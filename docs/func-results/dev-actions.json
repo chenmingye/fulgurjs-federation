@@ -2,7 +2,8 @@
   "env": "dev",
   "results": {
     "复制": {
-      "ok": false
+      "ok": false,
+      "how": null
     },
     "发布": {
       "ok": false

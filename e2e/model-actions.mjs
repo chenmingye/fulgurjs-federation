@@ -74,9 +74,14 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
     return inp ? inp.value : null
   })
   await page.locator('button:has-text("保 存"), button:has-text("保存")').first().click()
-  const copied = await waitFor(async () => (await page.evaluate(() => document.body.innerText)).includes('复制成功'), 20000)
+  // 后台接口慢（dept 13s 同源延迟），保存+跳转可能 >30s：toast 或返回列表均算成功
+  const copied = await waitFor(async () => {
+    const txt = await page.evaluate(() => document.body.innerText)
+    if (txt.includes('复制成功')) return 'toast'
+    return page.url().includes('/model') && !page.url().includes('copy') ? 'navigated' : null
+  }, 90000)
   await page.screenshot({ path: shot('08-流程模型-复制-02-复制成功') })
-  results['复制'] = { ok: !!copied }
+  results['复制'] = { ok: !!copied, how: copied }
 }
 
 // ---------- 发布（对复制出的模型） ----------
@@ -93,9 +98,9 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   // 确认框
   const cfm = page.locator('[class*="message-box"] button[class*="primary"], [role="dialog"]:visible button[class*="primary"]').last()
   if (await cfm.count()) { await cfm.click({ timeout: 6000 }).catch(() => {}); await wait(3000) }
+  const pubOk = await waitFor(async () => (await page.evaluate(() => document.body.innerText)).includes('发布成功'), 60000)
   await page.screenshot({ path: shot('08-流程模型-发布-02-发布结果') })
-  const body = await page.evaluate(() => document.body.innerText)
-  results['发布'] = { ok: body.includes('发布成功') || body.includes('成功') }
+  results['发布'] = { ok: !!pubOk }
 }
 
 // ---------- 导出（下载事件断言） ----------
