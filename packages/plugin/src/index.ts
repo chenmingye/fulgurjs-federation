@@ -221,6 +221,16 @@ export function federation(options: UnifedOptions): Plugin[] {
         return { code: `${initCode}\n${code}`, map: null }
       }
 
+      // node_modules 依赖是否进改写管线 = devSharedSelf || 纯 remote，与 dev post 阶段
+      // （post.transform 的 devRewriteAll / rewriteShared）共用同一开关："自身源码（含依赖）
+      // 参与 shared 协商就放行"。旧判定 isPureRemoteBuild 会把双向联邦（有 exposes 也有
+      // remotes，如 bpm expose 组件同时消费 admin 页面）挡在管线外——依赖包（element-plus
+      // 等）的 vue 导入不门面化 → prod 内联本地 vue 双实例（'ce' 错误）；dev 侧走
+      // devSharedSelf 所以通，两处语义必须一致。
+      const isPureRemoteBuild =
+        state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
+      const allowNodeModules = state.normalized.devSharedSelf || isPureRemoteBuild
+
       if (/\.vue(\?|$)/.test(id)) {
         // prod 构建时 vue 插件将 script 拆为 ?vue&type=script 子请求（源码 import 仍是 bare）：
         // 在 pre 阶段先行改写；其余 .vue 主请求与 template/style 子请求交给 post 阶段。
@@ -229,23 +239,18 @@ export function federation(options: UnifedOptions): Plugin[] {
           return transformModule(code, id, {
             options: state.normalized,
             rewriteShared: true,
-            // 纯 remote 构建：依赖包（element-plus 等）对 shared 的导入也要走门面，防双运行时；
-            // host+remote 双角色（如宿主同时 expose 组件）保持宿主行为，自身依赖即 provide 实例
-            allowNodeModules:
-              state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0,
+            allowNodeModules,
           })
         }
         return null
       }
-      const isPureRemoteBuild =
-        state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
-      if (!isTransformableId(id, isPureRemoteBuild)) return null
+      if (!isTransformableId(id, allowNodeModules)) return null
       return transformModule(code, id, {
         options: state.normalized,
         // build：全量改写；dev：默认仅纯 remote 改写 shared（被宿主消费的组件需协商到宿主实例），
         // 双角色宿主可显式 devSharedSelf: true 参与协商
         rewriteShared: state.command === 'build' || state.normalized.devSharedSelf,
-        allowNodeModules: isPureRemoteBuild,
+        allowNodeModules,
       })
     },
 

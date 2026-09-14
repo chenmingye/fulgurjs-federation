@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { federation } from '../src/index'
 import { normalizeOptions, type UnifedOptions } from '../src/options'
 import { transformModule } from '../src/transform'
 import { genBindingFacade, genDevRemoteEntry } from '../src/virtual'
@@ -231,5 +232,69 @@ describe('dev 容器入口：注册自身 remotes（回归：双向联邦 MFU-00
       '/remote-a/',
     )
     expect(entry).not.toContain('registerRemotes(')
+  })
+})
+
+describe('build 改写门禁：node_modules 依赖进管线（回归：双向联邦 prod 双 vue）', () => {
+  // 依赖包源码形态：element-plus 等对 shared（vue）的导入必须被门面化，否则
+  // prod 依赖 chunk 内联本地 vue → 双实例（'ce' 错误）；dev 走 devSharedSelf 判定所以通
+  const DEP_ID = '/proj/node_modules/element-plus/es/index.mjs'
+  const DEP_CODE = `import { ref } from 'vue'\nexport const a = ref\n`
+
+  /** 走真实插件 hook（config 初始化 normalized 后调 pre.transform）验证 build 门禁判定 */
+  async function buildPreTransform(opts: UnifedOptions, id: string, code = DEP_CODE) {
+    const [pre] = federation({ ...opts })
+    await (pre.config as NonNullable<typeof pre.config>)({}, { command: 'build' } as never)
+    return (pre.transform as NonNullable<typeof pre.transform>)(code, id)
+  }
+
+  it('双向联邦（exposes + remotes + devSharedSelf: true）：node_modules 依赖被门面化', async () => {
+    const r = await buildPreTransform(
+      {
+        name: 'mes-bpm',
+        exposes: { './TaskCard': './src/TaskCard.vue' },
+        remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+        devSharedSelf: true,
+        shared: { vue: '^3.4.0' },
+      },
+      DEP_ID,
+    )
+    expect(r?.code).toMatch(/virtual:unifed-shared:vue(\?f=[\w-]+)?/)
+    expect(r?.code).not.toContain(`from 'vue'`)
+  })
+
+  it('双向联邦默认 devSharedSelf: false：保持宿主行为，node_modules 不进管线', async () => {
+    const r = await buildPreTransform(
+      {
+        name: 'mes-bpm',
+        exposes: { './TaskCard': './src/TaskCard.vue' },
+        remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+        shared: { vue: '^3.4.0' },
+      },
+      DEP_ID,
+    )
+    expect(r).toBeNull()
+  })
+
+  it('纯 remote（exposes 有、remotes 无）：node_modules 依赖被门面化（旧行为保持）', async () => {
+    const r = await buildPreTransform(
+      { name: 'mes-lowcode', exposes: { './DesignPage': './src/DesignPage.vue' }, shared: { vue: '^3.4.0' } },
+      DEP_ID,
+    )
+    expect(r?.code).toMatch(/virtual:unifed-shared:vue/)
+  })
+
+  it('双向联邦下 .vue?type=script 子请求走同一门禁（build pre 分支）', async () => {
+    const r = await buildPreTransform(
+      {
+        name: 'mes-bpm',
+        exposes: { './TaskCard': './src/TaskCard.vue' },
+        remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+        devSharedSelf: true,
+        shared: { vue: '^3.4.0' },
+      },
+      '/proj/src/TaskCard.vue?vue&type=script&setup=true&lang.ts',
+    )
+    expect(r?.code).toMatch(/virtual:unifed-shared:vue/)
   })
 })
