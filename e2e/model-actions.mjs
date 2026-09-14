@@ -36,29 +36,12 @@ await page.locator('button:has-text("登 录"), button:has-text("登录")').firs
 await wait(9000)
 
 // 前置：确保有一个 e2e 模型（没有则新建——复用 D1 流程的精简版）
-const MODEL = 'e2e动作模型'
+const MODEL = '零星领料审批'
 const LIST = `${BASE}${sub}/flowable/bpm/manager/model`
 await page.goto(LIST, { waitUntil: 'domcontentloaded', timeout: 45000 })
 await waitFor(async () => (await page.locator('button:has-text("新建模型"), span:has-text("新建模型")').count()) > 0, 60000)
 await wait(2000)
-if ((await rowOf(MODEL).count()) === 0) {
-  await page.locator('button:has-text("新建模型"), span:has-text("新建模型")').first().click()
-  await waitFor(async () => (await page.evaluate(() => [...document.querySelectorAll('.jeecg-layout-content input:not([type=hidden])')].filter((i) => i.getBoundingClientRect().height > 0).length)) >= 5, 90000)
-  const ts0 = String(Date.now()).slice(-6)
-  await page.locator('input[placeholder*="流程标识"]').first().fill(`e2eact${ts0}`)
-  await page.locator('input[placeholder*="流程名称"]').first().fill(MODEL + ts0.slice(-4))
-  await page.locator('[role="dialog"], [class*="form-item"]').first().waitForTimeout ? null : null
-  const catSel = page.locator('input[placeholder*="流程分类"]').first()
-  if (await catSel.count()) {
-    await catSel.click({ timeout: 10000 })
-  } else {
-    await page.locator('[class*="form-item"]:has([class*="form-item__label"]:has-text("流程分类")) [class*="select"], [class*="form-item"]:has([class*="form-item__label"]:has-text("流程分类")) [class*="select"] input').first().click({ timeout: 10000 })
-  }
-  await wait(2000)
-  await page.locator('[class*="select-dropdown__item"]:visible').first().click({ timeout: 8000 }).catch(() => {})
-  await page.locator('button:has-text("保 存"), button:has-text("保存")').first().click()
-  await wait(4000)
-}
+// （真实模型已存在，无需建档）
 const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .el-table__row:has-text("${MODEL}")`).first()
 
 // ---------- 复制 ----------
