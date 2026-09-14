@@ -57,6 +57,7 @@ function injectInitScript(html: string, scriptSrc: string): string {
 }
 
 export function federation(options: UnifedOptions): Plugin[] {
+  const stateId = Math.random().toString(36).slice(2, 6)
   const warnedUnknownPrefixes = new Set<string>()
   const state: {
     normalized?: NormalizedOptions
@@ -223,22 +224,31 @@ export function federation(options: UnifedOptions): Plugin[] {
 
       if (/\.vue(\?|$)/.test(id)) {
         // prod 构建时 vue 插件将 script 拆为 ?vue&type=script 子请求（源码 import 仍是 bare）：
-        // 在 pre 阶段先行改写；其余 .vue 主请求与 template/style 子请求交给 post 阶段
-        if (/type=script/.test(id)) {
+        // 在 pre 阶段先行改写；其余 .vue 主请求与 template/style 子请求交给 post 阶段。
+        // dev 不走这里：dev 的 .vue 全部交给 post 阶段按 dev 角色判定处理（见 post.transform）。
+        if (state.command === 'build' && /type=script/.test(id)) {
           return transformModule(code, id, {
             options: state.normalized,
             rewriteShared: true,
-            // 远程构建：依赖包（element-plus 等）对 shared 的导入也要走门面，防双运行时
-            allowNodeModules: state.normalized.exposes.length > 0,
+            // 纯 remote 构建：依赖包（element-plus 等）对 shared 的导入也要走门面，防双运行时；
+            // host+remote 双角色（如宿主同时 expose 组件）保持宿主行为，自身依赖即 provide 实例
+            allowNodeModules:
+              state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0,
           })
         }
         return null
       }
-      if (!isTransformableId(id, state.normalized.exposes.length > 0)) return null
+      const isPureRemoteBuild =
+        state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
+      if (!isTransformableId(id, isPureRemoteBuild)) return null
+      if (clean.includes('FormRouterPage') || clean.includes('activitiesMixin'))
+        console.log(`[unifed:dbg][core-pre] id=${id.slice(-70)} rewriteShared=${state.command === 'build' || state.normalized.devSharedSelf} remotes=${state.normalized.remotes.length} name=${state.normalized.name} stateId=${stateId}`)
       return transformModule(code, id, {
         options: state.normalized,
-        rewriteShared: true,
-        allowNodeModules: state.normalized.exposes.length > 0,
+        // build：全量改写；dev：默认仅纯 remote 改写 shared（被宿主消费的组件需协商到宿主实例），
+        // 双角色宿主可显式 devSharedSelf: true 参与协商
+        rewriteShared: state.command === 'build' || state.normalized.devSharedSelf,
+        allowNodeModules: isPureRemoteBuild,
       })
     },
 
@@ -376,16 +386,20 @@ export function federation(options: UnifedOptions): Plugin[] {
       const clean = id.split('?')[0]
       const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
       if (!isJsLike) return null
-      // dev 宿主（无 exposes）：自身源码不做 shared 改写（自身 import 即自身 provide，
-      // 避免 TLA 改变大型工程循环依赖求值顺序）；remote 与 build 场景全量改写。
-      // 远程（有 exposes）：node_modules 内文件也放行——依赖包对 shared 的导入必须走门面
-      // 防双运行时；dev 下需配合 optimizeDeps.exclude（预构建产物内联代码无法改写）。
-      const isRemoteServe = state.command === 'serve' && state.normalized.exposes.length > 0
-      if (clean.includes('node_modules') && !id.includes('.vite/deps') && !isRemoteServe) return null
+      // dev 宿主（无 exposes 或 host+remote 双角色）：自身源码不做 shared 改写（自身 import 即
+      // 自身 provide，被消费方协商到的就是这份实例；避免 TLA 改变大型工程循环依赖求值顺序）；
+      // 纯 remote（有 exposes、无 remotes）全量改写，含 node_modules——依赖包对 shared 的导入
+      // 必须走门面防双运行时；dev 下需配合 optimizeDeps.exclude（预构建产物内联代码无法改写）。
+      const devRewriteAll = state.command === 'serve' && state.normalized.devSharedSelf
+      if (clean.includes('node_modules') && !id.includes('.vite/deps') && !devRewriteAll) return null
 
-      // dev 宿主（无 exposes）：自身源码不做 shared 改写（自身 import 即自身 provide，
-      // 避免 TLA 改变大型工程循环依赖求值顺序）；remote 与 build 场景全量改写
-      const rewriteShared = !(state.command === 'serve' && state.normalized.exposes.length === 0)
+      // dev 改写范围 = devSharedSelf（默认：纯 remote 为 true，有 remotes 的宿主为 false，
+      // 双向联邦的宿主可显式开启）。宿主自身 import 即自身 provide，其全局状态
+      // （pinia/router）已初始化在本地副本上——被消费方协商到的实例本来就是这份；
+      // 且不改写可避免巨型工程引入 TLA 与循环依赖求值顺序风险。
+      const rewriteShared = state.command === 'build' || state.normalized.devSharedSelf
+      if (clean.includes('FormRouterPage') || clean.includes('activitiesMixin'))
+        console.log(`[unifed:dbg][vue-post] id=${id.slice(-70)} rewriteShared=${rewriteShared} remotes=${state.normalized.remotes.length} exposes=${state.normalized.exposes.length} name=${state.normalized.name} stateId=${stateId}`)
 
       const remapSpecifier = (spec: string): string | null => {
         // build：bare specifier 直接参与匹配

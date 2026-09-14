@@ -112,6 +112,8 @@ export interface NormalizedOptions {
   /** 包依赖表（推断 requiredVersion / 提供版本用） */
   pkgDependencies: Record<string, string>
   warnings: string[]
+  /** dev 下自身源码是否参与 shared 协商改写（devSharedSelf 选项的规范化结果） */
+  devSharedSelf: boolean
 }
 
 export interface UnifedOptions {
@@ -135,6 +137,13 @@ export interface UnifedOptions {
   /** 接受 no-op：Rollup/Rolldown 原生 tree-shaking 已覆盖 */
   usedExports?: boolean
   ignoreUnusedSharedExports?: boolean
+  /**
+   * dev 下自身源码（含依赖，需配合 optimizeDeps.exclude）是否参与 shared 协商改写。
+   * 默认：纯 remote（无 remotes）为 true——被宿主消费的组件需协商到宿主实例；
+   * 有 remotes 的宿主为 false——自身 import 即自身 provide，避免巨型工程 TLA/循环依赖风险。
+   * 双向联邦（宿主同时 expose 组件给更高层消费）显式设 true。
+   */
+  devSharedSelf?: boolean
 }
 
 export const DEFAULT_FILENAME = 'unifed-remoteEntry.js'
@@ -510,6 +519,8 @@ export function normalizeOptions(options: UnifedOptions, root: string, command: 
     root,
     pkgDependencies,
     warnings,
+    // dev 改写开关：默认纯 remote 参与 shared 协商，宿主（有 remotes）不参与；可显式覆盖
+    devSharedSelf: options.devSharedSelf ?? remotes.length === 0,
   }
 }
 

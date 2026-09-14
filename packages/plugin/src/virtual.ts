@@ -110,10 +110,11 @@ export function genInitModule(
     lines.push(`import * as __unifed_eager_${i} from "virtual:unifed-shared:${s.shareKey}";`)
   })
 
-  // dev 宿主（有 remotes、无 exposes）：自身应用实例已在用本地副本（pinia/router 等全局
-  // 状态已初始化在本副本上），把 provide 标记为已加载——singleton 协商"已加载优先"时
-  // 远程必然命中宿主正在用的这份，避免双实例断链。远程自身（有 exposes）不标记。
-  const isDevHost = command === 'serve' && options.exposes.length === 0 && options.remotes.length > 0
+  // dev 宿主（有 remotes 即浏览器直接加载的主应用，是否同时 exposes 不影响）：
+  // 自身应用实例已在用本地副本（pinia/router 等全局状态已初始化在本副本上），把 provide
+  // 标记为已加载——singleton 协商"已加载优先"时远程必然命中宿主正在用的这份，避免双实例
+  // 断链。纯 remote（无 remotes）不标记。
+  const isDevHost = command === 'serve' && options.remotes.length > 0
   const loadedFlag = isDevHost ? 'true' : 'false'
 
   lines.push(`initSharing(${JSON.stringify(options.shareScope)});`)
