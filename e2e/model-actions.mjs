@@ -25,6 +25,7 @@ async function waitFor(fn, timeoutMs = 30000, intervalMs = 800) {
   return null
 }
 const results = {}
+let copyName = null
 const rowOf = (name) => page.locator(`[class*="table__body"] tr:has-text("${name}"), .el-table__row:has-text("${name}")`).first()
 
 await page.goto(`${BASE}/main/`, { waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -47,9 +48,13 @@ if ((await rowOf(MODEL).count()) === 0) {
   await page.locator('input[placeholder*="流程标识"]').first().fill(`e2eact${ts0}`)
   await page.locator('input[placeholder*="流程名称"]').first().fill(MODEL + ts0.slice(-4))
   await page.locator('[role="dialog"], [class*="form-item"]').first().waitForTimeout ? null : null
-  const catSel = page.locator('input[placeholder*="流程分类"], [class*="form-item"]:has([class*="form-item__label"]:has-text("流程分类")) [class*="select"], [class*="form-item"]:has([class*="form-item__label"]:has-text("流程分类")) [class*="select"] input').first()
-  await catSel.click({ timeout: 10000 }).catch(() => {})
-  await wait(1500)
+  const catSel = page.locator('input[placeholder*="流程分类"]').first()
+  if (await catSel.count()) {
+    await catSel.click({ timeout: 10000 })
+  } else {
+    await page.locator('[class*="form-item"]:has([class*="form-item__label"]:has-text("流程分类")) [class*="select"], [class*="form-item"]:has([class*="form-item__label"]:has-text("流程分类")) [class*="select"] input').first().click({ timeout: 10000 })
+  }
+  await wait(2000)
   await page.locator('[class*="select-dropdown__item"]:visible').first().click({ timeout: 8000 }).catch(() => {})
   await page.locator('button:has-text("保 存"), button:has-text("保存")').first().click()
   await wait(4000)
@@ -63,6 +68,11 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   await row.locator('a:has-text("复制"), span:has-text("复制"), button:has-text("复制")').first().click({ timeout: 10000 })
   await waitFor(async () => (await page.evaluate(() => [...document.querySelectorAll('.jeecg-layout-content input:not([type=hidden])')].filter((i) => i.getBoundingClientRect().height > 0).length)) >= 5, 90000)
   await page.screenshot({ path: shot('08-流程模型-复制-01-复制页回显') })
+  // 记录副本名（原版语义：名称 + "副本"）
+  copyName = await page.evaluate(() => {
+    const inp = [...document.querySelectorAll('.jeecg-layout-content input')].find((i) => /流程名称|流程名/.test(i.placeholder || '') && i.getBoundingClientRect().height > 0)
+    return inp ? inp.value : null
+  })
   await page.locator('button:has-text("保 存"), button:has-text("保存")').first().click()
   const copied = await waitFor(async () => (await page.evaluate(() => document.body.innerText)).includes('复制成功'), 20000)
   await page.screenshot({ path: shot('08-流程模型-复制-02-复制成功') })
@@ -74,7 +84,8 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   await page.goto(LIST, { waitUntil: 'domcontentloaded', timeout: 45000 })
   await waitFor(async () => (await page.locator('button:has-text("新建模型")').count()) > 0, 60000)
   await wait(2500)
-  const copyRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .el-table__row:has-text("${MODEL}")`).last()
+  const pubName = copyName ? `${copyName}` : MODEL
+  const copyRow = page.locator(`[class*="table__body"] tr:has-text("${pubName}"), .el-table__row:has-text("${pubName}")`).first()
   await copyRow.scrollIntoViewIfNeeded().catch(() => {})
   await page.screenshot({ path: shot('08-流程模型-发布-01-发布入口') })
   await copyRow.locator('a:has-text("发布"), span:has-text("发布"), button:has-text("发布")').first().click({ timeout: 10000 })
@@ -93,6 +104,10 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   await waitFor(async () => (await page.locator('button:has-text("新建模型")').count()) > 0, 60000)
   await wait(2500)
   const dlPromise = page.waitForEvent('download', { timeout: 20000 }).catch(() => null)
+  // 勾选 e2e 行复选框（导出按选中行）
+  const chk = page.locator(`[class*="table__body"] tr:has-text("${MODEL}") input[type="checkbox"], .el-table__row:has-text("${MODEL}") input[type="checkbox"]`).first()
+  if (await chk.count()) await chk.click({ timeout: 8000 }).catch(() => {})
+  await wait(800)
   const exportBtn = page.locator('button:has-text("导 出"), button:has-text("导出")').first()
   await exportBtn.click({ timeout: 10000 }).catch(() => {})
   await wait(2000)
@@ -121,7 +136,7 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
 }
 
 // ---------- 14 流程实例管理：取消 ----------
-const PI = `${BASE}${sub}/flowable/bpm/manager/process-instance`
+const PI = `${BASE}${sub}/flowable/bpm/manager/process-instance/manager`
 await page.goto(PI, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {})
 await waitFor(async () => (await page.locator('[class*="table__body"] tr, .el-table__row').count()) > 0, 40000)
 await wait(2000)

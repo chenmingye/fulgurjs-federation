@@ -1,0 +1,23 @@
+{
+  "env": "dev",
+  "results": {
+    "复制": {
+      "ok": false
+    },
+    "发布": {
+      "ok": false
+    },
+    "导出": {
+      "ok": false,
+      "file": null
+    },
+    "删除": {
+      "ok": true,
+      "note": "至少删除一次（副本/主模型择一）"
+    },
+    "实例取消": {
+      "ok": false
+    }
+  },
+  "pageErrors": []
+}
