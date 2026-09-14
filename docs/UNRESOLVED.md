@@ -20,33 +20,34 @@
 - **结论**：业务表单区联邦化在 demo 后台下**完整可用**。若将来仍需对接 pe-mes255，
   需向该项目方索要其 Env*/Bas* 表单组件源码补入 admin 前端。
 
-## U-2：lowcode 4 设计器页空白——avue 预构建双 vue 实例（2026-09-14）
+## U-2：lowcode 6 页空白——**已改判为插件缺陷，必须修到根因**（2026-09-14）
 
-- **当前状态（2026-09-14 升级）**：**dev + prod 双环境均不可渲染**。dev 为 avue 预构建内联
-  本地 vue 双实例；prod（插件 build 门禁修复 + prod remoteEntry 注册 remotes 之后实测，
-  8662）4 页（formDesign/reportDesign/graphReportDesign/moduleDesign）同样空白，
-  错误签名与 dev 不同：`TypeError: p.default.extend is not a function`（4 页一致），
-  定位在 lowcode 产物 `assets/domUtils-BHw4j-To.js` 的 element-plus date-table
-  `useDateTable` 等 dayjs 插件注册处（`u.default.extend(n.default)` 的 CJS interop 形态）。
-  lowcode 为纯 remote（无 remotes），本轮 build 门禁修复不改变其管线——prod 失败系原有问题。
+> ⚠️ **2026-09-14 定性修正（用户指示）**：此项**不再记作"avue 只有 UMD 的第三方限制"**，
+> 也不接受 iframe 兜底/降级/"仅 dev 限制"。理由：真实工程本就在用 UMD-only 依赖，**插件必须支持**；
+> 且 prod 报错形态（rollup 产物内 CJS default interop 破损）本身就指向插件侧的 CJS/UMD 处理缺陷。
+> → **归入 `docs/插件成型路线图.md` P0-2，按插件缺陷修复，验收标准 = 6 页功能可用 + 双环境零报错。**
+
+- **当前状态**：**dev + prod 双环境均不可渲染**（页面：formDesign / reportDesign /
+  graphReportDesign / moduleDesign / reportTest / form_external，共 6 页）。
+  路由与页签正常、接口零失败，内容区空白。
+  - dev：`resolveComponent can only be used in render() or setup()` /
+    `Cannot destructure property 'node' of 'undefined'`
+  - prod：`TypeError: p.default.extend is not a function`（6 页一致），定位在 lowcode 产物
+    `assets/domUtils-*.js` 的 element-plus date-table `useDateTable` 等 dayjs 插件注册处
+    （`u.default.extend(n.default)` 的 CJS interop 形态）
 - **接口层已全通**（零失败请求）；federatedBoot 已把 lowcode 全局注册
   （globCom/lowDesagn/avue/hasPermi 指令/i18n）补装到宿主 app（组件数 335→686）。
-- **dev 根因**：`@smallwei/avue@3.7.0` 只有 UMD 构建（`lib/avue.min.js`，无 ESM）——dev 下只能走
+- **dev 机制**：`@smallwei/avue@3.7.0` 只有 UMD 构建（`lib/avue.min.js`，无 ESM）——dev 下走
   optimizeDeps 预构建；预构建产物把 lowcode 自己的 vue 内联进 deps chunk（与门面协商到的宿主
-  vue 形成双实例）→ avue 组件（avue-tree/avue-crud）渲染报
-  `resolveComponent can only be used in render() or setup()` /
-  `Cannot destructure property 'node' of 'undefined'`。
-- **已排除的路径**：① exclude avue → UMD 作为源码服务直接语法错误（无 ESM 可用）；
-  ② include 加 xe-utils（vxe 依赖 interop）→ 对非扫描依赖不生效；
-  ③ **注意：显式写进 `include` 会压过 `exclude`**（原 include 里有 `@smallwei/avue`，
-  必须先移除才可能生效，但移除后即落到路径 ①）——lowcode 的 optimize.ts 已还原为原状，
-  不留半成品改动。
-- **prod 失败机制（初判，未挖穿）**：avue UMD 经 rollup+commonjs 转换进产物后，
-  其依赖链上 dayjs/element-plus 的 CJS default interop 在 chunk 拆分后
-  （`.default.extend` 于顶层执行时）拿到未初始化完成的对象。乾坤基线（8661）下 4 页
-  正常渲染（基线截图 22-25 存在），差异点在联邦管线的 vue 门面化与 chunk 拆分。
-- **候选方向**（均需额外投入，暂缓）：
-  1. 给 avue 出一份本地 ESM 构建（esbuild 对 avue.min.js 做 cjs→esm 转换后入 src/vendor）；
-  2. **iframe 兜底**：lowcode 4 设计器页退回 iframe 通道（乾坤时代形态，admin unifedPages
-     工厂按页指定 iframe 通道即可，页面本身在 lowcode 独立部署下可用）；
-  3. 向上游 avue 提 issue 索要 ESM 构建。
+  vue 形成双实例）。**待解决的是"插件如何让 UMD-only/CJS-only 依赖在 dev 下也走门面协商"**。
+- **prod 机制**：avue UMD 经 rollup+commonjs 转换进产物后，依赖链上 dayjs/element-plus 的
+  CJS default interop 在 chunk 拆分后拿到未初始化对象 → 顶层 `.default.extend` 报错。
+  **待定位：插件改写（门面化）与 commonjs 转换的先后顺序是否破坏了 interop。**
+- **已排除的路径**（作为排查记录保留）：① exclude avue → UMD 作为源码服务直接语法错误；
+  ② include 加 xe-utils → 对非扫描依赖不生效；③ **显式写进 `include` 会压过 `exclude`**
+  （原 include 里有 `@smallwei/avue`，须先移除才可能生效，但移除后即落到路径 ①）。
+- **已否决的方向**：~~iframe 兜底~~（用户明确否决：新插件不允许兜底）、
+  ~~标记"仅 dev 限制"~~（同上）。
+- **允许的技术方向**：① 插件支持 UMD-only/CJS-only 依赖（插件侧转换/门面改写优化产物/自定义
+  loader —— 首选，属能力升级）；② 辅助生成 ESM 入口（由插件自动完成，而非要求用户手改 avue）；
+  ③ 向 avue 上游提 ESM 需求（可并行，但不能作为把问题挂起的理由）。
