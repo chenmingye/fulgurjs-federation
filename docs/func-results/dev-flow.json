@@ -1,0 +1,24 @@
+{
+  "05-发起": {
+    "ok": false,
+    "note": "http://localhost:8773/main/flowable/bpm/task/create"
+  },
+  "01-待办出现": {
+    "ok": false,
+    "url": "http://localhost:8773/main/flowable/bpm/task/todo"
+  },
+  "06-审批通过": {
+    "ok": false
+  },
+  "02-已办出现": {
+    "ok": false
+  },
+  "03-我的流程可见": {
+    "ok": false
+  },
+  "_meta": {
+    "env": "dev",
+    "ts": "313686",
+    "pageErrors": []
+  }
+}
