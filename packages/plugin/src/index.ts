@@ -57,7 +57,6 @@ function injectInitScript(html: string, scriptSrc: string): string {
 }
 
 export function federation(options: UnifedOptions): Plugin[] {
-  const stateId = Math.random().toString(36).slice(2, 6)
   const warnedUnknownPrefixes = new Set<string>()
   const state: {
     normalized?: NormalizedOptions
@@ -241,8 +240,6 @@ export function federation(options: UnifedOptions): Plugin[] {
       const isPureRemoteBuild =
         state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
       if (!isTransformableId(id, isPureRemoteBuild)) return null
-      if (clean.includes('FormRouterPage') || clean.includes('activitiesMixin'))
-        console.log(`[unifed:dbg][core-pre] id=${id.slice(-70)} rewriteShared=${state.command === 'build' || state.normalized.devSharedSelf} remotes=${state.normalized.remotes.length} name=${state.normalized.name} stateId=${stateId}`)
       return transformModule(code, id, {
         options: state.normalized,
         // build：全量改写；dev：默认仅纯 remote 改写 shared（被宿主消费的组件需协商到宿主实例），
@@ -398,9 +395,6 @@ export function federation(options: UnifedOptions): Plugin[] {
       // （pinia/router）已初始化在本地副本上——被消费方协商到的实例本来就是这份；
       // 且不改写可避免巨型工程引入 TLA 与循环依赖求值顺序风险。
       const rewriteShared = state.command === 'build' || state.normalized.devSharedSelf
-      if (clean.includes('FormRouterPage') || clean.includes('activitiesMixin'))
-        console.log(`[unifed:dbg][vue-post] id=${id.slice(-70)} rewriteShared=${rewriteShared} remotes=${state.normalized.remotes.length} exposes=${state.normalized.exposes.length} name=${state.normalized.name} stateId=${stateId}`)
-
       const remapSpecifier = (spec: string): string | null => {
         // build：bare specifier 直接参与匹配
         if (state.normalized!.shared.some((s) => s.aliases.includes(spec))) return spec

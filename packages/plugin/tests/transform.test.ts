@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeOptions, type UnifedOptions } from '../src/options'
 import { transformModule } from '../src/transform'
-import { genBindingFacade } from '../src/virtual'
+import { genBindingFacade, genDevRemoteEntry } from '../src/virtual'
 
 const ROOT = process.cwd()
 
@@ -180,5 +180,56 @@ describe('transform: dev .vue post 阶段（依赖 URL 重映射）', () => {
       rewriteShared: false,
     })
     expect(r).toBeNull()
+  })
+})
+
+describe('transform: 门面签名确定性（回归：进程内序号导致重启后 404）', () => {
+  it('同一模块重复转换/不同转换顺序下签名一致', async () => {
+    const code = `import { ref, computed as C } from 'vue'\nconst a = [ref, C]\n`
+    const r1 = await x(code)
+    const r2 = await x(`import { other } from './other'\nconst q = other\n`)
+    const r3 = await x(code)
+    const sig1 = r1?.code.match(/\?f=([\w-]+)/)?.[1]
+    const sig3 = r3?.code.match(/\?f=([\w-]+)/)?.[1]
+    expect(sig1).toBeTruthy()
+    expect(sig1).toBe(sig3)
+  })
+
+  it('不同绑定集签名不同', async () => {
+    const r1 = await x(`import { ref } from 'vue'\nconst a = ref\n`)
+    const r2 = await x(`import { ref, computed } from 'vue'\nconst a = [ref, computed]\n`)
+    const sig1 = r1?.code.match(/\?f=([\w-]+)/)?.[1]
+    const sig2 = r2?.code.match(/\?f=([\w-]+)/)?.[1]
+    expect(sig1).not.toBe(sig2)
+  })
+})
+
+describe('dev 容器入口：注册自身 remotes（回归：双向联邦 MFU-008）', () => {
+  it('有 remotes 时容器入口顶层 registerRemotes', () => {
+    const entry = genDevRemoteEntry(
+      normalizeOptions(
+        {
+          name: 'mes-bpm',
+          exposes: { './TaskCard': './src/TaskCard.vue' },
+          remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+          shared: { vue: '^3.4.0' },
+        },
+        ROOT,
+        'serve',
+      ),
+      '/flowable/',
+    )
+    expect(entry).toContain('registerRemotes(')
+    expect(entry).toContain('"name":"mes-admin"')
+    expect(entry).toContain('http://localhost:8773/main/@unifed-entry.js')
+    expect(entry).toContain('@id/virtual:unifed-runtime')
+  })
+
+  it('无 remotes 时不生成 registerRemotes', () => {
+    const entry = genDevRemoteEntry(
+      normalizeOptions({ name: 'remote-a', exposes: { './Button': './src/Button.vue' }, shared: { vue: '^3.4.0' } }, ROOT, 'serve'),
+      '/remote-a/',
+    )
+    expect(entry).not.toContain('registerRemotes(')
   })
 })

@@ -131,23 +131,7 @@ export function genInitModule(
   }
 
   if (options.remotes.length > 0) {
-    // promise-based remote 无法序列化（函数），由用户在运行时 registerRemote 注册
-    const serializable = options.remotes.filter((r) => !r.promise)
-    const remotesJson = serializable.map((r: NormalizedRemote) => ({
-      name: r.name,
-      entry: command === 'serve' ? r.devEntry : r.prodEntry,
-      shareScope: r.shareScope,
-      timeout: r.timeout,
-      retries: r.retries,
-      fallback: r.fallback,
-      breaker: r.breaker,
-      manifestUrl: manifestUrlFor(r, command),
-    }))
-    if (remotesJson.length > 0) {
-      lines.push(
-        `registerRemotes(${JSON.stringify(remotesJson, jsonReplacer).replace(/"manifestUrl":null,?/g, '')});`,
-      )
-    }
+    lines.push(...registerRemotesLines(options, command))
   }
 
   provides.forEach((p) => {
@@ -183,14 +167,40 @@ function manifestUrlFor(r: NormalizedRemote, command: 'serve' | 'build'): string
   }
 }
 
+/** 可序列化 remotes 的注册语句（genInitModule 与 dev 容器入口共用） */
+function registerRemotesLines(options: NormalizedOptions, command: 'serve' | 'build'): string[] {
+  if (options.remotes.length === 0) return []
+  // promise-based remote 无法序列化（函数），由用户在运行时 registerRemote 注册
+  const remotesJson = options.remotes
+    .filter((r) => !r.promise)
+    .map((r: NormalizedRemote) => ({
+      name: r.name,
+      entry: command === 'serve' ? r.devEntry : r.prodEntry,
+      shareScope: r.shareScope,
+      timeout: r.timeout,
+      retries: r.retries,
+      fallback: r.fallback,
+      breaker: r.breaker,
+      manifestUrl: manifestUrlFor(r, command),
+    }))
+  if (remotesJson.length === 0) return []
+  return [
+    `registerRemotes(${JSON.stringify(remotesJson, jsonReplacer).replace(/"manifestUrl":null,?/g, '')});`,
+  ]
+}
+
 /**
  * dev 容器入口（remote 端 dev server 中间件直出的自包含 JS）。
  * init(shareScopeMap) 按引用收养 scope map 并注册 provides——对齐 webpack 容器协议。
+ * 顶层注册自身 remotes：远程页面被宿主加载后可能再消费其他远程（双向联邦/嵌套联邦），
+ * 页面级运行时经 globalThis.__UNIFED_RUNTIME__ 单例，跨源模块副本共享同一注册表。
  */
 export function genDevRemoteEntry(options: NormalizedOptions, base: string): string {
   const b = base.endsWith('/') ? base : `${base}/`
+  const remoteLines = registerRemotesLines(options, 'serve')
   return `import ${JSON.stringify(`${b}@vite/client`)};
 import { name as _unifed_name, exposes, provides } from ${JSON.stringify(`${b}@id/__x00__virtual:unifed-provides`)};
+${remoteLines.length > 0 ? `import { registerRemotes } from ${JSON.stringify(`${b}@id/virtual:unifed-runtime`)};\n${remoteLines.join('\n')}` : ''}
 
 export const name = _unifed_name;
 

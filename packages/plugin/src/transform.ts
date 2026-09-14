@@ -139,14 +139,16 @@ export function isTransformableId(id: string, allowNodeModules = false): boolean
  * transform 时注册，load 时反查。
  */
 const facadeRegistry = new Map<string, { bindings: string[]; shareKey?: string; remoteName?: string; exposeName?: string }>()
-let facadeSeq = 0
 
 function shortSig(kind: string, key: string, bindings: string[]): string {
+  // 签名必须确定性：同 key+绑定集恒得同签名。dev 下签名进入源码转换产物并被
+  // moduleGraph/浏览器持有，若掺入进程内状态（自增序号），dev server 重启或模块
+  // 重转换后签名漂移，旧引用全部 404（element-plus 源码经改写管线时必现）
   const full = kind + '|' + key + '|' + bindings.join('|')
   let h = 5381
   for (let i = 0; i < full.length; i++) h = ((h << 5) + h + full.charCodeAt(i)) | 0
-  const id = (h >>> 0).toString(36) + '_' + facadeSeq.toString(36)
-  facadeSeq++
+  // 绑定集长度入签名，降低不同绑定集哈希碰撞同 id 的概率
+  const id = (h >>> 0).toString(36) + bindings.length.toString(36)
   facadeRegistry.set(id, kind === 'shared' ? { bindings, shareKey: key } : { bindings, remoteName: key })
   return id
 }
