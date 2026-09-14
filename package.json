@@ -1,0 +1,13 @@
+{
+  "name": "vite-plugin-unifed-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --dir packages/plugin build",
+    "test:unit": "pnpm --dir packages/plugin test",
+    "test:dev": "pnpm --dir e2e test:dev",
+    "test:prod": "bash e2e/scripts/prod-setup.sh && SKIP_DEV_SERVERS=1 pnpm --dir e2e test:prod",
+    "test": "pnpm test:unit && pnpm test:dev && pnpm test:prod"
+  }
+}

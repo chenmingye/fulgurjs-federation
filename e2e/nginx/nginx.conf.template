@@ -1,0 +1,59 @@
+# unifed e2e 专用隔离 NGINX 实例（端口 8999，与用户实例完全隔离）
+pid /tmp/unifed-nginx/nginx.pid;
+error_log /tmp/unifed-nginx/error.log warn;
+
+events {
+  worker_connections 256;
+}
+
+http {
+  include /opt/homebrew/etc/nginx/mime.types;
+  default_type application/octet-stream;
+  access_log /tmp/unifed-nginx/access.log;
+  sendfile on;
+  tcp_nopush on;
+  keepalive_timeout 65;
+
+  # gzip 与缓存语义（prod 验证点）
+  gzip on;
+  gzip_comp_level 6;
+  gzip_min_length 1k;
+  gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+  gzip_vary on;
+
+  server {
+    listen 8999;
+    server_name localhost;
+
+    # 远程应用 remote-a（子路径部署）
+    location /remote-a/ {
+      alias "__PROD_DIST__/remote-a/";
+      index index.html;
+      try_files $uri $uri/ /remote-a/index.html;
+
+      # remoteEntry 长缓存 + 跨域模块访问
+      location = /remote-a/unifed-remoteEntry.js {
+        alias "__PROD_DIST__/remote-a/unifed-remoteEntry.js";
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Access-Control-Allow-Origin "*";
+        add_header Access-Control-Expose-Headers "*";
+      }
+      add_header Access-Control-Allow-Origin "*";
+    }
+
+    # 远程应用 remote-b（子路径部署）
+    location /remote-b/ {
+      alias "__PROD_DIST__/remote-b/";
+      index index.html;
+      try_files $uri $uri/ /remote-b/index.html;
+      add_header Access-Control-Allow-Origin "*";
+    }
+
+    # 宿主应用（根路径）
+    location / {
+      root "__PROD_DIST__";
+      index index.html;
+      try_files $uri $uri/ /index.html;
+    }
+  }
+}

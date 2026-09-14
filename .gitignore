@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+
+# build output
+packages/plugin/dist/
+fixtures/*/dist/
+fixtures/*/dist-*/
+
+# testbed（真实项目私有副本，7.6G，不入库——发 GitHub 时同样排除）
+testbed/
+
+# test & tooling artifacts
+e2e/artifacts/
+e2e/playwright-report/
+e2e/test-results/
+e2e/.prod-dist/
+e2e/.playwright/
+*.log
+
+# editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# local env
+.env.local
+.env.*.local
+
+# 公司业务数据截图：本地保留供手册/对照使用，不入库（公开仓库前无需再审查）
+docs/screenshots/baseline-8661/
+docs/screenshots/migration1-dev/
+docs/screenshots/tb-dev-*
+docs/screenshots/tb-prod-*

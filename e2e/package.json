@@ -1,0 +1,14 @@
+{
+  "name": "unifed-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:dev": "playwright test --project=dev",
+    "test:prod": "playwright test --project=prod",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0",
+    "vite": "^6.3.5"
+  }
+}
