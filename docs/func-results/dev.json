@@ -1,0 +1,107 @@
+{
+  "env": "dev",
+  "base": "http://localhost:8773",
+  "ts": "294357",
+  "results": [
+    {
+      "page": "09 流程表单",
+      "steps": {
+        "设计器打开": {
+          "ok": true
+        },
+        "新增+保存": {
+          "ok": true,
+          "name": "e2e表单294357"
+        }
+      }
+    },
+    {
+      "page": "10 流程分类",
+      "steps": {
+        "列表页": {
+          "rows": 4,
+          "ok": true
+        },
+        "新增": {
+          "ok": true,
+          "name": "e2e分类294357"
+        },
+        "编辑": {
+          "ok": true,
+          "expect": "e2e分类改9642"
+        },
+        "删除": {
+          "ok": true,
+          "deleted": "e2e分类改9642"
+        }
+      }
+    },
+    {
+      "page": "11 用户分组",
+      "steps": {
+        "列表页": {
+          "rows": 1,
+          "ok": true
+        },
+        "新增": {
+          "ok": true,
+          "name": "e2e分组294357"
+        },
+        "编辑": {
+          "ok": true,
+          "expect": "e2e分组改1055"
+        },
+        "删除": {
+          "ok": true,
+          "deleted": "e2e分组改1055"
+        }
+      }
+    },
+    {
+      "page": "12 流程监听器",
+      "steps": {
+        "列表页": {
+          "rows": 1,
+          "ok": true
+        },
+        "新增": {
+          "ok": true,
+          "name": "e2e监听294357"
+        },
+        "编辑": {
+          "ok": true,
+          "expect": "e2e监听改4206"
+        },
+        "删除": {
+          "ok": true,
+          "deleted": "e2e监听改4206"
+        }
+      }
+    },
+    {
+      "page": "13 流程表达式",
+      "steps": {
+        "列表页": {
+          "rows": 7,
+          "ok": true
+        },
+        "新增": {
+          "ok": true,
+          "name": "e2e表达式294357"
+        },
+        "编辑": {
+          "ok": true,
+          "expect": "e2e表达式改2118"
+        },
+        "删除": {
+          "ok": true,
+          "deleted": "e2e表达式改2118"
+        }
+      }
+    }
+  ],
+  "errors": {
+    "pageErrors": [],
+    "consoleErrs": []
+  }
+}
