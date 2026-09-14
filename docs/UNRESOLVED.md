@@ -20,14 +20,18 @@
 - **结论**：业务表单区联邦化在 demo 后台下**完整可用**。若将来仍需对接 pe-mes255，
   需向该项目方索要其 Env*/Bas* 表单组件源码补入 admin 前端。
 
-## U-2：lowcode 4 设计器页 dev 模式空白——avue 预构建双 vue 实例（2026-09-14）
+## U-2：lowcode 4 设计器页空白——avue 预构建双 vue 实例（2026-09-14）
 
-- **当前状态**：经**两套后台**（pe-mes255 与本地 demo）分别实测，4 页
-  （formDesign/reportDesign/graphReportDesign/moduleDesign）均为空白 →
-  **确认与后台无关**，是 avue 在本插件 dev 管线下的固有限制。
-  接口层已全通（零失败请求）；federatedBoot 已把 lowcode 全局注册
+- **当前状态（2026-09-14 升级）**：**dev + prod 双环境均不可渲染**。dev 为 avue 预构建内联
+  本地 vue 双实例；prod（插件 build 门禁修复 + prod remoteEntry 注册 remotes 之后实测，
+  8662）4 页（formDesign/reportDesign/graphReportDesign/moduleDesign）同样空白，
+  错误签名与 dev 不同：`TypeError: p.default.extend is not a function`（4 页一致），
+  定位在 lowcode 产物 `assets/domUtils-BHw4j-To.js` 的 element-plus date-table
+  `useDateTable` 等 dayjs 插件注册处（`u.default.extend(n.default)` 的 CJS interop 形态）。
+  lowcode 为纯 remote（无 remotes），本轮 build 门禁修复不改变其管线——prod 失败系原有问题。
+- **接口层已全通**（零失败请求）；federatedBoot 已把 lowcode 全局注册
   （globCom/lowDesagn/avue/hasPermi 指令/i18n）补装到宿主 app（组件数 335→686）。
-- **根因**：`@smallwei/avue@3.7.0` 只有 UMD 构建（`lib/avue.min.js`，无 ESM）——dev 下只能走
+- **dev 根因**：`@smallwei/avue@3.7.0` 只有 UMD 构建（`lib/avue.min.js`，无 ESM）——dev 下只能走
   optimizeDeps 预构建；预构建产物把 lowcode 自己的 vue 内联进 deps chunk（与门面协商到的宿主
   vue 形成双实例）→ avue 组件（avue-tree/avue-crud）渲染报
   `resolveComponent can only be used in render() or setup()` /
@@ -37,9 +41,12 @@
   ③ **注意：显式写进 `include` 会压过 `exclude`**（原 include 里有 `@smallwei/avue`，
   必须先移除才可能生效，但移除后即落到路径 ①）——lowcode 的 optimize.ts 已还原为原状，
   不留半成品改动。
-- **prod 预期可行（待验）**：build 走 rollup + commonjs 转换，avue.min.js 的 vue 导入可被插件
-  改写到共享门面（lowcode prod 产物已实测 **220 个文件**含 `unifed-shared` 改写）→
-  等 prod 双 vue 问题（见交接清单遗留 1）修好后一并验证；若 prod 通过，U-2 降级为「仅 dev 限制」。
-- **dev 若必须打通的候选方向**（均需额外投入，暂缓）：给 avue 出一份本地 ESM 构建
-  （esbuild 对 avue.min.js 做 cjs→esm 转换后入 src/vendor）；或 dev 下对 lowcode 页面退回
-  iframe 通道。
+- **prod 失败机制（初判，未挖穿）**：avue UMD 经 rollup+commonjs 转换进产物后，
+  其依赖链上 dayjs/element-plus 的 CJS default interop 在 chunk 拆分后
+  （`.default.extend` 于顶层执行时）拿到未初始化完成的对象。乾坤基线（8661）下 4 页
+  正常渲染（基线截图 22-25 存在），差异点在联邦管线的 vue 门面化与 chunk 拆分。
+- **候选方向**（均需额外投入，暂缓）：
+  1. 给 avue 出一份本地 ESM 构建（esbuild 对 avue.min.js 做 cjs→esm 转换后入 src/vendor）；
+  2. **iframe 兜底**：lowcode 4 设计器页退回 iframe 通道（乾坤时代形态，admin unifedPages
+     工厂按页指定 iframe 通道即可，页面本身在 lowcode 独立部署下可用）；
+  3. 向上游 avue 提 issue 索要 ESM 构建。
