@@ -254,6 +254,11 @@ export function genDevProvides(options: NormalizedOptions): string {
 /**
  * prod 容器入口（作为额外 rollup 输入，emitFile 固定文件名）。
  * exposes 为动态导入 → rollup 自动拆独立 chunk；shared 经 facade 动态导入 → 自动剥离。
+ * 顶层注册自身 remotes（与 dev 容器入口 genDevRemoteEntry 同语义）：prod 双向联邦下，
+ * 本应用页面被宿主加载后还会 loadRemote 其他 remote（如 bpm 页面消费 admin 的
+ * FormRouterPage），而本应用的 registerRemotes 写在自己 index.html 内联 init 里——
+ * 联邦模式下宿主从不加载本应用的 index.html，remotes 无人注册 → MFU-008。
+ * 经 globalThis.__UNIFED_RUNTIME__ 单例与宿主共享同一注册表。
  */
 export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: Record<string, string>): string {
   const exposes: string[] = []
@@ -266,7 +271,11 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
     (p) =>
       `  { shareScope: ${JSON.stringify(p.shareScope)}, name: ${JSON.stringify(p.name)}, version: ${JSON.stringify(p.version)}, eager: ${p.eager}, get: () => import("virtual:unifed-shared:${p.name}") },`,
   )
+  const remoteLines = registerRemotesLines(options, 'build')
   return [
+    ...(remoteLines.length > 0
+      ? [`import { registerRemotes } from "virtual:unifed-runtime";`, ...remoteLines]
+      : []),
     `const exposes = {`,
     ...exposes,
     `};`,

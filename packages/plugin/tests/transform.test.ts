@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { federation } from '../src/index'
 import { normalizeOptions, type UnifedOptions } from '../src/options'
 import { transformModule } from '../src/transform'
-import { genBindingFacade, genDevRemoteEntry } from '../src/virtual'
+import { genBindingFacade, genBuildRemoteEntry, genDevRemoteEntry } from '../src/virtual'
 
 const ROOT = process.cwd()
 
@@ -230,6 +230,36 @@ describe('dev 容器入口：注册自身 remotes（回归：双向联邦 MFU-00
     const entry = genDevRemoteEntry(
       normalizeOptions({ name: 'remote-a', exposes: { './Button': './src/Button.vue' }, shared: { vue: '^3.4.0' } }, ROOT, 'serve'),
       '/remote-a/',
+    )
+    expect(entry).not.toContain('registerRemotes(')
+  })
+})
+
+describe('prod 容器入口：注册自身 remotes（回归：双向联邦 prod MFU-008）', () => {
+  it('有 remotes 时顶层 registerRemotes（external 自报名）', () => {
+    const entry = genBuildRemoteEntry(
+      normalizeOptions(
+        {
+          name: 'mes-bpm',
+          exposes: { './TaskCard': './src/TaskCard.vue' },
+          remotes: { 'mes-admin': { external: 'demo-host@http://localhost:8773/main', prod: '/main' } },
+          shared: { vue: '^3.4.0' },
+        },
+        ROOT,
+        'build',
+      ),
+      {},
+    )
+    expect(entry).toContain('registerRemotes(')
+    expect(entry).toContain('"name":"demo-host"')
+    expect(entry).toContain('/main/unifed-remoteEntry.js')
+    expect(entry).toContain('virtual:unifed-runtime')
+  })
+
+  it('无 remotes 时不生成 registerRemotes', () => {
+    const entry = genBuildRemoteEntry(
+      normalizeOptions({ name: 'remote-a', exposes: { './Button': './src/Button.vue' }, shared: { vue: '^3.4.0' } }, ROOT, 'build'),
+      {},
     )
     expect(entry).not.toContain('registerRemotes(')
   })
