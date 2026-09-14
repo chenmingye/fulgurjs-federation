@@ -152,6 +152,8 @@ export const INIT_VIRTUAL_ID = 'virtual:unifed-init'
 export const PROVIDES_VIRTUAL_ID = 'virtual:unifed-provides'
 export const REMOTE_ENTRY_VIRTUAL_ID = 'virtual:unifed-remote-entry'
 export const SHARED_FACADE_PREFIX = 'virtual:unifed-shared:'
+/** 预构建协商门面前缀：optimizeDeps 外部化产物内对 shared 键的导入指向它（完整命名空间语义） */
+export const SHARED_NS_FACADE_PREFIX = 'virtual:unifed-shared-ns:'
 
 // 不用 \0 前缀：rollup 对 \0 虚拟模块做无副作用激进摇树，会剥掉 init 的顶层调用
 export const RESOLVED = {
@@ -160,6 +162,9 @@ export const RESOLVED = {
   provides: 'virtual:unifed-provides',
   remoteEntry: 'virtual:unifed-remote-entry',
   sharedFacade: (name: string) => `virtual:unifed-shared:${name}`,
+  sharedNsFacade: (name: string) => `virtual:unifed-shared-ns:${name}`,
+  /** CJS require(<shared>) 垫片：与 sharedNsFacade 同体，仅 id 形态不同（保持 require 调用语义） */
+  cjsNsFacade: (name: string) => `virtual:unifed-cjs-ns:${name}`,
 }
 
 function joinUrl(base: string, file: string): string {

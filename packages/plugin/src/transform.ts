@@ -47,7 +47,21 @@ function matchShared(spec: string, matcher: SharedMatcher): NormalizedShared | n
   return null
 }
 
-/** loadShare 调用参数序列化（运行时协商所需的全部 webpack 语义） */
+/** loadShare 调用参数序列化（运行时协商所需的全部 webpack 语义）。fallbackUrl 覆盖默认的命名空间门面地址 */
+export function serializeShareCallForFacade(item: NormalizedShared, fallbackUrl?: string): string {
+  const opts: string[] = []
+  opts.push(`shareScope: ${JSON.stringify(item.shareScope)}`)
+  opts.push(`shareKey: ${JSON.stringify(item.shareKey)}`)
+  if (item.requiredVersion !== false) opts.push(`requiredVersion: ${JSON.stringify(item.requiredVersion)}`)
+  if (item.singleton) opts.push('singleton: true')
+  if (item.strictVersion) opts.push('strictVersion: true')
+  if (item.import !== false) {
+    const facadeUrl = fallbackUrl ?? SHARED_FACADE_PREFIX + item.shareKey
+    opts.push(`fallback: () => import(${JSON.stringify(facadeUrl)})`)
+  }
+  return `__unifed_loadShare(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} })`
+}
+
 function serializeShareCall(item: NormalizedShared, devUrls?: TransformContext['devUrls']): string {
   const opts: string[] = []
   opts.push(`shareScope: ${JSON.stringify(item.shareScope)}`)
@@ -111,6 +125,12 @@ export interface TransformContext {
    * dev 下配合 optimizeDeps.exclude 使用（预构建产物内联代码无法改写）。
    */
   allowNodeModules?: boolean
+  /**
+   * build 专用：CJS/UMD 文本里的 require(<shared>) 重定向到 CJS 垫片虚拟模块
+   * （赶在 vite:commonjs 转换前，防依赖子树内联第二份 vue 运行时）。
+   * dev 不启用——dev 的 CJS 依赖走 optimizeDeps 预构建外部化。
+   */
+  cjsRequireRewrite?: boolean
   /** dev post 阶段：生成的运行时/门面引用必须是最终 URL（importAnalysis 已跑过） */
   devUrls?: {
     runtime: string
@@ -209,6 +229,31 @@ export async function transformModule(
   for (const s of options.shared) candidates.push(s.configKey.replace(/\/$/, ''))
   for (const r of options.remotes) candidates.push(r.key)
   if (!candidates.some((c) => code.includes(c))) return null
+
+  // ---- CJS/UMD 依赖的 require(<shared>) 重定向（avue UMD、element-plus lib 等）----
+  // 必须赶在 vite:commonjs 转换之前：commonjs 会把 require("vue") 解析为本地模块导入，
+  // 把整条依赖子树钉死在第二份 vue 运行时上（联邦渲染即 'ce'/renderSlot null 崩溃）。
+  // 这里把 require("vue") 重写为 require("virtual:unifed-cjs-ns:vue")——保持 require 调用
+  // 形态，commonjs 插件才会继续转换本模块（ESM import 前置会把文件变成 mixed 而被跳过，
+  // module.exports 语义即断裂），并对垫片虚拟模块做 CJS→ESM interop。
+  // 仅 build 启用；dev 的 CJS 依赖走 optimizeDeps 预构建（unifed:optimize-shared-external）。
+  if (ctx.cjsRequireRewrite && /require\s*\(\s*["']/.test(code)) {
+    const sharedByAlias = new Map<string, NormalizedShared>()
+    for (const s of options.shared) {
+      if (s.import === false) continue
+      for (const a of s.aliases) if (!a.includes('/')) sharedByAlias.set(a, s)
+    }
+    let cjsEdited = false
+    for (const [alias, item] of sharedByAlias) {
+      const re = new RegExp(`require\\((["'])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1\\)`, 'g')
+      if (!re.test(code)) continue
+      code = code.replace(re, `require(${JSON.stringify(`virtual:unifed-cjs-ns:${item.shareKey}`)})`)
+      cjsEdited = true
+    }
+    if (!cjsEdited) return null
+    // 继续走 ESM 词法分析无意义（CJS 文本），直接以纯文本改写结果返回
+    return { code, map: null }
+  }
 
   await ensureLexer()
   let imports: Awaited<ReturnType<typeof parse>>[0]

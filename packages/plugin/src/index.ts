@@ -4,6 +4,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import type { Plugin, ViteDevServer } from 'vite'
 import {
@@ -13,10 +14,11 @@ import {
   INIT_VIRTUAL_ID,
   RUNTIME_VIRTUAL_ID,
   SHARED_FACADE_PREFIX,
+  SHARED_NS_FACADE_PREFIX,
   type NormalizedOptions,
   type UnifedOptions,
 } from './options'
-import { getFacadeEntry, isTransformableId, transformModule } from './transform'
+import { getFacadeEntry, isTransformableId, transformModule, serializeShareCallForFacade } from './transform'
 import {
   genBindingFacade,
   genBuildRemoteEntry,
@@ -27,6 +29,7 @@ import {
   genProdManifest,
   genRemoteBindingFacade,
   genSharedFacade,
+  genSharedNsFacade,
   type ManifestExposeEntry,
 } from './virtual'
 import { generateDevTypes } from './dts'
@@ -40,6 +43,34 @@ function readRuntimeCode(): string {
 function normalizeBase(base: string): string {
   if (!base || base === '/') return '/'
   return base.endsWith('/') ? base : `${base}/`
+}
+
+/** 预构建外部化桩模块的 esbuild namespace（配合 unifed-stub: 路径前缀使用） */
+const UNIFED_STUB_NAMESPACE = 'unifed-opt-stub'
+
+/**
+ * 枚举本机安装包 CJS 入口的全部命名导出（预构建协商门面的命名导出清单生成用）。
+ * ESM 无法动态枚举，必须在 dev server 进程里从真实包取。ESM-only 包（无 CJS 入口）
+ * 返回空数组：门面降级为仅 default 导出并保持可用（消费方解构出 undefined 属可容忍降级，非静默失败）。
+ */
+const nsExportCache = new Map<string, string[]>()
+function enumerateCjsExports(packageName: string, appRoot: string): string[] {
+  const cached = nsExportCache.get(packageName)
+  if (cached) return cached
+  let names: string[] = []
+  try {
+    const appRequire = createRequire(path.join(appRoot, 'package.json'))
+    const mod = appRequire(packageName) as Record<string, unknown>
+    names = Object.keys(mod)
+  } catch {
+    console.warn(
+      `[unifed] cannot enumerate CJS exports of shared package "${packageName}" for the optimize-deps facade; ` +
+        `the facade will export default only. If consumers destructure named exports from it, add this package ` +
+        `to optimizeDeps.exclude to serve it through the transform pipeline instead.`,
+    )
+  }
+  nsExportCache.set(packageName, names)
+  return names
 }
 
 function injectInitScript(html: string, scriptSrc: string): string {
@@ -87,8 +118,69 @@ export function federation(options: UnifedOptions): Plugin[] {
       state.normalized = normalized
 
       const extra: Record<string, unknown> = {}
-      // 不干预 optimizeDeps：大型工程的预构建分组被额外 include 改动后，
+      // 不干预 optimizeDeps 的 include/exclude：大型工程的预构建分组被额外 include 改动后，
       // 可能出现 chunk 循环求值顺序问题；shared 解析走门面虚拟模块，无需强制预构建
+
+      // dev remote：向依赖预构建注入 shared 键外部化 resolver——CJS/UMD-only 依赖（element-plus、
+      // avue、dayjs 等）得以正常预构建（esbuild 的 CJS interop 正确保留 default 静态方法），
+      // 而其内部对 shared 键（vue 等）的导入在运行时协商到联邦实例，不内联本地副本形成双运行时。
+      // 作用面与改写管线的 devSharedSelf 一致：纯 remote 默认开启，双向宿主显式 devSharedSelf 才开。
+      if (env.command === 'serve' && normalized.exposes.length > 0 && normalized.devSharedSelf) {
+        const aliasToShare = new Map<string, (typeof normalized.shared)[number]>()
+        for (const s of normalized.shared) {
+          if (s.import === false) continue
+          for (const a of s.aliases) if (!a.includes('/')) aliasToShare.set(a, s)
+        }
+        if (aliasToShare.size > 0) {
+          const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const filter = new RegExp(`^(${[...aliasToShare.keys()].map(escapeRe).join('|')})$`)
+          const devBase = normalizeBase(userConfig.base ?? '/')
+          const sharedExternal: { name: string; setup: (build: unknown) => void } = {
+            name: 'unifed:optimize-shared-external',
+            setup(build) {
+              const facadeUrlFor = (shareKey: string) =>
+                `${devBase}@id/__x00__virtual:unifed-shared-ns:${shareKey}?import`
+              const b = build as {
+                onResolve: (
+                  opts: { filter: RegExp },
+                  cb: (args: { path: string; kind: string }) => { path: string; namespace?: string; external?: boolean } | null,
+                ) => void
+                onLoad: (
+                  opts: { filter: RegExp; namespace: string },
+                  cb: (args: { path: string }) => { contents: string; loader: string } | null,
+                ) => void
+              }
+              // 桩内容里的门面 URL（浏览器 URL，非文件系统路径）必须标记 external，
+              // esbuild 原样保留为静态 import/export-from，不做文件解析
+              b.onResolve({ filter: /unifed-shared-ns:/ }, (args) => ({ path: args.path, external: true }))
+              b.onResolve({ filter }, (args) => {
+                // shared 键本身常是预构建入口（include/扫描发现）：入口解析放行走本地预构建，
+                // 只有依赖包内部的 import/require 才改道协商门面（esbuild 禁止 entry point external）
+                if (args.kind === 'entry-point' || args.kind === 'entry-point-render') return null
+                const s = aliasToShare.get(args.path)
+                if (!s) return null
+                return { path: `unifed-stub:${s.shareKey}`, namespace: UNIFED_STUB_NAMESPACE }
+              })
+              // re-export 桩：不能直接 external——esbuild 对 CJS 依赖内部的 require(external)
+              // 会生成运行时抛错的动态 require 垫片（"Dynamic require of ... is not supported"）。
+              // 改道到 bundled 桩模块后，esbuild 把门面 URL 提升为 chunk 顶部的静态 import，
+              // 门面（TLA 协商）先于 chunk 求值完成，CJS require 拿到的命名空间同步可用。
+              b.onLoad({ filter: /^unifed-stub:/, namespace: UNIFED_STUB_NAMESPACE }, (args) => {
+                const shareKey = args.path.slice('unifed-stub:'.length)
+                const url = facadeUrlFor(shareKey)
+                return {
+                  contents: `export * from ${JSON.stringify(url)};\nexport { default } from ${JSON.stringify(url)};\n`,
+                  loader: 'js',
+                }
+              })
+            },
+          }
+          // mergeConfig 会把插件数组拼接在用户已有 esbuildOptions.plugins 之后，无需手动合并
+          ;(extra as Record<string, unknown>).optimizeDeps = {
+            esbuildOptions: { plugins: [sharedExternal] },
+          }
+        }
+      }
 
       if (env.command === 'serve') {
         // 跨 dev-server 模块加载需要 CORS（对齐双 dev-server 协作引擎）
@@ -156,6 +248,12 @@ export function federation(options: UnifedOptions): Plugin[] {
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
       if (bareClean === 'virtual:unifed-provides') return RESOLVED.provides
       if (bareClean === 'virtual:unifed-remote-entry') return RESOLVED.remoteEntry
+      if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
+        return RESOLVED.sharedNsFacade(bareClean.slice(SHARED_NS_FACADE_PREFIX.length)) + query
+      }
+      if (bareClean.startsWith('virtual:unifed-cjs-ns:')) {
+        return RESOLVED.sharedNsFacade(bareClean.slice('virtual:unifed-cjs-ns:'.length)) + query
+      }
       if (bareClean.startsWith('virtual:unifed-shared:')) {
         // 绑定门面（?f= 绑定签名）与命名空间门面共用前缀；query 透传
         const body = bareClean.slice('virtual:unifed-shared:'.length)
@@ -177,6 +275,21 @@ export function federation(options: UnifedOptions): Plugin[] {
       }
       if (clean === 'virtual:unifed-remote-entry' && state.normalized) {
         return genBuildRemoteEntry(state.normalized, state.exposeAbsPaths)
+      }
+      if (clean.startsWith(SHARED_NS_FACADE_PREFIX) && state.normalized) {
+        const body = clean.slice(SHARED_NS_FACADE_PREFIX.length)
+        const item = state.normalized.shared.find((x) => x.shareKey === body)
+        if (!item || item.import === false) return null
+        const names = enumerateCjsExports(item.import, state.normalized.root)
+        // vue-demi 的 Vue2 兼容导出在依赖预构建里也被指到 'vue'（vite 生态普遍把 vue-demi
+        // 解析为 vue）：缺名会让 ESM 命名导入直接致命。vue3 下 isVue2/Vue2 为假值、set/del
+        // 仅 Vue2 分支调用——从协商实例取不到即为 undefined，语义正确。
+        if (item.shareKey === 'vue') {
+          for (const compat of ['isVue2', 'isVue3', 'Vue2', 'set', 'del']) {
+            if (!names.includes(compat)) names.push(compat)
+          }
+        }
+        return genSharedNsFacade(item, serializeShareCallForFacade(item), names)
       }
       if (clean.startsWith('virtual:unifed-shared:') && state.normalized) {
         const body = clean.slice('virtual:unifed-shared:'.length)
@@ -240,6 +353,7 @@ export function federation(options: UnifedOptions): Plugin[] {
             options: state.normalized,
             rewriteShared: true,
             allowNodeModules,
+            cjsRequireRewrite: true,
           })
         }
         return null
@@ -251,6 +365,7 @@ export function federation(options: UnifedOptions): Plugin[] {
         // 双角色宿主可显式 devSharedSelf: true 参与协商
         rewriteShared: state.command === 'build' || state.normalized.devSharedSelf,
         allowNodeModules,
+        cjsRequireRewrite: state.command === 'build',
       })
     },
 

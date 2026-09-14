@@ -22,6 +22,29 @@ export function genSharedFacade(specifier: string): string {
 }
 
 /**
+ * 预构建协商门面（optimizeDeps 外部化用，仅 dev）：
+ * 依赖预构建产物内对 shared 键的导入指向本门面——loadShare 协商到目标实例后转发完整命名空间。
+ * ESM 无法动态枚举导出，命名导出按本机安装包 CJS 入口的真实导出在生成期列全
+ * （见 index.ts 的 enumerateCjsExports）；宿主实例缺少个别新导出时对应值为 undefined，语义不变。
+ */
+export function genSharedNsFacade(item: NormalizedShared, loadShareCall: string, exportNames: string[]): string {
+  const lines: string[] = [
+    `import { loadShare as __unifed_loadShare, unwrapDefault as __unifedU } from "virtual:unifed-runtime";`,
+    `const __unifed_m = await ${loadShareCall};`,
+    `const __unifed_d = __unifedU(__unifed_m);`,
+    `export default __unifed_d;`,
+  ]
+  const seen = new Set<string>(['default'])
+  for (const name of exportNames) {
+    if (seen.has(name) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) continue
+    seen.add(name)
+    lines.push(`export const ${name} = __unifed_d[${JSON.stringify(name)}];`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+/**
  * 绑定门面：消费方静态 import 直接指向它。
  * 门面内做 loadShare 协商（TLA 集中在这一个虚拟模块里，消费方保持同步求值），
  * 并把消费方请求的绑定逐一转发；default 走 unwrapDefault interop。
