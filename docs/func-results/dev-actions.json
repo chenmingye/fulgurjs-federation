@@ -2,11 +2,12 @@
   "env": "dev",
   "results": {
     "复制": {
-      "ok": true,
-      "how": "toast"
+      "ok": false,
+      "how": null
     },
     "发布": {
-      "ok": false
+      "ok": true,
+      "msg": "发布成功"
     },
     "导出": {
       "ok": false,

@@ -46,6 +46,15 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
 
 // ---------- 复制 ----------
 {
+  // 先删旧副本（复制 key=_copy 与旧副本冲突会被后端拒）
+  const stale = rowOf(MODEL + '副本')
+  if (await stale.count()) {
+    await stale.locator('a:has-text("删除"), span:has-text("删除"), button:has-text("删除")').first().click({ timeout: 8000 }).catch(() => {})
+    await wait(1500)
+    const c = page.locator('[class*="message-box"] button[class*="primary"], [role="dialog"]:visible button[class*="primary"]').last()
+    if (await c.count()) { await c.click({ timeout: 6000 }).catch(() => {}); await wait(3000) }
+    await page.reload().catch(() => {}); await wait(8000)
+  }
   const row = rowOf(MODEL)
   await row.scrollIntoViewIfNeeded().catch(() => {})
   await row.locator('a:has-text("复制"), span:has-text("复制"), button:has-text("复制")').first().click({ timeout: 10000 })
@@ -72,8 +81,8 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   await page.goto(LIST, { waitUntil: 'domcontentloaded', timeout: 45000 })
   await waitFor(async () => (await page.locator('button:has-text("新建模型")').count()) > 0, 60000)
   await wait(2500)
-  const pubName = copyName ? `${copyName}` : MODEL
-  const copyRow = page.locator(`[class*="table__body"] tr:has-text("${pubName}"), .el-table__row:has-text("${pubName}")`).first()
+  // 对原模型重发布（副本的 bpmn process id 与新 key 不一致，发布需先改流程图——见 seed3）
+  const copyRow = rowOf(MODEL)
   await copyRow.scrollIntoViewIfNeeded().catch(() => {})
   await page.screenshot({ path: shot('08-流程模型-发布-01-发布入口') })
   await copyRow.locator('a:has-text("发布"), span:has-text("发布"), button:has-text("发布")').first().click({ timeout: 10000 })
@@ -81,9 +90,16 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   // 确认框
   const cfm = page.locator('[class*="message-box"] button[class*="primary"], [role="dialog"]:visible button[class*="primary"]').last()
   if (await cfm.count()) { await cfm.click({ timeout: 6000 }).catch(() => {}); await wait(3000) }
-  const pubOk = await waitFor(async () => (await page.evaluate(() => document.body.innerText)).includes('发布成功'), 60000)
+  let pubMsg = null
+  const pubOk = await waitFor(async () => {
+    const txt = await page.evaluate(() => document.body.innerText)
+    if (txt.includes('发布成功')) return '成功'
+    const m = txt.match(/操作失败[^\n]*|发布失败[^\n]*|[^\n]*不存在/)
+    if (m && !pubMsg) { pubMsg = m[0]; return null }
+    return null
+  }, 60000)
   await page.screenshot({ path: shot('08-流程模型-发布-02-发布结果') })
-  results['发布'] = { ok: !!pubOk }
+  results['发布'] = { ok: !!pubOk, msg: pubMsg ?? '发布成功' }
 }
 
 // ---------- 导出（下载事件断言） ----------
