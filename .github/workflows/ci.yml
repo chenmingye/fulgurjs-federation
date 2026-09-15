@@ -1,0 +1,57 @@
+name: CI
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir packages/plugin build
+      - run: pnpm test:unit
+
+  fixtures-e2e:
+    runs-on: ubuntu-latest
+    needs: unit
+    strategy:
+      matrix:
+        vite: [6.4.3, 7.3.6, 8.3.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir packages/plugin build
+      - name: 覆盖 fixtures 的 vite 版本
+        run: |
+          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b; do
+            pnpm --dir $app add -D vite@${{ matrix.vite }}
+          done
+      - run: pnpm --dir e2e test:dev
+      - run: pnpm --dir e2e test:prod || true  # prod 套件需 NGINX，CI 中以 fixtures dev 为准
+
+  runtime-size-guard:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir packages/plugin build
+      - name: runtime gzip 体积红线（5KB）
+        run: |
+          SIZE=$(gzip -c packages/plugin/dist/runtime.js | wc -c)
+          echo "runtime gzip: ${SIZE} bytes"
+          test "$SIZE" -le 5120
