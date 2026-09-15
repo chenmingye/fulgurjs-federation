@@ -134,17 +134,17 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   // 勾选第一行复选框并验证选中态（分组表格渲染时序敏感，循环重试到 is-checked）
   let checked = false
   for (let i = 0; i < 5 && !checked; i++) {
-    const cb = page.locator('[class*="table__body"] .el-checkbox').first()
+    const cb = page.locator('[class*="table__body"] [class*="checkbox"]').first()
     if (!(await cb.count())) { await wait(2000); continue }
     await cb.click({ timeout: 8000 }).catch(() => {})
     await wait(1200)
-    checked = await cb.evaluate((el) => el.className.includes('is-checked') || el.closest('tr')?.className.includes('selected-row') || !!el.closest('tr')?.querySelector('.el-checkbox.is-checked'))
+    checked = await cb.evaluate((el) => el.className.includes('is-checked') || !!el.closest('tr')?.querySelector('[class*="checkbox"].is-checked'))
     if (!checked) {
       // 试分组表头全选
       const all = page.locator('[class*="table__header"] .el-checkbox, [class*="table__body"]').first()
       await all.click({ timeout: 5000 }).catch(() => {})
       await wait(1200)
-      checked = await cb.evaluate((el) => el.className.includes('is-checked') || !!el.closest('tr')?.querySelector('.el-checkbox.is-checked')).catch(() => false)
+      checked = await cb.evaluate((el) => el.className.includes('is-checked') || !!el.closest('tr')?.querySelector('[class*="checkbox"].is-checked')).catch(() => false)
     }
   }
   await wait(500)
@@ -156,7 +156,7 @@ const modelRow = page.locator(`[class*="table__body"] tr:has-text("${MODEL}"), .
   let body = await page.evaluate(() => document.body.innerText)
   // 一次重试（勾选可能被表格重渲染吞掉）
   if (!dl && !body.includes('导出成功')) {
-    const chk2 = page.locator('[class*="table__body"] .el-checkbox, [class*="table__body"] [class*="checkbox"]').nth(2)
+    const chk2 = page.locator('[class*="table__body"] [class*="checkbox"]').nth(2)
     if (await chk2.count()) await chk2.click({ timeout: 8000 }).catch(() => {})
     await wait(1000)
     const dl2 = page.waitForEvent('download', { timeout: 30000 }).catch(() => null)

@@ -4,77 +4,8 @@
     "errors": []
   },
   "02 已办任务": {
-    "count": 17,
-    "errors": [
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_form_style_css.js?v=b6a24399"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_popover_style_css.js?v=5e77abbe"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_date-picker_style_css.js?v=2cabb15a"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_select_style_css.js?v=61f90e4e"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_option_style_css.js?v=2701d154"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "pageerror",
-        "text": "UnifedError: [unifed:MFU-001] failed to load module \"./pages/bpm/task/done\" from remote \"mes-bpm\": Failed to fetch dynamically imported module: http://localhost:4529/flowable/src/views/bpm/task/done/index.vue"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_button_style_css.js?v=b0022f76"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_form-item_style_css.js?v=7522e155"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_input_style_css.js?v=e19c7fc0"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "03 我的流程": {
     "count": 0,
@@ -85,66 +16,16 @@
     "errors": []
   },
   "05 发起流程": {
-    "count": 5,
-    "errors": [
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_tab-pane_style_css.js?v=28277da5"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_divider_style_css.js?v=446fa33f"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "pageerror",
-        "text": "UnifedError: [unifed:MFU-001] failed to load module \"./pages/bpm/task/create\" from remote \"mes-bpm\": Failed to fetch dynamically imported module: http://localhost:4529/flowable/src/views/bpm/processInstance/create/index.vue"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "07 审批操作": {
     "count": 0,
     "errors": []
   },
   "08 流程模型": {
-    "count": 7,
-    "errors": [
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/element-plus_es_components_collapse-transition_style_css.js?v=08996a4a"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/sortablejs.js?v=4e87e97c"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4529/flowable/node_modules/.vite/deps/@vueuse_core.js?v=4e87e97c"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "pageerror",
-        "text": "UnifedError: [unifed:MFU-001] failed to load module \"./pages/bpm/manager/model\" from remote \"mes-bpm\": Failed to fetch dynamically imported module: http://localhost:4529/flowable/src/views/bpm/model/index.vue"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "09 流程表单": {
     "count": 0,
@@ -179,61 +60,8 @@
     "errors": []
   },
   "22 表单设计": {
-    "count": 13,
-    "errors": [
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4669/lowcode/node_modules/.vite/deps/element-plus_es_components_tab-pane_style_css.js?v=57c99cd4"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4669/lowcode/node_modules/.vite/deps/element-plus_es_components_scrollbar_style_css.js?v=de007f4f"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4669/lowcode/node_modules/.vite/deps/element-plus_es_components_divider_style_css.js?v=b7971804"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4669/lowcode/node_modules/.vite/deps/element-plus_es_components_input_style_css.js?v=14b63560"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4669/lowcode/node_modules/.vite/deps/lodash-es.js?v=ad6b7173"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      },
-      {
-        "kind": "pageerror",
-        "text": "TypeError: Failed to fetch dynamically imported module: http://localhost:4669/lowcode/src/components/index.ts"
-      },
-      {
-        "kind": "http",
-        "text": "504 http://localhost:4669/lowcode/node_modules/.vite/deps/@iconify_iconify.js?v=ad6b7173"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 504 (Outdated Optimize Dep)"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "23 报表设计": {
     "count": 0,

@@ -1,0 +1,56 @@
+[
+  {
+    "suite": "五页CRUD",
+    "pair": "dev vs prod",
+    "h5一致": true,
+    "双方全绿": true,
+    "diffs": []
+  },
+  {
+    "suite": "五页CRUD",
+    "pair": "qiankun-crud vs dev",
+    "h5一致": true,
+    "双方全绿": true,
+    "diffs": []
+  },
+  {
+    "suite": "动作闭环",
+    "pair": "dev-actions vs prod-actions",
+    "h5一致": true,
+    "双方全绿": true,
+    "diffs": []
+  },
+  {
+    "suite": "动作闭环",
+    "pair": "qiankun-actions-actions vs dev-actions",
+    "h5一致": true,
+    "双方全绿": true,
+    "diffs": []
+  },
+  {
+    "suite": "全链路",
+    "pair": "dev-flow vs prod-flow",
+    "h5一致": true,
+    "双方全绿": true,
+    "diffs": []
+  },
+  {
+    "suite": "全链路",
+    "pair": "qiankun-flow-flow vs dev-flow",
+    "h5一致": true,
+    "双方全绿": true,
+    "diffs": []
+  },
+  {
+    "suite": "H1控制台报错",
+    "env": "dev",
+    "总数": 0,
+    "达标": true
+  },
+  {
+    "suite": "H1控制台报错",
+    "env": "prod",
+    "总数": 0,
+    "达标": true
+  }
+]

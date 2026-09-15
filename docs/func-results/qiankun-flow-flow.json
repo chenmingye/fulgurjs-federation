@@ -1,0 +1,25 @@
+{
+  "05-发起页渲染": {
+    "ok": true,
+    "note": "与原版一致：表单区由业务入口承载"
+  },
+  "01-待办出现": {
+    "ok": true,
+    "url": "http://localhost:8661/main/flowable/bpm/process-instance/detail?id=ac628eeb-b131-11f1-bb90-1ad9e106d037&taskId=ac92edd1-b131-11f1-bb90-1ad9e106d037"
+  },
+  "06-审批通过": {
+    "ok": true,
+    "note": "提交成功与否由 02 已办断言判定"
+  },
+  "02-已办出现": {
+    "ok": true
+  },
+  "03-我的流程可见": {
+    "ok": true
+  },
+  "_meta": {
+    "env": "qiankun-flow",
+    "ts": "215104",
+    "pageErrors": []
+  }
+}
