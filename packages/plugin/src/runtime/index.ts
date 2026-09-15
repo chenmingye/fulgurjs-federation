@@ -283,7 +283,7 @@ function createRuntime() {
     )
   }
 
-  async function acquireContainer(remote: RemoteInternal): Promise<any> {
+  async function acquireContainer(remote: RemoteInternal, overrides?: { retries?: number }): Promise<any> {
     const scopeKey = remote.shareScope || 'default'
     if (remote.container) {
       // 缓存路径同样校验：对已 init 的容器换 scope → MFU-005（webpack 语义）
@@ -335,7 +335,7 @@ function createRuntime() {
       let container: any
       let lastErr: unknown
       let succeeded = false
-      const maxRetries = remote.retries ?? DEFAULT_RETRIES
+      const maxRetries = overrides?.retries ?? remote.retries ?? DEFAULT_RETRIES
       for (const loader of loaders) {
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
           const start = performance.now()
@@ -437,7 +437,19 @@ function createRuntime() {
     return m.startsWith('.') ? m : `./${m}`
   }
 
-  async function loadRemote(spec: string, opts?: { shareScope?: string }): Promise<any> {
+  async function loadRemote(
+    spec: string,
+    opts?: {
+      shareScope?: string
+      /** 单次调用覆盖 remote.retries（社区高频诉求：按调用控制重试次数） */
+      retries?: number
+      /**
+       * 对齐 webpack MF 2.0 errorLoadRemote 语义：加载失败时返回 fallback 模块
+       * （错误事件/console 仍显式发出，绝不静默——调用方不传则照旧抛错）
+       */
+      fallbackModule?: () => any
+    },
+  ): Promise<any> {
     const { remote: name, module } = parseSpec(spec)
     hooks.beforeLoadRemote?.({ remote: name, module })
     const remote = remotes.get(name)
@@ -448,7 +460,17 @@ function createRuntime() {
         { remote: name },
       )
     }
-    const container = await acquireContainer(remote)
+    let container: any
+    try {
+      container = await acquireContainer(remote, { retries: opts?.retries })
+    } catch (err) {
+      if (opts?.fallbackModule) {
+        console.error(`[unifed] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
+        emitError({ remote: name, error: err as Error })
+        return await opts.fallbackModule()
+      }
+      throw err
+    }
     if (!module) return container
     const cacheKey = `${name}@${remote.shareScope || 'default'}#${module}`
     if (!loadedModules.has(cacheKey)) {
@@ -465,7 +487,17 @@ function createRuntime() {
         }),
       )
     }
-    const ns = await loadedModules.get(cacheKey)
+    let ns: any
+    try {
+      ns = await loadedModules.get(cacheKey)
+    } catch (err) {
+      if (opts?.fallbackModule) {
+        console.error(`[unifed] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
+        emitError({ remote: name, error: err as Error })
+        return await opts.fallbackModule()
+      }
+      throw err
+    }
     hooks.afterLoadRemote?.({ remote: name, module, module_ns: ns })
     return ns
   }

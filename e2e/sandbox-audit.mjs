@@ -16,8 +16,8 @@ await page.goto(`${BASE}/main/`, { waitUntil: 'domcontentloaded', timeout: 60000
 await page.waitForTimeout(6000)
 await page.locator('input[placeholder*="账号"], input[placeholder*="用户名"]').first().fill('admin')
 await page.locator('input[type="password"]').first().fill('Demo@123456')
-await page.locator('button:has-text("登 录"), button:has-text("登录")').first().click()
-await page.waitForTimeout(9000)
+await robustLogin()
+await page.waitForTimeout(3000)
 // 打开一个纯宿主页（首页），采基线
 await page.goto(`${BASE}/main/dashboard/analysis`, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {})
 await page.waitForTimeout(8000)

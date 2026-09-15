@@ -61,6 +61,20 @@ page.on('console', (m) => { if (m.type() === 'error') consoleErrs.push(m.text().
 
 const wait = (ms) => page.waitForTimeout(ms)
 const shot = (name) => `${DIR}/${ENV}-${name}.png`
+// 健壮登录：点击后等离开登录页，失败重试（后台慢链条偶发 getInfo 超时踢回）
+async function robustLogin() {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.locator('button:has-text("登 录"), button:has-text("登录")').first().click({ timeout: 10000 })
+    // 登录是异步链（getInfo ~15s under slow backend）：以"密码框消失"为准，而非 URL
+    const ok = await waitFor(async () => {
+      if (/login/i.test(page.url())) return false
+      return (await page.locator('input[type="password"]:visible').count()) === 0
+    }, 30000, 500)
+    if (ok) { await page.waitForTimeout(5000); return true }
+  }
+  return false
+}
+
 async function waitFor(fn, timeoutMs = 30000, intervalMs = 800) {
   const t0 = Date.now()
   while (Date.now() - t0 < timeoutMs) {
