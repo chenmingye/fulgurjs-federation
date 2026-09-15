@@ -385,7 +385,7 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   location /lowcode  { try_files $uri $uri/ /lowcode/index.html; }
   location /main     { try_files $uri $uri/ /main/index.html; }
   location /demo {
-    proxy_pass http://localhost:8085;
+    proxy_pass http://YOUR-BACKEND-HOST:8085;  # 替换为你的后端地址（脱敏）
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";

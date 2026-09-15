@@ -1,6 +1,6 @@
 {
   "name": "@fulgur/federation",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -12,10 +12,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts --format esm,cjs --dts --external vite --target node18 --clean",
@@ -40,5 +43,26 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenmingye/fulgur-federation.git",
+    "directory": "packages/plugin"
+  },
+  "homepage": "https://github.com/chenmingye/fulgur-federation#readme",
+  "author": "chenmingye (Jason)",
+  "bugs": {
+    "url": "https://github.com/chenmingye/fulgur-federation/issues"
+  },
+  "keywords": [
+    "vite",
+    "module-federation",
+    "federation",
+    "micro-frontend",
+    "vite-plugin",
+    "webpack-federation"
+  ],
+  "engines": {
+    "node": ">=18"
   }
 }
