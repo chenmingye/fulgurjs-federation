@@ -2,7 +2,7 @@
 // 用法：node h5-diff.mjs
 import fs from 'node:fs'
 
-const DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/func-results'
+const DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/func-results'
 const load = (f) => JSON.parse(fs.readFileSync(`${DIR}/${f}.json`, 'utf8'))
 
 const flat = (obj, prefix = '') => {

@@ -1,7 +1,7 @@
 // 任务3 U-2 验证：prod 8662 下 lowcode 4 设计器页是否渲染（原 dev 双 vue 空白）
 import { chromium } from '@playwright/test'
 
-const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/screenshots/migration1-dev'
+const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 const PROFILE = `/tmp/unifed-prod-prof-u2-${Date.now()}`
 const BASE = 'http://localhost:8662'
 const PAGES = [

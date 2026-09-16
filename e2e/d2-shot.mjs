@@ -7,7 +7,7 @@ import fs from 'node:fs'
 
 const BASE = process.argv[2] || 'http://localhost:8773'
 const ENV = process.argv[3] || 'dev'
-const DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/screenshots/migration1-dev'
+const DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 fs.mkdirSync(DIR, { recursive: true })
 const shot = (pageNo, page, step) => `${DIR}/${ENV}-${pageNo}-${page}-${step}.png`
 

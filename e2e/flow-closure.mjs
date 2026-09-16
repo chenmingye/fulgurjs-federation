@@ -9,8 +9,8 @@ const BASE = arg('--base', 'http://localhost:8773')
 const ENV = arg('--env', 'dev')
 const sub = BASE.includes('8661') ? '/main' : ''
 const PROC = 'AMIS联邦验证2-勿删'
-const DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/screenshots/migration1-dev'
-const RESULT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/func-results'
+const DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
+const RESULT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/func-results'
 fs.mkdirSync(DIR, { recursive: true }); fs.mkdirSync(RESULT_DIR, { recursive: true })
 const shot = (name) => `${DIR}/${ENV}-${name}.png`
 

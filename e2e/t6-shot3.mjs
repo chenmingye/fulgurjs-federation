@@ -2,7 +2,7 @@
 import { chromium } from '@playwright/test'
 const BASE = 'http://localhost:8662'
 const TAG = 'prod'
-const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/screenshots/migration1-dev'
+const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 const browser = await chromium.launchPersistentContext(`/tmp/t6-shot3-${Date.now()}`, { headless: true, args: ['--no-proxy-server'], viewport: { width: 1600, height: 900 } })
 const page = browser.pages()[0]
 const errors = []

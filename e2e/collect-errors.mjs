@@ -6,7 +6,7 @@ import fs from 'node:fs'
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > -1 ? process.argv[i + 1] : d }
 const BASE = arg('--base', 'http://localhost:8773')
 const ENV = arg('--env', 'dev')
-const OUT = arg('--out', `/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/func-results/${ENV}-console-errors.json`)
+const OUT = arg('--out', `/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/func-results/${ENV}-console-errors.json`)
 const sub = BASE.includes('8661') ? '/main' : ''
 
 const PAGES = [

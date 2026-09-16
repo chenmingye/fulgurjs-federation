@@ -7,7 +7,7 @@ import fs from 'node:fs'
 
 const BASE = process.env.VBASE || 'http://localhost:8773'
 const TAG = process.env.VTAG || 'dev'
-const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/screenshots/migration1-dev'
+const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 const RESULT = `${SHOT_DIR}/t6-${TAG}-routes-result.json`
 const PROFILE = `/tmp/unifed-routes-${TAG}-${Date.now()}`
 

@@ -2,7 +2,7 @@
 import { chromium } from '@playwright/test'
 import fs from 'node:fs'
 
-const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/vite-plugin-unifed/docs/screenshots/migration1-dev'
+const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 const PROFILE = `/tmp/unifed-prod-prof-${Date.now()}`
 const BASE = 'http://localhost:8662'
 
