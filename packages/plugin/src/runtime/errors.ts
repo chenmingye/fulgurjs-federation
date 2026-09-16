@@ -1,11 +1,11 @@
 /** 统一错误码体系（对齐 webpack ScriptExternalLoadError 等运行时错误的可诊断性） */
-export class UnifedError extends Error {
+export class FulgurError extends Error {
   code: string
   details?: Record<string, unknown>
 
   constructor(code: string, message: string, details?: Record<string, unknown>) {
-    super(`[unifed:${code}] ${message}`)
-    this.name = 'UnifedError'
+    super(`[fulgur:${code}] ${message}`)
+    this.name = 'FulgurError'
     this.code = code
     this.details = details
   }

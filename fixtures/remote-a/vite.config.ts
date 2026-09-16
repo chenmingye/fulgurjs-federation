@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     federation({
       name: 'remote-a',
-      filename: 'unifed-remoteEntry.js',
+      filename: 'fulgur-remoteEntry.js',
       exposes: {
         './Button': './src/exposes/Button.vue',
         './StyledCard': './src/exposes/StyledCard.vue',

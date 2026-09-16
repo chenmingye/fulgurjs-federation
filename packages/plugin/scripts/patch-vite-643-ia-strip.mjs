@@ -36,7 +36,7 @@ const ORIGINAL = `              if (buildSourcemap === "inline") {
                   ""
                 );`
 const PATCHED = `              if (buildSourcemap === "inline") {
-                // update-begin--vite-plugin-unifed---P1 修复（本地 patch，见 packages/plugin/scripts/patch-vite-643-ia-strip.mjs）
+                // update-begin--fulgur-federation---P1 修复（本地 patch，见 packages/plugin/scripts/patch-vite-643-ia-strip.mjs）
                 // 原实现 convertSourceMap.mapFileCommentRegex 的 String.replace 在巨型 chunk（38.8MB entry，
                 // 27MB 单行内联 sourcemap）上于构建进程内必现 RangeError: Maximum call stack size exceeded
                 // （lazy/greedy、平坦化字符串均复现；离线正常；JS 栈余量 63529 帧）。改为无正则行过滤，
@@ -44,7 +44,7 @@ const PATCHED = `              if (buildSourcemap === "inline") {
                 chunk.code = chunk.code.split("\\n").filter(
                   (l) => !l.startsWith("//# sourceMappingURL=") && !l.startsWith("/*# sourceMappingURL=")
                 ).join("\\n");
-                // update-end--vite-plugin-unifed---`
+                // update-end--fulgur-federation---`
 
 if (code.includes('!l.startsWith("//# sourceMappingURL=")')) {
   console.log('[patch] 已应用过，跳过')

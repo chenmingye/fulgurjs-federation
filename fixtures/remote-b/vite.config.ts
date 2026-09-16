@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     federation({
       name: 'remote-b',
-      filename: 'unifed-remoteEntry.js',
+      filename: 'fulgur-remoteEntry.js',
       exposes: {
         './VueCheck': './src/exposes/VueCheck.vue',
         './LodashPage': './src/exposes/LodashPage.vue',

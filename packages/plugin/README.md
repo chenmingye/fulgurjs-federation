@@ -28,7 +28,7 @@ export default {
   plugins: [
     federation({
       name: 'mes-lowcode',
-      filename: 'unifed-remoteEntry.js',
+      filename: 'fulgur-remoteEntry.js',
       exposes: { './InfoCard': './src/unifed-exposes/InfoCard.vue' },
       shared: { vue: { singleton: true, requiredVersion: '^3.4.0' } },
     }),
@@ -42,7 +42,7 @@ export default {
 federation({
   name: 'host',
   remotes: {
-    // 单地址：dev 自动拼 @unifed-entry.js，prod 用 filename
+    // 单地址：dev 自动拼 @fulgur-entry.js，prod 用 filename
     lowcode: 'http://localhost:4664/lowcode',
   },
   shared: { vue: { singleton: true } },
@@ -52,7 +52,7 @@ federation({
 **消费**
 
 ```ts
-import { loadRemote, registerRemote, preloadRemote } from 'virtual:unifed-runtime'
+import { loadRemote, registerRemote, preloadRemote } from 'virtual:fulgur-runtime'
 
 const Mod = await loadRemote('lowcode/./InfoCard')
 // 远程可能部署不稳定？显式 fallback + 单次重试覆盖

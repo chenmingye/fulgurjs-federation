@@ -1,17 +1,17 @@
 /**
- * unifed 浏览器运行时内核。
+ * fulgur 浏览器运行时内核。
  *
  * 设计要点（与 webpack MF 语义对齐）：
  * - share scope 为普通对象：scopeName -> name -> version -> { get, from, eager, loaded }，
  *   容器 init 时按引用"收养"传入的 scope map，双向供给、兄弟 remote 互享。
  * - 版本裁决：满足 requiredVersion 的最高版本胜出；已注册/已加载版本永不替换（first-wins）；
  *   singleton 冲突警告并使用唯一实例；strictVersion 冲突抛错。
- * - 页面级单例：通过 globalThis.__UNIFED_RUNTIME__ 保证宿主与远程各自打包的运行时副本
+ * - 页面级单例：通过 globalThis.__FULGUR_RUNTIME__ 保证宿主与远程各自打包的运行时副本
  *   在同一页面只实例化一次。
  * - 自包含容器协议：remoteEntry 导出 { name, init(shareScopeMap), get(module) }，不 import 运行时。
  */
 import { satisfies, compareVersions } from '../semver'
-import { UnifedError, ErrorCodes } from './errors'
+import { FulgurError, ErrorCodes } from './errors'
 
 export interface ShareEntry {
   version: string
@@ -67,7 +67,7 @@ export interface RuntimeHooks {
   }) => Promise<ShareEntry | void> | ShareEntry | void
   beforeLoadRemote?: (info: { remote: string; module: string }) => void
   afterLoadRemote?: (info: { remote: string; module: string; module_ns?: any }) => void
-  onRemoteError?: (info: { remote: string; error: UnifedError }) => void
+  onRemoteError?: (info: { remote: string; error: FulgurError }) => void
 }
 
 export interface RemoteDebugInfo {
@@ -104,19 +104,19 @@ function createRuntime() {
       try {
         p.init?.(hooks)
       } catch (err) {
-        console.warn('[unifed] runtimePlugin init failed:', p.name, err)
+        console.warn('[fulgur] runtimePlugin init failed:', p.name, err)
       }
     }
   }
 
   const getScope = (name: string): ShareScope => (shareScopeMap[name] ??= {})
 
-  function emitError(info: { remote: string; error: UnifedError }) {
+  function emitError(info: { remote: string; error: FulgurError }) {
     try {
       hooks.onRemoteError?.(info)
     } catch {}
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('unifed:error', { detail: info }))
+      window.dispatchEvent(new CustomEvent('fulgur:error', { detail: info }))
     }
   }
 
@@ -193,20 +193,20 @@ function createRuntime() {
         const entry0 = byName[pick!]
         const msg = `singleton conflict for "${shareKey}": required "${req ?? 'any'}", using ${pick} from ${entry0.from}`
         if (opts.strictVersion) {
-          const err = new UnifedError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
+          const err = new FulgurError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
             shareKey,
             requiredVersion: req,
           })
           emitError({ remote: entry0.from, error: err })
           throw err
         }
-        console.warn(`[unifed] ${msg}`)
+        console.warn(`[fulgur] ${msg}`)
       }
     } else {
       pick = [...satisfying].sort(compareVersions).pop()
       if (!pick) {
         if (opts.strictVersion) {
-          const err = new UnifedError(
+          const err = new FulgurError(
             ErrorCodes.SHARE_STRICT_VERSION,
             `no satisfying version for "${shareKey}" (required "${req}") in share scope "${scopeName}"`,
           )
@@ -214,7 +214,7 @@ function createRuntime() {
           throw err
         }
         if (opts.fallback) return opts.fallback()
-        const err = new UnifedError(
+        const err = new FulgurError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
           `shared module "${shareKey}" (${req ?? 'any'}) is not available in share scope "${scopeName}" and has no local fallback`,
           { shareKey, requiredVersion: req },
@@ -267,7 +267,7 @@ function createRuntime() {
     if (container.name && remote.name && container.name !== remote.name) {
       const msg = `remoteEntry self-reported name "${container.name}" mismatches configured name "${remote.name}"`
       if (remote.promise) {
-        console.warn(`[unifed] ${msg} (promise-based remote, continuing)`)
+        console.warn(`[fulgur] ${msg} (promise-based remote, continuing)`)
       } else {
         throw Object.assign(new Error(msg), { code: ErrorCodes.REMOTE_NAME_MISMATCH })
       }
@@ -289,7 +289,7 @@ function createRuntime() {
       // 缓存路径同样校验：对已 init 的容器换 scope → MFU-005（webpack 语义）
       const prevScope = containerInitScopes.get(remote.container)
       if (prevScope && prevScope !== scopeKey) {
-        throw new UnifedError(
+        throw new FulgurError(
           ErrorCodes.CONTAINER_REINIT_CONFLICT,
           `container "${remote.name}" already initialized with share scope "${prevScope}", cannot re-init with "${scopeKey}"`,
         )
@@ -301,7 +301,7 @@ function createRuntime() {
     // 熔断：连续失败达到阈值后快速失败
     const b = remote.breakerState
     if (b.openUntil > Date.now()) {
-      const err = new UnifedError(
+      const err = new FulgurError(
         ErrorCodes.REMOTE_LOAD_FAILED,
         `circuit breaker open for remote "${remote.name}" until ${new Date(b.openUntil).toISOString()}`,
         { remote: remote.name },
@@ -361,12 +361,12 @@ function createRuntime() {
         if (/^https?:\/\//.test(remote.entry) && typeof location !== 'undefined') {
           hints.push(`1. is the remote dev server running?  try opening ${remote.entry} in the browser — it must return JS, not HTML/an error`)
           hints.push(`2. is the URL correct in federation({ remotes })?  dev and prod entries can differ`)
-          hints.push(`3. CORS: the remote dev server must allow cross-origin requests (vite-plugin-unifed enables server.cors automatically; a custom server config may have disabled it)`)
+          hints.push(`3. CORS: the remote dev server must allow cross-origin requests (fulgur-federation enables server.cors automatically; a custom server config may have disabled it)`)
         } else {
           hints.push(`1. is the remote deployed and reachable?  try opening ${remote.entry} in the browser — it must return JS`)
           hints.push(`2. NGINX/CDN routing: the entry path must serve the remoteEntry JS file (check try_files / fallback rules)`)
         }
-        throw new UnifedError(
+        throw new FulgurError(
           ErrorCodes.REMOTE_LOAD_FAILED,
           `failed to load remote "${remote.name}" from ${remote.entry}: ${String((lastErr as Error)?.message ?? lastErr)}\n` +
             hints.join('\n'),
@@ -380,7 +380,7 @@ function createRuntime() {
       // 模块命名空间对象是密封的，init scope 标记存 WeakMap
       const prevScope = containerInitScopes.get(container)
       if (prevScope && prevScope !== scopeKey) {
-        throw new UnifedError(
+        throw new FulgurError(
           ErrorCodes.CONTAINER_REINIT_CONFLICT,
           `container "${remote.name}" already initialized with share scope "${prevScope}", cannot re-init with "${scopeKey}"`,
         )
@@ -409,16 +409,16 @@ function createRuntime() {
         b.openUntil = Date.now() + BREAKER_RESET_MS
         b.fails = 0
       }
-      if (err instanceof UnifedError) {
+      if (err instanceof FulgurError) {
         emitError({ remote: remote.name, error: err })
         throw err
       }
       // 带 code 的领域错误（如 MFU-002 名称不匹配）原样穿透，不重包装为 MFU-001
       if ((err as any)?.code) {
-        emitError({ remote: remote.name, error: err as UnifedError })
+        emitError({ remote: remote.name, error: err as FulgurError })
         throw err
       }
-      const wrapped = new UnifedError(ErrorCodes.REMOTE_LOAD_FAILED, String((err as Error)?.message ?? err), {
+      const wrapped = new FulgurError(ErrorCodes.REMOTE_LOAD_FAILED, String((err as Error)?.message ?? err), {
         remote: remote.name,
       })
       emitError({ remote: remote.name, error: wrapped })
@@ -454,7 +454,7 @@ function createRuntime() {
     hooks.beforeLoadRemote?.({ remote: name, module })
     const remote = remotes.get(name)
     if (!remote) {
-      throw new UnifedError(
+      throw new FulgurError(
         ErrorCodes.REMOTE_UNKNOWN,
         `unknown remote "${name}". Register it via federation({ remotes }) or registerRemote().`,
         { remote: name },
@@ -465,7 +465,7 @@ function createRuntime() {
       container = await acquireContainer(remote, { retries: opts?.retries })
     } catch (err) {
       if (opts?.fallbackModule) {
-        console.error(`[unifed] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
+        console.error(`[fulgur] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
         emitError({ remote: name, error: err as Error })
         return await opts.fallbackModule()
       }
@@ -478,8 +478,8 @@ function createRuntime() {
         cacheKey,
         container.get(module).catch((err: unknown) => {
           loadedModules.delete(cacheKey)
-          if (err instanceof UnifedError || (err as any)?.code) throw err
-          throw new UnifedError(
+          if (err instanceof FulgurError || (err as any)?.code) throw err
+          throw new FulgurError(
             ErrorCodes.REMOTE_LOAD_FAILED,
             `failed to load module "${module}" from remote "${name}": ${String((err as Error)?.message ?? err)}`,
             { remote: name, module },
@@ -492,7 +492,7 @@ function createRuntime() {
       ns = await loadedModules.get(cacheKey)
     } catch (err) {
       if (opts?.fallbackModule) {
-        console.error(`[unifed] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
+        console.error(`[fulgur] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
         emitError({ remote: name, error: err as Error })
         return await opts.fallbackModule()
       }
@@ -505,7 +505,7 @@ function createRuntime() {
   function getContainer(name: string): Promise<any> {
     const remote = remotes.get(name)
     if (!remote) {
-      throw new UnifedError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
+      throw new FulgurError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
     }
     return acquireContainer(remote)
   }
@@ -517,7 +517,7 @@ function createRuntime() {
     const { remote: name } = parseSpec(spec)
     const remote = remotes.get(name)
     if (!remote) {
-      throw new UnifedError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
+      throw new FulgurError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
     }
     const mode = opts.mode ?? 'preload'
     const inject = (href: string, as: 'modulepreload' | 'style') => {
@@ -552,18 +552,18 @@ function createRuntime() {
       // 预加载失败不阻断业务，仅上报
       emitError({
         remote: name,
-        error: new UnifedError(ErrorCodes.PRELOAD_FAILED, String((err as Error)?.message ?? err), {
+        error: new FulgurError(ErrorCodes.PRELOAD_FAILED, String((err as Error)?.message ?? err), {
           remote: name,
         }),
       })
     }
   }
 
-  // 调试出口：window.__UNIFED_SCOPE__ / __UNIFED_INFO__
+  // 调试出口：window.__FULGUR_SCOPE__ / __FULGUR_INFO__
   const attachDebug = () => {
     if (typeof window === 'undefined') return
-    ;(window as any).__UNIFED_SCOPE__ = shareScopeMap
-    ;(window as any).__UNIFED_INFO__ = {
+    ;(window as any).__FULGUR_SCOPE__ = shareScopeMap
+    ;(window as any).__FULGUR_INFO__ = {
       get remotes() {
         const out: Record<string, RemoteDebugInfo> = {}
         for (const [k, v] of remotes) {
@@ -591,11 +591,11 @@ function createRuntime() {
   }
 }
 
-export type UnifedRuntime = ReturnType<typeof createRuntime>
+export type FulgurRuntime = ReturnType<typeof createRuntime>
 
 const g = globalThis as any
-export const runtime: UnifedRuntime = g.__UNIFED_RUNTIME__ ?? createRuntime()
-g.__UNIFED_RUNTIME__ = runtime
+export const runtime: FulgurRuntime = g.__FULGUR_RUNTIME__ ?? createRuntime()
+g.__FULGUR_RUNTIME__ = runtime
 
 export const initSharing = runtime.initSharing
 export const registerShare = runtime.registerShare

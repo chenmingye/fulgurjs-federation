@@ -8,7 +8,7 @@ type Runtime = typeof import('../src/runtime/index')
 
 async function fresh(): Promise<Runtime> {
   vi.resetModules()
-  ;(globalThis as any).__UNIFED_RUNTIME__ = undefined
+  ;(globalThis as any).__FULGUR_RUNTIME__ = undefined
   return import('../src/runtime/index')
 }
 

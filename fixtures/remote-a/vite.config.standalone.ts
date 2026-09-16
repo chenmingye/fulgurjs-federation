@@ -8,7 +8,7 @@ export default defineConfig({
     vue(),
     federation({
       name: 'remote-a-sa',
-      filename: 'unifed-remoteEntry.js',
+      filename: 'fulgur-remoteEntry.js',
       exposes: {
         './Button': './src/exposes/Button.vue',
         './utils': './src/exposes/utils.ts',

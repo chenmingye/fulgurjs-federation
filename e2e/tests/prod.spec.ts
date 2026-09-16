@@ -9,12 +9,12 @@ const HOST = 'http://localhost:8999'
 
 test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
   test('构建产物完备：remoteEntry 稳定文件名 / manifest / init 注入 / gzip / 长缓存头', async ({ request }) => {
-    const entry = await request.get(`${HOST}/remote-a/unifed-remoteEntry.js`)
+    const entry = await request.get(`${HOST}/remote-a/fulgur-remoteEntry.js`)
     expect(entry.status()).toBe(200)
     expect(entry.headers()['cache-control']).toContain('immutable')
     expect(entry.headers()['access-control-allow-origin']).toBe('*')
 
-    const manifest = await (await request.get(`${HOST}/remote-a/unifed-manifest.json`)).json()
+    const manifest = await (await request.get(`${HOST}/remote-a/fulgur-manifest.json`)).json()
     expect(manifest.name).toBe('remote-a')
     expect(Object.keys(manifest.exposes)).toContain('./Button')
     // exposes 对象形式稳定 chunk 名在 prod 产物的体现：expose 独立成 chunk 且被 manifest 收录
@@ -96,7 +96,7 @@ test.describe('prod(NGINX): 容错', () => {
   test('B-15 摘除 remoteEntry → MFU-001 + 恢复', async ({ page, request }) => {
     await page.goto(`${HOST}/#/`)
     // 记录原始 remoteEntry 内容
-    const entry = await request.get(`${HOST}/remote-a/unifed-remoteEntry.js`)
+    const entry = await request.get(`${HOST}/remote-a/fulgur-remoteEntry.js`)
     const original = await entry.text()
     expect(original.length).toBeGreaterThan(0)
     await shot(page, 'prod-fault-before')

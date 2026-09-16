@@ -20,7 +20,7 @@ await page.waitForTimeout(5000)
 const results = await page.evaluate(async () => {
   const out = {}
   // @ts-ignore
-  const rt = await import(/* @vite-ignore */ window.location.origin + '/main/@id/__x00__virtual:unifed-runtime')
+  const rt = await import(/* @vite-ignore */ window.location.origin + '/main/@id/__x00__virtual:fulgur-runtime')
 
   // 1) loadRemote —— webpack: container.get(expose)
   try {
@@ -39,16 +39,16 @@ const results = await page.evaluate(async () => {
   try {
     const container = await rt.getContainer?.('mes-bpm')
     if (container) {
-      await container.init((window.__UNIFED_SCOPE__ ?? {})['default'] ?? {})
+      await container.init((window.__FULGUR_SCOPE__ ?? {})['default'] ?? {})
       const mod = await container.get('./pages/bpm/task/todo')
       out['container.init/get'] = { ok: !!mod }
     } else out['container.init/get'] = { ok: false, err: 'getContainer 不可用' }
   } catch (e) { out['container.init/get'] = { ok: false, err: String(e).slice(0, 100) } }
 
   // 4) 注册面/解析面：webpack 不导出 parseSpec（内部），本插件同样以内部形态存在；
-  //    对外可验证的是 __UNIFED_INFO__（remote 注册表）
+  //    对外可验证的是 __FULGUR_INFO__（remote 注册表）
   try {
-    const info = window.__UNIFED_INFO__
+    const info = window.__FULGUR_INFO__
     const remotes = info ? Object.keys(info.remotes ?? {}) : []
     out.registeredRemotes = { ok: remotes.length > 0, remotes }
   } catch (e) { out.registeredRemotes = { ok: false, err: String(e).slice(0, 100) } }
@@ -61,7 +61,7 @@ const results = await page.evaluate(async () => {
 
   // 6) registerRemote + loadRemote（运行时动态注册：webpack promise remote 语义）
   try {
-    rt.registerRemote?.({ name: 'remote-old', entry: 'http://localhost:4529/flowable', shareScope: 'default', manifestUrl: 'http://localhost:4529/flowable/@unifed-manifest.json' })
+    rt.registerRemote?.({ name: 'remote-old', entry: 'http://localhost:4529/flowable', shareScope: 'default', manifestUrl: 'http://localhost:4529/flowable/@fulgur-manifest.json' })
     const m = await rt.loadRemote('remote-old/pages/bpm/task/done')
     out.registerRemote = { ok: !!m }
   } catch (e) { out.registerRemote = { ok: false, err: String(e).slice(0, 120) } }

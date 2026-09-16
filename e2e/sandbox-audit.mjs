@@ -31,7 +31,7 @@ const baseline = await page.evaluate(() => {
     elPrimary: getComputedStyle(document.documentElement).getPropertyValue('--el-color-primary').trim(),
     elFonts: getComputedStyle(document.documentElement).getPropertyValue('--el-font-size-base').trim(),
     vueVersion: null,
-    unifedScope: !!window.__UNIFED_SCOPE__,
+    unifedScope: !!window.__FULGUR_SCOPE__,
   }
 })
 console.log('基线(纯宿主): styleSheets=' + baseline.styleSheetCount, 'el-primary=' + baseline.elPrimary, 'window新增键=' + baseline.winKeys.length)
@@ -47,8 +47,8 @@ const after = await page.evaluate(() => {
     styleSheetCount: document.styleSheets.length,
     elPrimary: getComputedStyle(document.documentElement).getPropertyValue('--el-color-primary').trim(),
     // 页面上任取一个元素，看它实例所属的 vue 版本（联邦单例证明）
-    unifedScopes: window.__UNIFED_SCOPE__ ? Object.keys(window.__UNIFED_SCOPE__) : [],
-    unifedInfo: window.__UNIFED_INFO__ ? Object.keys(window.__UNIFED_INFO__) : [],
+    unifedScopes: window.__FULGUR_SCOPE__ ? Object.keys(window.__FULGUR_SCOPE__) : [],
+    unifedInfo: window.__FULGUR_INFO__ ? Object.keys(window.__FULGUR_INFO__) : [],
     // element-plus 的 CSS 规则来源统计（多版本共存证据）
     elCssFiles: [...document.styleSheets]
       .map((s) => (s.href || '').split('/').slice(-1)[0])
@@ -73,7 +73,7 @@ console.log('1) CSS:', {
 console.log('2) window 全局:', {
   基线新增键: baseline.winKeys.length,
   '联邦加载后新增键(截取)': winDiffClean,
-  __UNIFED_SCOPE__: after.unifedScopes,
+  __FULGUR_SCOPE__: after.unifedScopes,
 })
 console.log('3) 联邦注册面:', JSON.stringify(after.unifedInfo))
 await browser.close()

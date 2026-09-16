@@ -14,9 +14,9 @@ function jsonReplacer(_k: string, v: unknown) {
 /** shared facade：export * + default interop（CJS 与无 default 包都能工作）——provide/fallback 用的命名空间门面 */
 export function genSharedFacade(specifier: string): string {
   return [
-    `import * as __unifed_facade from ${JSON.stringify(specifier)};`,
+    `import * as __fulgur_facade from ${JSON.stringify(specifier)};`,
     `export * from ${JSON.stringify(specifier)};`,
-    `export default __unifed_facade.default ?? __unifed_facade;`,
+    `export default __fulgur_facade.default ?? __fulgur_facade;`,
     '',
   ].join('\n')
 }
@@ -29,16 +29,16 @@ export function genSharedFacade(specifier: string): string {
  */
 export function genSharedNsFacade(item: NormalizedShared, loadShareCall: string, exportNames: string[]): string {
   const lines: string[] = [
-    `import { loadShare as __unifed_loadShare, unwrapDefault as __unifedU } from "virtual:unifed-runtime";`,
-    `const __unifed_m = await ${loadShareCall};`,
-    `const __unifed_d = __unifedU(__unifed_m);`,
-    `export default __unifed_d;`,
+    `import { loadShare as __fulgur_loadShare, unwrapDefault as __fulgurU } from "virtual:fulgur-runtime";`,
+    `const __fulgur_m = await ${loadShareCall};`,
+    `const __fulgur_d = __fulgurU(__fulgur_m);`,
+    `export default __fulgur_d;`,
   ]
   const seen = new Set<string>(['default'])
   for (const name of exportNames) {
     if (seen.has(name) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) continue
     seen.add(name)
-    lines.push(`export const ${name} = __unifed_d[${JSON.stringify(name)}];`)
+    lines.push(`export const ${name} = __fulgur_d[${JSON.stringify(name)}];`)
   }
   lines.push('')
   return lines.join('\n')
@@ -55,8 +55,8 @@ export function genBindingFacade(
   loadShareCall: string,
 ): string {
   const lines: string[] = [
-    `import { loadShare as __unifed_loadShare, unwrapDefault as __unifedU } from "virtual:unifed-runtime";`,
-    `const __unifed_m = await ${loadShareCall};`,
+    `import { loadShare as __fulgur_loadShare, unwrapDefault as __fulgurU } from "virtual:fulgur-runtime";`,
+    `const __fulgur_m = await ${loadShareCall};`,
   ]
   // 门面导出名 = 消费方导入的 imported 名（消费方的 as 别名由其 import 语句自行处理）
   const seen = new Set<string>()
@@ -67,9 +67,9 @@ export function genBindingFacade(
     const imported = (asMatch ? asMatch[1] : bRaw).trim()
     if (seen.has(imported)) continue
     seen.add(imported)
-    lines.push(`export const ${imported} = __unifed_m.${imported};`)
+    lines.push(`export const ${imported} = __fulgur_m.${imported};`)
   }
-  lines.push(`export default __unifedU(__unifed_m);`)
+  lines.push(`export default __fulgurU(__fulgur_m);`)
   lines.push('')
   return lines.join('\n')
 }
@@ -77,8 +77,8 @@ export function genBindingFacade(
 /** 远程绑定门面：静态 import 远程模块时指向它（内部走 loadRemote） */
 export function genRemoteBindingFacade(remoteSpec: string, bindings: string[]): string {
   const lines: string[] = [
-    `import { loadRemote as __unifed_loadRemote, unwrapDefault as __unifedU } from "virtual:unifed-runtime";`,
-    `const __unifed_m = await __unifed_loadRemote(${JSON.stringify(remoteSpec)});`,
+    `import { loadRemote as __fulgur_loadRemote, unwrapDefault as __fulgurU } from "virtual:fulgur-runtime";`,
+    `const __fulgur_m = await __fulgur_loadRemote(${JSON.stringify(remoteSpec)});`,
   ]
   const seen = new Set<string>()
   for (const bRaw of bindings) {
@@ -88,9 +88,9 @@ export function genRemoteBindingFacade(remoteSpec: string, bindings: string[]): 
     const imported = (asMatch ? asMatch[1] : bRaw).trim()
     if (seen.has(imported)) continue
     seen.add(imported)
-    lines.push(`export const ${imported} = __unifed_m.${imported};`)
+    lines.push(`export const ${imported} = __fulgur_m.${imported};`)
   }
-  lines.push(`export default __unifedU(__unifed_m);`)
+  lines.push(`export default __fulgurU(__fulgur_m);`)
   lines.push('')
   return lines.join('\n')
 }
@@ -125,12 +125,12 @@ export function genInitModule(
   command: 'serve' | 'build',
 ): string {
   const lines: string[] = []
-  lines.push(`import { initSharing, registerShare, registerRemotes, registerPlugins } from "virtual:unifed-runtime";`)
+  lines.push(`import { initSharing, registerShare, registerRemotes, registerPlugins } from "virtual:fulgur-runtime";`)
 
   const provides = providesRecords(options)
   const eagerShared: NormalizedShared[] = options.shared.filter((s) => s.eager && s.import !== false)
   eagerShared.forEach((s, i) => {
-    lines.push(`import * as __unifed_eager_${i} from "virtual:unifed-shared:${s.shareKey}";`)
+    lines.push(`import * as __fulgur_eager_${i} from "virtual:fulgur-shared:${s.shareKey}";`)
   })
 
   // dev 宿主（有 remotes 即浏览器直接加载的主应用，是否同时 exposes 不影响）：
@@ -144,11 +144,11 @@ export function genInitModule(
 
   if (options.runtimePlugins.length > 0) {
     options.runtimePlugins.forEach((p, i) => {
-      lines.push(`import * as __unifed_rp_${i} from ${JSON.stringify(p)};`)
+      lines.push(`import * as __fulgur_rp_${i} from ${JSON.stringify(p)};`)
     })
     lines.push(
       `registerPlugins([${options.runtimePlugins
-        .map((_, i) => `(__unifed_rp_${i}.default ?? __unifed_rp_${i})`)
+        .map((_, i) => `(__fulgur_rp_${i}.default ?? __fulgur_rp_${i})`)
         .join(', ')}]);`,
     )
   }
@@ -161,11 +161,11 @@ export function genInitModule(
     const eagerIdx = eagerShared.findIndex((s) => s.shareKey === p.name && s.shareScope === p.shareScope)
     if (p.eager && eagerIdx !== -1) {
       lines.push(
-        `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => Promise.resolve(__unifed_eager_${eagerIdx}), { from: ${JSON.stringify(p.from)}, eager: true, loaded: ${loadedFlag} });`,
+        `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => Promise.resolve(__fulgur_eager_${eagerIdx}), { from: ${JSON.stringify(p.from)}, eager: true, loaded: ${loadedFlag} });`,
       )
     } else {
       lines.push(
-        `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => import("virtual:unifed-shared:${p.name}"), { from: ${JSON.stringify(p.from)}, eager: false, loaded: ${loadedFlag} });`,
+        `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => import("virtual:fulgur-shared:${p.name}"), { from: ${JSON.stringify(p.from)}, eager: false, loaded: ${loadedFlag} });`,
       )
     }
   })
@@ -178,11 +178,11 @@ function manifestUrlFor(r: NormalizedRemote, command: 'serve' | 'build'): string
   if (!entry) return null
   try {
     const u = new URL(entry)
-    // dev 容器入口 @unifed-entry.js → @unifed-manifest.json；prod remoteEntry 同目录 manifest
-    if (u.pathname.includes('@unifed-entry.js')) {
-      u.pathname = u.pathname.replace('@unifed-entry.js', '@unifed-manifest.json')
+    // dev 容器入口 @fulgur-entry.js → @fulgur-manifest.json；prod remoteEntry 同目录 manifest
+    if (u.pathname.includes('@fulgur-entry.js')) {
+      u.pathname = u.pathname.replace('@fulgur-entry.js', '@fulgur-manifest.json')
     } else {
-      u.pathname = u.pathname.replace(/[^/]*$/, '') + 'unifed-manifest.json'
+      u.pathname = u.pathname.replace(/[^/]*$/, '') + 'fulgur-manifest.json'
     }
     return u.href
   } catch {
@@ -216,16 +216,16 @@ function registerRemotesLines(options: NormalizedOptions, command: 'serve' | 'bu
  * dev 容器入口（remote 端 dev server 中间件直出的自包含 JS）。
  * init(shareScopeMap) 按引用收养 scope map 并注册 provides——对齐 webpack 容器协议。
  * 顶层注册自身 remotes：远程页面被宿主加载后可能再消费其他远程（双向联邦/嵌套联邦），
- * 页面级运行时经 globalThis.__UNIFED_RUNTIME__ 单例，跨源模块副本共享同一注册表。
+ * 页面级运行时经 globalThis.__FULGUR_RUNTIME__ 单例，跨源模块副本共享同一注册表。
  */
 export function genDevRemoteEntry(options: NormalizedOptions, base: string): string {
   const b = base.endsWith('/') ? base : `${base}/`
   const remoteLines = registerRemotesLines(options, 'serve')
   return `import ${JSON.stringify(`${b}@vite/client`)};
-import { name as _unifed_name, exposes, provides } from ${JSON.stringify(`${b}@id/__x00__virtual:unifed-provides`)};
-${remoteLines.length > 0 ? `import { registerRemotes } from ${JSON.stringify(`${b}@id/virtual:unifed-runtime`)};\n${remoteLines.join('\n')}` : ''}
+import { name as _fulgur_name, exposes, provides } from ${JSON.stringify(`${b}@id/__x00__virtual:fulgur-provides`)};
+${remoteLines.length > 0 ? `import { registerRemotes } from ${JSON.stringify(`${b}@id/virtual:fulgur-runtime`)};\n${remoteLines.join('\n')}` : ''}
 
-export const name = _unifed_name;
+export const name = _fulgur_name;
 
 export async function init(shareScopeMap) {
   for (const p of provides) {
@@ -260,7 +260,7 @@ export function genDevProvides(options: NormalizedOptions): string {
   }
   const provides = providesRecords(options).map(
     (p) =>
-      `  { shareScope: ${JSON.stringify(p.shareScope)}, name: ${JSON.stringify(p.name)}, version: ${JSON.stringify(p.version)}, eager: ${p.eager}, get: () => import("virtual:unifed-shared:${p.name}") },`,
+      `  { shareScope: ${JSON.stringify(p.shareScope)}, name: ${JSON.stringify(p.name)}, version: ${JSON.stringify(p.version)}, eager: ${p.eager}, get: () => import("virtual:fulgur-shared:${p.name}") },`,
   )
   return [
     `export const name = ${JSON.stringify(options.name)};`,
@@ -281,7 +281,7 @@ export function genDevProvides(options: NormalizedOptions): string {
  * 本应用页面被宿主加载后还会 loadRemote 其他 remote（如 bpm 页面消费 admin 的
  * FormRouterPage），而本应用的 registerRemotes 写在自己 index.html 内联 init 里——
  * 联邦模式下宿主从不加载本应用的 index.html，remotes 无人注册 → MFU-008。
- * 经 globalThis.__UNIFED_RUNTIME__ 单例与宿主共享同一注册表。
+ * 经 globalThis.__FULGUR_RUNTIME__ 单例与宿主共享同一注册表。
  */
 export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: Record<string, string>): string {
   const exposes: string[] = []
@@ -292,12 +292,12 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
   }
   const provides = providesRecords(options).map(
     (p) =>
-      `  { shareScope: ${JSON.stringify(p.shareScope)}, name: ${JSON.stringify(p.name)}, version: ${JSON.stringify(p.version)}, eager: ${p.eager}, get: () => import("virtual:unifed-shared:${p.name}") },`,
+      `  { shareScope: ${JSON.stringify(p.shareScope)}, name: ${JSON.stringify(p.name)}, version: ${JSON.stringify(p.version)}, eager: ${p.eager}, get: () => import("virtual:fulgur-shared:${p.name}") },`,
   )
   const remoteLines = registerRemotesLines(options, 'build')
   return [
     ...(remoteLines.length > 0
-      ? [`import { registerRemotes } from "virtual:unifed-runtime";`, ...remoteLines]
+      ? [`import { registerRemotes } from "virtual:fulgur-runtime";`, ...remoteLines]
       : []),
     `const exposes = {`,
     ...exposes,
@@ -335,16 +335,16 @@ export function genDevManifest(options: NormalizedOptions, base: string): Record
   return {
     id: options.name,
     name: options.name,
-    version: options.pkgDependencies?.['unifed'] ?? '0.0.0',
+    version: options.pkgDependencies?.['fulgur'] ?? '0.0.0',
     devServer: true,
     base: b,
-    entry: `${b}@unifed-entry.js`,
+    entry: `${b}@fulgur-entry.js`,
     /** 本地联调时供宿主端 dts 类型直连（见 dts.ts）；远程不在本机时宿主回退 any 桩 */
     fsRoot: options.root,
     exposes: options.exposes.map((e) => ({
       name: e.name,
       src: e.import,
-      file: `${b}@unifed-src/${e.import.replace(/^\.?\//, '')}`,
+      file: `${b}@fulgur-src/${e.import.replace(/^\.?\//, '')}`,
     })),
     shared: options.shared.map((s) => ({
       name: s.shareKey,
@@ -382,7 +382,7 @@ export function genProdManifest(
       eager: s.eager,
     })),
     buildInfo: {
-      builtBy: 'vite-plugin-unifed',
+      builtBy: 'fulgur-federation',
       timestamp: Date.now(),
     },
   }

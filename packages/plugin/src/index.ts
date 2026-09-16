@@ -1,5 +1,5 @@
 /**
- * vite-plugin-unifed 主入口。
+ * fulgur-federation 主入口。
  * 一套 API 两个引擎：serve → 双 dev-server 协作；build → 构建期改写（Rollup/Rolldown）。
  */
 import fs from 'node:fs'
@@ -16,7 +16,7 @@ import {
   SHARED_FACADE_PREFIX,
   SHARED_NS_FACADE_PREFIX,
   type NormalizedOptions,
-  type UnifedOptions,
+  type FulgurOptions,
 } from './options'
 import { getFacadeEntry, isTransformableId, transformModule, serializeShareCallForFacade } from './transform'
 import {
@@ -45,8 +45,8 @@ function normalizeBase(base: string): string {
   return base.endsWith('/') ? base : `${base}/`
 }
 
-/** 预构建外部化桩模块的 esbuild namespace（配合 unifed-stub: 路径前缀使用） */
-const UNIFED_STUB_NAMESPACE = 'unifed-opt-stub'
+/** 预构建外部化桩模块的 esbuild namespace（配合 fulgur-stub: 路径前缀使用） */
+const FULGUR_STUB_NAMESPACE = 'fulgur-opt-stub'
 
 /**
  * 枚举本机安装包 CJS 入口的全部命名导出（预构建协商门面的命名导出清单生成用）。
@@ -64,7 +64,7 @@ function enumerateCjsExports(packageName: string, appRoot: string): string[] {
     names = Object.keys(mod)
   } catch {
     console.warn(
-      `[unifed] cannot enumerate CJS exports of shared package "${packageName}" for the optimize-deps facade; ` +
+      `[fulgur] cannot enumerate CJS exports of shared package "${packageName}" for the optimize-deps facade; ` +
         `the facade will export default only. If consumers destructure named exports from it, add this package ` +
         `to optimizeDeps.exclude to serve it through the transform pipeline instead.`,
     )
@@ -87,7 +87,7 @@ function injectInitScript(html: string, scriptSrc: string): string {
   return tag + html
 }
 
-export function federation(options: UnifedOptions): Plugin[] {
+export function federation(options: FulgurOptions): Plugin[] {
   const warnedUnknownPrefixes = new Set<string>()
   const state: {
     normalized?: NormalizedOptions
@@ -109,7 +109,7 @@ export function federation(options: UnifedOptions): Plugin[] {
   }
 
   const pre: Plugin = {
-    name: 'unifed:core',
+    name: 'fulgur:core',
     enforce: 'pre',
     async config(userConfig, env) {
       state.command = env.command
@@ -136,10 +136,10 @@ export function federation(options: UnifedOptions): Plugin[] {
           const filter = new RegExp(`^(${[...aliasToShare.keys()].map(escapeRe).join('|')})$`)
           const devBase = normalizeBase(userConfig.base ?? '/')
           const sharedExternal: { name: string; setup: (build: unknown) => void } = {
-            name: 'unifed:optimize-shared-external',
+            name: 'fulgur:optimize-shared-external',
             setup(build) {
               const facadeUrlFor = (shareKey: string) =>
-                `${devBase}@id/__x00__virtual:unifed-shared-ns:${shareKey}?import`
+                `${devBase}@id/__x00__virtual:fulgur-shared-ns:${shareKey}?import`
               const b = build as {
                 onResolve: (
                   opts: { filter: RegExp },
@@ -152,21 +152,21 @@ export function federation(options: UnifedOptions): Plugin[] {
               }
               // 桩内容里的门面 URL（浏览器 URL，非文件系统路径）必须标记 external，
               // esbuild 原样保留为静态 import/export-from，不做文件解析
-              b.onResolve({ filter: /unifed-shared-ns:/ }, (args) => ({ path: args.path, external: true }))
+              b.onResolve({ filter: /fulgur-shared-ns:/ }, (args) => ({ path: args.path, external: true }))
               b.onResolve({ filter }, (args) => {
                 // shared 键本身常是预构建入口（include/扫描发现）：入口解析放行走本地预构建，
                 // 只有依赖包内部的 import/require 才改道协商门面（esbuild 禁止 entry point external）
                 if (args.kind === 'entry-point' || args.kind === 'entry-point-render') return null
                 const s = aliasToShare.get(args.path)
                 if (!s) return null
-                return { path: `unifed-stub:${s.shareKey}`, namespace: UNIFED_STUB_NAMESPACE }
+                return { path: `fulgur-stub:${s.shareKey}`, namespace: FULGUR_STUB_NAMESPACE }
               })
               // re-export 桩：不能直接 external——esbuild 对 CJS 依赖内部的 require(external)
               // 会生成运行时抛错的动态 require 垫片（"Dynamic require of ... is not supported"）。
               // 改道到 bundled 桩模块后，esbuild 把门面 URL 提升为 chunk 顶部的静态 import，
               // 门面（TLA 协商）先于 chunk 求值完成，CJS require 拿到的命名空间同步可用。
-              b.onLoad({ filter: /^unifed-stub:/, namespace: UNIFED_STUB_NAMESPACE }, (args) => {
-                const shareKey = args.path.slice('unifed-stub:'.length)
+              b.onLoad({ filter: /^fulgur-stub:/, namespace: FULGUR_STUB_NAMESPACE }, (args) => {
+                const shareKey = args.path.slice('fulgur-stub:'.length)
                 const url = facadeUrlFor(shareKey)
                 return {
                   contents: `export * from ${JSON.stringify(url)};\nexport { default } from ${JSON.stringify(url)};\n`,
@@ -194,7 +194,7 @@ export function federation(options: UnifedOptions): Plugin[] {
         if (userTarget) {
           if (/es20(0\d|1\d|20|21)/.test(String(userTarget))) {
             normalized.warnings.push(
-              `build.target="${String(userTarget)}" does not support top-level await; unifed requires es2022 or higher.`,
+              `build.target="${String(userTarget)}" does not support top-level await; fulgur requires es2022 or higher.`,
             )
           }
         } else {
@@ -202,14 +202,14 @@ export function federation(options: UnifedOptions): Plugin[] {
         }
       }
 
-      for (const w of normalized.warnings) console.warn(`[unifed] ${w}`)
+      for (const w of normalized.warnings) console.warn(`[fulgur] ${w}`)
       return extra
     },
 
     configResolved(resolved) {
       state.base = normalizeBase(resolved.base)
       if ((resolved as unknown as { build?: { ssr?: boolean } }).build?.ssr) {
-        console.warn('[unifed] SSR builds are not supported in this version; plugin hooks disabled.')
+        console.warn('[fulgur] SSR builds are not supported in this version; plugin hooks disabled.')
       }
     },
 
@@ -236,7 +236,7 @@ export function federation(options: UnifedOptions): Plugin[] {
           if (!known && !warnedUnknownPrefixes.has(prefix)) {
             warnedUnknownPrefixes.add(prefix)
             console.warn(
-              `[vite-plugin-unifed] "${source}" uses prefix "${prefix}/", which is not in federation({ remotes }) or shared. ` +
+              `[fulgur] "${source}" uses prefix "${prefix}/", which is not in federation({ remotes }) or shared. ` +
                 `If "${prefix}" is a federated remote, add it: remotes: { '${prefix}': '<url>' }. ` +
                 `(Ignore this if it is a plain npm package.)`,
             )
@@ -246,17 +246,17 @@ export function federation(options: UnifedOptions): Plugin[] {
 
       if (bareClean === RUNTIME_VIRTUAL_ID) return RESOLVED.runtime
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
-      if (bareClean === 'virtual:unifed-provides') return RESOLVED.provides
-      if (bareClean === 'virtual:unifed-remote-entry') return RESOLVED.remoteEntry
+      if (bareClean === 'virtual:fulgur-provides') return RESOLVED.provides
+      if (bareClean === 'virtual:fulgur-remote-entry') return RESOLVED.remoteEntry
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
         return RESOLVED.sharedNsFacade(bareClean.slice(SHARED_NS_FACADE_PREFIX.length)) + query
       }
-      if (bareClean.startsWith('virtual:unifed-cjs-ns:')) {
-        return RESOLVED.sharedNsFacade(bareClean.slice('virtual:unifed-cjs-ns:'.length)) + query
+      if (bareClean.startsWith('virtual:fulgur-cjs-ns:')) {
+        return RESOLVED.sharedNsFacade(bareClean.slice('virtual:fulgur-cjs-ns:'.length)) + query
       }
-      if (bareClean.startsWith('virtual:unifed-shared:')) {
+      if (bareClean.startsWith('virtual:fulgur-shared:')) {
         // 绑定门面（?f= 绑定签名）与命名空间门面共用前缀；query 透传
-        const body = bareClean.slice('virtual:unifed-shared:'.length)
+        const body = bareClean.slice('virtual:fulgur-shared:'.length)
         return RESOLVED.sharedFacade(body) + query
       }
       return null
@@ -266,14 +266,14 @@ export function federation(options: UnifedOptions): Plugin[] {
       const raw = id.startsWith('\0') ? id.slice(1) : id
       const q = raw.indexOf('?')
       const clean = q === -1 ? raw : raw.slice(0, q)
-      if (clean === 'virtual:unifed-runtime') return readRuntimeCode()
-      if (clean === 'virtual:unifed-init' && state.normalized) {
+      if (clean === 'virtual:fulgur-runtime') return readRuntimeCode()
+      if (clean === 'virtual:fulgur-init' && state.normalized) {
         return genInitModule(state.normalized, state.command)
       }
-      if (clean === 'virtual:unifed-provides' && state.normalized) {
+      if (clean === 'virtual:fulgur-provides' && state.normalized) {
         return genDevProvides(state.normalized)
       }
-      if (clean === 'virtual:unifed-remote-entry' && state.normalized) {
+      if (clean === 'virtual:fulgur-remote-entry' && state.normalized) {
         return genBuildRemoteEntry(state.normalized, state.exposeAbsPaths)
       }
       if (clean.startsWith(SHARED_NS_FACADE_PREFIX) && state.normalized) {
@@ -291,8 +291,8 @@ export function federation(options: UnifedOptions): Plugin[] {
         }
         return genSharedNsFacade(item, serializeShareCallForFacade(item), names)
       }
-      if (clean.startsWith('virtual:unifed-shared:') && state.normalized) {
-        const body = clean.slice('virtual:unifed-shared:'.length)
+      if (clean.startsWith('virtual:fulgur-shared:') && state.normalized) {
+        const body = clean.slice('virtual:fulgur-shared:'.length)
         const f = raw.indexOf('?f=')
         if (f === -1) {
           // 命名空间门面（provide/fallback 用）：本应用自己的副本
@@ -316,7 +316,7 @@ export function federation(options: UnifedOptions): Plugin[] {
           ...(item.strictVersion ? ['strictVersion: true'] : []),
           'fallback: () => import(' + JSON.stringify(item.import) + ')',
         ]
-        const call = '__unifed_loadShare(' + JSON.stringify(item.shareKey) + ', { ' + opts.join(', ') + ' })'
+        const call = '__fulgur_loadShare(' + JSON.stringify(item.shareKey) + ', { ' + opts.join(', ') + ' })'
         return genBindingFacade(item, entry.bindings, call)
       }
       return null
@@ -401,13 +401,13 @@ export function federation(options: UnifedOptions): Plugin[] {
           if (resolved) {
             state.exposeAbsPaths[e.import] = resolved.id.split('?')[0]
           } else {
-            this.error(`[unifed] expose "${e.import}" could not be resolved from ${n.root}`)
+            this.error(`[fulgur] expose "${e.import}" could not be resolved from ${n.root}`)
           }
         }
         // emitFile 固定文件名：remoteEntry URL 稳定，CDN 长缓存友好
         this.emitFile({
           type: 'chunk',
-          id: 'virtual:unifed-remote-entry',
+          id: 'virtual:fulgur-remote-entry',
           fileName: n.filename.replace(/^\//, ''),
           preserveSignature: 'allow-extension',
         })
@@ -440,7 +440,7 @@ export function federation(options: UnifedOptions): Plugin[] {
       const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
       this.emitFile({
         type: 'asset',
-        fileName: 'unifed-manifest.json',
+        fileName: 'fulgur-manifest.json',
         source: JSON.stringify(manifest, null, 2),
       })
     },
@@ -456,7 +456,7 @@ export function federation(options: UnifedOptions): Plugin[] {
         server.middlewares.use((req, res, next) => {
           const raw = (req.url ?? '').split('?')[0]
           const stripped = raw.startsWith(baseNorm) ? `/${raw.slice(baseNorm.length)}` : raw
-          if (stripped === '/@unifed-entry.js' || stripped === '/@unifed-manifest.json') {
+          if (stripped === '/@fulgur-entry.js' || stripped === '/@fulgur-manifest.json') {
             res.setHeader('Access-Control-Allow-Origin', '*')
             res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS')
             res.setHeader('Access-Control-Allow-Headers', '*')
@@ -465,7 +465,7 @@ export function federation(options: UnifedOptions): Plugin[] {
               res.end()
               return
             }
-            if (stripped === '/@unifed-entry.js') {
+            if (stripped === '/@fulgur-entry.js') {
               res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
               res.setHeader('Cache-Control', 'no-cache')
               res.end(genDevRemoteEntry(n, baseNorm))
@@ -490,12 +490,12 @@ export function federation(options: UnifedOptions): Plugin[] {
 
   // .vue 编译产物处理：vue 插件输出的 JS 仍带 bare import（build）或依赖 URL（dev）
   const post: Plugin = {
-    name: 'unifed:vue-post',
+    name: 'fulgur:vue-post',
     enforce: 'post',
     async transform(code, id) {
       if (!state.normalized) return null
       // pre 阶段已改写过的模块（build 入口/子请求）不再处理，防双重生成
-      if (code.includes('virtual:unifed-runtime')) return null
+      if (code.includes('virtual:fulgur-runtime')) return null
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：仅 .vue 主请求（其余已由 pre 处理）
       if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) return null
       if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里
@@ -553,4 +553,4 @@ export function federation(options: UnifedOptions): Plugin[] {
 }
 
 export default federation
-export type { UnifedOptions } from './options'
+export type { FulgurOptions } from './options'

@@ -18,8 +18,8 @@ async function fetchManifest(devEntry: string, attempts = 30, delayMs = 2000): P
   let manifestUrl: URL
   try {
     const u = new URL(devEntry)
-    // 容器入口 @unifed-entry.js → 对应 manifest 端点 @unifed-manifest.json
-    u.pathname = u.pathname.replace('@unifed-entry.js', '@unifed-manifest.json')
+    // 容器入口 @fulgur-entry.js → 对应 manifest 端点 @fulgur-manifest.json
+    u.pathname = u.pathname.replace('@fulgur-entry.js', '@fulgur-manifest.json')
     manifestUrl = u
   } catch {
     return null
@@ -48,7 +48,7 @@ function sourceHasDefaultExport(file: string): boolean {
 export async function generateDevTypes(options: NormalizedOptions, _server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
-  const defaultDir = fs.existsSync(path.join(options.root, 'src')) ? 'src/unifed-types' : 'unifed-types'
+  const defaultDir = fs.existsSync(path.join(options.root, 'src')) ? 'src/fulgur-types' : 'fulgur-types'
   const dir = typeof dtsOpt === 'object' ? (dtsOpt.dir ?? defaultDir) : defaultDir
   const outDir = path.join(options.root, dir)
   fs.mkdirSync(outDir, { recursive: true })
@@ -57,19 +57,19 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
     if (!remote.devEntry || remote.promise) continue
     const manifest = await fetchManifest(remote.devEntry)
     if (!manifest || !manifest.exposes) {
-      console.warn(`[unifed] dts: remote "${remote.key}" dev manifest unavailable; type mapping skipped.`)
+      console.warn(`[fulgur] dts: remote "${remote.key}" dev manifest unavailable; type mapping skipped.`)
       continue
     }
     const remoteRoot = manifest.fsRoot
     if (!remoteRoot || !fs.existsSync(remoteRoot)) {
       console.warn(
-        `[unifed] dts: remote "${remote.key}" is not on this machine; type mapping skipped (module types fall back to any).`,
+        `[fulgur] dts: remote "${remote.key}" is not on this machine; type mapping skipped (module types fall back to any).`,
       )
       continue
     }
 
     const lines: string[] = [
-      `// 自动生成：vite-plugin-unifed dev 类型直连（remote: ${remote.name}）`,
+      `// 自动生成：fulgur-federation dev 类型直连（remote: ${remote.name}）`,
       `// 重新生成：重启 host dev server`,
     ]
     for (const expose of manifest.exposes ?? []) {
@@ -95,7 +95,7 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
     }
     fs.writeFileSync(path.join(outDir, `${remote.key}.d.ts`), `${lines.join('\n')}\n`)
     console.log(
-      `[unifed] dts: generated ${dir}/${remote.key}.d.ts (${manifest.exposes?.length ?? 0} exposes). ` +
+      `[fulgur] dts: generated ${dir}/${remote.key}.d.ts (${manifest.exposes?.length ?? 0} exposes). ` +
         `确保 tsconfig include 包含 "${dir}" 以获得源码级类型补全。`,
     )
   }

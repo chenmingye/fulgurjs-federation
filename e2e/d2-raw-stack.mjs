@@ -13,7 +13,7 @@ await page.locator('input[type="password"]').first().fill('Demo@123456')
 await page.locator('button:has-text("登 录"), button:has-text("登录")').first().click()
 await page.waitForTimeout(9000)
 
-const RT_URL = `${BASE}/main/js/virtual_unifed-runtime-pkH-rS1N.js`
+const RT_URL = `${BASE}/main/js/virtual_fulgur-runtime-pkH-rS1N.js`
 const result = await page.evaluate(async (rtUrl) => {
   const rt = await import(/* @vite-ignore */ rtUrl)
   const out = { keys: Object.keys(rt) }

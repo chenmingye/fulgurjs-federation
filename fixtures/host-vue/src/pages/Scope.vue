@@ -28,7 +28,7 @@ const rows = ref<Array<Record<string, unknown>>>([])
 const remotesInfo = ref('')
 
 function collect() {
-  const scope = (window as any).__UNIFED_SCOPE__ ?? {}
+  const scope = (window as any).__FULGUR_SCOPE__ ?? {}
   const out: Array<Record<string, unknown>> = []
   for (const [scopeName, byName] of Object.entries<Record<string, Record<string, any>>>(scope)) {
     for (const [key, versions] of Object.entries(byName)) {
@@ -38,7 +38,7 @@ function collect() {
     }
   }
   rows.value = out
-  remotesInfo.value = JSON.stringify((window as any).__UNIFED_INFO__?.remotes ?? {}, null, 2)
+  remotesInfo.value = JSON.stringify((window as any).__FULGUR_INFO__?.remotes ?? {}, null, 2)
 }
 
 onMounted(() => {

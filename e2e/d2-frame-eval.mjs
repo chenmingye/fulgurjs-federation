@@ -2,7 +2,7 @@
 import { chromium } from '@playwright/test'
 
 const BASE = process.argv[2] || 'http://localhost:8662'
-const RT_URL = `${BASE}/main/js/virtual_unifed-runtime-pkH-rS1N.js`
+const RT_URL = `${BASE}/main/js/virtual_fulgur-runtime-pkH-rS1N.js`
 const browser = await chromium.launchPersistentContext(`/tmp/pd2e-${Date.now()}`, {
   headless: true, args: ['--no-proxy-server'], viewport: { width: 1500, height: 950 },
 })
