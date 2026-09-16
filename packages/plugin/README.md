@@ -29,7 +29,7 @@ export default {
     federation({
       name: 'mes-lowcode',
       filename: 'fulgur-remoteEntry.js',
-      exposes: { './InfoCard': './src/unifed-exposes/InfoCard.vue' },
+      exposes: { './InfoCard': './src/exposes/InfoCard.vue' },
       shared: { vue: { singleton: true, requiredVersion: '^3.4.0' } },
     }),
   ],

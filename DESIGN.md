@@ -2,7 +2,7 @@
 
 > **品牌**：fulgur，拉丁语「闪电 · 辉光」，取自作者名中「烨」字的意译。
 > 系列规划：`@fulgur/federation`（模块联邦）→ `@fulgur/micro`、`@fulgur/dts` …
-> 内部技术命名空间保留 `unifed`（`virtual:unifed-*` 虚拟模块、`window.__UNIFED_*` 调试出口、MFU 错误码）。
+> 内外命名统一 `fulgur`（`virtual:fulgur-*` 虚拟模块、`window.__FULGUR_*` 调试出口、`FulgurError` / MFU 错误码）。
 
 > 状态：已实现并验证（2026-09-13）。测试结果：单测 76/76、fixtures dev e2e 10/10、容错/HMR-L3 2/2、fixtures prod e2e 8/8（隔离 NGINX 8999）、testbed dev 实测全通、testbed prod（NGINX 8662）最小宿主消费真实远程产物实测通过；runtime gzip 4.4KB。已知问题见手册 §7。
 > 日期：2026-09-12
@@ -30,7 +30,7 @@
 
 ### 2A. 核心配置（webpack 官方文档全部选项）
 
-| # | webpack 选项 | unifed | 实现方式与语义说明 |
+| # | webpack 选项 | fulgur | 实现方式与语义说明 |
 |---|---|---|---|
 | 1 | `name` | ✅ | 容器名；同时作为 uniqueName 决胜来源。重名冲突构建期检测并警告（对齐 webpack 对 `output.uniqueName` 的要求） |
 | 2 | `filename` | ✅ | remoteEntry 文件名，稳定命名，利于 CDN 长缓存 |
@@ -50,7 +50,7 @@
 
 ### 2B. 运行时行为语义（"效果一模一样"的实体，逐条 e2e 验收）
 
-| # | webpack 行为 | unifed 验收语义 |
+| # | webpack 行为 | fulgur 验收语义 |
 |---|---|---|
 | 1 | 版本协商：消费方拿到 scope 中**满足其 requiredVersion 的最高版本** | e2e 断言双版本场景加载的是高版本 |
 | 2 | 多版本共存（非 singleton、不同 requiredVersion 可并存） | e2e 断言两版本模块图并存且各自正常 |
@@ -69,11 +69,11 @@
 | 15 | 静态 remote 自动加载；加载失败 → 等价 `ScriptExternalLoadError` 的统一错误码（MFU-0xx 体系） | e2e：kill remote 断言错误码 + UI 错误边界 |
 | 16 | `import('app1/Button')` 语法 + default/named unwrap 语义 | 所有用例的基础断言 |
 | 17 | exposed 模块的样式自动随模块注入（dev / prod 都生效） | e2e：远程组件样式生效断言 |
-| 18 | 异步边界：unifed **自动注入**（等效 `automaticAsyncBoundary: true` 默认开启），用户不需要 webpack 的 bootstrap.js 手工模式；提供开关可关 | e2e：不写 bootstrap 直接跑通 |
+| 18 | 异步边界：fulgur **自动注入**（等效 `automaticAsyncBoundary: true` 默认开启），用户不需要 webpack 的 bootstrap.js 手工模式；提供开关可关 | e2e：不写 bootstrap 直接跑通 |
 
 ### 2C. MF 2.0 / @module-federation/enhanced 配置
 
-| # | 选项 | unifed | 说明 |
+| # | 选项 | fulgur | 说明 |
 |---|---|---|---|
 | 1 | `manifest` | ✅ | `mf-manifest.json`（资源清单 + 版本 + 公共路径），部署回滚 = 切 manifest 指针 |
 | 2 | `runtimePlugins` | ✅ | runtime 钩子 API（init / get / loadShare 前后钩子） |
@@ -84,7 +84,7 @@
 
 ## 3. 比 webpack 更进一步的点
 
-1. **自动异步边界**——webpack 要求手工 `import('./bootstrap')`，unifed 自动注入，配置零改动
+1. **自动异步边界**——webpack 要求手工 `import('./bootstrap')`，fulgur 自动注入，配置零改动
 2. **类型直连**——dev 下 remote 的补全与跳转是真源码级（webpack 需要额外 dts 工具链折腾）
 3. **runtime 内核 gzip < 5KB**（CI 硬指标，对比 @module-federation/runtime 的 40KB+）
 4. **一套配置 dev/prod 自动切换**——webpack 的 dev/prod 配置经常分裂两份
@@ -92,7 +92,7 @@
 
 ## 4. HMR 对齐承诺（dev 体验）
 
-webpack 里 remote 模块 HMR 天然可用（同一构建系统）。unifed 通过 host↔remote 双 dev-server HMR 桥对齐，分三档自动化验收：
+webpack 里 remote 模块 HMR 天然可用（同一构建系统）。fulgur 通过 host↔remote 双 dev-server HMR 桥对齐，分三档自动化验收：
 
 - L1 组件热替换成功（页面不整页刷新）
 - L2 状态保留（组件热替换后 local state 不丢，对齐 vue HMR 行为）

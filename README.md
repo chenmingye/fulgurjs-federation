@@ -26,7 +26,7 @@
 - **exposes / remotes / shared 全语义**：`name@url` 语法、键重命名、promise-based remote、semver 全语法 requiredVersion、版本协商（最高版本胜出）、singleton / strictVersion、已加载版本永不替换、多版本共存、shareKey 重定向、多 shareScope
 - **UMD / CJS-only 依赖开箱即用**：element-plus、avue 等只有 UMD/CJS 产物的依赖直接进 `optimizeDeps.include` 即可——dev 期插件自动把预构建产物内的 shared 键改道协商门面；build 期自动把 CJS `require(<shared>)` 重定向到垫片，双运行时免疫
 - **自动异步边界**：top-level await 自动注入（es2022+），无需 webpack 式手工 `import('./bootstrap')`
-- **稳定产物**：remoteEntry 固定文件名利于 CDN 长缓存；`unifed-manifest.json` 资源清单；expose 独立 chunk
+- **稳定产物**：remoteEntry 固定文件名利于 CDN 长缓存；`fulgur-manifest.json` 资源清单；expose 独立 chunk
 - **容错（对齐 webpack MF 2.0 errorLoadRemote）**：加载重试 / 熔断 / 超时内置；`loadRemote(spec, { retries, fallbackModule })` 单次调用级覆盖——失败时返回 fallback 模块，错误事件仍显式发出（**绝不静默兜底**，不传则照旧抛错）
 - **增强能力**：dts 类型直连（dev 补全直达 remote 源码）、`preloadRemote()` manifest 驱动精确预载、runtimePlugins 钩子
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
@@ -94,7 +94,7 @@ export default defineConfig({
 import Button from 'remote-a/Button'
 
 // 动态导入 / 运行时 API
-import { loadRemote, registerRemote, preloadRemote } from 'virtual:unifed-runtime'
+import { loadRemote, registerRemote, preloadRemote } from 'virtual:fulgur-runtime'
 
 const Chart = defineAsyncComponent(() => loadRemote('remote-a/Chart').then(m => m.default))
 
@@ -110,7 +110,7 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
-**没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@unifed-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
+**没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgur-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
@@ -179,7 +179,7 @@ const Panel = await loadRemote('shop/Panel', {
 所有配置问题在 `vite` 启动瞬间即报，固定三段式，可直接照抄修正：
 
 ```
-[vite-plugin-unifed] Invalid federation() config — remotes["remote-a"] has no address (need one of external / dev / prod)
+[fulgur] Invalid federation() config — remotes["remote-a"] has no address (need one of external / dev / prod)
   got:      {"dev":""}
   expected: at least one address; with only one URL it is used for both dev and prod
   example:  remotes: { 'remote-a': 'http://localhost:5101' }
@@ -199,13 +199,13 @@ const Panel = await loadRemote('shop/Panel', {
 | MFU-007 | 预载失败（不阻断业务） |
 | MFU-008 | 引用了未注册的 remote |
 
-调试出口：`window.__UNIFED_SCOPE__`（share 协商实时结果）、`window.__UNIFED_INFO__`（remote 状态/耗时/错误）。
+调试出口：`window.__FULGUR_SCOPE__`（share 协商实时结果）、`window.__FULGUR_INFO__`（remote 状态/耗时/错误）。
 
 ## 边界（明确不支持）
 
 - 仅 Vue 3 生态（React 适配不在当前范围）；不兼容 originjs 的 `virtual:__federation__` 旧写法
 - 不支持 SSR（检测到即警告并禁用钩子）
-- 无浏览器 DevTools 扩展（提供 `window.__UNIFED_SCOPE__ / __UNIFED_INFO__` 调试面）
+- 无浏览器 DevTools 扩展（提供 `window.__FULGUR_SCOPE__ / __FULGUR_INFO__` 调试面）
 - 无 JS 沙箱 / CSS 隔离——联邦是同 realm 共存架构，靠 shared 单例协商防止双运行时（详见 `docs/沙箱边界审计.md` 的三维度实测）
 
 ## 文档
