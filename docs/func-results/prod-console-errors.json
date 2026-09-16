@@ -72,33 +72,8 @@
     "errors": []
   },
   "25 模块设计": {
-    "count": 6,
-    "errors": [
-      {
-        "kind": "pageerror",
-        "text": "TypeError: a.map is not a function"
-      },
-      {
-        "kind": "http",
-        "text": "404 http://localhost:8662/demo/tab/page?pageNo=1&pageSize=10"
-      },
-      {
-        "kind": "console",
-        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
-      },
-      {
-        "kind": "pageerror",
-        "text": "AxiosError: Zt"
-      },
-      {
-        "kind": "pageerror",
-        "text": "TypeError: Cannot read properties of undefined (reading 'map')"
-      },
-      {
-        "kind": "pageerror",
-        "text": "TypeError: Cannot read properties of undefined (reading 'map')"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "26 报表测试": {
     "count": 0,
