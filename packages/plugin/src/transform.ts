@@ -10,6 +10,7 @@
  */
 import { init as initLexer, parse } from 'es-module-lexer'
 import MagicString from 'magic-string'
+import path from 'node:path'
 import type { NormalizedOptions, NormalizedShared } from './options'
 import { SHARED_FACADE_PREFIX } from './options'
 
@@ -17,6 +18,37 @@ let lexerReady: Promise<unknown> | null = null
 function ensureLexer() {
   lexerReady ??= initLexer
   return lexerReady
+}
+
+/**
+ * 判断被 transform 的文件是否为 exposes 目标源文件（联邦远程页面的入口）。
+ * exposes 声明可省略扩展名（'./src/x' → x.ts/.vue/...），故逐个候选扩展名比对；
+ * cleanPath 已剥离 query（.vue 的 script 子请求 clean 后与主请求同路径，同样命中）。
+ */
+export function isExposeTargetFile(cleanPath: string, root: string, exposes: { import: string }[]): boolean {
+  for (const e of exposes) {
+    const abs = path.resolve(root, e.import.replace(/^\.\//, ''))
+    if (cleanPath === abs) return true
+    for (const ext of ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue']) {
+      if (cleanPath === abs + ext) return true
+    }
+  }
+  return false
+}
+
+/**
+ * D.1 守卫报错文案（三段式：现象 → 根因 → 修法）。
+ * exposes 目标文件静态导入虚拟运行时是明确误用：该文件必然被宿主跨源加载，
+ * 导入会改由远程 dev server 求值，在远程模块图内实例化第二份运行时副本，
+ * 破坏渲染上下文（resolveComponent / withDirectives / ref owner 告警、内容区空白）。
+ */
+export function staticRuntimeImportError(root: string, cleanPath: string): string {
+  const rel = path.relative(root, cleanPath) || cleanPath
+  return (
+    `[fulgur] ${rel} statically imports 'virtual:fulgur-runtime'.\n` +
+    `This file is a federation expose: when the host loads it cross-origin, the import is resolved by the REMOTE dev server and instantiates a second runtime copy inside the remote module graph, which breaks the render context (resolveComponent / withDirectives / "Missing ref owner" warnings, blank content area).\n` +
+    `Fix: access the host-initialized singleton instead — e.g. const runtime = (globalThis as any).__FULGUR_RUNTIME__ — or use getRuntime() from the standalone /fulgur-runtime.js build. See docs/迁移指南.md (远程页面如何取宿主运行时).`
+  )
 }
 
 interface SharedMatcher {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { federation } from '../src/index'
 import { normalizeOptions, type FulgurOptions } from '../src/options'
-import { transformModule } from '../src/transform'
+import { transformModule, isExposeTargetFile, staticRuntimeImportError } from '../src/transform'
 import { genBindingFacade, genBuildRemoteEntry, genDevRemoteEntry } from '../src/virtual'
 
 const ROOT = process.cwd()
@@ -326,5 +326,39 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
       '/proj/src/TaskCard.vue?vue&type=script&setup=true&lang.ts',
     )
     expect(r?.code).toMatch(/virtual:fulgur-shared:vue/)
+  })
+})
+
+describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
+  const exposes = [
+    { name: './pages/detail', import: './src/views/detail/index.vue' },
+    { name: './federatedBoot', import: './src/fulgur-exposes/federatedBoot.ts' },
+  ]
+  const root = '/proj'
+
+  it('exposes 主请求路径命中', () => {
+    expect(isExposeTargetFile('/proj/src/views/detail/index.vue', root, exposes)).toBe(true)
+  })
+
+  it('exposes 无扩展名声明按候选扩展名命中', () => {
+    const noExt = [{ name: './boot', import: './src/boot' }]
+    expect(isExposeTargetFile('/proj/src/boot.ts', root, noExt)).toBe(true)
+    expect(isExposeTargetFile('/proj/src/boot.vue', root, noExt)).toBe(true)
+  })
+
+  it('宿主侧非 expose 文件（demo 页/路由表）不命中', () => {
+    expect(isExposeTargetFile('/proj/src/views/fulgur/FulgurDemo.vue', root, exposes)).toBe(false)
+    expect(isExposeTargetFile('/proj/src/qiankun/fulgurPages.ts', root, exposes)).toBe(false)
+  })
+
+  it('非本项目路径不命中', () => {
+    expect(isExposeTargetFile('/other/proj/src/views/detail/index.vue', root, exposes)).toBe(false)
+  })
+
+  it('报错文案含文件相对路径、根因与修法（三段式）', () => {
+    const msg = staticRuntimeImportError(root, '/proj/src/views/detail/index.vue')
+    expect(msg).toContain('src/views/detail/index.vue')
+    expect(msg).toContain('second runtime copy')
+    expect(msg).toContain('globalThis')
   })
 })

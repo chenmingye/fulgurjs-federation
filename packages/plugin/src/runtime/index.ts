@@ -12,6 +12,7 @@
  */
 import { satisfies, compareVersions } from '../semver'
 import { FulgurError, ErrorCodes } from './errors'
+import { RUNTIME_VERSION } from '../version'
 
 export interface ShareEntry {
   version: string
@@ -596,6 +597,30 @@ export type FulgurRuntime = ReturnType<typeof createRuntime>
 const g = globalThis as any
 export const runtime: FulgurRuntime = g.__FULGUR_RUNTIME__ ?? createRuntime()
 g.__FULGUR_RUNTIME__ = runtime
+
+// 运行时单例契约固化：跨源消费方（远程页面/最小宿主）只允许经 globalThis.__FULGUR_RUNTIME__
+// 或 getRuntime() 取这份实例；方法面冻结防意外覆写（shareScopeMap 注册表本身仍可变）。
+// 冻结的是单例本体——无论它由哪份打包副本先创建，后续副本拿到的都是同一个冻结对象。
+try {
+  Object.freeze(runtime)
+} catch {
+  /* 极端环境（不可冻结）静默降级：契约仍由文档与 getRuntime 保证 */
+}
+
+/** 插件版本（与 package.json 同步维护于 src/version.ts，测试拦截漂移；用于跨源副本一致性诊断） */
+export const version: string = RUNTIME_VERSION
+
+/**
+ * 取当前页面生效的运行时单例（与 globalThis.__FULGUR_RUNTIME__ 同一实例）。
+ *
+ * 远程页面禁止静态 import 'virtual:fulgur-runtime'——该虚拟模块由远程 dev server
+ * 求值，会在远程模块图内实例化独立的运行时副本，破坏渲染上下文
+ * （resolveComponent / withDirectives / ref owner 告警、内容区空白）。
+ * 跨源取运行时一律用本入口，或直接读全局单例。
+ */
+export function getRuntime(): FulgurRuntime {
+  return runtime
+}
 
 export const initSharing = runtime.initSharing
 export const registerShare = runtime.registerShare

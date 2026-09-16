@@ -18,7 +18,14 @@ import {
   type NormalizedOptions,
   type FulgurOptions,
 } from './options'
-import { getFacadeEntry, isTransformableId, transformModule, serializeShareCallForFacade } from './transform'
+import {
+  getFacadeEntry,
+  isTransformableId,
+  transformModule,
+  serializeShareCallForFacade,
+  isExposeTargetFile,
+  staticRuntimeImportError,
+} from './transform'
 import {
   genBindingFacade,
   genBuildRemoteEntry,
@@ -494,13 +501,24 @@ export function federation(options: FulgurOptions): Plugin[] {
     enforce: 'post',
     async transform(code, id) {
       if (!state.normalized) return null
+      const clean = id.split('?')[0]
+      // D.1 守卫（dev-only）：exposes 目标文件静态导入虚拟运行时 → 宿主跨源加载该页面时，
+      // 导入会改由远程 dev server 求值，在远程模块图内实例化第二份 runtime 副本，
+      // 破坏渲染上下文（resolveComponent / withDirectives / ref owner 告警、内容区静默空白），
+      // 且此前无任何插件级报错（实测排障 40min+）。这里显式报错拦截。
+      // build 不拦：prod 各副本经 globalThis 单例收敛，无此破坏路径。
+      if (
+        state.command === 'serve' &&
+        code.includes('virtual:fulgur-runtime') &&
+        isExposeTargetFile(clean, state.normalized.root, state.normalized.exposes)
+      ) {
+        this.error(staticRuntimeImportError(state.normalized.root, clean))
+      }
       // pre 阶段已改写过的模块（build 入口/子请求）不再处理，防双重生成
       if (code.includes('virtual:fulgur-runtime')) return null
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：仅 .vue 主请求（其余已由 pre 处理）
       if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) return null
       if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里
-
-      const clean = id.split('?')[0]
       const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
       if (!isJsLike) return null
       // dev 宿主（无 exposes 或 host+remote 双角色）：自身源码不做 shared 改写（自身 import 即

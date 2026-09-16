@@ -2,6 +2,7 @@
  * 运行时语义单测：逐条对应 DESIGN.md §2B 的 webpack 行为语义。
  * 每个 case 通过 vi.resetModules + 动态 import 获得全新 runtime 实例（隔离 globalThis 单例）。
  */
+import fs from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Runtime = typeof import('../src/runtime/index')
@@ -250,5 +251,39 @@ describe('runtime: 容器收养语义（B-5 双向供给 / 兄弟互享）', () 
     await rt.getContainer('lib-provider')
     const mod = await rt.loadShare('dayjs', { requiredVersion: '^1.11.0' })
     expect(mod.v).toBe('from-remote')
+  })
+})
+
+describe('D.3 运行时契约官方化：getRuntime / version / 冻结', () => {
+  it('getRuntime() 返回与 globalThis.__FULGUR_RUNTIME__ 同一单例', async () => {
+    const rt = await fresh()
+    expect(rt.getRuntime()).toBe(rt.runtime)
+    expect(rt.getRuntime()).toBe((globalThis as any).__FULGUR_RUNTIME__)
+  })
+
+  it('跨打包副本收敛：后加载副本拿到先创建的同一实例', async () => {
+    vi.resetModules()
+    ;(globalThis as any).__FULGUR_RUNTIME__ = undefined
+    const first = await import('../src/runtime/index')
+    const second = await import('../src/runtime/index')
+    expect(second.getRuntime()).toBe(first.getRuntime())
+    expect(second.runtime).toBe(first.runtime)
+  })
+
+  it('version 与 package.json 同源', async () => {
+    const rt = await fresh()
+    const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    expect(rt.version).toBe(pkg.version)
+  })
+
+  it('方法面冻结：运行时单例不可被覆写（shareScopeMap 注册表仍可变）', async () => {
+    const rt = await fresh()
+    rt.initSharing('default')
+    expect(() => {
+      ;(rt.runtime as any).loadRemote = () => {}
+    }).toThrow()
+    // 注册表本身必须仍然可写（冻结只作用方法面）
+    expect(() => rt.registerShare('default', 'vue', '3.5.40', async () => ({}), { from: 'x' })).not.toThrow()
+    expect(Object.keys(rt.shareScopeMap.default)).toContain('vue')
   })
 })
