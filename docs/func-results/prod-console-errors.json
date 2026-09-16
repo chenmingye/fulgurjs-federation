@@ -72,8 +72,13 @@
     "errors": []
   },
   "25 模块设计": {
-    "count": 0,
-    "errors": []
+    "count": 1,
+    "errors": [
+      {
+        "kind": "console",
+        "text": "TypeError: w.getBoundingClientRect is not a function\n    at http://localhost:8662/lowcode/assets/index-Clnoo90i.js:2:65951\n    at callWithErrorHandling (http://localhost:8662/main/js/vue-vendor-wms-ehnU.js:2725:33)\n    at callWithAsyncErrorHandling ("
+      }
+    ]
   },
   "26 报表测试": {
     "count": 0,
