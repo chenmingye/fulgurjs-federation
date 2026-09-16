@@ -6,7 +6,7 @@ import fs from 'node:fs'
 const BASE = process.env.VBASE || 'http://localhost:8662'
 const TAG = process.env.VTAG || 'prod'
 const OUT = `/tmp/probe-depth2-${TAG}.json`
-const PROFILE = `/tmp/unifed-depth2-${TAG}-${Date.now()}`
+const PROFILE = `/tmp/fulgur-depth2-${TAG}-${Date.now()}`
 
 // [名, 路由, 期望至少有数据行的列表页?]
 const PAGES = [

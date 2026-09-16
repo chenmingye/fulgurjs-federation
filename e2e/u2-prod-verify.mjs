@@ -2,7 +2,7 @@
 import { chromium } from '@playwright/test'
 
 const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
-const PROFILE = `/tmp/unifed-prod-prof-u2-${Date.now()}`
+const PROFILE = `/tmp/fulgur-prod-prof-u2-${Date.now()}`
 const BASE = 'http://localhost:8662'
 const PAGES = [
   ['/lowcode/lowdev/formDesign', 'u2-prod-formDesign.png'],

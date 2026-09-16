@@ -12,7 +12,7 @@ const BASE = process.env.VBASE || 'http://localhost:8773'
 const TAG = process.env.VTAG || 'dev'
 const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 const RESULT = `${SHOT_DIR}/matrix-${TAG}.json`
-const PROFILE = `/tmp/unifed-matrix-${TAG}-${Date.now()}`
+const PROFILE = `/tmp/fulgur-matrix-${TAG}-${Date.now()}`
 
 // [编号, 输出名, 宿主路由, 类型 menu/action, 断言文本, u2Known]
 const PAGES = [

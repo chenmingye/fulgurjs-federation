@@ -3,7 +3,7 @@
 import { chromium } from '@playwright/test'
 const BASE = 'http://localhost:8662'
 const KEY = process.argv[2]
-const browser = await chromium.launchPersistentContext(`/tmp/unifed-start-${Date.now()}`, { headless: true, args: ['--no-proxy-server'] })
+const browser = await chromium.launchPersistentContext(`/tmp/fulgur-start-${Date.now()}`, { headless: true, args: ['--no-proxy-server'] })
 const page = browser.pages()[0]
 await page.goto(`${BASE}/main/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
 await page.waitForTimeout(4000)

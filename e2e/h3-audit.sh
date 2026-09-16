@@ -18,7 +18,7 @@ if [ -n "$hits" ]; then echo "✗ 残留回退语义:"; echo "$hits"; FAIL=1; el
 
 # 3. 空 catch（吞异常）在联邦/qiankun 桥接代码中不得出现
 hits=$(grep -rn 'catch {}' \
-  "$ROOT/demo-bpm/src/unifed-exposes" "$ROOT/demo-lowcode/src/unifed-exposes" \
+  "$ROOT/demo-bpm/src/fulgur-exposes" "$ROOT/demo-lowcode/src/fulgur-exposes" \
   "$ROOT/demo-host/src/qiankun" 2>/dev/null || true)
 if [ -n "$hits" ]; then echo "✗ 联邦桥接代码存在空 catch:"; echo "$hits"; FAIL=1; else echo "✓ 联邦桥接代码无空 catch"; fi
 

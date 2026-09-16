@@ -3,7 +3,7 @@
 import { chromium } from '@playwright/test'
 const BASE = 'http://localhost:8662'
 const SRC_MODEL = '5c0fd82d-4849-11f0-8041-f8e43be98cda' // demo_leave 请个假审批流程（已部署、最简单）
-const browser = await chromium.launchPersistentContext(`/tmp/unifed-seed3-${Date.now()}`, { headless: true, args: ['--no-proxy-server'] })
+const browser = await chromium.launchPersistentContext(`/tmp/fulgur-seed3-${Date.now()}`, { headless: true, args: ['--no-proxy-server'] })
 const page = browser.pages()[0]
 await page.goto(`${BASE}/main/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
 await page.waitForTimeout(4000)

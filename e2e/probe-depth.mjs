@@ -7,7 +7,7 @@ import fs from 'node:fs'
 const BASE = process.env.VBASE || 'http://localhost:8662'
 const TAG = process.env.VTAG || 'prod'
 const OUT = `/tmp/probe-depth-${TAG}.json`
-const PROFILE = `/tmp/unifed-depth-${TAG}-${Date.now()}`
+const PROFILE = `/tmp/fulgur-depth-${TAG}-${Date.now()}`
 
 const PAGES = [
   ['todo', '/flowable/bpm/task/todo'],

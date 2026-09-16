@@ -2,7 +2,7 @@
 import { chromium } from '@playwright/test'
 const BASE = process.env.VBASE || 'http://localhost:8773'
 const TAG = process.env.VTAG || 'dev'
-const PROFILE = `/tmp/unifed-amis-${TAG}-${Date.now()}`
+const PROFILE = `/tmp/fulgur-amis-${TAG}-${Date.now()}`
 const SHOT_DIR = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation/docs/screenshots/migration1-dev'
 const browser = await chromium.launchPersistentContext(PROFILE, { headless: true, args: ['--no-proxy-server'], viewport: { width: 1600, height: 900 } })
 const page = browser.pages()[0]
