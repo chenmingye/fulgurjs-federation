@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fulgur 最小宿主（纯运行时容器 API · 无构建步骤）</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        background: #f5f7fa;
+        color: #303133;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 8px;
+      }
+      .desc {
+        margin: 0 0 24px;
+        font-size: 13px;
+        color: #909399;
+      }
+      .cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .runtime-info {
+        margin-top: 24px;
+        padding: 16px;
+        border: 1px solid #ebeef5;
+        border-radius: 8px;
+        background: #fff;
+      }
+      .runtime-info h3 {
+        margin: 0 0 12px;
+        font-size: 15px;
+      }
+      table {
+        width: 100%;
+        margin-bottom: 12px;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        border: 1px solid #ebeef5;
+        padding: 6px 10px;
+        text-align: left;
+      }
+      th {
+        background: #f5f7fa;
+        color: #606266;
+      }
+      .ok {
+        color: #67c23a;
+      }
+      .bad {
+        color: #f56c6c;
+      }
+      .hint {
+        margin: 0;
+        font-size: 12px;
+        color: #909399;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>fulgur 最小宿主 — 纯运行时容器 API（无构建步骤）</h1>
+    <p class="desc">
+      NGINX 8662 真实 prod 产物：mes-bpm（/flowable/fulgur-remoteEntry.js）+ mes-lowcode（/lowcode/fulgur-remoteEntry.js），
+      宿主侧零构建，直接 initSharing → registerRemotes → loadRemote / loadShare 消费。
+    </p>
+    <div id="app"><p class="desc">加载中…</p></div>
+    <div class="runtime-info">
+      <h3>联邦运行时信息（实测读取 window.__FULGUR_INFO__ / __FULGUR_SCOPE__）</h3>
+      <div id="info">读取中…</div>
+      <p class="hint">多版本条目并存，消费方按 requiredVersion 取最高满足版本；数据由运行时注册表实时读取。</p>
+    </div>
+
+    <script type="module">
+      import {
+        initSharing,
+        registerRemotes,
+        loadRemote,
+        loadShare,
+        unwrapDefault,
+        shareScopeMap
+      } from '/fulgur-runtime.js'
+
+      initSharing('default')
+      registerRemotes([
+        { name: 'mes-bpm', entry: '/flowable/fulgur-remoteEntry.js' },
+        { name: 'mes-lowcode', entry: '/lowcode/fulgur-remoteEntry.js' }
+      ])
+
+      // 先 loadRemote（remoteEntry 执行时向 default scope 注册各自 shared），宿主再取 share
+      const TaskCard = unwrapDefault(await loadRemote('mes-bpm/./TaskCard'))
+      const InfoCard = unwrapDefault(await loadRemote('mes-lowcode/./InfoCard'))
+      const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: true })
+      const { createApp, defineComponent, h } = vueMod
+
+      createApp(
+        defineComponent({
+          render() {
+            return h('div', { class: 'cards' }, [h(TaskCard), h(InfoCard)])
+          }
+        })
+      ).mount('#app')
+
+      // remotes 状态 + shared 协商表（注册表非响应式，读快照；等两个 remote 都 loaded）
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+      const renderInfo = () => {
+        const remotes = window.__FULGUR_INFO__?.remotes ?? {}
+        const defScope = shareScopeMap.default ?? {}
+        const remoteRows = Object.entries(remotes)
+          .map(([name, v]) => {
+            const st = v?.status ?? 'unknown'
+            return `<tr><td>${esc(name)}</td><td>${esc(v?.entry ?? '')}</td><td class="${st === 'loaded' ? 'ok' : 'bad'}">${esc(st)}</td></tr>`
+          })
+          .join('')
+        const sharedRows = Object.entries(defScope)
+          .map(([key, entries]) => {
+            const list = Object.values(entries ?? {})
+              .map((e) => `${e.version} ← ${e.from}`)
+              .join('、')
+            return `<tr><td>${esc(key)}</td><td>${esc(list)}</td></tr>`
+          })
+          .join('')
+        document.getElementById('info').innerHTML =
+          `<table><tr><th>remote</th><th>entry</th><th>状态</th></tr>${remoteRows}</table>` +
+          `<table><tr><th>shared 键</th><th>协商条目（version ← 提供方）</th></tr>${sharedRows}</table>` +
+          `<p class="hint">宿主 loadShare('vue') 实取版本：${esc(vueMod.version)}</p>`
+        return Object.values(remotes).every((v) => v?.status === 'loaded')
+      }
+      if (!renderInfo()) {
+        const t = setInterval(() => {
+          if (renderInfo()) clearInterval(t)
+        }, 500)
+      }
+    </script>
+  </body>
+</html>

@@ -42,7 +42,15 @@ await page.goto(`${BASE}/main/`, { waitUntil: 'domcontentloaded', timeout: 60000
 await page.waitForTimeout(6000)
 await page.locator('input[placeholder*="账号"], input[placeholder*="用户名"]').first().fill('admin')
 await page.locator('input[type="password"]').first().fill('Demo@123456')
-await robustLogin()
+// 健壮登录：等「登录表单消失」+ 重试 3 轮（与 matrix-shot.mjs 同款，prod 慢链 ≥15s）
+await page.locator('button:has-text("登 录"), button:has-text("登录")').first().click()
+for (let attempt = 0; attempt < 3; attempt++) {
+  const gone = await page.locator('input[type="password"]').first().waitFor({ state: 'hidden', timeout: 30000 }).then(() => true).catch(() => false)
+  if (gone) break
+  await page.locator('input[placeholder*="账号"], input[placeholder*="用户名"]').first().fill('admin').catch(() => {})
+  await page.locator('input[type="password"]').first().fill('Demo@123456').catch(() => {})
+  await page.locator('button:has-text("登 录"), button:has-text("登录")').first().click().catch(() => {})
+}
 await page.waitForTimeout(3000)
 
 const report = {}
