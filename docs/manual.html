@@ -284,7 +284,7 @@ registerRemotes([
 const TaskCard = (await loadRemote('mes-bpm/./TaskCard')).default
 const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: true })</pre>
 <img class="shot" src="screenshots/tb-prod-minimal-host.png">
-<figcaption>prod 实测：双远程组件渲染、跨应用工具模块、vue/pinia 双版本协商（vue@3.5.40 ← mes-bpm、vue@3.5.22 ← mes-lowcode）</figcaption>
+<figcaption>prod 实测：双远程组件渲染、vue/pinia 双版本协商（vue@3.5.40 ← mes-bpm、vue@3.5.22 ← mes-lowcode；pinia 2.3.1 ← mes-bpm、2.1.7 ← mes-lowcode；宿主 loadShare 实取 3.5.40）</figcaption>
 
 <h2 id="cases">5.2 线上环境案例清单（后台菜单配置的 27 个子应用页面）</h2>
 <p>以下页面由后台动态菜单配置，当前经 qiankun 按 <code>/flowable/</code>、<code>/lowcode/</code> 前缀路由到子应用加载。
@@ -360,7 +360,9 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td>7</td><td>jeecg 规模宿主的 <b>admin 生产构建</b></td><td>demo-app admin（3 万+模块、Vite 6.4.3、node 24）构建触发
       vite build-import-analysis 在 3MB 的 xlsx.mjs vendor chunk（纯第三方库，与联邦代码无关）上的 V8 栈溢出；伴随 16GB 堆 OOM、
       vite-plugin-top-level-await 1.6.0 的 swc "missing field type" 连锁问题。已验证：与 shared 开关无关（最小联邦配置同样触发）；
-      <b>dev 模式完全正常，bpm/lowcode 的生产构建正常</b>。规避：关闭 inline sourcemap / vendor 分包 / 升级 vite；根治需等 vite 上游修复。</td></tr>
+      <b>dev 模式完全正常，bpm/lowcode 的生产构建正常</b>。规避：关闭 inline sourcemap / vendor 分包 / 升级 vite；根治需等 vite 上游修复。
+      <b>已实测可行组合（2026-09-16，testbed admin prod 构建通过并部署 8662 验证）</b>：<code>build.sourcemap: false</code> + 停用
+      <code>vite-plugin-top-level-await</code> + <code>build.target: 'es2022'</code> 三件套（缺一即崩，勿回退）。</td></tr>
   <tr><td>6</td><td>跨端口 HMR 的 ws 地址</td><td>remote 的 vite client 以页面 hostname + remote 端口连 ws；本机 localhost 联调无碍，跨主机名需反代</td></tr>
 </table>
 
