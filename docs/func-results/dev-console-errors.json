@@ -72,8 +72,33 @@
     "errors": []
   },
   "25 模块设计": {
-    "count": 0,
-    "errors": []
+    "count": 6,
+    "errors": [
+      {
+        "kind": "pageerror",
+        "text": "TypeError: res.map is not a function"
+      },
+      {
+        "kind": "http",
+        "text": "404 http://localhost:8773/demo/tab/page?pageNo=1&pageSize=10"
+      },
+      {
+        "kind": "console",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      },
+      {
+        "kind": "pageerror",
+        "text": "AxiosError: AxiosError"
+      },
+      {
+        "kind": "pageerror",
+        "text": "TypeError: Cannot read properties of undefined (reading 'map')"
+      },
+      {
+        "kind": "pageerror",
+        "text": "TypeError: Cannot read properties of undefined (reading 'map')"
+      }
+    ]
   },
   "26 报表测试": {
     "count": 0,
