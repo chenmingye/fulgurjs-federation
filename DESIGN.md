@@ -127,7 +127,7 @@ remote 样式改动立即生效；host 自身业务 HMR 不受影响。
 
 ### 6.3 NGINX 实测规范（本机 NGINX 1.31.4，homebrew）
 
-- 新增 `/opt/homebrew/etc/nginx/servers/30-unifed-test-8662.conf`：**独立端口 8662，不碰用户现有 8661/8088 站点**。root 指向测试副本 dist；路径规则照抄 8661（/main、/flowable、/lowcode 的 try_files SPA 回退）；/demo 反代 `http://localhost:8085`（含 WebSocket Upgrade 三件套）；conf 文件在插件仓库托管副本
+- 新增 `/opt/homebrew/etc/nginx/servers/30-fulgur-test-8662.conf`：**独立端口 8662，不碰用户现有 8661/8088 站点**。root 指向测试副本 dist；路径规则照抄 8661（/main、/flowable、/lowcode 的 try_files SPA 回退）；/demo 反代 `http://localhost:8085`（含 WebSocket Upgrade 三件套）；conf 文件在插件仓库托管副本
 - 流程：`nginx -t` 校验 → reload → curl 冒烟（remoteEntry 200 / manifest 200 / CORS 头 / gzip 生效）→ Playwright 全量 prod e2e
 - 附带发现：8661 站点 302 是正常行为（`/ → /main` 重定向）；8088 的 500 是 touch 应用 dist 缺失所致，与本插件无关，不处理
 
