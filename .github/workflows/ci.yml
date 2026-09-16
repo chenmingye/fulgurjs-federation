@@ -54,4 +54,4 @@ jobs:
         run: |
           SIZE=$(gzip -c packages/plugin/dist/runtime.js | wc -c)
           echo "runtime gzip: ${SIZE} bytes"
-          test "$SIZE" -le 5120
+          test "$SIZE" -le 5250  # D.5 诊断能力（MFU-009/010 + 文案）约 +100B；仍为 webpack MF runtime(~40KB gzip) 的 ~1/8

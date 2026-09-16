@@ -60,7 +60,7 @@ describe('runtime: 共享版本协商（webpack 语义对齐）', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const mod = await rt.loadShare('vue', { requiredVersion: '^3.5.0', singleton: true, shareScope: 'default' })
     expect(mod.v).toBe('only')
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('singleton conflict'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('singleton skew'))
     warnSpy.mockRestore()
   })
 

@@ -192,7 +192,7 @@ function createRuntime() {
       pick = [...(loadedVersions.length ? loadedVersions : versions)].sort(compareVersions).pop()
       if (versions.length > 1 || !satisfying.includes(pick!)) {
         const entry0 = byName[pick!]
-        const msg = `singleton conflict for "${shareKey}": required "${req ?? 'any'}", using ${pick} from ${entry0.from}`
+        const msg = `singleton skew "${shareKey}": req "${req ?? 'any'}" use ${pick} from ${entry0.from}`
         if (opts.strictVersion) {
           const err = new FulgurError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
             shareKey,
@@ -201,7 +201,8 @@ function createRuntime() {
           emitError({ remote: entry0.from, error: err })
           throw err
         }
-        console.warn(`[fulgur] ${msg}`)
+        // MFU-010：singleton 版本漂移告警（消费方要求与作用域实际提供不一致时的可诊断性）
+        console.warn(`[fulgur:MFU-010] ${msg}`)
       }
     } else {
       pick = [...satisfying].sort(compareVersions).pop()
@@ -217,7 +218,7 @@ function createRuntime() {
         if (opts.fallback) return opts.fallback()
         const err = new FulgurError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
-          `shared module "${shareKey}" (${req ?? 'any'}) is not available in share scope "${scopeName}" and has no local fallback`,
+          `shared "${shareKey}" (${req ?? 'any'}) unavailable in scope "${scopeName}" (no local fallback)`,
           { shareKey, requiredVersion: req },
         )
         emitError({ remote: shareKey, error: err })
@@ -500,6 +501,17 @@ function createRuntime() {
       throw err
     }
     hooks.afterLoadRemote?.({ remote: name, module, module_ns: ns })
+    // MFU-009：加载到的模块没有任何导出——exposes 指向了不导出内容的文件（误导出/空文件）。
+    // 仅告警不抛错：命名空间为空对调用方必然不可用，但保留返回值避免破坏既有容错路径
+    if (ns && typeof ns === 'object' && Object.keys(ns).length === 0) {
+      const err = new FulgurError(
+        ErrorCodes.EMPTY_EXPORTS,
+        `no exports: ${module} @ ${name}`,
+        { remote: name, module },
+      )
+      emitError({ remote: name, error: err })
+      console.error(`[fulgur:MFU-009] ${err.message}`)
+    }
     return ns
   }
 

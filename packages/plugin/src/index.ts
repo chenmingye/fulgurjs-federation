@@ -40,6 +40,8 @@ import {
   type ManifestExposeEntry,
 } from './virtual'
 import { generateDevTypes } from './dts'
+import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, type RemoteSchema } from './remote-schema'
+import { formatFulgurDiagnostic } from './diagnostics'
 
 // 运行时代码由构建脚本生成（src/runtime-code.gen.ts），内联进插件产物，无文件定位问题
 import runtimeCode from './runtime-code.gen'
@@ -96,6 +98,7 @@ function injectInitScript(html: string, scriptSrc: string): string {
 
 export function federation(options: FulgurOptions): Plugin[] {
   const warnedUnknownPrefixes = new Set<string>()
+  let remoteSchemaPromise: Promise<string> | null = null
   const state: {
     normalized?: NormalizedOptions
     command: 'serve' | 'build'
@@ -218,6 +221,46 @@ export function federation(options: FulgurOptions): Plugin[] {
       if ((resolved as unknown as { build?: { ssr?: boolean } }).build?.ssr) {
         console.warn('[fulgur] SSR builds are not supported in this version; plugin hooks disabled.')
       }
+      // D.5 DEV-003/004：optimizeDeps 与联邦 shared/UMD 依赖的配置矛盾，启动前显式提示
+      const n0 = state.normalized
+      const optimize = (resolved as unknown as { optimizeDeps?: { include?: string[]; exclude?: string[] } })
+        .optimizeDeps
+      if (n0 && optimize) {
+        const include = optimize.include ?? []
+        const exclude = optimize.exclude ?? []
+        const excl = (pkg: string) => exclude.some((e) => e === pkg || e.startsWith(pkg + '/') || e.startsWith(pkg + '>'))
+        const incl = (pkg: string) => include.some((e) => e === pkg || e.startsWith(pkg + '/') || e.startsWith(pkg + '>'))
+        // DEV-003：shared 键被 exclude → dev 下裸 CJS 服务无 interop（dayjs/element-plus 事故类）
+        for (const item of n0.shared) {
+          const pkg = item.import && item.import.includes('/') ? item.shareKey : item.shareKey
+          if (excl(pkg)) {
+            console.warn(
+              formatFulgurDiagnostic({
+                code: 'DEV-003',
+                symptom: `shared 键 "${pkg}" 同时出现在 optimizeDeps.exclude`,
+                cause: 'exclude 会让该包被裸 CJS 服务（无 interop），其命名导入在 dev 下将缺 default 导出',
+                fix: '从 optimizeDeps.exclude 移除该包；确需移出预构建的库改用 dev 专用别名兜 CJS 子路径（见迁移指南避坑 #3/#4）',
+                details: { sharedKey: pkg },
+              }),
+            )
+          }
+        }
+        // DEV-004：已知 UMD-only 依赖不在 include → 预构建内联本地 vue（avue 事故类）
+        const KNOWN_UMD = ['@smallwei/avue']
+        for (const pkg of KNOWN_UMD) {
+          if (n0.pkgDependencies[pkg] && !incl(pkg) && !excl(pkg)) {
+            console.warn(
+              formatFulgurDiagnostic({
+                code: 'DEV-004',
+                symptom: `UMD-only 依赖 "${pkg}" 不在 optimizeDeps.include`,
+                cause: 'UMD 包只能经预构建消费；不声明会被裸 CJS 服务或内联本地 vue（页面空白/双实例）',
+                fix: `加入 optimizeDeps.include: ['${pkg}']`,
+                details: { pkg },
+              }),
+            )
+          }
+        }
+      }
     },
 
     resolveId(source) {
@@ -253,6 +296,7 @@ export function federation(options: FulgurOptions): Plugin[] {
 
       if (bareClean === RUNTIME_VIRTUAL_ID) return RESOLVED.runtime
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
+      if (bareClean === 'virtual:fulgur-remote-schema') return bareClean
       if (bareClean === 'virtual:fulgur-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgur-remote-entry') return RESOLVED.remoteEntry
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
@@ -279,6 +323,14 @@ export function federation(options: FulgurOptions): Plugin[] {
       }
       if (clean === 'virtual:fulgur-provides' && state.normalized) {
         return genDevProvides(state.normalized)
+      }
+      if (clean === 'virtual:fulgur-remote-schema' && state.normalized) {
+        // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）
+        if (state.command === 'build') return genEmptyRemoteSchemaModule()
+        remoteSchemaPromise ??= probeRemotesAndBuildSchema(state.normalized).then(
+          (schema: RemoteSchema) => `export default ${JSON.stringify(schema)}`,
+        )
+        return remoteSchemaPromise
       }
       if (clean === 'virtual:fulgur-remote-entry' && state.normalized) {
         return genBuildRemoteEntry(state.normalized, state.exposeAbsPaths)
@@ -452,7 +504,7 @@ export function federation(options: FulgurOptions): Plugin[] {
       })
     },
 
-    configureServer(server: ViteDevServer) {
+    configureServer(server: ViteDevServer): any {
       const n = state.normalized
       if (!n) return
       warmResolvedSharedPaths(server)
@@ -490,6 +542,39 @@ export function federation(options: FulgurOptions): Plugin[] {
       if (n.remotes.length > 0 && n.dts) {
         server.httpServer?.once('listening', () => {
           void generateDevTypes(n, server)
+        })
+      }
+
+      // ---- D.5 DEV-001/002/005/006 启动探针（单次快连，WARN 不阻塞）+ schema 缓存 ----
+      if (n.remotes.length > 0) {
+        server.httpServer?.once('listening', () => {
+          // 宽限 5s：宿主常先于 remote 启动，降低假阳性
+          setTimeout(() => {
+            remoteSchemaPromise ??= probeRemotesAndBuildSchema(n).then(
+              (schema: RemoteSchema) => `export default ${JSON.stringify(schema)}`,
+            )
+          }, 5000)
+        })
+      }
+
+      // ---- D.5 DEV-009：联邦虚拟模块 404 拦截（.vite 缓存漂移高频坑的显式指引）----
+      // configureServer 返回函数 = 内部中间件之后执行（此时仍未处理的 fulgur 相关请求即 404）
+      return () => {
+        server.middlewares.use((req: any, res: any, next: () => void) => {
+          const url = req.url ?? ''
+          if (req.method === 'GET' && url.includes('fulgur')) {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+            res.end(
+              formatFulgurDiagnostic({
+                code: 'DEV-009',
+                symptom: `联邦模块请求 404：${url.slice(0, 120)}`,
+                cause: 'node_modules/.vite 预构建缓存与当前插件产物不一致（immutable 缓存按 ?f= 签名长期持有，插件 dist 更新后旧签名必 404）',
+                fix: 'rm -rf node_modules/.vite 后重启 dev server，并更换全新浏览器 profile（浏览器也持有旧缓存）',
+              }),
+            )
+            return
+          }
+          next()
         })
       }
     },

@@ -29,4 +29,8 @@ export const ErrorCodes = {
   PRELOAD_FAILED: 'MFU-007',
   /** 未知远程 */
   REMOTE_UNKNOWN: 'MFU-008',
+  /** 加载到的模块没有任何导出（常见：exposes 指向了不导出内容的文件） */
+  EMPTY_EXPORTS: 'MFU-009',
+  /** singleton 共享协商版本与消费方 requiredVersion 不一致（使用作用域版本，仅告警） */
+  SINGLETON_SKEW: 'MFU-010',
 } as const

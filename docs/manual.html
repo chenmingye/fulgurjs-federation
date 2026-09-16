@@ -166,7 +166,7 @@ import Btn from 'remote-a/Button'</pre>
     <td>每个 expose 生成虚拟入口 → 独立 chunk；shared 经动态导入边界自动剥离；产出稳定文件名的
     <code>fulgur-remoteEntry.js</code> + <code>fulgur-manifest.json</code>；宿主入口前置 init import 注册 remotes/provides。</td></tr>
 </table>
-<div class="note">运行时内核 gzip 约 <b>4.9KB</b>（对标 @module-federation/runtime 的 40KB+），页面级单例：
+<div class="note">运行时内核 gzip 约 <b>5.0KB</b>（对标 @module-federation/runtime 的 40KB+），页面级单例：
 多应用各自打包的运行时副本经 <code>globalThis.__FULGUR_RUNTIME__</code> 合一。
 跨源取运行时的官方入口：<code>getRuntime()</code>（独立产物导出，与全局单例同一实例），
 单例带 <code>version</code> 字段（与插件包版本同源）用于副本一致性诊断；方法面已冻结防意外覆写。
@@ -380,17 +380,40 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td>MFU-006</td><td>模块未被该远程 exposes</td><td>核对 exposes 键名（自动补 ./）</td></tr>
   <tr><td>MFU-007</td><td>预加载失败</td><td>仅上报不阻断；检查 manifest 可达性</td></tr>
   <tr><td>MFU-008</td><td>未知远程</td><td>在 <code>remotes</code> 配置或运行时 <code>registerRemote()</code> 注册</td></tr>
+  <tr><td>MFU-009</td><td>加载到的模块没有任何导出</td><td>核对远程 exposes 是否指向了正确的文件（MFU-006 语义），或该文件是否缺少 export</td></tr>
+  <tr><td>MFU-010</td><td>singleton 共享版本漂移（消费方要求与作用域实际提供不一致，使用作用域版本）</td><td>核对双方 shared requiredVersion；确需锁版本用 strictVersion（升级为 MFU-003 抛错）</td></tr>
 </table>
 
-<h3>构建/dev 期错误（非 MFU 运行时码）</h3>
+<h3>构建/开发期错误（非 MFU 运行时码）</h3>
 <table>
-  <tr><th>错误</th><th>含义</th><th>处置</th></tr>
-  <tr><td><code>[fulgur] ... statically imports 'virtual:fulgur-runtime'</code>（dev）</td>
-      <td>exposes 目标文件（远程页面）静态导入虚拟运行时——宿主跨源加载时会在远程模块图内
-          实例化第二份运行时副本，破坏渲染上下文（resolveComponent / withDirectives /
+  <tr><th>错误码</th><th>含义</th><th>处置</th></tr>
+  <tr><td><code>CFG-001</code></td><td>name 缺失或含非法字符</td><td>按报错示例修正 federation name</td></tr>
+  <tr><td><code>CFG-002</code></td><td>exposes 配置形状错误</td><td>{ "./Module": "./src/path" }</td></tr>
+  <tr><td><code>CFG-003</code></td><td>remotes 配置形状错误 / 键含非法字符</td><td>{ name: url | { dev, prod } | () =&gt; Promise }</td></tr>
+  <tr><td><code>CFG-004</code></td><td>shared 配置形状错误</td><td>["vue"] 或 { vue: { singleton: true } }</td></tr>
+  <tr><td><code>CFG-005</code></td><td>remotes 键与 shared 键同名冲突</td><td>改名（webpack 同款互斥约束）</td></tr>
+  <tr><td><code>CFG-006</code></td><td>孤岛配置（既无 exposes 也无 remotes/shared）</td><td>核对 federation 配置意图</td></tr>
+  <tr><td><code>DEV-001</code></td><td>remote dev server 不可达（dev manifest 拉取失败）</td>
+      <td>启动对应 remote 的 dev server；核对宿主 remotes[].dev URL 与 remote 实际 VITE_PORT/base</td></tr>
+  <tr><td><code>DEV-002</code></td><td>dev manifest 可达但 exposes 为空</td>
+      <td>核对 remote 的 federation exposes 配置；确认插件版本与宿主一致（DEV-006）</td></tr>
+  <tr><td><code>DEV-003</code></td><td>shared 键被 optimizeDeps.exclude（dev 裸 CJS 无 interop 风险）</td>
+      <td>从 exclude 移除；确需移出预构建的库用 dev 专用别名兜 CJS 子路径（迁移指南避坑 #3/#4）</td></tr>
+  <tr><td><code>DEV-004</code></td><td>已知 UMD-only 依赖（如 @smallwei/avue）不在 optimizeDeps.include</td>
+      <td>加入 include: ['@smallwei/avue']</td></tr>
+  <tr><td><code>DEV-005</code></td><td>remotes dev URL 端口无监听</td>
+      <td>remote 未启动或端口错位（server.origin 同款），核对 VITE_PORT 与 remotes[].dev</td></tr>
+  <tr><td><code>DEV-006</code></td><td>宿主/远程插件版本不一致</td>
+      <td>统一各应用 @fulgur/federation 版本并重启 dev server</td></tr>
+  <tr><td><code>DEV-008</code></td><td>exposes 目标文件（远程页面）静态导入 virtual:fulgur-runtime——宿主跨源加载时
+          在远程模块图内实例化第二份运行时副本，破坏渲染上下文（resolveComponent / withDirectives /
           ref owner 告警、内容区静默空白）</td>
       <td>改用 <code>(globalThis as any).__FULGUR_RUNTIME__</code> 或独立产物 <code>getRuntime()</code>；
           详见迁移指南「三B-1、远程页面如何取宿主运行时」</td></tr>
+  <tr><td><code>DEV-009</code></td><td>联邦虚拟模块/门面请求 404（.vite 缓存漂移）</td>
+      <td><code>rm -rf node_modules/.vite</code> + 重启 dev server + 换全新浏览器 profile</td></tr>
+  <tr><td><code>BLD-001</code></td><td>expose 源文件解析失败</td><td>核对 exposes 指向的文件路径存在且可编译</td></tr>
+  <tr><td><code>BLD-002</code></td><td>构建目标低于 es2022（TLA 需要）</td><td>提升 build.target（插件会自动提升并告警）</td></tr>
 </table>
 
 <h3>NGINX 生产样例（同源部署 + 反代后端）</h3>

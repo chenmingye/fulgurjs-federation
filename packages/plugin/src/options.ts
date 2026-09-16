@@ -5,6 +5,7 @@
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
+import { RUNTIME_VERSION } from './version'
 
 export interface SharedHint {
   /** 放入共享作用域的本地模块；false 表示不提供本地副本 */
@@ -109,6 +110,8 @@ export interface NormalizedOptions {
   runtimePlugins: string[]
   dts: boolean | { dir?: string }
   root: string
+  /** 本插件版本（D.5 DEV-006：宿主/远程版本一致性校验） */
+  pluginVersion: string
   /** 包依赖表（推断 requiredVersion / 提供版本用） */
   pkgDependencies: Record<string, string>
   warnings: string[]
@@ -522,6 +525,7 @@ export function normalizeOptions(options: FulgurOptions, root: string, command: 
     runtimePlugins: options.runtimePlugins ?? [],
     dts: options.dts === undefined ? true : options.dts,
     root,
+    pluginVersion: RUNTIME_VERSION,
     pkgDependencies,
     warnings,
     // dev 改写开关：默认纯 remote 参与 shared 协商，宿主（有 remotes）不参与；可显式覆盖
