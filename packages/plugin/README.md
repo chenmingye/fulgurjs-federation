@@ -62,12 +62,16 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
+> ⚠️ 静态导入只限**宿主侧**。exposes 目标文件（被宿主跨源加载的远程页面）请用
+> `(globalThis as any).__FULGUR_RUNTIME__` 或独立产物 `getRuntime()`（含 `version` 字段），
+> 插件 dev 下对违规静态导入直接报错。
+
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
 1. **插件升级后务必「清缓存 + 重启 dev server」**：`rm -rf node_modules/.vite` 后重启。vite 对预构建产物下发一年 immutable 缓存，旧内容不会被自动失效。
 2. **pnpm 项目装完 tarball 检查软链**：`pnpm add xxx.tgz` 偶发断链（整目录拷贝过的项目尤甚）。装完验证 `node_modules/@fulgur/federation` 真实可达，断链则重新 add。
 3. **UMD/CJS-only 依赖放 `optimizeDeps.include`，不要 exclude**：插件已自动注入 shared 键外部化（dev 防双 vue + build 防 CJS 内联），正常预构建即可。移出预构建会让 CJS 文件被裸服务（dev 白屏）。
-4. **不要给 shared 依赖加别名/手工改写**：`dayjs → dayjs/esm` 之类的别名会让构建期 CJS `require` 撞上双重 interop（典型症状 `xxx.default.extend is not a function`）。
+4. **不要给 shared 依赖加别名/手工改写**：build 下 `dayjs → dayjs/esm` 之类的别名会撞双重 interop（典型症状 `xxx.default.extend is not a function`）；dev 下若该依赖已移出预构建，其 CJS 子路径需 `command==='serve'` 条件注入的别名兜住（参考迁移指南避坑 #4）。
 5. **dev 冷启动先预热再判断**：首轮访问联邦页面会触发依赖再预构建（504 Outdated Optimize Dep 瞬态），访问一轮所有页面即稳定。
 6. **显式降级用 `fallbackModule`**：远程不稳定时 `loadRemote(spec, { retries, fallbackModule })` 返回 fallback 模块；错误事件仍显式发出——不传则照旧抛错（本插件无静默兜底路径）。
 7. **构建目标 es2022+**：协商门面的 top-level await 需要；插件未显式配置时会自动提升并告警。

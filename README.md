@@ -110,6 +110,11 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
+> ⚠️ 上面这种静态导入**只限宿主侧页面**。exposes 目标文件（被宿主跨源加载的远程页面）禁止静态导入
+> `virtual:fulgur-runtime`——会实例化第二份运行时副本、破坏渲染上下文，插件 dev 下会直接报错；
+> 远程页面请用 `(globalThis as any).__FULGUR_RUNTIME__` 或独立产物的 `getRuntime()`（带 `version` 字段），
+> 详见 `docs/迁移指南.md` 三B-1。
+
 **没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgur-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）

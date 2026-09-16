@@ -166,8 +166,11 @@ import Btn from 'remote-a/Button'</pre>
     <td>每个 expose 生成虚拟入口 → 独立 chunk；shared 经动态导入边界自动剥离；产出稳定文件名的
     <code>fulgur-remoteEntry.js</code> + <code>fulgur-manifest.json</code>；宿主入口前置 init import 注册 remotes/provides。</td></tr>
 </table>
-<div class="note">运行时内核 gzip 约 <b>4.4KB</b>（对标 @module-federation/runtime 的 40KB+），页面级单例：
-多应用各自打包的运行时副本经 <code>globalThis.__FULGUR_RUNTIME__</code> 合一。</div>
+<div class="note">运行时内核 gzip 约 <b>4.9KB</b>（对标 @module-federation/runtime 的 40KB+），页面级单例：
+多应用各自打包的运行时副本经 <code>globalThis.__FULGUR_RUNTIME__</code> 合一。
+跨源取运行时的官方入口：<code>getRuntime()</code>（独立产物导出，与全局单例同一实例），
+单例带 <code>version</code> 字段（与插件包版本同源）用于副本一致性诊断；方法面已冻结防意外覆写。
+注意：exposes 目标文件（远程页面）禁止静态导入 <code>virtual:fulgur-runtime</code>，插件 dev 下会显式报错（见 §8）。</div>
 
 <h2 id="feat">4. 功能章节（含实测截图）</h2>
 
@@ -377,6 +380,17 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td>MFU-006</td><td>模块未被该远程 exposes</td><td>核对 exposes 键名（自动补 ./）</td></tr>
   <tr><td>MFU-007</td><td>预加载失败</td><td>仅上报不阻断；检查 manifest 可达性</td></tr>
   <tr><td>MFU-008</td><td>未知远程</td><td>在 <code>remotes</code> 配置或运行时 <code>registerRemote()</code> 注册</td></tr>
+</table>
+
+<h3>构建/dev 期错误（非 MFU 运行时码）</h3>
+<table>
+  <tr><th>错误</th><th>含义</th><th>处置</th></tr>
+  <tr><td><code>[fulgur] ... statically imports 'virtual:fulgur-runtime'</code>（dev）</td>
+      <td>exposes 目标文件（远程页面）静态导入虚拟运行时——宿主跨源加载时会在远程模块图内
+          实例化第二份运行时副本，破坏渲染上下文（resolveComponent / withDirectives /
+          ref owner 告警、内容区静默空白）</td>
+      <td>改用 <code>(globalThis as any).__FULGUR_RUNTIME__</code> 或独立产物 <code>getRuntime()</code>；
+          详见迁移指南「三B-1、远程页面如何取宿主运行时」</td></tr>
 </table>
 
 <h3>NGINX 生产样例（同源部署 + 反代后端）</h3>
