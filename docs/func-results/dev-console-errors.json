@@ -60,49 +60,24 @@
     "errors": []
   },
   "22 表单设计": {
-    "count": 1,
-    "errors": [
-      {
-        "kind": "console",
-        "text": "Error: [fulgur] federatedBoot 初始化失败（remote=mes-lowcode）：[fulgur:MFU-001] failed to load module \"./federatedBoot\" from remote \"mes-lowcode\": The requested module '/lowcode/node_modules/.pnpm/dayjs@1.11.18/node_modules/dayjs/dayjs.min.js?v=26e37b3a' do"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "23 报表设计": {
-    "count": 1,
-    "errors": [
-      {
-        "kind": "console",
-        "text": "Error: [fulgur] federatedBoot 初始化失败（remote=mes-lowcode）：[fulgur:MFU-001] failed to load module \"./federatedBoot\" from remote \"mes-lowcode\": The requested module '/lowcode/node_modules/.pnpm/dayjs@1.11.18/node_modules/dayjs/dayjs.min.js?v=26e37b3a' do"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "24 图形报表设计": {
-    "count": 1,
-    "errors": [
-      {
-        "kind": "console",
-        "text": "Error: [fulgur] federatedBoot 初始化失败（remote=mes-lowcode）：[fulgur:MFU-001] failed to load module \"./federatedBoot\" from remote \"mes-lowcode\": The requested module '/lowcode/node_modules/.pnpm/dayjs@1.11.18/node_modules/dayjs/dayjs.min.js?v=26e37b3a' do"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "25 模块设计": {
-    "count": 1,
-    "errors": [
-      {
-        "kind": "console",
-        "text": "Error: [fulgur] federatedBoot 初始化失败（remote=mes-lowcode）：[fulgur:MFU-001] failed to load module \"./federatedBoot\" from remote \"mes-lowcode\": The requested module '/lowcode/node_modules/.pnpm/dayjs@1.11.18/node_modules/dayjs/dayjs.min.js?v=26e37b3a' do"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "26 报表测试": {
-    "count": 1,
-    "errors": [
-      {
-        "kind": "console",
-        "text": "Error: [fulgur] federatedBoot 初始化失败（remote=mes-lowcode）：[fulgur:MFU-001] failed to load module \"./federatedBoot\" from remote \"mes-lowcode\": The requested module '/lowcode/node_modules/.pnpm/dayjs@1.11.18/node_modules/dayjs/dayjs.min.js?v=26e37b3a' do"
-      }
-    ]
+    "count": 0,
+    "errors": []
   },
   "27 外部表单": {
     "count": 0,

@@ -861,8 +861,8 @@ function initRemoteApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: Init
       {
         label: 'dayjs dev 别名',
         marker: 'dev 专用 dayjs→esm 别名',
-        find: "          find: 'vue-i18n',",
-        replace: DAYJS_ALIAS_BLOCK + "\n          find: 'vue-i18n',",
+        find: "      alias: [\n        {\n          find: 'vue-i18n',",
+        replace: "      alias: [\n" + DAYJS_ALIAS_BLOCK + "\n        {\n          find: 'vue-i18n',",
       },
       {
         label: 'emptyOutDir（outDir 根外显式清空）',
