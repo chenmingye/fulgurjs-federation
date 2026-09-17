@@ -230,21 +230,8 @@ export function federation(options: FulgurOptions): Plugin[] {
         const exclude = optimize.exclude ?? []
         const excl = (pkg: string) => exclude.some((e) => e === pkg || e.startsWith(pkg + '/') || e.startsWith(pkg + '>'))
         const incl = (pkg: string) => include.some((e) => e === pkg || e.startsWith(pkg + '/') || e.startsWith(pkg + '>'))
-        // DEV-003：shared 键被 exclude → dev 下裸 CJS 服务无 interop（dayjs/element-plus 事故类）
-        for (const item of n0.shared) {
-          const pkg = item.import && item.import.includes('/') ? item.shareKey : item.shareKey
-          if (excl(pkg)) {
-            console.warn(
-              formatFulgurDiagnostic({
-                code: 'DEV-003',
-                symptom: `shared 键 "${pkg}" 同时出现在 optimizeDeps.exclude`,
-                cause: 'exclude 会让该包被裸 CJS 服务（无 interop），其命名导入在 dev 下将缺 default 导出',
-                fix: '从 optimizeDeps.exclude 移除该包；确需移出预构建的库改用 dev 专用别名兜 CJS 子路径（见迁移指南避坑 #3/#4）',
-                details: { sharedKey: pkg },
-              }),
-            )
-          }
-        }
+        // DEV-003（shared∩exclude）撤回：shared 键由插件外部化机制支持 exclude+shared 组合，
+        // 该告警在受支持的 lowcode 配置下误报（2026-09-17 实测）。代码保留于 diagnostics.ts 码表。
         // DEV-004：已知 UMD-only 依赖不在 include → 预构建内联本地 vue（avue 事故类）
         const KNOWN_UMD = ['@smallwei/avue']
         for (const pkg of KNOWN_UMD) {
