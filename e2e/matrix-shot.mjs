@@ -26,7 +26,7 @@ const PAGES = [
   ['08', 'model', '/flowable/bpm/manager/model', 'menu', ['流程模型']],
   ['09', 'form', '/flowable/bpm/manager/form', 'menu', ['表单']],
   ['10', 'category', '/flowable/bpm/manager/category', 'menu', ['分类']],
-  ['11', 'user-group', '/flowable/bpm/manager/user-group', 'menu', ['用户组']],
+  ['11', 'user-group', '/flowable/bpm/manager/user-group', 'menu', ['用户分组']],
   ['12', 'process-listener', '/flowable/bpm/manager/process-listener', 'menu', ['监听']],
   ['13', 'process-expression', '/flowable/bpm/manager/process-expression', 'menu', ['表达式']],
   ['14', 'instance-manager', '/flowable/bpm/manager/process-instance/manager', 'menu', ['流程实例']],
@@ -102,10 +102,43 @@ for (const [no, name, routeTpl, kind, assertTexts, u2Known] of PAGES) {
   const route = routeTpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '')
   errors.length = 0
   await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {})
-  await page.waitForTimeout(9000)
+  // F 项判据：menu 页内容区必须有真实表格行或明确空态（防侧栏文本撑爆 textLen 掩盖内容空白）。
+  // 大列表页（08 模型 76 行等）首屏 chunk 加载可超 9s——改为轮询等待内容就绪（最长 30s）再断言，
+  // 而非固定等待后一刀切；action/U-2 页保持原固定等待。
+  const readRows = () =>
+    page
+      .evaluate(() =>
+        // 内容单元 = 可见的表格行或卡片（05 发起流程等卡片布局页无表格）
+        Array.from(document.querySelectorAll('.el-table__row, .vxe-body--row, .el-card')).filter(
+          (n) => n.offsetParent !== null,
+        ).length,
+      )
+      .catch(() => -1)
+  const readTableEmpty = () =>
+    page
+      .evaluate(() =>
+        Array.from(document.querySelectorAll('.el-table__empty-text, .vxe-table--empty-content, .vxe-table--empty-block, .el-empty__description'))
+          .some((n) => n.offsetParent !== null && !!n.textContent.trim()),
+      )
+      .catch(() => false)
+  let content = { rows: 0, hasEmpty: false }
+  if (kind === 'menu' && !u2Known) {
+    // 只提前退出行数就绪；空态必须等满窗口后用「表格自身空元素」判定——加载中表格的
+    // 瞬时空态（行随后到达）不能当结论
+    const deadline = Date.now() + 30000
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(3000)
+      content.rows = await readRows()
+      if (content.rows > 0) break
+    }
+    if (content.rows <= 0) content.hasEmpty = await readTableEmpty()
+  } else {
+    await page.waitForTimeout(9000)
+  }
   await page.screenshot({ path: `${SHOT_DIR}/m-${TAG}-${no}-${name}.png` })
   const text = (await page.locator('body').innerText().catch(() => '')).trim()
   const iframes = await page.locator('iframe').count()
+  const contentOk = kind !== 'menu' || u2Known || content.rows > 0 || content.hasEmpty
   const missing = assertTexts.filter((t) => !text.includes(t))
   const renderOk = u2Known ? 'u2-blank' : text.length > 200 ? 'ok' : 'thin'
   const result = {
@@ -113,10 +146,12 @@ for (const [no, name, routeTpl, kind, assertTexts, u2Known] of PAGES) {
     iframe: iframes,
     render: renderOk,
     textLen: text.length,
+    tableRows: kind === 'menu' ? content.rows : undefined,
+    contentOk: kind === 'menu' ? contentOk : undefined,
     missing,
     pageErrors: errors.slice(0, 2),
     u2Known: u2Known || undefined,
-    pass: missing.length === 0 && (u2Known || errors.length === 0),
+    pass: missing.length === 0 && (u2Known || errors.length === 0) && contentOk,
   }
   results[`${no}-${name}`] = result
   console.log(`${no}-${name}`, JSON.stringify(result))
