@@ -18,6 +18,11 @@
       "import": "./dist/pages.js",
       "require": "./dist/pages.cjs"
     },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js",
+      "require": "./dist/config.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -26,7 +31,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts --format esm,cjs --dts --external vite --target node18 --clean && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node \"--banner:js=#!/usr/bin/env node\" --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js",
+    "build": "esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/config.ts src/init.ts --format esm,cjs --dts --external vite --target node18 --clean && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
