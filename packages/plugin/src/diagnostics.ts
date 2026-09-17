@@ -25,6 +25,8 @@ export const CODE_REGISTRY: FulgurCodeMeta[] = [
   { code: 'CFG-004', stage: 'CFG', title: 'shared 配置形状错误' },
   { code: 'CFG-005', stage: 'CFG', title: 'remotes 键与 shared 键同名冲突' },
   { code: 'CFG-006', stage: 'CFG', title: '孤岛配置（既不提供也不消费）' },
+  { code: 'CFG-007', stage: 'CFG', title: 'remotes 对象形式误用 name@ 前缀（整串当 URL 拼接）' },
+  { code: 'CFG-008', stage: 'CFG', title: 'shared 非法组合（eager+import:false / shareKey 重复声明）' },
   // ── DEV 开发启动/转换期 ──
   { code: 'DEV-001', stage: 'DEV', title: 'remote dev server 不可达（manifest 拉取失败）' },
   { code: 'DEV-002', stage: 'DEV', title: 'remote dev manifest 为空或格式不识别' },
@@ -34,9 +36,11 @@ export const CODE_REGISTRY: FulgurCodeMeta[] = [
   { code: 'DEV-006', stage: 'DEV', title: '宿主/远程插件版本不一致' },
   { code: 'DEV-008', stage: 'DEV', title: 'exposes 目标文件静态导入 virtual:fulgur-runtime（原 D.1 检测）' },
   { code: 'DEV-009', stage: 'DEV', title: '门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启）' },
+  { code: 'DEV-010', stage: 'DEV', title: 'dev 冷启动预构建窗口（首轮 30~60s 瞬态 504/\'ce\' 假错误）' },
   // ── BLD 构建期 ──
   { code: 'BLD-001', stage: 'BLD', title: 'expose 源文件解析失败' },
   { code: 'BLD-002', stage: 'BLD', title: '构建目标低于 es2022（TLA 需要）' },
+  { code: 'BLD-003', stage: 'BLD', title: 'expose 目标组件含必填 props（联邦直挂无法传 props）' },
   // ── MFU 运行时（定义于 runtime/errors.ts，此处登记供手册一致性校验） ──
   { code: 'MFU-001', stage: 'MFU', title: '远程容器/模块加载失败（网络/超时/重试耗尽/熔断）' },
   { code: 'MFU-002', stage: 'MFU', title: 'remoteEntry 自报名与配置名不一致' },
@@ -87,4 +91,27 @@ export async function isPortReachable(host: string, port: number, timeoutMs = 80
     socket.once('error', () => done(false))
     socket.connect(port, host)
   })
+}
+
+/**
+ * BLD-003 启发式：扫描 expose 目标源码里的「必填 props」。
+ * 背景（07 审批操作页事故）：expose 挂了需要父页传 props 的子组件，联邦直挂无法传 props
+ * → Vue 层渲染崩溃而插件此前无感。启发式识别两种声明形态：
+ * - 运行时：defineProps({ foo: { type: X, required: true } })
+ * - 类型：defineProps<{ foo: string }>()（无 ? 视为必填；嵌套对象字面量类型的键可能误报，
+ *   属可容忍噪音——告警指向核对而非报错）
+ * 返回必填 props 名列表（空 = 未检出）。
+ */
+export function scanExposeRequiredProps(source: string): string[] {
+  const required = new Set<string>()
+  for (const m of source.matchAll(/(\w+)\s*:\s*\{[^{}]*required\s*:\s*true/g)) {
+    required.add(m[1])
+  }
+  const typeBlock = source.match(/defineProps\s*<\s*\{([\s\S]*?)\}>/)
+  if (typeBlock) {
+    for (const m of typeBlock[1].matchAll(/(?:^|[;,{\n])\s*([A-Za-z_$][\w$]*)\s*(\?)?\s*:/g)) {
+      if (!m[2]) required.add(m[1])
+    }
+  }
+  return [...required]
 }

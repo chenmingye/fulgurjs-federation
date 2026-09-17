@@ -468,7 +468,7 @@ function createRuntime() {
     } catch (err) {
       if (opts?.fallbackModule) {
         console.error(`[fulgur] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
-        emitError({ remote: name, error: err as Error })
+        emitError({ remote: name, error: err as FulgurError })
         return await opts.fallbackModule()
       }
       throw err
@@ -495,7 +495,7 @@ function createRuntime() {
     } catch (err) {
       if (opts?.fallbackModule) {
         console.error(`[fulgur] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
-        emitError({ remote: name, error: err as Error })
+        emitError({ remote: name, error: err as FulgurError })
         return await opts.fallbackModule()
       }
       throw err

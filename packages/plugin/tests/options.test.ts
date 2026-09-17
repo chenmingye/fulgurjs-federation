@@ -190,3 +190,60 @@ describe('配置校验（DX：清晰报错）', () => {
     expect(remote.exposes[0].name).toBe('./Button')
   })
 })
+
+describe('W5/CFG-007: remotes 对象形式误用 name@ 前缀（2026-09-17 testbed 实踩）', () => {
+  it('对象形式 dev/prod 槽位带 name@ 前缀 → 配置期显式报错', () => {
+    expect(() =>
+      norm({
+        name: 'host',
+        remotes: { bpm: { dev: 'bpm@http://localhost:4529/flowable', prod: '/flowable' } },
+      }),
+    ).toThrow(/CFG-007/)
+    expect(() =>
+      norm({
+        name: 'host',
+        remotes: { bpm: { dev: 'http://localhost:4529/flowable', prod: 'mes-bpm@/flowable' } },
+      }),
+    ).toThrow(/name@/)
+  })
+
+  it('字符串 external 的 name@ 前缀仍受支持（webpack 重命名语义）', () => {
+    const n = norm({ name: 'host', remotes: { checkout: 'shop@http://localhost:3001' } })
+    expect(n.remotes[0].name).toBe('shop')
+  })
+
+  it('URL 认证信息 user@host 不误报（http:// 前缀整段豁免）', () => {
+    const n = norm({ name: 'host', remotes: { r: { dev: 'http://user@localhost:5101', prod: '/r' } } })
+    expect(n.remotes[0].devEntry).toContain('user@localhost')
+  })
+})
+
+describe('W5/CFG-008: shared 非法组合', () => {
+  it('eager + import:false → 报错', () => {
+    expect(() =>
+      norm({ name: 'r', exposes: { './A': './src/A.vue' }, shared: { vue: { eager: true, import: false } } }),
+    ).toThrow(/CFG-008/)
+  })
+
+  it('同 shareKey + shareScope 重复声明 → 报错', () => {
+    expect(() =>
+      norm({
+        name: 'r',
+        exposes: { './A': './src/A.vue' },
+        shared: {
+          vue: { singleton: true },
+          'vue-demi': { shareKey: 'vue', singleton: true },
+        },
+      }),
+    ).toThrow(/declared twice/)
+  })
+
+  it('不同 shareKey 同名包合法（vue 与 vue2 键并存）', () => {
+    const n = norm({
+      name: 'r',
+      exposes: { './A': './src/A.vue' },
+      shared: { vue: { singleton: true }, 'vue-demi': { shareKey: 'vue-demi' } },
+    })
+    expect(n.shared).toHaveLength(2)
+  })
+})

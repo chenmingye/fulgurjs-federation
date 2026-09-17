@@ -341,9 +341,14 @@ export function federation(options: FulgurOptions): Plugin[] {
         const body = clean.slice('virtual:fulgur-shared:'.length)
         const f = raw.indexOf('?f=')
         if (f === -1) {
-          // 命名空间门面（provide/fallback 用）：本应用自己的副本
+          // 命名空间门面（provide/fallback 用）：本应用自己的副本。
+          // U-7：bare 包枚举式再导出（rolldown 下 export *+TLA 命名绑定全 undefined）；
+          // 相对路径 import 不进 require 枚举，回退 export * 形态
           const item = state.normalized.shared.find((x) => x.shareKey === body)
-          if (item && item.import !== false) return genSharedFacade(item.import)
+          if (item && item.import !== false) {
+            const names = /^(\.|\/)/.test(item.import) ? [] : enumerateCjsExports(item.import, state.normalized.root)
+            return genSharedFacade(item.import, names)
+          }
           return null
         }
         // 绑定门面：短签名反查绑定集，门面内做 loadShare/loadRemote 协商并转发绑定
@@ -496,6 +501,18 @@ export function federation(options: FulgurOptions): Plugin[] {
       if (!n) return
       warmResolvedSharedPaths(server)
 
+      // ---- D.5/W6 DEV-010：冷启动预构建窗口提示（一次性，防"开箱即坏"误判）----
+      if (n.exposes.length > 0 || n.remotes.length > 0) {
+        console.warn(
+          formatFulgurDiagnostic({
+            code: 'DEV-010',
+            symptom: 'dev 冷启动预构建窗口：首次启动或清 node_modules/.vite 后首轮 30~60s 内，联邦模块请求可能出现瞬时 504 / "ce" / Outdated Optimize Dep',
+            cause: 'vite 依赖预构建（含 fulgur 外部化桩）尚未就绪，属预构建暂态而非回归；首轮结束后自行恢复',
+            fix: '先真实打开一次页面预热（等到网络空闲），再做验收断言或人工判断；重复出现才按 DEV-009 清缓存排查',
+          }),
+        )
+      }
+
       // ---- remote 端中间件：容器入口 / manifest（跨 dev-server 协作的服务面）----
       if (n.exposes.length > 0) {
         const baseNorm = state.base
@@ -638,6 +655,11 @@ export function federation(options: FulgurOptions): Plugin[] {
         .catch(() => {})
     }
   }
+
+  // W5/BLD-003 说明：expose 目标必填 props 的启发式扫描（scanExposeRequiredProps，见
+  // diagnostics.ts 与单测）在 testbed 实测出现误报——bpm 流程详情页声明必填 id，但宿主
+  // 路由以 props 回调（params+query 全量透传）供给，页面完全正常。插件无法感知宿主是否
+  // 透传 props，按预授权（排期文档 §4.5 #6）降级为手册 §8 文档化检查项，不自动发射。
 
   return [pre, post]
 }

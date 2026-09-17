@@ -287,9 +287,31 @@ function normalizeShared(
 
   const out: NormalizedShared[] = []
   for (const [configKey, hint] of entries) {
+    // CFG-008（shared 非法组合）：eager 依赖本地副本打进初始 chunk，import:false（纯消费）
+    // 与 eager 语义互斥；同 shareKey+shareScope 重复声明会让版本裁决与 loaded 标记歧义
+    if (hint.eager && hint.import === false) {
+      configError(
+        `CFG-008: shared["${configKey}"] combines eager with import:false`,
+        hint,
+        'eager requires a local copy to bundle into the initial chunk',
+        `shared: { '${configKey}': { eager: true } }  // or drop eager: { '${configKey}': { import: false } }`,
+      )
+    }
     const canonical = configKey.endsWith('/') ? configKey.slice(0, -1) : configKey
     const importSpec = hint.import === undefined ? canonical : hint.import
     const lookupName = hint.packageName || canonical
+
+    const shareScopeOfHint = hint.shareScope || shareScopeDefault
+    const shareKeyOfHint = hint.shareKey || canonical
+    const dup = out.find((s) => s.shareKey === shareKeyOfHint && s.shareScope === shareScopeOfHint)
+    if (dup) {
+      configError(
+        `CFG-008: shared key "${shareKeyOfHint}" is declared twice in share scope "${shareScopeOfHint}" (keys "${dup.configKey}" and "${configKey}")`,
+        configKey,
+        'one declaration per shareKey per share scope',
+        `merge hints: { '${shareKeyOfHint}': { singleton: true } }  // or use distinct shareKey values`,
+      )
+    }
 
     // requiredVersion 推断：显式 > 配置简写 > package.json 推断
     let requiredVersion: string | false
@@ -442,6 +464,21 @@ function validateOptions(options: FulgurOptions): void {
       const v = (cfg as RemoteEntryConfig)[slot]
       if (v !== undefined && typeof v !== 'string') {
         configError(`remotes["${key}"].${slot} must be a string`, v, 'a URL string', `remotes: { '${key}': { ${slot}: 'http://localhost:5101' } }`)
+      }
+      // CFG-007（remotes name@ 对象形式误用，2026-09-17 testbed 实踩）：name@ 前缀仅字符串
+      // external 语法支持（normalizeRemoteValue 拆名重命名）；对象形式 dev/prod 槽位整串当
+      // URL 拼接，产出 "bpm@http://.../@fulgur-entry.js" 这类坏地址，运行时表现为无关的
+      // MFU-001 加载失败——配置期显式拦截
+      if (slot !== 'external') {
+        const slotUrl = (cfg as RemoteEntryConfig)[slot]
+        if (typeof slotUrl === 'string' && /^[A-Za-z][\w.-]*@/.test(slotUrl)) {
+          configError(
+            `CFG-007: remotes["${key}"].${slot} uses the "name@url" prefix, which the object form does not support (it is concatenated verbatim into a broken URL)`,
+            slotUrl,
+            'a bare URL (the remote self-name defaults to the key), or the plain string form if renaming is needed',
+            `remotes: { '${key}': 'http://localhost:5101' }  // or: remotes: { '${key}': { dev: 'http://localhost:5101', prod: '/${key}' } }`,
+          )
+        }
       }
     }
   }

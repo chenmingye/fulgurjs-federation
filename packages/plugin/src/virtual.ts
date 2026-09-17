@@ -11,11 +11,32 @@ function jsonReplacer(_k: string, v: unknown) {
   return v
 }
 
-/** shared facade：export * + default interop（CJS 与无 default 包都能工作）——provide/fallback 用的命名空间门面 */
-export function genSharedFacade(specifier: string): string {
+/**
+ * shared facade：provide/fallback 用的命名空间门面。
+ *
+ * U-7（2026-09-17 修复）：此前为 `export * from <pkg>`，rolldown 产物下 export * 连同
+ * vite-plugin-top-level-await 的 __tla 机制被展开为「let 提升 + then 回调赋值」，命名绑定
+ * 全 undefined（provider 注册后 loadShare 拿到的命名空间只有 default）。改为枚举式再导出
+ * （同 genSharedNsFacade 形态）：`export const X = ns.X` 是普通绑定赋值，不依赖 rolldown
+ * 对 export * 的展开。exportNames 来自 enumerateCjsExports（index.ts）；无法枚举时
+ * （ESM-only/相对路径）回退 export * 形态——此时不存在 CJS 命名空间可枚举，TLA 展开风险
+ * 由「无 CJS 入口 → 消费方解构命名导出本就不可用」兜底。
+ */
+export function genSharedFacade(specifier: string, exportNames?: string[]): string {
+  const names = (exportNames ?? []).filter(
+    (n) => n !== 'default' && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(n),
+  )
+  if (names.length === 0) {
+    return [
+      `import * as __fulgur_facade from ${JSON.stringify(specifier)};`,
+      `export * from ${JSON.stringify(specifier)};`,
+      `export default __fulgur_facade.default ?? __fulgur_facade;`,
+      '',
+    ].join('\n')
+  }
   return [
     `import * as __fulgur_facade from ${JSON.stringify(specifier)};`,
-    `export * from ${JSON.stringify(specifier)};`,
+    ...names.map((n) => `export const ${n} = __fulgur_facade[${JSON.stringify(n)}];`),
     `export default __fulgur_facade.default ?? __fulgur_facade;`,
     '',
   ].join('\n')

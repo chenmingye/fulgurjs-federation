@@ -393,6 +393,10 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td><code>CFG-004</code></td><td>shared 配置形状错误</td><td>["vue"] 或 { vue: { singleton: true } }</td></tr>
   <tr><td><code>CFG-005</code></td><td>remotes 键与 shared 键同名冲突</td><td>改名（webpack 同款互斥约束）</td></tr>
   <tr><td><code>CFG-006</code></td><td>孤岛配置（既无 exposes 也无 remotes/shared）</td><td>核对 federation 配置意图</td></tr>
+  <tr><td><code>CFG-007</code></td><td>remotes 对象形式误用 name@ 前缀（dev/prod 槽位整串当 URL 拼接成坏地址，运行时表现为无关的 MFU-001）</td>
+      <td>对象形式不支持 name@ 前缀：改用键名（自报名默认取键）或字符串形式 <code>'shop@http://host'</code>（重命名语义）</td></tr>
+  <tr><td><code>CFG-008</code></td><td>shared 非法组合：eager + import:false（eager 需本地副本打进初始 chunk）；同 shareKey+shareScope 重复声明（版本裁决歧义）</td>
+      <td>eager 项去掉 import:false；合并重复声明或改用不同 shareKey</td></tr>
   <tr><td><code>DEV-001</code></td><td>remote dev server 不可达（dev manifest 拉取失败）</td>
       <td>启动对应 remote 的 dev server；核对宿主 remotes[].dev URL 与 remote 实际 VITE_PORT/base</td></tr>
   <tr><td><code>DEV-002</code></td><td>dev manifest 可达但 exposes 为空</td>
@@ -412,8 +416,12 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
           详见迁移指南「三B-1、远程页面如何取宿主运行时」</td></tr>
   <tr><td><code>DEV-009</code></td><td>联邦虚拟模块/门面请求 404（.vite 缓存漂移）</td>
       <td><code>rm -rf node_modules/.vite</code> + 重启 dev server + 换全新浏览器 profile</td></tr>
+  <tr><td><code>DEV-010</code></td><td>dev 冷启动预构建窗口提示：首次启动/清 .vite 后首轮 30~60s 内联邦请求瞬时 504 / "ce" / Outdated Optimize Dep（预构建暂态，非回归）</td>
+      <td>先真实打开一次页面预热（等网络空闲）再做验收断言；重复出现才按 DEV-009 清缓存排查</td></tr>
   <tr><td><code>BLD-001</code></td><td>expose 源文件解析失败</td><td>核对 exposes 指向的文件路径存在且可编译</td></tr>
   <tr><td><code>BLD-002</code></td><td>构建目标低于 es2022（TLA 需要）</td><td>提升 build.target（插件会自动提升并告警）</td></tr>
+  <tr><td><code>BLD-003</code></td><td>expose 目标组件含必填 props（文档化核对项，不自动告警）——联邦直挂无法像父组件传 props，必填 props 缺失会渲染崩溃（审批操作页误挂子组件事故类）。自动发射已按实测降级：宿主路由以 props 回调透传 params/query 时必填 props 可由 query 供给（流程详情页 id 实例），插件无法感知该通道</td>
+      <td>expose 指向独立页（自带取参逻辑）或给 props 默认值；接入前人工核对 expose 目标的 defineProps 声明与取参通道</td></tr>
 </table>
 
 <h3>NGINX 生产样例（同源部署 + 反代后端）</h3>

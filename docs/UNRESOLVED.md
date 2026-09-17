@@ -84,7 +84,18 @@
 - **验收口径**：本项按「EP shared 已知限制」记录结案——collect 25 页 1 条 console.error
   为已知噪音（pageerror 恒为 0），其余 26 页 collect 双零。
 
-## U-7：插件裸门面 export* + TLA 在 rolldown 产物下命名绑定全 undefined（2026-09-17 定位）
+## U-7：插件裸门面 export* + TLA 在 rolldown 产物下命名绑定全 undefined——✅ 已结案（2026-09-17 夜，批次 A/W3）
+
+> **结案摘要**：`genSharedFacade` 改枚举式再导出（`export const X = ns.X`，复用
+> enumerateCjsExports；无法枚举的相对路径/ESM-only 回退 export * 形态）。rolldown 产物里
+> U-7 缺陷签名（「let 提升 + Promise.all(...).then 回调只赋 default」）消除——新产物
+> `virtual_fulgur-shared_element-plus-*.js` 中 494 个导出名全部进入 then 赋值回调
+> （493 命名绑定 + default 的 `ns.default ?? ns` interop）+ `__tla` 机制自有导出。
+> 回归防线：新增单测断言「可枚举包的 provider 门面生成物不含 `export *`」（tests/virtual.test.ts）。
+> **实战验证**：testbed 全新重拷后 lowcode federatedBoot 从深路径绕行改回 bare
+> `element-plus` 导入（走 loadShare provider 路径），prod 构建部署后 AMIS 详情页联邦直渲染
+> 正常（amis dev/prod hasFields=true errors=[]）、27 页双环境矩阵全绿全页 iframe=0、
+> 分页中文「共 88 条」保持（EP shared singleton locale 注入链完好）。
 
 - **现象**：任何消费方在 provider 注册后 `loadShare('element-plus')`（即走 provider 路径），
   拿到的命名空间 494 个命名导出**全部 undefined**（仅 default 事后有值）——D 项排查时由
@@ -99,8 +110,8 @@
 - **影响面**：仅「provider 注册后经 loadShare 消费 bare 门面」的路径（宿主自身不走；
   页面内消费走 ?f= 绑定门面 + 各自 fallback 时正常）。当前 testbed 无存量消费方
   （federatedBoot 已改深路径绕开），属**潜伏缺陷**。
-- **修法方向（插件侧，待排期）**：`genSharedFacade` 弃用 `export *`，改枚举式再导出
+- **修法（已实施，2026-09-17）**：`genSharedFacade` 弃用 `export *`，改枚举式再导出
   （复用 `enumerateCjsExports`，同 `genSharedNsFacade` 的
   `export const x = ns.x` 形态——枚举赋值不依赖 rolldown 的 export* 展开）；
-  或升级 rolldown 观察 export*+TLA 展开是否已修。修完应回归：构造「provider 注册后
-  loadShare」场景断言命名导出非 undefined（当前无此用例）。
+  新增「可枚举包 provider 门面生成物不含 export *」单测防回归（tests/virtual.test.ts）；
+  testbed bare 导入 prod 实测通过（见结案摘要）。
