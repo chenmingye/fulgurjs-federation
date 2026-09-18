@@ -83,6 +83,9 @@
   是否改变该 tooltip 的挂载路径。
 - **验收口径**：本项按「EP shared 已知限制」记录结案——collect 25 页 1 条 console.error
   为已知噪音（pageerror 恒为 0），其余 26 页 collect 双零。
+- **2026-09-18 复核（v0.4.0 终态）**：collect prod 全 27 页 **0 条**——该噪音在 D.4/W4 之
+  后的产物形态下不再出现（W4 机制化 locale/配置注入与 shared 单副本协商路径稳定）。
+  若未来复现，按上方「规避/后续」清单处理。
 
 ## U-7：插件裸门面 export* + TLA 在 rolldown 产物下命名绑定全 undefined——✅ 已结案（2026-09-17 夜，批次 A/W3）
 
