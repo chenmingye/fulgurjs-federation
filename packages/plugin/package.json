@@ -1,6 +1,6 @@
 {
   "name": "@fulgur/federation",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",

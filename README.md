@@ -3,7 +3,7 @@
 > **fulgur** — 拉丁语「闪电 · 辉光」。
 > 一个把 Vite 模块联邦做到开箱即用的插件：**一套配置，dev / prod 双引擎，语义对齐 Webpack Module Federation**。
 
-![tests](https://img.shields.io/badge/tests-97%20%2B%20e2e%2018-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-%3C%205KB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
+![tests](https://img.shields.io/badge/tests-148%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-%3C%205KB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
 
 ---
 
@@ -31,6 +31,9 @@
 - **增强能力**：dts 类型直连（dev 补全直达 remote 源码）、`preloadRemote()` manifest 驱动精确预载、runtimePlugins 钩子
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
+- **CLI（主包内置 bin）**：`fulgur init`——`fulgur.config.ts` 单配置驱动的迁移生成器（模板 = 真实工程验证形态：vite 配置/路由表/桥/联邦启动器/NGINX conf 全量编码，锚点补丁幂等可续跑）；`fulgur doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
+- **跨应用全局配置协商（W4）**：`provideFulgurAppConfig({ locale, size, ... })` 一次写入运行时页面级单例，各远程副本经 `getFulgurAppConfig()` 消费注入（EP locale/size 类问题的机制化收编）
+- **全链路错误码体系（30 码）**：CFG/DEV/BLD/MFU 四段 + 手册 §8 码表防漂移校验
 
 ## 安装
 
@@ -116,6 +119,18 @@ const Panel = await loadRemote('shop/Panel', {
 > 详见 `docs/迁移指南.md` 三B-1。
 
 **没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgur-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
+
+## CLI：init 一键接入 + doctor 部署体检
+
+```bash
+# 1) 迁移生成器：单配置文件描述宿主/远程/页面路由表/部署形态，零手工编辑完成接入
+npx fulgur init --config fulgur.config.ts      # 锚点补丁幂等，失败修复后重跑续接
+# 起步模板：examples/ 目录（真实三应用工程的验收样例）
+
+# 2) 部署体检（CI 可嵌）：缓存头/资源形态/CORS/chunk 可达/版本 skew
+npx fulgur doctor --base http://your-site --apps main,app-a,app-b
+npx fulgur doctor --base http://localhost:5173 --apps app-a --dev
+```
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
