@@ -141,7 +141,7 @@ npx fulgurjs doctor --base http://localhost:5173 --apps app-a --dev
 
 ## API 参考
 
-以下覆盖插件的全部公开 API，签名与默认值与源码一致；完整语义细节与实测截图见 [`docs/manual.html`](./docs/manual.html)。
+以下覆盖插件的全部公开 API，签名与默认值与源码一致；完整语义细节与实测截图见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html)。
 
 ### 1. `federation(options)` — Vite 插件（宿主/远程同一份 API）
 
@@ -393,7 +393,7 @@ export default defineFulgurjsConfig({
 | | `MFU-009` | 加载到的模块没有任何导出 |
 | | `MFU-010` | singleton 共享版本漂移（使用作用域版本，告警） |
 
-每个码的完整排查文案见 [`docs/manual.html`](./docs/manual.html) §8；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
+每个码的完整排查文案见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) §8；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
 
 ### 7. 产物与端点约定
 
@@ -404,7 +404,7 @@ export default defineFulgurjsConfig({
 | prod | `/<base>/fulgurjs-remoteEntry.js` | 固定文件名容器入口（内容每次构建变——**必须 no-cache**） |
 | prod | `/<base>/fulgurjs-manifest.json` | expose chunk/CSS 清单（preloadRemote 消费，**no-cache**） |
 
-NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgurjs init --config` 自动生成，样例见 [`docs/manual.html`](./docs/manual.html)。
+NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgurjs init --config` 自动生成，样例见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html)。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
@@ -489,11 +489,11 @@ const Panel = await loadRemote('shop/Panel', {
 
 ## 文档
 
-- [`docs/manual.html`](./docs/manual.html) — 完整使用手册：webpack 逐项对齐总表、每个功能的配置代码 + dev/prod 实测截图、错误码排查、NGINX 部署样例
-- [`docs/迁移指南.md`](./docs/迁移指南.md) — qiankun 微前端 → 联邦的真实迁移案例（七步法 + 验收清单）
-- [`docs/webpack-mf-对照与缺口.md`](./docs/webpack-mf-对照与缺口.md) — webpack MF 逐项对照与明确不支持清单
-- [`docs/沙箱边界审计.md`](./docs/沙箱边界审计.md) — CSS / 全局变量 / 公共依赖三维度互扰实测
-- [`DESIGN.md`](./DESIGN.md) — 架构设计、对齐总表、测试与验收方案
+- [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) — 完整使用手册：webpack 逐项对齐总表、每个功能的配置代码 + dev/prod 实测截图、错误码排查、NGINX 部署样例
+- [`docs/迁移指南.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md) — qiankun 微前端 → 联邦的真实迁移案例（七步法 + 验收清单）
+- [`docs/webpack-mf-对照与缺口.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md) — webpack MF 逐项对照与明确不支持清单
+- [`docs/沙箱边界审计.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/沙箱边界审计.md) — CSS / 全局变量 / 公共依赖三维度互扰实测
+- [`DESIGN.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/DESIGN.md) — 架构设计、对齐总表、测试与验收方案
 
 ## 开发与测试
 

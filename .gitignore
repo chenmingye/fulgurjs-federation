@@ -33,6 +33,9 @@ docs/screenshots/baseline-8661/
 docs/screenshots/migration1-dev/
 docs/screenshots/tb-dev-*
 docs/screenshots/tb-prod-*
+# npm 真实用户视角验证截图（本轮验证证据，本地留证不上传）
+docs/screenshots/npm-testbed/
+docs/screenshots/npm-install/
 
 # 项目本地工作区（不入库：验证产物/截图/工作记录）
 docs/_workspace/

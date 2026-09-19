@@ -141,11 +141,14 @@ function providesRecords(options: NormalizedOptions): ProvideRecord[] {
  * 同步执行——注册 share scope、remotes、runtimePlugins、自己的 provides。
  * eager 共享项以静态导入形式出现（webpack eager 语义：总是被下载、初始 chunk 可用）。
  */
+/** 构建入口 init 注入的标识（post 阶段防双重生成的精确特征之一） */
+export const INIT_MODULE_MARKER = '/* fulgurjs:init */'
+
 export function genInitModule(
   options: NormalizedOptions,
   command: 'serve' | 'build',
 ): string {
-  const lines: string[] = []
+  const lines: string[] = [INIT_MODULE_MARKER]
   lines.push(`import { initSharing, registerShare, registerRemotes, registerPlugins } from "virtual:fulgurjs-runtime";`)
 
   const provides = providesRecords(options)

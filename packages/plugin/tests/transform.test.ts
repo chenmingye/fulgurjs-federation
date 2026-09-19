@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { federation } from '../src/index'
 import { normalizeOptions, type FulgurjsOptions } from '../src/options'
-import { transformModule, isExposeTargetFile, staticRuntimeImportError } from '../src/transform'
-import { genBindingFacade, genBuildRemoteEntry, genDevRemoteEntry } from '../src/virtual'
+import { transformModule, isExposeTargetFile, isPluginProcessedModule, staticRuntimeImportError } from '../src/transform'
+import { genBindingFacade, genBuildRemoteEntry, genDevRemoteEntry, genInitModule, INIT_MODULE_MARKER } from '../src/virtual'
 
 const ROOT = process.cwd()
 
@@ -181,6 +181,31 @@ describe('transform: dev .vue post 阶段（依赖 URL 重映射）', () => {
       rewriteShared: false,
     })
     expect(r).toBeNull()
+  })
+})
+
+describe('transform: 插件生成物判定（post 阶段防双重生成）', () => {
+  it('用户直接导入虚拟运行时 + 远程导入：不判为已处理（回归：宿主混用漏改写 500）', () => {
+    const code = [
+      `import { loadRemote, version } from 'virtual:fulgurjs-runtime'`,
+      `const m = () => import('remote-a/Button')`,
+    ].join('\n')
+    expect(isPluginProcessedModule(code)).toBe(false)
+  })
+
+  it('代理化运行时导入：判为已处理', () => {
+    expect(isPluginProcessedModule(`import x from 'virtual:fulgurjs-runtime-proxy'`)).toBe(true)
+  })
+
+  it('改写助手特征：判为已处理', () => {
+    expect(isPluginProcessedModule(`import { loadRemote as __fulgurjs_loadRemote, loadShare as __fulgurjs_loadShare } from 'virtual:fulgurjs-runtime'`)).toBe(true)
+  })
+
+  it('构建入口 init 注入标识：判为已处理，且 genInitModule 输出以标识开头', () => {
+    const injected = `${INIT_MODULE_MARKER}\nimport { initSharing } from 'virtual:fulgurjs-runtime'`
+    expect(isPluginProcessedModule(injected)).toBe(true)
+    const init = genInitModule(normalizeOptions({ name: 'h', shared: { vue: '^3.4.0' } }, ROOT, 'serve'))
+    expect(init.startsWith(INIT_MODULE_MARKER)).toBe(true)
   })
 })
 

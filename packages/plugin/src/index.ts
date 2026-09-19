@@ -22,6 +22,7 @@ import {
 import {
   getFacadeEntry,
   isTransformableId,
+  isPluginProcessedModule,
   transformModule,
   serializeShareCallForFacade,
   isExposeTargetFile,
@@ -610,8 +611,11 @@ export function federation(options: FulgurjsOptions): Plugin[] {
       ) {
         return { code: code.split('virtual:fulgurjs-runtime').join('virtual:fulgurjs-runtime-proxy'), map: null }
       }
-      // pre 阶段已改写过的模块（build 入口/子请求）不再处理，防双重生成
-      if (code.includes('virtual:fulgurjs-runtime')) return null
+      // pre 阶段已改写过的模块（代理化远程页 / 构建入口 init 注入 / 已改写模块）不再处理，
+      // 防双重生成。按插件生成物特征精确判定，不能按「含 virtual:fulgurjs-runtime 字样」
+      // 一刀切——用户源码本可合法直接导入该虚拟模块（README §2 标准用法），同文件再写
+      // 远程动态导入属正常混用，一刀切会让远程导入漏改写（vite:import-analysis 500）。
+      if (isPluginProcessedModule(code)) return null
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：仅 .vue 主请求（其余已由 pre 处理）
       if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) return null
       if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里

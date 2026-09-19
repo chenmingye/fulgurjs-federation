@@ -13,6 +13,7 @@ import MagicString from 'magic-string'
 import path from 'node:path'
 import type { NormalizedOptions, NormalizedShared } from './options'
 import { SHARED_FACADE_PREFIX } from './options'
+import { INIT_MODULE_MARKER } from './virtual'
 
 let lexerReady: Promise<unknown> | null = null
 function ensureLexer() {
@@ -176,6 +177,21 @@ export function isTransformableId(id: string, allowNodeModules = false): boolean
   if (!JS_EXT_RE.test(clean) && !clean.endsWith('.vue')) return false
   if (clean.includes('node_modules') && !allowNodeModules) return false
   return true
+}
+
+/**
+ * 判定模块是否已含插件生成物（代理化运行时导入 / 改写助手 / 构建入口 init 注入）。
+ * post 阶段据此跳过，防双重生成。不能按「含 virtual:fulgurjs-runtime 字样」一刀切：
+ * 用户源码本可合法直接导入该虚拟模块（README §2 标准用法），同文件再写远程导入属正常混用
+ * （回归：宿主页面混用两者时远程导入被跳过改写，vite:import-analysis 报 500）。
+ */
+export function isPluginProcessedModule(code: string): boolean {
+  return (
+    code.includes('virtual:fulgurjs-runtime-proxy') ||
+    code.includes('__fulgurjs_loadRemote') ||
+    code.includes('__fulgurjs_loadShare') ||
+    code.includes(INIT_MODULE_MARKER)
+  )
 }
 
 /**
