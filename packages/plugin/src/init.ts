@@ -87,10 +87,15 @@ interface PatchOp {
   label: string
   /** 幂等标记：replace 后的文件包含它即视为已应用 */
   marker: string
-  find: string
+  /** 字面锚点（与 findRe 二选一；patchFile 内部按存在性分发） */
+  find?: string
   replace: string
   /** 允许多处命中（默认恰好 1 处，防锚点漂移） */
   allowMany?: boolean
+  /** 正则锚点（多行模式）：同族项目文本漂移时用；优先于 find */
+  findRe?: string
+  /** 文件内容匹配此正则即视为「已满足」跳过（如目标已是目标形态） */
+  skipIf?: string
 }
 
 /** 锚点式补丁：锚点唯一命中才动手；缺失/多义都显式报错，绝不静默 */
@@ -109,10 +114,17 @@ function patchFile(abs: string, ops: PatchOp[], report: InitReportEntry[], error
       report.push({ file: abs, action: 'skip', note: `${op.label}（已应用）` })
       continue
     }
-    const hits = src.split(toFileEol(op.find)).length - 1
+    if (op.skipIf && new RegExp(op.skipIf, 'm').test(src)) {
+      report.push({ file: abs, action: 'skip', note: `${op.label}（已满足，跳过）` })
+      continue
+    }
+    const findText = op.find ?? ''
+    const hits = op.findRe
+      ? (src.match(new RegExp(op.findRe, 'gm')) ?? []).length
+      : src.split(toFileEol(findText)).length - 1
     if (hits === 0) {
       errors.push(
-        `[fulgur:init] 补丁锚点未命中：${abs} :: ${op.label}\n根因：该文件与 jeecg/yudao 基线结构不符（已手工改过或版本不同）\n修法：按迁移指南手工落此改动（锚点：${op.find.split('\n')[0].slice(0, 80)}）`,
+        `[fulgur:init] 补丁锚点未命中：${abs} :: ${op.label}\n根因：该文件与 jeecg/yudao 基线结构不符（已手工改过或版本不同）\n修法：按迁移指南手工落此改动（锚点：${(op.findRe ?? findText).split('\n')[0].slice(0, 80)}）`,
       )
       continue
     }
@@ -120,7 +132,11 @@ function patchFile(abs: string, ops: PatchOp[], report: InitReportEntry[], error
       errors.push(`[fulgur:init] 补丁锚点多义（${hits} 处）：${abs} :: ${op.label}\n根因：锚点字符串不够唯一\n修法：人工核对该文件后处理`)
       continue
     }
-    src = src.split(toFileEol(op.find)).join(toFileEol(op.replace))
+    if (op.findRe) {
+      src = src.replace(new RegExp(op.findRe, 'gm'), toFileEol(op.replace))
+    } else {
+      src = src.split(toFileEol(findText)).join(toFileEol(op.replace))
+    }
     touched += 1
   }
   if (touched > 0) {
@@ -172,16 +188,14 @@ function patchPkgDep(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
   let pluginLink = path.relative(rel(cfg.root, app.path), PLUGIN_ROOT).split(path.sep).join('/')
   const probe = path.resolve(rel(cfg.root, app.path), pluginLink)
   if (path.resolve(probe) !== path.resolve(PLUGIN_ROOT)) pluginLink = PLUGIN_ROOT
-  // 锚点候选：admin 尾依赖为 xss，bpm/lowcode 为 xml-js
-  const anchors = ['"xss": "^1.0.15"', '"xml-js": "^1.6.11"']
-  let applied = false
-  for (const anchor of anchors) {
-    const before = fs.readFileSync(abs, 'utf8')
-    if (before.includes('"@fulgur/federation":')) {
-      applied = true
-      break
-    }
-    if (!before.includes(anchor)) continue
+  const raw = fs.readFileSync(abs, 'utf8')
+  if (raw.includes('"@fulgur/federation":')) {
+    report.push({ file: abs, action: 'skip', note: '依赖已存在' })
+    return
+  }
+  // 锚点路径优先（diff 最小）：admin 尾依赖 xss、bpm/lowcode 尾依赖 xml-js
+  for (const anchor of ['"xss": "^1.0.15"', '"xml-js": "^1.6.11"']) {
+    if (!raw.includes(anchor)) continue
     patchFile(
       abs,
       [
@@ -196,12 +210,19 @@ function patchPkgDep(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
       errors,
       force,
     )
-    applied = true
-    break
+    return
   }
-  if (!applied && !fs.readFileSync(abs, 'utf8').includes('"@fulgur/federation":')) {
+  // 家族兜底：JSON 感知插入（同族项目依赖表尾部各异，文本锚点不可靠）
+  try {
+    const pkg = JSON.parse(raw)
+    pkg.dependencies ??= {}
+    pkg.dependencies['@fulgur/federation'] = `link:${pluginLink}`
+    ensureDirFor(abs)
+    fs.writeFileSync(abs, JSON.stringify(pkg, null, 2) + '\n')
+    report.push({ file: abs, action: 'patch', note: 'JSON 方式添加依赖（锚点不适配，整文件重排为标准 2 空格 JSON）' })
+  } catch (e) {
     errors.push(
-      `[fulgur:init] package.json 依赖锚点未命中：${abs}\n根因：dependencies 末项既不是 xss 也不是 xml-js（依赖版本与 jeecg/yudao 基线不同）\n修法：手工在 dependencies 加 "@fulgur/federation": "link:${pluginLink}"`,
+      `[fulgur:init] package.json 依赖写入失败：${abs}\n根因：锚点不适配且 JSON 解析失败（${String((e as Error).message ?? e)}）\n修法：手工在 dependencies 加 "@fulgur/federation": "link:${pluginLink}"`,
     )
   }
 }
@@ -238,13 +259,14 @@ function generateAppEnvFiles(cfg: FulgurRepoConfig, app: FulgurAppConfig, report
       {
         label: 'dev 代理指向本地后台',
         marker: `VITE_PROXY=[["${cfg.env.backendContext}","${backend}/"]`,
-        find: 'VITE_PROXY=[["/demo","http://localhost:8085/demo/"],["/upload","http://localhost:8085/demo/sys/common/upload"]]',
+        // 同族项目部署 IP 各异——按行首键名正则替换，不绑具体旧值
+        findRe: '^VITE_PROXY=.*$',
         replace: `VITE_PROXY=[["${cfg.env.backendContext}","${backend}/"],["/upload","${backend}/sys/common/upload"]]`,
       },
       {
         label: 'dev 域名指向本地后台',
         marker: `VITE_GLOB_DOMAIN_URL=${backend}/`,
-        find: 'VITE_GLOB_DOMAIN_URL=http://localhost:8085/demo/',
+        findRe: '^VITE_GLOB_DOMAIN_URL=.*$',
         replace: `VITE_GLOB_DOMAIN_URL=${backend}/`,
       },
     ],
@@ -279,7 +301,8 @@ function patchRootEnvBackend(cfg: FulgurRepoConfig, report: InitReportEntry[], e
       {
         label: 'BACKEND_ORIGIN_DEV 指向本地后台',
         marker: `BACKEND_ORIGIN_DEV=${cfg.env.backendOrigin}`,
-        find: 'BACKEND_ORIGIN_DEV=http://localhost:8085',
+        // 同族项目部署 IP 各异（含尾斜杠差异）——按行首键名正则替换
+        findRe: '^BACKEND_ORIGIN_DEV=.*$',
         replace: `BACKEND_ORIGIN_DEV=${cfg.env.backendOrigin}`,
       },
       {
@@ -340,6 +363,8 @@ function initHostApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
         replace:
           "      // es2015 → es2022：联邦 TLA（自动异步边界）要求 es2022+（DESIGN 已知差异 #3）\n" +
           "      target: 'es2022',",
+        // 同族项目存在数组形态（如 ['chrome100']，原生支持 TLA）或已 es2022——视为满足
+        skipIf: "target:\\s*\\[|target:\\s*['\"]es2022",
       },
       {
         label: 'emptyOutDir（outDir 根外显式清空）',
@@ -409,11 +434,9 @@ function initHostApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
       {
         label: 'BACK 权限模式剔除联邦路径',
         marker: '联邦通道（fulgur）：/flowable/**',
-        find:
-          '          // update-begin--author:liaozhiyang---date:20240529---for：【TV360X-522】ai助手路由写死在前端\n' +
-          '          routes = [PAGE_NOT_FOUND_ROUTE, ...routeList, ...staticRoutesList];',
+        // 锚点只依赖赋值行本身：同族项目的注释史不同（TV360X 注释非所有分支都有）
+        find: '          routes = [PAGE_NOT_FOUND_ROUTE, ...routeList, ...staticRoutesList];',
         replace:
-          '          // update-end--author:liaozhiyang---date:20240529---for：【TV360X-522】ai助手路由写死在前端\n' +
           `          // 联邦通道（fulgur）：/flowable/**、/lowcode/** 页面由 staticRouter 的 FULGUR_ROUTES ${MARK}\n` +
           '          // 承载（loadRemote 直渲染）。后台菜单为这两类路径生成的路由记录在宿主无法解析\n' +
           '          // component（恒为空），若注册会抢先匹配导致页面空白——此处剔除；\n' +
@@ -423,7 +446,8 @@ function initHostApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
           "            return norm.startsWith('flowable/') || norm.startsWith('lowcode/');\n" +
           '          };\n' +
           '          routeList = routeList.filter((r) => !isFederatedPath(r.path));\n' +
-          '          routes = [PAGE_NOT_FOUND_ROUTE, ...routeList, ...staticRoutesList];',
+          '          routes = [PAGE_NOT_FOUND_ROUTE, ...routeList, ...staticRoutesList];\n' +
+          '          // update-end--author:liaozhiyang---date:20240529---for：【TV360X-522】ai助手路由写死在前端',
       },
       {
         label: '注册前递归剔除联邦空路由（各权限模式）',
@@ -587,11 +611,11 @@ function initHostApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
       {
         label: 'formParams props（取参通道）',
         marker: 'const fp: Record<string, any> | null =',
+        // 同族项目四行之间可能夹注释行——前两行连续匹配即可，disabled 单独一条正则
         find:
           "  const name = getUrlParam('name') || 'default';\n" +
           "  const id = getUrlParam('id') || 'default';\n" +
-          "  const toEdit = getUrlParam('toEdit') || '-1';\n" +
-          "  const disabled = getUrlParam('disabled') || '';",
+          "  const toEdit = getUrlParam('toEdit') || '-1';",
         replace:
           '  // 联邦直渲染通道：formParams 优先（props 传参替代 URL query，联邦页面里 useRoute/window.location\n' +
           '  // 都是宿主的）；空时回落 URL 参数，乾坤 iframe 用法完全兼容\n' +
@@ -600,8 +624,13 @@ function initHostApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: InitRe
           "    props.formParams && Object.keys(props.formParams).length ? props.formParams : null;\n" +
           "  const name = fp?.name ?? (getUrlParam('name') || 'default');\n" +
           "  const id = fp?.id ?? (getUrlParam('id') || 'default');\n" +
-          "  const toEdit = fp?.toEdit ?? (getUrlParam('toEdit') || '-1');\n" +
-          "  const disabled = fp?.disabled ?? (getUrlParam('disabled') || '');",
+          "  const toEdit = fp?.toEdit ?? (getUrlParam('toEdit') || '-1');",
+      },
+      {
+        label: 'disabled 取参切换（可与上者间夹注释）',
+        marker: "const disabled = fp?.disabled ??",
+        findRe: "^  const disabled = getUrlParam\\('disabled'\\) \\|\\| '';",
+        replace: "  const disabled = fp?.disabled ?? (getUrlParam('disabled') || '');",
       },
       {
         label: 'processData 取参切换',
@@ -895,6 +924,8 @@ function initRemoteApp(cfg: FulgurRepoConfig, app: FulgurAppConfig, report: Init
         {
           label: 'Redirect 子路由改名（shared 协商高版本 vue-router）',
           marker: "name: 'RedirectChild'",
+          // 同族项目可能已自行改名（如 RedirectPage）——视为满足
+          skipIf: "name:\\s*'Redirect(Page|Child)'",
           find: "        name: 'Redirect',",
           replace:
             "        // 子路由改名：vue-router 4.6（shared 协商取最高版本）禁止父子同名路由\n" +

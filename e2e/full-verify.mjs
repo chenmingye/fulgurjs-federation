@@ -7,18 +7,21 @@ import fs from 'node:fs'
 const REPO = '/Users/Admin/Desktop/ai 杂物/插件/fulgur-federation'
 const SHOT = `${REPO}/docs/screenshots/migration1-dev`
 
+// dev 宿主地址可覆盖（同族项目端口各异：demo-app=8773、demo-app-b=8772）
+const DEV_BASE = process.env.DEV_BASE || 'http://localhost:8773'
+const PROD_BASE = process.env.PROD_BASE || 'http://localhost:8662'
 const steps = [
-  ['matrix-dev', 'VTAG=dev VBASE=http://localhost:8773 node matrix-shot.mjs'],
-  ['matrix-prod', 'VTAG=prod VBASE=http://localhost:8662 node matrix-shot.mjs'],
-  ['collect-dev', 'node collect-errors.mjs --base http://localhost:8773 --env dev'],
-  ['collect-prod', 'node collect-errors.mjs --base http://localhost:8662 --env prod'],
-  ['flow-dev', 'node flow-closure.mjs --base http://localhost:8773 --env dev'],
-  ['flow-prod', 'node flow-closure.mjs --base http://localhost:8662 --env prod'],
-  ['amis-dev', 'node amis-dev-verify.mjs'],
-  ['amis-prod', 'VTAG=prod VBASE=http://localhost:8662 node amis-dev-verify.mjs'],
-  ['demo-prod', `VBASE=http://localhost:8662 VOUT="${REPO}/docs/screenshots/tb-prod-demo-page.png" node tb-demo-shot.mjs`],
-  ['todo-rows-dev', 'TAG=dev node todo-rows.mjs'],
-  ['todo-rows-prod', 'TAG=prod BASE=http://localhost:8662 node todo-rows.mjs'],
+  ['matrix-dev', `VTAG=dev VBASE=${DEV_BASE} node matrix-shot.mjs`],
+  ['matrix-prod', `VTAG=prod VBASE=${PROD_BASE} node matrix-shot.mjs`],
+  ['collect-dev', `node collect-errors.mjs --base ${DEV_BASE} --env dev`],
+  ['collect-prod', `node collect-errors.mjs --base ${PROD_BASE} --env prod`],
+  ['flow-dev', `node flow-closure.mjs --base ${DEV_BASE} --env dev`],
+  ['flow-prod', `node flow-closure.mjs --base ${PROD_BASE} --env prod`],
+  ['amis-dev', `VTAG=dev VBASE=${DEV_BASE} node amis-dev-verify.mjs`],
+  ['amis-prod', `VTAG=prod VBASE=${PROD_BASE} node amis-dev-verify.mjs`],
+  ['demo-prod', `VBASE=${PROD_BASE} VOUT="${REPO}/docs/screenshots/tb-prod-demo-page.png" node tb-demo-shot.mjs`],
+  ['todo-rows-dev', `TAG=dev BASE=${DEV_BASE} node todo-rows.mjs`],
+  ['todo-rows-prod', `TAG=prod BASE=${PROD_BASE} node todo-rows.mjs`],
 ]
 
 // W8-②：失败归因表——套件 → 覆盖面 + 证据位置 + 第一步排查动作
