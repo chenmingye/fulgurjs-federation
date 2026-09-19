@@ -118,6 +118,8 @@ const Panel = await loadRemote('shop/Panel', {
 > 远程页面请用 `(globalThis as any).__FULGUR_RUNTIME__` 或独立产物的 `getRuntime()`（带 `version` 字段），
 > 详见 `docs/迁移指南.md` 三B-1。
 
+> 以上只是最小面。**全部选项（remotes 四形态/shared 九个开关/dts/runtimePlugins…）、运行时 API、CLI、错误码见下方 [API 参考](#api-参考)。**
+
 **没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgur-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
 ## CLI：init 起步模板 + doctor 部署体检
@@ -137,6 +139,274 @@ npx fulgur doctor --base http://localhost:5173 --apps app-a --dev
 
 **插件保持项目无关**：init 不改写任何项目文件，不内置任何具体项目的模板或补丁；权限路由、
 远程启动器等项目集成细节由各项目按 init 输出的通用核对清单自行落地。
+
+## API 参考
+
+以下覆盖插件的全部公开 API，签名与默认值与源码一致；完整语义细节与实测截图见 [`docs/manual.html`](./docs/manual.html)。
+
+### 1. `federation(options)` — Vite 插件（宿主/远程同一份 API）
+
+```ts
+import { federation } from '@fulgur/federation'
+```
+
+#### 全部选项
+
+| 选项 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `name` | `string` **必填** | — | 容器名。同页面宿主/远程必须唯一（也是 uniqueName）；须匹配 `/^[a-zA-Z][\w.-]*$/` |
+| `filename` | `string` | `'fulgur-remoteEntry.js'` | prod 容器入口文件名（固定文件名，CDN 可长缓存） |
+| `exposes` | `Record<string, string \| { import: string; name?: string }>` | — | 对外暴露模块：键 `'./X'`，值源文件路径；`name` 为稳定 chunk 文件名 |
+| `remotes` | `Record<string, string \| RemoteConfig \| (() => Promise<any>)>` | — | 消费的远程，三种形态见下表 |
+| `shared` | `string[] \| Record<string, string \| SharedHint>` | — | 共享依赖；字符串简写 = requiredVersion（缺省从本应用 package.json 推断） |
+| `shareScope` | `string` | `'default'` | 默认共享作用域名 |
+| `remoteType` | `string` | `'module'` | 仅支持 `'module'`（传其它值告警并回落） |
+| `library` | `{ type?: string }` | — | 仅接受 esm/module（webpack 宿主 interop 尚未支持，告警） |
+| `runtime` | `string \| false` | 内置运行时 | 自定义运行时模块路径；`false` 禁用内置运行时 |
+| `runtimeChunk` | `boolean \| 'single'` | — | 运行时是否拆独立 chunk |
+| `manifest` | `boolean` | `true` | prod 构建生成 `fulgur-manifest.json`（preloadRemote 依赖它） |
+| `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（写法见「运行时插件」） |
+| `dts` | `boolean \| { dir?: string }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 补全直达远程源码 |
+| `devSharedSelf` | `boolean` | 纯远程 `true`；有 `remotes` 的宿主 `false` | dev 下自身源码（含依赖）是否参与 shared 协商改写。**双向联邦**（既 expose 又消费 remote）的宿主/远程需显式 `true`，否则 prod 双 vue 实例 |
+| `automaticAsyncBoundary` | — | 恒为 `true` | 接受任意值：TLA 自动异步边界，无需手工 bootstrap |
+| `dataPrefetch` | — | 恒为 `true` | 接受任意值：`preloadRemote` 始终可用 |
+| `usedExports` / `ignoreUnusedSharedExports` | — | no-op | 接受并忽略（Rollup/Rolldown 原生 tree-shaking 已覆盖） |
+
+#### remotes 的三种形态
+
+```ts
+remotes: {
+  // ① 字符串单地址：dev 自动拼 /@fulgur-entry.js，prod 自动拼 filename
+  'remote-a': 'http://localhost:5101',
+  // ② '自报名@url'：重命名语义（仅字符串形式支持；对象形式不支持 name@，配置期即报 CFG-007）
+  'checkout': 'shop@http://localhost:5102',
+  // ③ 对象：dev/prod 显式拆分 + 容错参数（全部可选）
+  'remote-b': {
+    dev: 'http://localhost:5103/remote-b',
+    prod: '/remote-b',
+    shareScope: 'default',
+    timeout: 15000,            // 加载超时 ms
+    retries: 2,                // 失败重试次数
+    fallback: ['http://backup/remote-b'],  // 备用 remoteEntry，依次尝试
+    breaker: { threshold: 5, resetMs: 30000 }, // 连续失败熔断
+  },
+  // ④ 函数：promise-based remote（构建时地址未知；等价 webpack "promise new Promise"，
+  //    需在运行时配合 registerRemote 注册，见下文运行时 API）
+  'remote-c': () => fetch('/api/remote-url').then(r => r.text()),
+}
+```
+
+#### shared 的完整选项（SharedHint）
+
+```ts
+shared: {
+  vue: {
+    singleton: true,            // 全页单实例（vue/pinia/vue-router 强烈建议 true）
+    requiredVersion: '^3.4.0',  // semver 全语法；false = 接受任意；缺省从 package.json 推断
+    strictVersion: false,       // 缺省：有本地副本且非 singleton → true（不满足即抛 MFU-003）
+    shareKey: 'vue',            // 共享作用域里的键（导入名与共享名不同时用）
+    shareScope: 'default',      // 该项的共享作用域
+    eager: false,               // true = 本地副本打进初始 chunk（同步可用）
+    import: 'vue',              // 本地副本模块；false = 纯消费不提供（与 eager 互斥，CFG-008）
+    version: '3.4.21',          // 显式提供版本（缺省读本机安装版本）
+  },
+  // 字符串简写：等价 { requiredVersion: '^4.4.5' }
+  'vue-router': '^4.4.5',
+  // 数组形式：shared: ['vue', 'pinia']
+}
+```
+
+版本裁决语义对齐 webpack：满足 requiredVersion 的最高版本胜出；已加载版本永不替换；singleton 收敛到唯一实例（skew 告警 MFU-010）；strictVersion 不满足抛 MFU-003。
+
+### 2. 运行时 API — `virtual:fulgur-runtime`
+
+**宿主侧页面**直接静态导入；**exposes 目标文件（远程页面）禁止静态导入本模块**（dev 会直接报错拦截，DEV-008）——远程页面一律走页面级单例：
+
+```ts
+// 宿主页面
+import { loadRemote } from 'virtual:fulgur-runtime'
+
+// 远程页面（被宿主跨源加载的文件）
+const runtime = (globalThis as any).__FULGUR_RUNTIME__   // 页面级单例，跨副本同一实例
+```
+
+#### 函数总表
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `loadRemote` | `(spec: string, opts?) => Promise<模块命名空间>` | 加载远程模块。`spec = '远程名/./Expose键'`（`./` 可省）；opts 见下 |
+| `loadShare` | `(name: string, opts?) => Promise<命名空间>` | 共享模块协商（最高版本胜出/已加载优先/singleton 收敛）。opts：`{ requiredVersion?, singleton?, strictVersion?, shareKey?, shareScope?, fallback? }` |
+| `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | 按 manifest 精确预载该远程全部 expose chunk + CSS（prefetch = 空闲时低优先级） |
+| `getContainer` | `(name: string) => Promise<容器>` | 取远程容器（触发加载 + init），容器协议 `{ name, init, get }` |
+| `registerRemote` / `registerRemotes` | `(config \| list) => void` | 运行时注册远程（promise remote / 动态地址）。RemoteConfig：`{ name, entry, shareScope?, timeout?, retries?, fallback?, breaker? }` |
+| `registerShare` | `(scope, name, version, get, opts?) => void` | 手工注册共享模块（一般由 init 模块自动完成） |
+| `initSharing` | `(scopeName?) => ShareScopeMap` | 初始化共享作用域（一般由 init 模块自动完成） |
+| `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | 注册运行时插件（见下） |
+| `provideFulgurAppConfig` | `(config: Record<string, any>) => void` | **跨应用全局配置写入**（宿主桥一次写入；浅合并；镜像到 `globalThis.__FULGUR_APP_CONFIG__`） |
+| `getFulgurAppConfig` | `() => Record<string, any>` | 读取全局配置（远程 federatedBoot 消费注入 locale/size 等） |
+| `getRuntime` | `() => FulgurRuntime` | 取运行时单例本体（与 `__FULGUR_RUNTIME__` 同一实例） |
+| `version` | `string` | 运行时/插件版本（跨源副本一致性诊断用） |
+| `unwrapDefault` | `(ns: any) => any` | ESM/CJS default interop 工具 |
+
+#### loadRemote 选项
+
+```ts
+const Panel = await loadRemote('shop/Panel', {
+  shareScope: 'default',                        // 覆盖远程声明的 shareScope
+  retries: 3,                                   // 单次调用覆盖 remote.retries
+  fallbackModule: () => import('./PanelFallback.vue'),
+  // 失败时返回 fallback 模块；错误事件/console 仍显式发出（不是静默兜底）；不传则抛错
+})
+```
+
+#### 运行时插件（`runtimePlugins: ['./src/fulgurPlugin.ts']`）
+
+```ts
+import type { RuntimePlugin } from 'virtual:fulgur-runtime'
+
+export default {
+  name: 'my-plugin',
+  init(hooks) {
+    hooks.resolveShare = async ({ shareKey, shareScope, requiredVersion, picked, available }) => {
+      // 覆写共享版本裁决：返回 ShareEntry 即生效
+    }
+    hooks.beforeLoadRemote = ({ remote, module }) => {}
+    hooks.afterLoadRemote = ({ remote, module, module_ns }) => {}
+    hooks.onRemoteError = ({ remote, error }) => {}   // error.code ∈ 错误码总表
+  },
+} satisfies RuntimePlugin
+```
+
+#### 调试面（无需配置，始终存在）
+
+| 出口 | 内容 |
+|---|---|
+| `window.__FULGUR_SCOPE__` | share scope 实时协商结果（键 → 版本 → `{ get, from, loaded }`） |
+| `window.__FULGUR_INFO__` | `{ remotes: { [名]: { entry, status, lastLoadMs, error } }, errors: [] }` |
+| `window.__FULGUR_APP_CONFIG__` | W4 全局配置镜像 |
+| `window` 事件 `fulgur:error` | `CustomEvent<{ remote, error }>`，所有远程加载/共享错误都会发出 |
+
+### 3. `defineFulgurPages` — 宿主页面路由表（`@fulgur/federation/pages`）
+
+宿主把「URL 路径 → 远程 exposes 键」的映射表交给它校验，带参路由的静默冲突在启动期报错而不是运行时加载错组件：
+
+```ts
+import { defineFulgurPages } from '@fulgur/federation/pages'
+import remoteSchema from 'virtual:fulgur-remote-schema' // dev 自动生成；build 恒为空（诚实降级）
+
+export const PAGES = defineFulgurPages(
+  [
+    { route: '/remote-a/home', name: 'RemoteAHome', title: '首页' },
+    // 带参路由：缺省推导 spec = 去首段 + 剥 :参 段；与其它条目冲突时 ERROR，
+    // 指向独立 expose 用 spec 显式覆盖
+    { route: '/remote-a/detail/:id', name: 'RemoteADetail', spec: 'pages/remote-a/detail', title: '详情' },
+  ],
+  {
+    deriveSpec: (route) => 'pages/' + route.replace(/^\//, '').split('/').filter(s => !s.startsWith(':')).join('/'),
+    remotes: { '/remote-a/': 'remote-a' },   // 路由前缀 → 远程名
+    schema: remoteSchema,                     // { [remoteName]: { exposes: string[], exists?: boolean } }
+    strict: true,                             // ERROR 默认 throw；false 降级 console.error
+  },
+)
+```
+
+校验规则：
+
+| 规则 | 级别 | 内容 |
+|---|---|---|
+| R1 | ERROR | 带参路由（无显式 spec）的推导 spec 与其它条目收敛相同——会静默加载错误组件 |
+| R2 | WARN | 多条目有效 spec 完全相同（刻意的菜单别名可忽略） |
+| R3 | ERROR | spec 不在该 remote 的 exposes 清单中（dev 有 schema 时校验；远程不可达诚实跳过） |
+| R4 | ERROR | 静态路由被更靠前的带参路由遮蔽（先到先得）／路由完全重复 |
+| R5 | WARN | name 重复（vue-router 命名跳转歧义） |
+
+`validateFulgurPages(pages, options)` 为独立导出：返回违例清单不抛错，便于自测。
+
+### 4. `fulgur.config.ts` — CLI 单配置文件（`@fulgur/federation/config`）
+
+```ts
+import { defineFulgurConfig } from '@fulgur/federation/config'
+
+export default defineFulgurConfig({
+  root: process.cwd(),            // 工程根（monorepo 根或单应用仓库根）
+  apps: [
+    {
+      path: 'apps/host',          // 相对 root 的应用目录
+      name: 'host-app',           // 联邦容器名
+      port: 5173,                 // dev 端口
+      base: '/',                  // 部署/dev 的 URL 前缀
+      deployDir: 'main',          // 部署目录名（缺省取 base 去斜杠）
+      host: {
+        remotePrefixes: { '/remote-a/': 'remote-a' },
+        remotes: { 'remote-a': { dev: 'http://localhost:5174/remote-a', prod: '/remote-a' } },
+        pages: [{ route: '/remote-a/home', name: 'RemoteAHome', spec?: 'pages/remote-a/home', title: '首页' }],
+      },
+      remote: {                   // 该应用同时是远程时（双向联邦）
+        exposes: { './pages/remote-a/home': './src/views/Home.vue' },
+        remotes: { /* 反向消费 */ },
+      },
+      shared: { vue: { singleton: true } },
+    },
+  ],
+  deploy: { webRoot: '/var/www/your-site', listen: 8080 }, // 仅供 init 输出 NGINX 样板
+})
+```
+
+### 5. CLI 命令参考
+
+| 命令 | 说明 |
+|---|---|
+| `fulgur init` | 在当前目录生成带注释的 `fulgur.config.ts` 起步模板；`--template <path>` 指定输出路径；已存在拒绝覆盖，`--force` 强制 |
+| `fulgur init --config <path>` | 校验配置（CFG 三段式报错）+ 输出各应用 `federation()` 粘贴块、NGINX no-cache 站点模板、8 条通用核对清单 |
+| `fulgur doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
+
+### 6. 错误码总表（30 个）
+
+| 段 | 码 | 含义 |
+|---|---|---|
+| CFG 配置期 | `CFG-001` | name 缺失或非法 |
+| | `CFG-002` | exposes 配置形状错误 |
+| | `CFG-003` | remotes 配置形状错误 / 键含非法字符 |
+| | `CFG-004` | shared 配置形状错误 |
+| | `CFG-005` | remotes 键与 shared 键同名冲突 |
+| | `CFG-006` | 孤岛配置（既不提供也不消费） |
+| | `CFG-007` | remotes 对象形式误用 name@ 前缀（整串当 URL 拼接） |
+| | `CFG-008` | shared 非法组合（eager+import:false / shareKey 重复声明） |
+| DEV 开发期 | `DEV-001` | remote dev server 不可达（manifest 拉取失败） |
+| | `DEV-002` | remote dev manifest 为空或格式不识别 |
+| | `DEV-003` | shared 键被 optimizeDeps.exclude（已撤回，码表保留） |
+| | `DEV-004` | 已知 UMD-only 依赖不在 optimizeDeps.include（预构建内联本地 vue 风险） |
+| | `DEV-005` | remotes dev URL 端口无监听 |
+| | `DEV-006` | 宿主/远程插件版本不一致 |
+| | `DEV-008` | 远程页面静态导入 virtual:fulgur-runtime（破坏渲染上下文） |
+| | `DEV-009` | 门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启） |
+| | `DEV-010` | dev 冷启动预构建窗口提示（首轮 30~60s 瞬态，非故障） |
+| BLD 构建期 | `BLD-001` | expose 源文件解析失败 |
+| | `BLD-002` | 构建目标低于 es2022（TLA 需要） |
+| | `BLD-003` | expose 目标组件含必填 props（文档化核对项） |
+| MFU 运行时 | `MFU-001` | 远程容器/模块加载失败（网络/超时/重试耗尽/熔断） |
+| | `MFU-002` | remoteEntry 自报名与配置名不一致 |
+| | `MFU-003` | strictVersion 版本不满足 |
+| | `MFU-004` | 共享模块缺失且无本地 fallback |
+| | `MFU-005` | 同一容器用不同 share scope 重复 init |
+| | `MFU-006` | 请求的模块未被该远程 exposes |
+| | `MFU-007` | 预加载失败（不阻断业务） |
+| | `MFU-008` | 未知远程 |
+| | `MFU-009` | 加载到的模块没有任何导出 |
+| | `MFU-010` | singleton 共享版本漂移（使用作用域版本，告警） |
+
+每个码的完整排查文案见 [`docs/manual.html`](./docs/manual.html) §8；`fulgur doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
+
+### 7. 产物与端点约定
+
+| 环境 | 路径 | 说明 |
+|---|---|---|
+| dev | `/<base>/@fulgur-entry.js` | 远程容器入口（插件中间件直出，自包含） |
+| dev | `/<base>/@fulgur-manifest.json` | dev manifest（宿主 dts / preloadRemote 消费） |
+| prod | `/<base>/fulgur-remoteEntry.js` | 固定文件名容器入口（内容每次构建变——**必须 no-cache**） |
+| prod | `/<base>/fulgur-manifest.json` | expose chunk/CSS 清单（preloadRemote 消费，**no-cache**） |
+
+NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgur init --config` 自动生成，样例见 [`docs/manual.html`](./docs/manual.html)。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
@@ -214,16 +484,7 @@ const Panel = await loadRemote('shop/Panel', {
 
 运行时加载失败同样给排查指引（remote dev server 未启动 / 地址配错 / CORS / NGINX 回退），并携带统一错误码：
 
-| 错误码 | 含义 |
-|---|---|
-| MFU-001 | remoteEntry 加载失败（附排查步骤） |
-| MFU-002 | 容器自报名与配置名不一致 |
-| MFU-003 | strictVersion 版本不满足 |
-| MFU-004 | shared 不可用且无本地 fallback |
-| MFU-005 | 容器重复 init 且 shareScope 不同 |
-| MFU-006 | 模块未被该 remote expose |
-| MFU-007 | 预载失败（不阻断业务） |
-| MFU-008 | 引用了未注册的 remote |
+统一错误码体系（CFG/DEV/BLD/MFU 四段共 30 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表30-个)**；报错文案一律「现象 → 根因 → 修法」三段式。
 
 调试出口：`window.__FULGUR_SCOPE__`（share 协商实时结果）、`window.__FULGUR_INFO__`（remote 状态/耗时/错误）。
 
@@ -247,7 +508,7 @@ const Panel = await loadRemote('shop/Panel', {
 
 ```bash
 pnpm install
-pnpm test        # 单测（97）+ fixtures dev e2e（10）+ prod e2e（8）
+pnpm test        # 单测（148）+ fixtures dev e2e（10）+ prod e2e（8）
 pnpm test:unit   # 仅单测
 pnpm test:dev    # 仅 dev e2e（Vite 6/7/8 矩阵见 CI）
 pnpm test:prod   # 仅 prod e2e
