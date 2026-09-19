@@ -34,9 +34,9 @@ describe('options: remotes 解析（webpack 语法 + 单地址自动切换）', 
   })
 
   it('带路径 base（微前端子应用场景）', () => {
-    const n = norm({ name: 'host', remotes: { bpm: 'http://localhost:4529/flowable' } })
-    expect(n.remotes[0].devEntry).toBe('http://localhost:4529/flowable/@fulgur-entry.js')
-    expect(n.remotes[0].prodEntry).toBe('http://localhost:4529/flowable/fulgur-remoteEntry.js')
+    const n = norm({ name: 'host', remotes: { bpm: 'http://localhost:5101/bpm' } })
+    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/bpm/@fulgur-entry.js')
+    expect(n.remotes[0].prodEntry).toBe('http://localhost:5101/bpm/fulgur-remoteEntry.js')
   })
 
   it('dev/prod 显式拆分', () => {
@@ -196,13 +196,13 @@ describe('W5/CFG-007: remotes 对象形式误用 name@ 前缀（2026-09-17 testb
     expect(() =>
       norm({
         name: 'host',
-        remotes: { bpm: { dev: 'bpm@http://localhost:4529/flowable', prod: '/flowable' } },
+        remotes: { bpm: { dev: 'bpm@http://localhost:5101/bpm', prod: '/flowable' } },
       }),
     ).toThrow(/CFG-007/)
     expect(() =>
       norm({
         name: 'host',
-        remotes: { bpm: { dev: 'http://localhost:4529/flowable', prod: 'mes-bpm@/flowable' } },
+        remotes: { bpm: { dev: 'http://localhost:5101/checkout', prod: 'shop@/checkout' } },
       }),
     ).toThrow(/name@/)
   })

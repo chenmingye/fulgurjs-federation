@@ -37,7 +37,7 @@
 <h1>@fulgur/federation 使用手册 <span class="badge">v0.1.0</span></h1>
 <p><b>Vite 模块联邦插件：开发环境与生产环境都能用，配置面与运行时行为全量对齐 Webpack Module Federation。</b>
 本手册中的全部截图均为真实浏览器测试（Playwright + Chromium）自动留证，测试基座包含
-<a href="#tb">demo-app 真实项目副本</a>（qiankun 微前端仓库）与独立 fixture 工程。</p>
+<a href="#tb">示例工程 真实项目副本</a>（qiankun 微前端仓库）与独立 fixture 工程。</p>
 
 <nav class="toc">
   <b>目录</b><br>
@@ -45,7 +45,7 @@
   <a href="#quick">2. 快速开始</a><br>
   <a href="#arch">3. 工作原理（dev / prod）</a><br>
   <a href="#feat">4. 功能章节（含实测截图）</a><br>
-  <a href="#tb">5. demo-app 真实项目实战</a><br>
+  <a href="#tb">5. 示例工程 真实项目实战</a><br>
   <a href="#hmr">6. HMR 全链路（L1/L2/L3）</a><br>
   <a href="#limit">7. 已知差异与限制（诚实版）</a><br>
   <a href="#faq">8. 故障排查（错误码 MFU-0xx）</a><br>
@@ -259,13 +259,13 @@ await preloadRemote('remote-a', { mode: 'prefetch' }) // 低优先级预取</pre
 不做盲猜，全部来自 manifest 清单。</p>
 <img class="shot" src="screenshots/dev-preload-remote.png">
 
-<h2 id="tb">5. demo-app 真实项目实战（qiankun 仓库 + 模块联邦平行通道）</h2>
-<p>复制 demo-app/demo-monorepo 到插件 testbed，保持 <b>qiankun 集成零改动</b>，新增联邦平行通道：
-demo-host（Vite 6.4.3）作为宿主，demo-bpm（Vite 5.1.4，/flowable）与 demo-lowcode（Vite 5.2.12，/lowcode）
+<h2 id="tb">5. 示例工程 真实项目实战（qiankun 仓库 + 模块联邦平行通道）</h2>
+<p>复制 示例工程（三应用 monorepo） 到插件 testbed，保持 <b>qiankun 集成零改动</b>，新增联邦平行通道：
+示例宿主应用（Vite 6.4.3）作为宿主，示例 bpm 子应用（Vite 5.1.4，/flowable）与 示例 lowcode 子应用（Vite 5.2.12，/lowcode）
 作为远程。免登录演示路由 <code>/main/fulgur-demo</code>（meta.ignoreAuth）。</p>
 <pre>// admin remotes（dev/prod 自动切换，prod 走 NGINX 同源路径）
-'mes-bpm':   { dev: 'http://localhost:4529/flowable', prod: '/flowable' },
-'mes-lowcode': { dev: 'http://localhost:4669/lowcode', prod: '/lowcode' },
+'bpm-app':   { dev: 'http://localhost:5102/bpm', prod: '/bpm' },
+'lowcode-app': { dev: 'http://localhost:5103/lowcode', prod: '/lowcode' },
 shared: { vue: {singleton:true, requiredVersion:'^3.4.0'}, pinia: {singleton:true} }</pre>
 <pre>&lt;!-- 推荐用法：远程组件纳入宿主组件树 --&gt;
 const TaskCard = defineAsyncComponent(() =&gt; import('mes-bpm/TaskCard').then(m =&gt; m.default))</pre>
@@ -355,12 +355,12 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td>1</td><td><code>remoteType: 'script'/'var'</code></td><td>webpack 宿主消费 Vite remote 的跨打包器互操作 → P3 里程碑，配置时告警并按 module 处理</td></tr>
   <tr><td>2</td><td><code>export * from '共享包'</code></td><td>ESM 无法动态生成导出绑定，构建期明确报错；请用命名 re-export</td></tr>
   <tr><td>3</td><td>构建目标 ≥ es2022</td><td>TLA（自动异步边界）要求；插件自动提升默认 target，显式低版本会告警</td></tr>
-  <tr><td>4</td><td>大型遗留宿主中远程组件的<b>交互响应式</b></td><td>实测 demo-app admin（Vite 6.4.3 + qiankun 插件 + 3 万模块）中，远程组件内联事件可触发、
+  <tr><td>4</td><td>大型遗留宿主中远程组件的<b>交互响应式</b></td><td>实测 示例工程 admin（Vite 6.4.3 + qiankun 插件 + 3 万模块）中，远程组件内联事件可触发、
       数据写入成功，但组件渲染效果偶发不随动（根因：多副本 prebundle chunk 图跨域组合的求值顺序）。<br>
       <b>规避：</b>① exposes 组件保持纯 Vue、避免依赖宿主 UI 库的 prebundle；② UI 库跨小版本共享需谨慎
       （EP 2.9.1/2.10.2/2.14.3 混用实测存在 Illegal constructor 风险）；③ 疑难场景可改用 qiankun 原通道。</td></tr>
   <tr><td>5</td><td>SSR</td><td>本版本不支持（hook 自动禁用并告警）</td></tr>
-  <tr><td>7</td><td>jeecg 规模宿主的 <b>admin 生产构建</b></td><td>demo-app admin（3 万+模块、Vite 6.4.3、node 24）构建触发
+  <tr><td>7</td><td>jeecg 规模宿主的 <b>admin 生产构建</b></td><td>示例工程 admin（3 万+模块、Vite 6.4.3、node 24）构建触发
       vite build-import-analysis 在 3MB 的 xlsx.mjs vendor chunk（纯第三方库，与联邦代码无关）上的 V8 栈溢出；伴随 16GB 堆 OOM、
       vite-plugin-top-level-await 1.6.0 的 swc "missing field type" 连锁问题。已验证：与 shared 开关无关（最小联邦配置同样触发）；
       <b>dev 模式完全正常，bpm/lowcode 的生产构建正常</b>。规避：关闭 inline sourcemap / vendor 分包 / 升级 vite；根治需等 vite 上游修复。
@@ -433,8 +433,8 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   location /flowable { try_files $uri $uri/ /flowable/index.html; }
   location /lowcode  { try_files $uri $uri/ /lowcode/index.html; }
   location /main     { try_files $uri $uri/ /main/index.html; }
-  location /demo {
-    proxy_pass http://YOUR-BACKEND-HOST:8085;  # 替换为你的后端地址（脱敏）
+  location /api {
+    proxy_pass http://YOUR-BACKEND-HOST:8080;  # 替换为你的后端地址
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";

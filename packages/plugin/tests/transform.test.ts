@@ -210,9 +210,9 @@ describe('dev 容器入口：注册自身 remotes（回归：双向联邦 MFU-00
     const entry = genDevRemoteEntry(
       normalizeOptions(
         {
-          name: 'mes-bpm',
+          name: 'remote-a',
           exposes: { './TaskCard': './src/TaskCard.vue' },
-          remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+          remotes: { 'host-remote': { dev: 'http://localhost:5100/main', prod: '/main' } },
           shared: { vue: '^3.4.0' },
         },
         ROOT,
@@ -221,8 +221,8 @@ describe('dev 容器入口：注册自身 remotes（回归：双向联邦 MFU-00
       '/flowable/',
     )
     expect(entry).toContain('registerRemotes(')
-    expect(entry).toContain('"name":"mes-admin"')
-    expect(entry).toContain('http://localhost:8773/main/@fulgur-entry.js')
+    expect(entry).toContain('"name":"host-remote"')
+    expect(entry).toContain('http://localhost:5100/main/@fulgur-entry.js')
     expect(entry).toContain('@id/virtual:fulgur-runtime')
   })
 
@@ -240,9 +240,9 @@ describe('prod 容器入口：注册自身 remotes（回归：双向联邦 prod 
     const entry = genBuildRemoteEntry(
       normalizeOptions(
         {
-          name: 'mes-bpm',
+          name: 'remote-a',
           exposes: { './TaskCard': './src/TaskCard.vue' },
-          remotes: { 'mes-admin': { external: 'demo-host@http://localhost:8773/main', prod: '/main' } },
+          remotes: { 'host-remote': { external: 'host-app@http://localhost:5101/main', prod: '/main' } },
           shared: { vue: '^3.4.0' },
         },
         ROOT,
@@ -251,7 +251,7 @@ describe('prod 容器入口：注册自身 remotes（回归：双向联邦 prod 
       {},
     )
     expect(entry).toContain('registerRemotes(')
-    expect(entry).toContain('"name":"demo-host"')
+    expect(entry).toContain('"name":"host-app"')
     expect(entry).toContain('/main/fulgur-remoteEntry.js')
     expect(entry).toContain('virtual:fulgur-runtime')
   })
@@ -281,9 +281,9 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
   it('双向联邦（exposes + remotes + devSharedSelf: true）：node_modules 依赖被门面化', async () => {
     const r = await buildPreTransform(
       {
-        name: 'mes-bpm',
+        name: 'remote-a',
         exposes: { './TaskCard': './src/TaskCard.vue' },
-        remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+        remotes: { 'host-remote': { dev: 'http://localhost:5100/main', prod: '/main' } },
         devSharedSelf: true,
         shared: { vue: '^3.4.0' },
       },
@@ -296,9 +296,9 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
   it('双向联邦默认 devSharedSelf: false：保持宿主行为，node_modules 不进管线', async () => {
     const r = await buildPreTransform(
       {
-        name: 'mes-bpm',
+        name: 'remote-a',
         exposes: { './TaskCard': './src/TaskCard.vue' },
-        remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+        remotes: { 'host-remote': { dev: 'http://localhost:5100/main', prod: '/main' } },
         shared: { vue: '^3.4.0' },
       },
       DEP_ID,
@@ -317,9 +317,9 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
   it('双向联邦下 .vue?type=script 子请求走同一门禁（build pre 分支）', async () => {
     const r = await buildPreTransform(
       {
-        name: 'mes-bpm',
+        name: 'remote-a',
         exposes: { './TaskCard': './src/TaskCard.vue' },
-        remotes: { 'mes-admin': { dev: 'http://localhost:8773/main', prod: '/main' } },
+        remotes: { 'host-remote': { dev: 'http://localhost:5100/main', prod: '/main' } },
         devSharedSelf: true,
         shared: { vue: '^3.4.0' },
       },

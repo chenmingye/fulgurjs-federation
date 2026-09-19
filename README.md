@@ -493,7 +493,6 @@ const Panel = await loadRemote('shop/Panel', {
 - [`docs/迁移指南.md`](./docs/迁移指南.md) — qiankun 微前端 → 联邦的真实迁移案例（七步法 + 验收清单）
 - [`docs/webpack-mf-对照与缺口.md`](./docs/webpack-mf-对照与缺口.md) — webpack MF 逐项对照与明确不支持清单
 - [`docs/沙箱边界审计.md`](./docs/沙箱边界审计.md) — CSS / 全局变量 / 公共依赖三维度互扰实测
-- [`docs/页面功能验收清单.md`](./docs/页面功能验收清单.md) — 真实工程 27 页逐页逐功能三环境验收记录
 - [`DESIGN.md`](./DESIGN.md) — 架构设计、对齐总表、测试与验收方案
 
 ## 开发与测试

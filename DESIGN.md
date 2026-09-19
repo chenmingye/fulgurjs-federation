@@ -4,7 +4,7 @@
 > 系列规划：`@fulgur/federation`（模块联邦）→ `@fulgur/micro`、`@fulgur/dts` …
 > 内外命名统一 `fulgur`（`virtual:fulgur-*` 虚拟模块、`window.__FULGUR_*` 调试出口、`FulgurError` / MFU 错误码）。
 
-> 状态：已实现并验证（2026-09-13）。测试结果：单测 76/76、fixtures dev e2e 10/10、容错/HMR-L3 2/2、fixtures prod e2e 8/8（隔离 NGINX 8999）、testbed dev 实测全通、testbed prod（NGINX 8662）最小宿主消费真实远程产物实测通过；runtime gzip 4.4KB。已知问题见手册 §7。
+> 状态：已实现并验证（2026-09-13）。测试结果：单测 76/76、fixtures dev e2e 10/10、容错/HMR-L3 2/2、fixtures prod e2e 8/8（隔离 NGINX 8999）、testbed dev 实测全通、testbed prod（本地 NGINX 测试站点）最小宿主消费真实远程产物实测通过；runtime gzip 4.4KB。已知问题见手册 §7。
 > 日期：2026-09-12
 
 ## 0. 已锁定的决策
@@ -106,28 +106,28 @@ remote 样式改动立即生效；host 自身业务 HMR 不受影响。
 
 ## 6. 测试与验证计划（真实项目实测版 v2）
 
-**分层策略**：fixtures 快扫（配置全量矩阵）+ demo-app 真实项目副本深测（dev + NGINX 生产双环境）+ 单测/产物断言托底。全部可脚本化重复执行，不靠手动。
+**分层策略**：fixtures 快扫（配置全量矩阵）+ 真实同族工程副本（testbed）深测（dev + NGINX 生产双环境）+ 单测/产物断言托底。全部可脚本化重复执行，不靠手动。
 
-### 6.1 测试基座：demo-app 真实项目副本
+### 6.1 测试基座：真实同族工程副本（testbed）
 
-- 来源：复制 `/Users/Admin/Desktop/svn_project/demo-app/demo-monorepo` → `@fulgur/federation/testbed/demo-app/`（rsync 排除 node_modules，副本内独立安装依赖；**原项目只读不碰；副本与 SVN 无关，绝不执行任何 svn 提交**）
-- 角色分配：demo-host（Vite **6.4.3**，jeecg 体系）= MF 宿主；demo-bpm（Vite **5.1.4**，yudao 体系）+ demo-lowcode（Vite **5.2.12**，jeelowcode 体系）= MF 远程
+- 来源：从真实工程本地拷贝（原件只读不碰，副本独立安装依赖；副本不入学件仓库）
+- 角色分配：宿主（Vite **6.4.3**）= MF 宿主；远程×2（Vite **5.1.4 / 5.2.12**，两家不同组件库体系）= MF 远程——刻意覆盖跨 Vite 版本与异构体系
 - 改造原则：**现有 qiankun 集成一律不动**（原路径保留，可随时回归对比），新增 MF 平行通道——admin 增加"联邦体验"路由页，经 loadRemote 加载两个 remote 暴露的模块
 - exposes 素材（每个 remote 三类，避开登录墙）：纯 UI 组件 / 纯工具函数模块 / 带样式的业务组件
 - shared 真实素材：vue@3.5.22（singleton）+ pinia@2.1.7（singleton）+ element-plus（bpm 2.9.1 vs lowcode 2.10.2，**真实双版本共存场景**）
-- 后台：测试副本 `.env.backend` 的 `BACKEND_ORIGIN_DEV` 改为 `http://localhost:8085`（2026-09-12 实测 200 可达；原配置 localhost 不可达；8105 全部不通）
+- 后台：本地后台地址（按各自环境在副本 .env.backend 配置，连通性以 200 实测为准）
 
 ### 6.2 环境矩阵
 
 | 环境 | 组成 | 验证内容 |
 |---|---|---|
-| A. 真实项目 dev | admin 8773 + bpm 4529 + lowcode 4669 三 dev server 并跑，接口经 /demo 代理到 localhost:8085 | §2B 18 条语义中 dev 可测全部条目 + HMR L1/L2/L3 + shared 单例（网络面板计数）+ remote 带 base（/flowable、/lowcode）的路径处理 |
-| B. 真实项目 prod + NGINX | 三应用 pnpm build → dist/{main,flowable,lowcode} → NGINX 测试站点 serve + 反代后台 | §2B 18 条中 prod 可测全部条目 + gzip/缓存头 + 同源接口 + remoteEntry/manifest 可达性 |
+| A. 真实工程 dev | 三 dev server 并跑，接口按 base 代理到本地后台 | §2B 18 条语义中 dev 可测全部条目 + HMR L1/L2/L3 + shared 单例（网络面板计数）+ remote 带 base 的路径处理 |
+| B. 真实工程 prod + NGINX | 三应用构建 → 测试站点 serve + 反代后台 | §2B 18 条中 prod 可测全部条目 + gzip/缓存头 + 同源接口 + remoteEntry/manifest 可达性 |
 | C. fixtures 矩阵（快扫） | Vite 5/6/7/8 × {vue单例/不共享/双版本/冲突} × exposes{组件/工具/CSS} | §2A/§2C 配置项全量（每项至少一用例） |
 
 ### 6.3 NGINX 实测规范（本机 NGINX 1.31.4，homebrew）
 
-- 新增 `/opt/homebrew/etc/nginx/servers/30-fulgur-test-8662.conf`：**独立端口 8662，不碰用户现有 8661/8088 站点**。root 指向测试副本 dist；路径规则照抄 8661（/main、/flowable、/lowcode 的 try_files SPA 回退）；/demo 反代 `http://localhost:8085`（含 WebSocket Upgrade 三件套）；conf 文件在插件仓库托管副本
+- 新增独立端口 NGINX 测试站点（不碰用户现有站点）：root 指向测试副本 dist；SPA 回退 + remoteEntry/manifest no-cache + 反代后台（含 WebSocket Upgrade 三件套）
 - 流程：`nginx -t` 校验 → reload → curl 冒烟（remoteEntry 200 / manifest 200 / CORS 头 / gzip 生效）→ Playwright 全量 prod e2e
 - 附带发现：8661 站点 302 是正常行为（`/ → /main` 重定向）；8088 的 500 是 touch 应用 dist 缺失所致，与本插件无关，不处理
 
@@ -184,7 +184,7 @@ remote 样式改动立即生效；host 自身业务 HMR 不受影响。
 | P3 | 跨打包器互操作（remoteType script/var） | 单独立项 |
 
 **验收环境补充**：
-- M0 前置动作：建立 testbed/demo-app 副本 + NGINX 8662 站点配置 + 后台连通性基线（localhost:8085 → 200 OK 已验证）
-- M2（dev 闭环）验收加：demo-app 副本三 dev server 实测
+- M0 前置动作：建立 testbed 副本 + NGINX 测试站点配置 + 后台连通性基线（200 实测验证）
+- M2（dev 闭环）验收加：副本三 dev server 实测
 - M3（shared 全语义）验收加：element-plus 双版本共存（bpm 2.9.1 vs lowcode 2.10.2）实测
-- M6 验收加：NGINX 8662 站点 prod 全量 e2e 绿 + 后台接口经 /demo 连通
+- M6 验收加：NGINX 测试站点 prod 全量 e2e 绿 + 后台接口经反代连通
