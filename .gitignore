@@ -43,3 +43,8 @@ docs/playwright-report/
 e2e/*.mjs
 e2e/h3-audit.sh
 e2e/nginx/30-fulgur-test-8662.conf
+packages/plugin/README.md
+packages/plugin/docs/
+packages/plugin/CHANGELOG.md
+packages/plugin/DESIGN.md
+packages/plugin/examples

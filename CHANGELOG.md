@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2（2026-09-19）
+
+### 修复（npm 发布面）
+
+- **npm 包内 README 与仓库 README 是两个文件**——包内是 4.7kB 旧版（无 API 参考）。现在构建时自动以仓库根 README（含完整 API 参考）为准，npm 页面与 GitHub 展示一致。
+- npm 包自带完整文档：docs/manual.html（使用手册）、迁移指南、webpack 对照、沙箱审计、兼容矩阵、CHANGELOG、DESIGN、examples 起步样例——包内 README 的相对链接在 npm 上不再 404。
+
 ## 0.4.1（2026-09-19）
 
 「让插件自动处理，而不是让用户记住规则」——两条使用规则自动化，使用面大幅简化。
