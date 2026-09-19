@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { genSharedFacade } from '../src/virtual'
+import { genSharedFacade, genRuntimeProxyModule } from '../src/virtual'
 import { scanExposeRequiredProps } from '../src/diagnostics'
 
 /**
@@ -72,5 +72,24 @@ describe('W5/BLD-003: scanExposeRequiredProps', () => {
 
   it('无 defineProps 的文件返回空', () => {
     expect(scanExposeRequiredProps('export default { template: "<div/>" }')).toEqual([])
+  })
+})
+
+/** 0.4.1：expose 目标静态导入运行时 → 自动改写为惰性单例委托（原 DEV-008 硬规则自动化） */
+describe('运行时惰性委托模块（genRuntimeProxyModule）', () => {
+  it('求值期零副作用：不 import 运行时、不创建副本，仅调用期动态转发', () => {
+    const code = genRuntimeProxyModule()
+    // 动态 import 只能出现在惰性函数体内
+    expect(code).toContain("import('virtual:fulgur-runtime')")
+    expect(code).not.toMatch(/^import\s/m)
+    for (const api of ['loadRemote', 'loadShare', 'preloadRemote', 'getContainer', 'registerRemote']) {
+      expect(code).toContain(`export const ${api} =`)
+    }
+  })
+
+  it('同步 API 走全局单例/镜像（单例未建时 getFulgurAppConfig 仍可用）', () => {
+    const code = genRuntimeProxyModule()
+    expect(code).toContain('__FULGUR_RUNTIME__')
+    expect(code).toContain('__FULGUR_APP_CONFIG__')
   })
 })

@@ -113,10 +113,9 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
-> ⚠️ 上面这种静态导入**只限宿主侧页面**。exposes 目标文件（被宿主跨源加载的远程页面）禁止静态导入
-> `virtual:fulgur-runtime`——会实例化第二份运行时副本、破坏渲染上下文，插件 dev 下会直接报错；
-> 远程页面请用 `(globalThis as any).__FULGUR_RUNTIME__` 或独立产物的 `getRuntime()`（带 `version` 字段），
-> 详见 `docs/迁移指南.md` 三B-1。
+> **在任何文件都可以直接这样导入**——包括 exposes 目标文件（远程页面）。插件会自动把远程页面里的
+> 该导入改写为惰性单例委托（0.4.1 起，原 0.4.0 要求手工改用 `globalThis.__FULGUR_RUNTIME__` 的规则已废除），
+> 求值期零副作用、调用期自动转发页面级运行时单例，无需关心宿主/远程的区别。
 
 > 以上只是最小面。**全部选项（remotes 四形态/shared 九个开关/dts/runtimePlugins…）、运行时 API、CLI、错误码见下方 [API 参考](#api-参考)。**
 
@@ -220,15 +219,14 @@ shared: {
 
 ### 2. 运行时 API — `virtual:fulgur-runtime`
 
-**宿主侧页面**直接静态导入；**exposes 目标文件（远程页面）禁止静态导入本模块**（dev 会直接报错拦截，DEV-008）——远程页面一律走页面级单例：
+**任何文件都直接静态导入**——宿主页面、exposes 目标文件（远程页面）都一样，插件自动保证同一页面只有一个运行时实例（远程页面里的导入会被自动改写为惰性单例委托，0.4.1 起）：
 
 ```ts
-// 宿主页面
-import { loadRemote } from 'virtual:fulgur-runtime'
-
-// 远程页面（被宿主跨源加载的文件）
-const runtime = (globalThis as any).__FULGUR_RUNTIME__   // 页面级单例，跨副本同一实例
+// 宿主页面、远程页面，写法完全一致
+import { loadRemote, provideFulgurAppConfig } from 'virtual:fulgur-runtime'
 ```
+
+> 仍可绕过代理直取全局单例（等价，调试用）：`(globalThis as any).__FULGUR_RUNTIME__`。
 
 #### 函数总表
 
@@ -412,15 +410,9 @@ NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgur init --config`
 
 以下每一条都在真实企业工程（qiankun → 联邦迁移，3 万模块级）中实际踩到过：
 
-### 1. 插件升级后，务必「清缓存 + 重启 dev server」
+### 1. 插件升级后，重启 dev server 即可（缓存自动清）
 
-vite 对 `node_modules/.vite` 预构建产物下发**一年 immutable 缓存**，浏览器与 dev server 都会持有旧内容。插件 dist 更新后：
-
-```bash
-# 每个联邦应用都执行
-rm -rf node_modules/.vite
-# 然后重启所有 dev server；e2e/浏览器请换新 profile
-```
+vite 对 `node_modules/.vite` 预构建产物下发**一年 immutable 缓存**，插件 dist 更新后旧签名会 404。**0.4.1 起插件在 dev server 启动时自动检测版本变化并清除缓存**——你只需要重启 dev server，无需手工 `rm -rf node_modules/.vite`。浏览器侧缓存建议 e2e/验收时换新 profile。
 
 ### 2. pnpm 项目装完 tarball 检查链接是否可达
 

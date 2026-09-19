@@ -355,10 +355,4 @@ describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
     expect(isExposeTargetFile('/other/proj/src/views/detail/index.vue', root, exposes)).toBe(false)
   })
 
-  it('报错文案含文件相对路径、根因与修法（三段式）', () => {
-    const msg = staticRuntimeImportError(root, '/proj/src/views/detail/index.vue')
-    expect(msg).toContain('src/views/detail/index.vue')
-    expect(msg).toContain('second runtime copy')
-    expect(msg).toContain('globalThis')
-  })
 })

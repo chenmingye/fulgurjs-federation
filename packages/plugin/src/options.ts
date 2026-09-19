@@ -151,6 +151,7 @@ export interface FulgurOptions {
 
 export const DEFAULT_FILENAME = 'fulgur-remoteEntry.js'
 export const RUNTIME_VIRTUAL_ID = 'virtual:fulgur-runtime'
+export const RUNTIME_PROXY_VIRTUAL_ID = 'virtual:fulgur-runtime-proxy'
 export const INIT_VIRTUAL_ID = 'virtual:fulgur-init'
 export const PROVIDES_VIRTUAL_ID = 'virtual:fulgur-provides'
 export const REMOTE_ENTRY_VIRTUAL_ID = 'virtual:fulgur-remote-entry'
@@ -161,6 +162,7 @@ export const SHARED_NS_FACADE_PREFIX = 'virtual:fulgur-shared-ns:'
 // 不用 \0 前缀：rollup 对 \0 虚拟模块做无副作用激进摇树，会剥掉 init 的顶层调用
 export const RESOLVED = {
   runtime: 'virtual:fulgur-runtime',
+  runtimeProxy: 'virtual:fulgur-runtime-proxy',
   init: 'virtual:fulgur-init',
   provides: 'virtual:fulgur-provides',
   remoteEntry: 'virtual:fulgur-remote-entry',

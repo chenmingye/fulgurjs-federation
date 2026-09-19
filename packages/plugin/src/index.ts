@@ -12,6 +12,7 @@ import {
   readInstalledVersion,
   RESOLVED,
   INIT_VIRTUAL_ID,
+  RUNTIME_PROXY_VIRTUAL_ID,
   RUNTIME_VIRTUAL_ID,
   SHARED_FACADE_PREFIX,
   SHARED_NS_FACADE_PREFIX,
@@ -24,10 +25,10 @@ import {
   transformModule,
   serializeShareCallForFacade,
   isExposeTargetFile,
-  staticRuntimeImportError,
 } from './transform'
 import {
   genBindingFacade,
+  genRuntimeProxyModule,
   genBuildRemoteEntry,
   genDevManifest,
   genDevProvides,
@@ -42,6 +43,7 @@ import {
 import { generateDevTypes } from './dts'
 import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, type RemoteSchema } from './remote-schema'
 import { formatFulgurDiagnostic } from './diagnostics'
+import { syncViteCacheMarker } from './vite-cache'
 
 // 运行时代码由构建脚本生成（src/runtime-code.gen.ts），内联进插件产物，无文件定位问题
 import runtimeCode from './runtime-code.gen'
@@ -193,6 +195,8 @@ export function federation(options: FulgurOptions): Plugin[] {
       }
 
       if (env.command === 'serve') {
+        // DEV-009 自动化：插件版本变化时自清本应用 .vite 预构建缓存（用户无需手工 rm）
+        syncViteCacheMarker(root, normalized.pluginVersion, (msg) => console.warn(msg))
         // 跨 dev-server 模块加载需要 CORS（对齐双 dev-server 协作引擎）
         extra.server = {
           ...(userConfig.server ?? {}),
@@ -282,6 +286,7 @@ export function federation(options: FulgurOptions): Plugin[] {
       }
 
       if (bareClean === RUNTIME_VIRTUAL_ID) return RESOLVED.runtime
+      if (bareClean === RUNTIME_PROXY_VIRTUAL_ID) return RESOLVED.runtimeProxy
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
       if (bareClean === 'virtual:fulgur-remote-schema') return bareClean
       if (bareClean === 'virtual:fulgur-provides') return RESOLVED.provides
@@ -305,6 +310,7 @@ export function federation(options: FulgurOptions): Plugin[] {
       const q = raw.indexOf('?')
       const clean = q === -1 ? raw : raw.slice(0, q)
       if (clean === 'virtual:fulgur-runtime') return readRuntimeCode()
+      if (clean === RESOLVED.runtimeProxy || clean === RUNTIME_PROXY_VIRTUAL_ID) return genRuntimeProxyModule()
       if (clean === 'virtual:fulgur-init' && state.normalized) {
         return genInitModule(state.normalized, state.command)
       }
@@ -591,17 +597,18 @@ export function federation(options: FulgurOptions): Plugin[] {
     async transform(code, id) {
       if (!state.normalized) return null
       const clean = id.split('?')[0]
-      // D.1 守卫（dev-only）：exposes 目标文件静态导入虚拟运行时 → 宿主跨源加载该页面时，
-      // 导入会改由远程 dev server 求值，在远程模块图内实例化第二份 runtime 副本，
-      // 破坏渲染上下文（resolveComponent / withDirectives / ref owner 告警、内容区静默空白），
-      // 且此前无任何插件级报错（实测排障 40min+）。这里显式报错拦截。
-      // build 不拦：prod 各副本经 globalThis 单例收敛，无此破坏路径。
+      // 原为 D.1 硬报错（DEV-008），0.4.1 起自动化：exposes 目标文件（远程页面）静态导入
+      // 虚拟运行时会被远程 dev server 求值，模块求值期拉起第二份副本链、破坏渲染上下文——
+      // 改写为惰性单例委托模块（求值期零副作用、调用期转发页面级单例），用户无需再感知
+      // 「宿主/远程页面取运行时的不同姿势」。build 无需处理：prod 各副本经 globalThis
+      // 单例天然收敛。
       if (
         state.command === 'serve' &&
         code.includes('virtual:fulgur-runtime') &&
+        !code.includes('virtual:fulgur-runtime-proxy') &&
         isExposeTargetFile(clean, state.normalized.root, state.normalized.exposes)
       ) {
-        this.error(staticRuntimeImportError(state.normalized.root, clean))
+        return { code: code.split('virtual:fulgur-runtime').join('virtual:fulgur-runtime-proxy'), map: null }
       }
       // pre 阶段已改写过的模块（build 入口/子请求）不再处理，防双重生成
       if (code.includes('virtual:fulgur-runtime')) return null

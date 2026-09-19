@@ -42,14 +42,6 @@ export function isExposeTargetFile(cleanPath: string, root: string, exposes: { i
  * 导入会改由远程 dev server 求值，在远程模块图内实例化第二份运行时副本，
  * 破坏渲染上下文（resolveComponent / withDirectives / ref owner 告警、内容区空白）。
  */
-export function staticRuntimeImportError(root: string, cleanPath: string): string {
-  const rel = path.relative(root, cleanPath) || cleanPath
-  return (
-    `[fulgur] ${rel} statically imports 'virtual:fulgur-runtime'.\n` +
-    `This file is a federation expose: when the host loads it cross-origin, the import is resolved by the REMOTE dev server and instantiates a second runtime copy inside the remote module graph, which breaks the render context (resolveComponent / withDirectives / "Missing ref owner" warnings, blank content area).\n` +
-    `Fix: access the host-initialized singleton instead — e.g. const runtime = (globalThis as any).__FULGUR_RUNTIME__ — or use getRuntime() from the standalone /fulgur-runtime.js build. See docs/迁移指南.md (远程页面如何取宿主运行时).`
-  )
-}
 
 interface SharedMatcher {
   exact: Map<string, NormalizedShared>

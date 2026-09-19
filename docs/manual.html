@@ -410,12 +410,14 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td><code>DEV-006</code></td><td>宿主/远程插件版本不一致</td>
       <td>统一各应用 @fulgur/federation 版本并重启 dev server</td></tr>
   <tr><td><code>DEV-008</code></td><td>exposes 目标文件（远程页面）静态导入 virtual:fulgur-runtime——宿主跨源加载时
-          在远程模块图内实例化第二份运行时副本，破坏渲染上下文（resolveComponent / withDirectives /
-          ref owner 告警、内容区静默空白）</td>
-      <td>改用 <code>(globalThis as any).__FULGUR_RUNTIME__</code> 或独立产物 <code>getRuntime()</code>；
-          详见迁移指南「三B-1、远程页面如何取宿主运行时」</td></tr>
-  <tr><td><code>DEV-009</code></td><td>联邦虚拟模块/门面请求 404（.vite 缓存漂移）</td>
-      <td><code>rm -rf node_modules/.vite</code> + 重启 dev server + 换全新浏览器 profile</td></tr>
+          在远程模块图内求值第二份副本链，破坏渲染上下文。<strong>0.4.1 起插件自动把该导入改写为惰性单例委托
+          （求值期零副作用、调用期转发页面级单例），不再报错</strong>；本码保留用于历史排查与极端场景说明</td>
+      <td>无需任何处理——任何文件直接 <code>import { loadRemote } from 'virtual:fulgur-runtime'</code> 即可；
+          调试时可绕过代理直取 <code>(globalThis as any).__FULGUR_RUNTIME__</code></td></tr>
+  <tr><td><code>DEV-009</code></td><td>联邦虚拟模块/门面请求 404（.vite 缓存漂移）——<strong>0.4.1 起插件在 dev server
+          启动时自动检测插件版本变化并清除 .vite 缓存</strong></td>
+      <td>重启 dev server 即可（缓存自清）；若自动清理失败按提示手工 <code>rm -rf node_modules/.vite</code>；
+          浏览器侧换全新 profile</td></tr>
   <tr><td><code>DEV-010</code></td><td>dev 冷启动预构建窗口提示：首次启动/清 .vite 后首轮 30~60s 内联邦请求瞬时 504 / "ce" / Outdated Optimize Dep（预构建暂态，非回归）</td>
       <td>先真实打开一次页面预热（等网络空闲）再做验收断言；重复出现才按 DEV-009 清缓存排查</td></tr>
   <tr><td><code>BLD-001</code></td><td>expose 源文件解析失败</td><td>核对 exposes 指向的文件路径存在且可编译</td></tr>

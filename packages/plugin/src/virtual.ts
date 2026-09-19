@@ -234,6 +234,55 @@ function registerRemotesLines(options: NormalizedOptions, command: 'serve' | 'bu
 }
 
 /**
+ * 运行时惰性委托模块（dev，expose 目标自动改写用）。
+ *
+ * 背景（原 DEV-008 硬规则，0.4.1 起自动化）：远程页面静态导入 virtual:fulgur-runtime 时，
+ * 该导入由远程 dev server 求值——模块求值期会拉起远程自己的运行时副本链。改为委托模块后：
+ * - 模块求值期不做任何事（不创建副本、不注册）；
+ * - Promise 型 API 在调用期经页面级单例（globalThis.__FULGUR_RUNTIME__）转发，
+ *   动态 import 确保单例已初始化（宿主 init 先行，或独立运行时自建）；
+ * - 同步 API 直接读全局单例/镜像（getFulgurAppConfig 读 W4 镜像，单例未建也可用）。
+ * 用户因此可以在任何文件直接 import { loadRemote } from 'virtual:fulgur-runtime'，
+ * 无需知道「宿主/远程页面取运行时的不同姿势」。
+ */
+export function genRuntimeProxyModule(): string {
+  const promiseApis = [
+    'loadRemote',
+    'loadShare',
+    'preloadRemote',
+    'getContainer',
+    'registerRemote',
+    'registerRemotes',
+    'registerShare',
+    'initSharing',
+    'registerPlugins',
+    'parseSpec',
+  ]
+  const lines: string[] = [
+    `let __fulgur_mod_p;`,
+    `const __fulgur_rt = async () => {`,
+    `  __fulgur_mod_p ??= import('virtual:fulgur-runtime');`,
+    `  return await __fulgur_mod_p;`,
+    `};`,
+    ...promiseApis.map((m) => `export const ${m} = (...a) => __fulgur_rt().then((m2) => m2.${m}(...a));`),
+    `export const getRuntime = () => (globalThis).__FULGUR_RUNTIME__;`,
+    `export const getFulgurAppConfig = () =>`,
+    `  (globalThis).__FULGUR_RUNTIME__?.getFulgurAppConfig?.() ?? (globalThis).__FULGUR_APP_CONFIG__ ?? {};`,
+    `export const provideFulgurAppConfig = (c) => {`,
+    `  const g = (globalThis);`,
+    `  g.__FULGUR_APP_CONFIG__ = { ...(g.__FULGUR_APP_CONFIG__ ?? {}), ...c };`,
+    `  g.__FULGUR_RUNTIME__?.provideFulgurAppConfig?.(c);`,
+    `};`,
+    `export const unwrapDefault = (ns) =>`,
+    `  ns && typeof ns === 'object' && 'default' in ns ? (ns.default !== undefined ? ns.default : ns) : ns;`,
+    `export const version = (globalThis).__FULGUR_RUNTIME__?.version;`,
+    `export default { get runtime() { return (globalThis).__FULGUR_RUNTIME__; } };`,
+    ``,
+  ]
+  return lines.join('\n')
+}
+
+/**
  * dev 容器入口（remote 端 dev server 中间件直出的自包含 JS）。
  * init(shareScopeMap) 按引用收养 scope map 并注册 provides——对齐 webpack 容器协议。
  * 顶层注册自身 remotes：远程页面被宿主加载后可能再消费其他远程（双向联邦/嵌套联邦），
