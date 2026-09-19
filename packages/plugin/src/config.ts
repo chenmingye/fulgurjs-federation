@@ -77,7 +77,7 @@ export function defineFulgurConfig(config: FulgurUserConfig): FulgurUserConfig {
 
 /**
  * 加载 fulgur.config.ts（或 .js/.json）。
- * - 配置内的 `@fulgur/federation/config` 导入被重写为本包 dist/config.js 绝对路径——
+ * - 配置内的 `@fulgurjs/federation/config` 导入被重写为本包 dist/config.js 绝对路径——
  *   init 之前工程依赖尚未安装（鸡生蛋），重写后零依赖可加载；
  * - TS 走 Node 原生类型剥离（Node ≥23.6 默认开启；配置文件须用可擦除语法——纯对象无 enum/namespace）；
  *   老版本 Node 回退 esbuild 转译（先试配置工程，再试 CLI 自带依赖树）。

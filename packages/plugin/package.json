@@ -1,5 +1,5 @@
 {
-  "name": "@fulgur/federation",
+  "name": "@fulgurjs/federation",
   "version": "0.4.2",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",

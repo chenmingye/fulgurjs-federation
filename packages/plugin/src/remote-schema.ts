@@ -57,7 +57,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
             code: 'DEV-002',
             symptom: `remote "${remote.key}" 的 dev manifest 可达但 exposes 为空（${u.href}）`,
             cause: 'remote 侧 federation({ exposes }) 为空，或其插件版本过旧导致 manifest 缺字段',
-            fix: '核对 remote 的 federation 配置 exposes，并确认 @fulgur/federation 版本与宿主一致',
+            fix: '核对 remote 的 federation 配置 exposes，并确认 @fulgurjs/federation 版本与宿主一致',
             details: { remote: remote.key, url: u.href, pluginVersion: manifest?.buildInfo?.version },
           }),
         )
@@ -69,9 +69,9 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
         console.warn(
           formatFulgurDiagnostic({
             code: 'DEV-006',
-            symptom: `宿主与 remote "${remote.key}" 的 @fulgur/federation 版本不一致`,
+            symptom: `宿主与 remote "${remote.key}" 的 @fulgurjs/federation 版本不一致`,
             cause: `宿主 ${options.pluginVersion} vs 远程 ${remoteVersion}（pnpm tarball 断链/漏升级常见）`,
-            fix: '统一升级各应用依赖到同一版本：pnpm add -D @fulgur/federation@<version> 并重启 dev server',
+            fix: '统一升级各应用依赖到同一版本：pnpm add -D @fulgurjs/federation@<version> 并重启 dev server',
             details: { host: options.pluginVersion, remote: remoteVersion },
           }),
         )

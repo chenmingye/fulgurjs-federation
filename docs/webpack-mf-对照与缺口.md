@@ -1,10 +1,10 @@
 # webpack Module Federation 逐项对照与缺口清单（P1-3）
 
-> 基准：webpack 5 Module Federation（ModuleFederationPlugin）语义；日期 2026-09-15；版本 @fulgur/federation 0.2.0
+> 基准：webpack 5 Module Federation（ModuleFederationPlugin）语义；日期 2026-09-15；版本 @fulgurjs/federation 0.2.0
 
 ## 一、已实现（与 webpack MF 对齐）
 
-| 能力 | webpack MF | @fulgur/federation | 备注 |
+| 能力 | webpack MF | @fulgurjs/federation | 备注 |
 |------|-----------|--------------------|------|
 | exposes 远程模块 | ✅ | ✅ | 自动拆 chunk；dev 动态容器入口 |
 | remotes 消费 | ✅ | ✅ | 单地址 dev/prod 自动切换；`name@url` 键重命名；promise remote（运行时 registerRemote） |

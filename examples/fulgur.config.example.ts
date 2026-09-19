@@ -3,7 +3,7 @@
  * 用法：npx fulgur init --config examples/fulgur.config.example.ts
  * 完整字段说明见 `fulgur init` 生成的起步模板（fulgur init --template fulgur.config.ts）。
  */
-import { defineFulgurConfig } from '@fulgur/federation/config'
+import { defineFulgurConfig } from '@fulgurjs/federation/config'
 
 export default defineFulgurConfig({
   root: process.cwd(),

@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { federation } from '@fulgur/federation'
+import { federation } from '@fulgurjs/federation'
 
 export default defineConfig({
   plugins: [

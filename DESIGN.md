@@ -1,7 +1,7 @@
-# @fulgur/federation 设计方案 v0.2（全量对齐 Webpack MF 版）
+# @fulgurjs/federation 设计方案 v0.2（全量对齐 Webpack MF 版）
 
 > **品牌**：fulgur，拉丁语「闪电 · 辉光」，取自作者名中「烨」字的意译。
-> 系列规划：`@fulgur/federation`（模块联邦）→ `@fulgur/micro`、`@fulgur/dts` …
+> 系列规划：`@fulgurjs/federation`（模块联邦）→ `@fulgurjs/micro`、`@fulgurjs/dts` …
 > 内外命名统一 `fulgur`（`virtual:fulgur-*` 虚拟模块、`window.__FULGUR_*` 调试出口、`FulgurError` / MFU 错误码）。
 
 > 状态：已实现并验证（2026-09-13）。测试结果：单测 76/76、fixtures dev e2e 10/10、容错/HMR-L3 2/2、fixtures prod e2e 8/8（隔离 NGINX 8999）、testbed dev 实测全通、testbed prod（本地 NGINX 测试站点）最小宿主消费真实远程产物实测通过；runtime gzip 4.4KB。已知问题见手册 §7。
@@ -11,7 +11,7 @@
 
 | # | 决策项 | 结论 |
 |---|--------|------|
-| 1 | 包名 | `@fulgur/federation` |
+| 1 | 包名 | `@fulgurjs/federation` |
 | 2 | 技术栈范围 | Vue 3 生态优先（fixtures / e2e 全部 Vue3） |
 | 3 | 兼容旧写法 | 不做（不兼容 originjs 的 `virtual:__federation__`） |
 | 4 | Remote 地址 | 一个地址，dev/prod 自动切换（可显式覆盖） |

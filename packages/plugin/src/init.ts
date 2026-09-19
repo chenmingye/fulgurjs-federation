@@ -16,10 +16,10 @@ import { loadFulgurConfig, type FulgurAppConfig, type FulgurRepoConfig } from '.
 const MARK = '[fulgur:init]'
 
 /** fulgur.config.ts 起步模板（通用示例， fictitious 应用名） */
-export const STARTER_CONFIG = `// fulgur.config.ts —— @fulgur/federation 接入配置（单文件驱动，可入库、可复跑）
+export const STARTER_CONFIG = `// fulgur.config.ts —— @fulgurjs/federation 接入配置（单文件驱动，可入库、可复跑）
 // 用法：npx fulgur init --config fulgur.config.ts   校验配置并输出可粘贴样板与核对清单
 //       npx fulgur doctor --base http://<站点> --apps <应用目录名...>   部署体检
-import { defineFulgurConfig } from '@fulgur/federation/config'
+import { defineFulgurConfig } from '@fulgurjs/federation/config'
 
 export default defineFulgurConfig({
   // 工程根目录（monorepo 根或单应用仓库根）
@@ -196,7 +196,7 @@ export async function inspectConfig(configPath: string): Promise<string> {
   out.push(nginxSnippetFor(cfg))
 
   out.push('\n── 接入核对清单（联邦通用项，与具体项目无关） ──')
-  out.push('1. 宿主与远程都安装依赖：pnpm add @fulgur/federation')
+  out.push('1. 宿主与远程都安装依赖：pnpm add @fulgurjs/federation')
   out.push('2. expose 一律指向独立页（页面从路由取参）；组件需要必填 props 时给默认值（BLD-003）')
   out.push('3. shared 里 vue / vue-router / pinia 建议 singleton: true——跨应用必须同实例（全局响应性、getActivePinia、路由注入）')
   out.push('4. 远程的全局副作用（全局组件/指令/启动期初始化）封装为启动器模块并 expose，宿主在 loadRemote 页面前调用；')

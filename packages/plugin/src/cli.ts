@@ -12,7 +12,7 @@
 import { resolve } from 'node:path'
 import { runDoctor, formatDoctorReport } from './doctor'
 
-const HELP = `fulgur — Vite Module Federation CLI (@fulgur/federation)
+const HELP = `fulgur — Vite Module Federation CLI (@fulgurjs/federation)
 
 用法：
   fulgur init [--template <path>] [--force]      生成带注释的 fulgur.config.ts 起步模板

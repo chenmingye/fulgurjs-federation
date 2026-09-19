@@ -15,16 +15,16 @@ echo "== 2. 干净项目安装（tarball + vite + vue）=="
 npm init -y >/dev/null
 npm i -D "$PACK_FILE" vite@^6.0.0 >/dev/null 2>&1
 npm i vue@^3.4.0 >/dev/null 2>&1
-node -e "console.log('installed @fulgur/federation:', JSON.parse(require('fs').readFileSync('node_modules/@fulgur/federation/package.json','utf8')).version)"
-test -f node_modules/@fulgur/federation/README.md && echo "✓ 包内 README 存在"
-test -f node_modules/@fulgur/federation/LICENSE && echo "✓ 包内 LICENSE 存在"
+node -e "console.log('installed @fulgurjs/federation:', JSON.parse(require('fs').readFileSync('node_modules/@fulgurjs/federation/package.json','utf8')).version)"
+test -f node_modules/@fulgurjs/federation/README.md && echo "✓ 包内 README 存在"
+test -f node_modules/@fulgurjs/federation/LICENSE && echo "✓ 包内 LICENSE 存在"
 
 echo "== 3. 最小双应用源码 =="
 mkdir -p remote/src host/src
 cat > remote/vite.config.mjs <<'EOF'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { federation } from '@fulgur/federation'
+import { federation } from '@fulgurjs/federation'
 export default defineConfig({
   plugins: [
     vue(),
@@ -50,7 +50,7 @@ EOF
 cat > host/vite.config.mjs <<'EOF'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { federation } from '@fulgur/federation'
+import { federation } from '@fulgurjs/federation'
 export default defineConfig({
   plugins: [
     vue(),

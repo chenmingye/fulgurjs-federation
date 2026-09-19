@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>@fulgur/federation 使用手册 · Vite 模块联邦（全量对齐 Webpack MF）</title>
+<title>@fulgurjs/federation 使用手册 · Vite 模块联邦（全量对齐 Webpack MF）</title>
 <style>
   :root { --blue:#1677ff; --bg:#f6f8fa; --border:#e4e7ed; --text:#24292f; }
   * { box-sizing: border-box; }
@@ -34,7 +34,7 @@
 <body>
 <div class="wrap">
 
-<h1>@fulgur/federation 使用手册 <span class="badge">v0.1.0</span></h1>
+<h1>@fulgurjs/federation 使用手册 <span class="badge">v0.1.0</span></h1>
 <p><b>Vite 模块联邦插件：开发环境与生产环境都能用，配置面与运行时行为全量对齐 Webpack Module Federation。</b>
 本手册中的全部截图均为真实浏览器测试（Playwright + Chromium）自动留证，测试基座包含
 <a href="#tb">示例工程 真实项目副本</a>（qiankun 微前端仓库）与独立 fixture 工程。</p>
@@ -104,13 +104,13 @@
 
 <h2 id="quick">2. 快速开始</h2>
 <h3>2.1 安装</h3>
-<pre>pnpm add -D @fulgur/federation</pre>
+<pre>pnpm add -D @fulgurjs/federation</pre>
 
 <h3>2.2 远程提供方（remote）</h3>
 <pre>// vite.config.ts
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { federation } from '@fulgur/federation'
+import { federation } from '@fulgurjs/federation'
 
 export default defineConfig({
   plugins: [
@@ -408,7 +408,7 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
   <tr><td><code>DEV-005</code></td><td>remotes dev URL 端口无监听</td>
       <td>remote 未启动或端口错位（server.origin 同款），核对 VITE_PORT 与 remotes[].dev</td></tr>
   <tr><td><code>DEV-006</code></td><td>宿主/远程插件版本不一致</td>
-      <td>统一各应用 @fulgur/federation 版本并重启 dev server</td></tr>
+      <td>统一各应用 @fulgurjs/federation 版本并重启 dev server</td></tr>
   <tr><td><code>DEV-008</code></td><td>exposes 目标文件（远程页面）静态导入 virtual:fulgur-runtime——宿主跨源加载时
           在远程模块图内求值第二份副本链，破坏渲染上下文。<strong>0.4.1 起插件自动把该导入改写为惰性单例委托
           （求值期零副作用、调用期转发页面级单例），不再报错</strong>；本码保留用于历史排查与极端场景说明</td>

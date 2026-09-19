@@ -1,4 +1,4 @@
-# @fulgur/federation
+# @fulgurjs/federation
 
 > **fulgur** — 拉丁语「闪电 · 辉光」。
 > 一个把 Vite 模块联邦做到开箱即用的插件：**一套配置，dev / prod 双引擎，语义对齐 Webpack Module Federation**。
@@ -9,7 +9,7 @@
 
 ## 为什么是它
 
-| | webpack MF | 其他 vite MF 方案 | **@fulgur/federation** |
+| | webpack MF | 其他 vite MF 方案 | **@fulgurjs/federation** |
 |---|---|---|---|
 | dev 体验 | 需要独立构建 | 通常要手工 bootstrap | ✅ 双 dev-server 直连，零手工异步边界 |
 | prod 产物 | ✅ | 常缺失或降级 | ✅ 构建期改写，稳定 remoteEntry 文件名 + manifest |
@@ -38,7 +38,7 @@
 ## 安装
 
 ```bash
-pnpm add -D @fulgur/federation
+pnpm add -D @fulgurjs/federation
 ```
 
 要求：Vite ≥ 5.1（实测至 8.x）、Node ≥ 18、Vue 3、浏览器 Chrome 108+（TLA 原生支持）。
@@ -51,7 +51,7 @@ pnpm add -D @fulgur/federation
 // vite.config.ts
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { federation } from '@fulgur/federation'
+import { federation } from '@fulgurjs/federation'
 
 export default defineConfig({
   plugins: [
@@ -146,7 +146,7 @@ npx fulgur doctor --base http://localhost:5173 --apps app-a --dev
 ### 1. `federation(options)` — Vite 插件（宿主/远程同一份 API）
 
 ```ts
-import { federation } from '@fulgur/federation'
+import { federation } from '@fulgurjs/federation'
 ```
 
 #### 全部选项
@@ -284,12 +284,12 @@ export default {
 | `window.__FULGUR_APP_CONFIG__` | W4 全局配置镜像 |
 | `window` 事件 `fulgur:error` | `CustomEvent<{ remote, error }>`，所有远程加载/共享错误都会发出 |
 
-### 3. `defineFulgurPages` — 宿主页面路由表（`@fulgur/federation/pages`）
+### 3. `defineFulgurPages` — 宿主页面路由表（`@fulgurjs/federation/pages`）
 
 宿主把「URL 路径 → 远程 exposes 键」的映射表交给它校验，带参路由的静默冲突在启动期报错而不是运行时加载错组件：
 
 ```ts
-import { defineFulgurPages } from '@fulgur/federation/pages'
+import { defineFulgurPages } from '@fulgurjs/federation/pages'
 import remoteSchema from 'virtual:fulgur-remote-schema' // dev 自动生成；build 恒为空（诚实降级）
 
 export const PAGES = defineFulgurPages(
@@ -320,10 +320,10 @@ export const PAGES = defineFulgurPages(
 
 `validateFulgurPages(pages, options)` 为独立导出：返回违例清单不抛错，便于自测。
 
-### 4. `fulgur.config.ts` — CLI 单配置文件（`@fulgur/federation/config`）
+### 4. `fulgur.config.ts` — CLI 单配置文件（`@fulgurjs/federation/config`）
 
 ```ts
-import { defineFulgurConfig } from '@fulgur/federation/config'
+import { defineFulgurConfig } from '@fulgurjs/federation/config'
 
 export default defineFulgurConfig({
   root: process.cwd(),            // 工程根（monorepo 根或单应用仓库根）
@@ -419,7 +419,7 @@ vite 对 `node_modules/.vite` 预构建产物下发**一年 immutable 缓存**�
 pnpm 工作区/子项目里 `pnpm add xxx.tgz` 偶发软链断链（尤其整目录拷贝过的项目）。装完验证：
 
 ```bash
-ls node_modules/@fulgur/federation/dist/index.js
+ls node_modules/@fulgurjs/federation/dist/index.js
 # 断链时重新执行 pnpm add -D <tarball>
 ```
 
