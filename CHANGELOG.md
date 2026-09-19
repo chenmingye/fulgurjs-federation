@@ -6,10 +6,10 @@
 
 ### 新增
 - **CLI（主包内置 bin `fulgur`）**
-  - `fulgur init`：`fulgur.config.ts` 单配置驱动的迁移生成器——宿主/远程角色、27 页路由表、
-    exposes/remotes/shared、env、NGINX conf 全量编码真实工程验证形态；锚点式补丁（CRLF 自适应、
-    幂等 marker、接管型文件自动备份 `.fulgur-orig.bak`），失败修复后重跑续接；
-    验收 = svn 全新重拷零手工编辑完成三应用接入，27 页双环境矩阵全绿
+  - `fulgur init`：起步模板（带注释的 `fulgur.config.ts`：宿主/远程/页面路由表/部署形态，
+    单文件可入库可复跑）+ 配置校验（CFG 三段式报错）+ 输出可直接粘贴的样板
+    （各应用 federation() vite 块、NGINX no-cache 站点模板、通用接入核对清单）；
+    **项目无关**——不内置任何具体项目的模板、锚点或文件改写
   - `fulgur doctor`：部署面体检——remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、
     CORS、chunk 抽样可达（含 index.html 引用与一跳下钻、200-HTML 回退伪装识别）、
     版本协商 skew 预演、`--dev` 模式端口/容器入口探测；`--json` 供 CI
@@ -26,4 +26,7 @@
   生成物级核对 494 个导出名全部进入赋值回调；bare 导入 prod 实测通过
 
 ### 变更
+- **插件去项目化（2026-09-19 定调）**：移除 init 中曾内置的具体项目集成模板/锚点/补丁
+  （历史实现见 git 历史）；`fulgur init` 重写为纯通用脚手架，配置 schema 同步精简。
+  插件为所有项目服务，不做任何单一项目的形状。
 - runtime gzip 5212 B（红线 ≤5250 内）；单测 148/148；错误码 30 个全量文档对齐

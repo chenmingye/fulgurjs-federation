@@ -43,7 +43,7 @@ export interface FulgurPagesOptions {
    * 推导只需在全部条目间自洽即可保持冲突判定成立。
    */
   deriveSpec?: (route: string) => string;
-  /** 路由前缀 → remote 名（R3 用：{'/lowcode/': 'mes-lowcode'}）；缺省跳过 R3 */
+  /** 路由前缀 → remote 名（R3 用：{'/remote-a/': 'remote-a'}）；缺省跳过 R3 */
   remotes?: Record<string, string>;
   /** remote exposes 清单（dev 由 virtual:fulgur-remote-schema 提供）；缺省跳过 R3 */
   schema?: Record<string, RemoteSchemaEntry>;

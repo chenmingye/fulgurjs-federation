@@ -132,7 +132,7 @@ export function federation(options: FulgurOptions): Plugin[] {
       // 可能出现 chunk 循环求值顺序问题；shared 解析走门面虚拟模块，无需强制预构建
 
       // dev remote：向依赖预构建注入 shared 键外部化 resolver——CJS/UMD-only 依赖（element-plus、
-      // avue、dayjs 等）得以正常预构建（esbuild 的 CJS interop 正确保留 default 静态方法），
+      // dayjs 等 CJS/UMD 依赖）得以正常预构建（esbuild 的 CJS interop 正确保留 default 静态方法），
       // 而其内部对 shared 键（vue 等）的导入在运行时协商到联邦实例，不内联本地副本形成双运行时。
       // 作用面与改写管线的 devSharedSelf 一致：纯 remote 默认开启，双向宿主显式 devSharedSelf 才开。
       if (env.command === 'serve' && normalized.exposes.length > 0 && normalized.devSharedSelf) {
@@ -231,8 +231,8 @@ export function federation(options: FulgurOptions): Plugin[] {
         const excl = (pkg: string) => exclude.some((e) => e === pkg || e.startsWith(pkg + '/') || e.startsWith(pkg + '>'))
         const incl = (pkg: string) => include.some((e) => e === pkg || e.startsWith(pkg + '/') || e.startsWith(pkg + '>'))
         // DEV-003（shared∩exclude）撤回：shared 键由插件外部化机制支持 exclude+shared 组合，
-        // 该告警在受支持的 lowcode 配置下误报（2026-09-17 实测）。代码保留于 diagnostics.ts 码表。
-        // DEV-004：已知 UMD-only 依赖不在 include → 预构建内联本地 vue（avue 事故类）
+        // 该告警曾在受支持的真实工程配置下误报（2026-09-17 实测），已撤回。代码保留于 diagnostics.ts 码表。
+        // DEV-004：已知 UMD-only 依赖不在 include → 预构建内联本地 vue（双实例页面空白）
         const KNOWN_UMD = ['@smallwei/avue']
         for (const pkg of KNOWN_UMD) {
           if (n0.pkgDependencies[pkg] && !incl(pkg) && !excl(pkg)) {

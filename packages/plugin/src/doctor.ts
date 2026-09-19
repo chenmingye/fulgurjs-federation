@@ -27,9 +27,9 @@ export interface DoctorCheck {
 }
 
 export interface DoctorOptions {
-  /** 站点根，如 http://localhost:8662 */
+  /** 站点根，如 http://your-site */
   base: string
-  /** 应用路径列表（相对站点根），如 ['main', 'flowable', 'lowcode'] */
+  /** 应用路径列表（相对站点根），如 ['app-a', 'app-b'] */
   apps: string[]
   /** dev 体检（检查 @fulgur-entry.js 与端口监听） */
   dev?: boolean

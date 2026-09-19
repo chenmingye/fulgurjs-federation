@@ -408,7 +408,7 @@ function validateOptions(options: FulgurOptions): void {
     configError(
       '`name` must match /^[a-zA-Z][\\w.-]*$/ (letters first, no spaces/slashes)',
       options.name,
-      'e.g. "my-app", "demo-host"',
+      'e.g. "my-app", "host-app"',
       `federation({ name: 'my-app', ... })`,
     )
   }

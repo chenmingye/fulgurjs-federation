@@ -120,17 +120,23 @@ const Panel = await loadRemote('shop/Panel', {
 
 **没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgur-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
-## CLI：init 一键接入 + doctor 部署体检
+## CLI：init 起步模板 + doctor 部署体检
 
 ```bash
-# 1) 迁移生成器：单配置文件描述宿主/远程/页面路由表/部署形态，零手工编辑完成接入
-npx fulgur init --config fulgur.config.ts      # 锚点补丁幂等，失败修复后重跑续接
-# 起步模板：examples/ 目录（真实三应用工程的验收样例）
+# 1) 生成带注释的 fulgur.config.ts 起步模板（宿主/远程/页面路由表/部署形态，单文件可入库）
+npx fulgur init                                # 已存在则拒绝，--force 覆盖
+# 样例：examples/fulgur.config.example.ts（通用字段示例）
 
-# 2) 部署体检（CI 可嵌）：缓存头/资源形态/CORS/chunk 可达/版本 skew
-npx fulgur doctor --base http://your-site --apps main,app-a,app-b
+# 2) 校验配置并输出可直接粘贴的样板：各应用 federation() 块、NGINX no-cache 站点模板、接入核对清单
+npx fulgur init --config fulgur.config.ts
+
+# 3) 部署体检（CI 可嵌）：缓存头/资源形态/CORS/chunk 可达/版本 skew
+npx fulgur doctor --base http://your-site --apps app-a,app-b
 npx fulgur doctor --base http://localhost:5173 --apps app-a --dev
 ```
+
+**插件保持项目无关**：init 不改写任何项目文件，不内置任何具体项目的模板或补丁；权限路由、
+远程启动器等项目集成细节由各项目按 init 输出的通用核对清单自行落地。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 

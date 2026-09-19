@@ -1,22 +1,31 @@
 #!/usr/bin/env node
 /**
- * fulgur CLI（主包内置 bin，决策见排期文档 §4：doctor/init 都在主包，不建独立包）。
+ * fulgur CLI（主包内置 bin）。
  *
  * 子命令：
- * - fulgur doctor --base <URL> --apps a,b,c [--dev] [--json]  部署/配置层体检（W2）
- * - fulgur init                                               迁移生成器（W1，规划中）
+ * - fulgur init [--template <path>] [--config <path>] [--force]  起步模板 / 配置校验 + 样板输出
+ * - fulgur doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
+ *
+ * 插件保持项目无关：init 不改写任何项目文件，只输出模板与可粘贴样板；
+ * 项目各自的集成细节由各项目按通用核对清单自行落地。
  */
+import { resolve } from 'node:path'
 import { runDoctor, formatDoctorReport } from './doctor'
 
 const HELP = `fulgur — Vite Module Federation CLI (@fulgur/federation)
 
 用法：
+  fulgur init [--template <path>] [--force]      生成带注释的 fulgur.config.ts 起步模板
+  fulgur init --config <path>                    校验配置；输出各应用 federation() 粘贴块、
+                                                 NGINX no-cache 站点模板与接入核对清单
   fulgur doctor --base <URL> --apps <a,b,c> [--dev] [--json] [--chunk-sample N]
   fulgur --help
 
-doctor 示例：
-  fulgur doctor --base http://localhost:8662 --apps main,flowable,lowcode
-  fulgur doctor --base http://localhost:8662 --apps main,flowable,lowcode --dev
+示例：
+  fulgur init                                    # 当前目录写 fulgur.config.ts（已存在则拒绝，--force 覆盖）
+  fulgur init --config fulgur.config.ts          # 校验 + 输出样板
+  fulgur doctor --base http://your-site --apps app-a,app-b
+  fulgur doctor --base http://localhost:5173 --apps app-a --dev
 `
 
 async function main(): Promise<number> {
@@ -34,11 +43,38 @@ async function main(): Promise<number> {
   }
   const has = (k: string): boolean => argv.includes(k)
 
+  if (cmd === 'init') {
+    const { writeConfigTemplate, inspectConfig } = await import('./init')
+    const configPath = argOf('--config')
+    if (configPath) {
+      try {
+        console.log(await inspectConfig(resolve(configPath)))
+        return 0
+      } catch (e) {
+        console.error(String((e as Error).message ?? e))
+        return 2
+      }
+    }
+    const target = resolve(argOf('--template') ?? 'fulgur.config.ts')
+    const result = await writeConfigTemplate(target, has('--force'))
+    if (result === 'exists') {
+      console.error(`[fulgur:init] ${target} 已存在，拒绝覆盖（--force 强制覆盖）`)
+      return 2
+    }
+    console.log(`[fulgur:init] 已生成起步模板 ${target}
+后续步骤：
+  1. 编辑 fulgur.config.ts：填入你的应用目录/容器名/端口/base/页面路由表/exposes
+  2. npx fulgur init --config fulgur.config.ts   # 校验并输出可粘贴样板与核对清单
+  3. 按清单把 federation() 块接入各应用 vite.config.ts，安装依赖
+  4. 部署后：npx fulgur doctor --base <URL> --apps <应用...>`)
+    return 0
+  }
+
   if (cmd === 'doctor') {
     const base = argOf('--base')
     const appsRaw = argOf('--apps') ?? 'main'
     if (!base) {
-      console.error('[fulgur:doctor] 缺少 --base <URL>（站点根地址，如 http://localhost:8662）')
+      console.error('[fulgur:doctor] 缺少 --base <URL>（站点根地址，如 http://your-site）')
       return 2
     }
     const apps = appsRaw
@@ -59,20 +95,6 @@ async function main(): Promise<number> {
     return failed ? 1 : 0
   }
 
-  if (cmd === 'init') {
-    const configPath = argOf('--config') ?? 'fulgur.config.ts'
-    const { runInit } = await import('./init')
-    const { report, errors } = await runInit(configPath, { force: has('--force') })
-    for (const r of report) console.log(`[fulgur:init] ${r.action.toUpperCase().padEnd(8)} ${r.file}${r.note ? ` — ${r.note}` : ''}`)
-    if (errors.length) {
-      console.error(`\n${errors.join('\n\n')}`)
-      console.error(`\n[fulgur:init] ${errors.length} 个补丁未能落地（见上）——已落地的改动保留，修完后重跑本命令幂等续接`)
-      return 1
-    }
-    console.log(`\n[fulgur:init] 完成：${report.filter((r) => r.action !== 'skip').length} 个文件动作。后续步骤：\n  1. cd 各应用 && pnpm install（挂 @fulgur/federation link）\n  2. pnpm start 起 dev 三服务（冷启动首轮 30~60s 预构建窗口属暂态，DEV-010）\n  3. 部署后 fulgur doctor --base <URL> --apps <a,b,c> 体检`)
-    return 0
-  }
-
   console.error(`未知命令：${cmd}\n${HELP}`)
   return 2
 }
@@ -80,7 +102,7 @@ async function main(): Promise<number> {
 main().then(
   (code) => process.exit(code),
   (e) => {
-    console.error('[fulgur:doctor] 执行失败：', e)
+    console.error('[fulgur] 执行失败：', e)
     process.exit(2)
   },
 )

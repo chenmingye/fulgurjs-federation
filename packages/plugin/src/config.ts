@@ -1,93 +1,71 @@
 /**
- * W1 fulgur.config.ts：单配置文件驱动的迁移生成器 schema（决策：主包内置 bin + 单配置文件）。
- *
- * 设计边界（排期文档 W1）：
- * - CLI 编码的是「已验证最终形态」（testbed 三应用集成的全部修复项，见排期 §3 重建必做清单）；
- *   项目侧差异（谁是宿主/谁是远程/页面路由表/端口/部署形态）全部来自本配置文件；
- * - 非标项目结构（权限/路由体系差异）由 patcher 锚点失败显式报错指路，不静默吞。
+ * W1 fulgur.config.ts：单配置文件驱动的 schema + 加载器（项目无关，决策见排期文档 §4：
+ * 主包内置 bin + 单配置文件驱动，可入库可复跑）。
+ * init 只消费该配置生成通用样板（见 init.ts）；插件运行时（federation()）不读取本文件。
  */
 export interface FulgurPageEntry {
-  /** 宿主路由路径（/flowable、/lowcode 原生空间，参数段 :xx） */
+  /** 宿主路由路径（参数段用 :xx） */
   route: string
   /** 路由 name（命名跳转依赖） */
   name?: string
-  /** exposes 键（显式覆盖推导） */
+  /** 远程 exposes 键（显式覆盖默认推导 pages/<去前缀去参数段>） */
   spec?: string
-  /** 页签中文标题 */
+  /** 页签标题 */
   title?: string
 }
 
+export interface FulgurRemoteAddress {
+  dev: string
+  prod: string
+}
+
+export interface FulgurHostConfig {
+  /** 页面路由表 */
+  pages: FulgurPageEntry[]
+  /** 路由前缀 → 远程名 */
+  remotePrefixes: Record<string, string>
+  /** 消费的远程地址（键 = import 前缀；裸 URL，对象形式不支持 name@ 前缀） */
+  remotes: Record<string, FulgurRemoteAddress>
+}
+
+export interface FulgurRemoteConfig {
+  /** exposes：./键 → 源文件（独立页） */
+  exposes: Record<string, string>
+  /** 反向消费的远程（双向联邦时；dev 下自身源码参与协商需 devSharedSelf: true） */
+  remotes?: Record<string, FulgurRemoteAddress>
+}
+
 export interface FulgurAppConfig {
-  /** 目录名（仓库内相对路径），如 demo-host */
+  /** 相对 root 的应用目录 */
   path: string
-  /** 联邦容器名（remotes 自报名/exposes 提供方） */
+  /** 联邦容器名 */
   name: string
   /** dev 端口 */
   port: number
-  /** 部署/dev base 路径，如 /main */
+  /** 部署/dev 的 URL 前缀，如 /main */
   base: string
-  /** 部署目录名（webRoot 下），缺省取 base 去斜杠 */
+  /** 部署目录名（缺省取 base 去斜杠） */
   deployDir?: string
   /** 宿主角色 */
-  host?: {
-    /** 页面路由表（fulgurPages） */
-    pages: FulgurPageEntry[]
-    /** 路由前缀 → remote 名 */
-    remotePrefixes: Record<string, string>
-    /** remotes 配置（键 → { dev, prod }，裸 URL 无 name@ 前缀） */
-    remotes: Record<string, { dev: string; prod: string }>
-    /** 权限路由剔除前缀（后台菜单生成的联邦路径） */
-    menuFilterPrefixes: string[]
-  }
-  /** remote 角色 */
-  remote?: {
-    /** exposes：./键 → 源文件 */
-    exposes: Record<string, string>
-    /** 消费的 remotes（双向联邦，如 bpm 消费 admin 表单组件） */
-    remotes?: Record<string, { dev: string; prod: string }>
-    /** federatedBoot 形态：bpm（store 挂宿主 pinia）/lowcode（globCom+avue+EP locale） */
-    boot: 'bpm' | 'lowcode'
-    /** 联邦详情页直渲染 patch（bpm detail 双分支） */
-    detailPatch?: boolean
-    /** EP 进 shared singleton（lowcode D.4） */
-    sharedElementPlus?: boolean
-  }
-  /** shared 表（vue/vue-router/pinia 全应用一致） */
+  host?: FulgurHostConfig
+  /** 远程角色 */
+  remote?: FulgurRemoteConfig
+  /** 该应用的 shared 表（缺省建议 vue/vue-router/pinia singleton，见 init 输出的样板） */
   shared?: Record<string, { singleton?: boolean; requiredVersion?: string }>
-  /** optimizeDeps 调整（bpm/lowcode 的 include/exclude 最终形态） */
-  optimize?: { exclude: string[] }
-  /** dev 专用 dayjs→esm 别名（CJS 子路径 interop 兜底） */
-  dayjsDevAlias?: boolean
+}
+
+export interface FulgurDeployConfig {
+  /** NGINX 站点根（样板输出用，可选） */
+  webRoot?: string
+  /** 监听端口（样板输出用，可选） */
+  listen?: number
 }
 
 export interface FulgurRepoConfig {
-  /** 全新拷贝出的工程根（CLI 在其上做集成） */
+  /** 工程根（monorepo 根或单应用仓库根） */
   root: string
   apps: FulgurAppConfig[]
-  env: {
-    /** 本地后台（.env.backend BACKEND_ORIGIN_DEV） */
-    backendOrigin: string
-    backendContext: string
-    /** 乾坤开关（false=联邦平行通道） */
-    qiankun: boolean
-    /** admin prod 压缩（compress 插件对 undefined 崩溃 → none） */
-    compress: 'none' | 'gzip' | 'brotli'
-  }
-  deploy: {
-    /** nginx 站点根 */
-    webRoot: string
-    /** conf 输出路径（nginx servers 目录） */
-    nginxConf: string
-    listen: number
-    /** 后台反代 */
-    backendProxy: string
-  }
-  /** 免登录演示路由（FulgurDemo，双远程组件直渲染） */
-  demo?: {
-    adminRoutePath: string
-    componentSource: string
-    cards: Array<{ remote: string; expose: string }>
-  }
+  deploy?: FulgurDeployConfig
 }
 
 export type FulgurUserConfig = Partial<FulgurRepoConfig>
@@ -162,11 +140,18 @@ export async function loadFulgurConfig(configPath: string): Promise<FulgurRepoCo
   const cfg = mod.default
   if (!cfg?.root) {
     throw new Error(
-      `[fulgur:init] 配置缺少 root（全新拷贝出的工程根目录绝对路径）\n根因：CLI 需要知道在哪个工程上做集成\n修法：fulgur.config.ts 顶层补 root: '/abs/path/to/repo'`,
+      `[fulgur:init] 配置缺少 root（工程根目录绝对路径）\n根因：CLI 需要知道在哪个工程上做集成\n修法：fulgur.config.ts 顶层补 root: '/abs/path/to/repo'（起步模板：fulgur init）`,
     )
   }
   if (!Array.isArray(cfg.apps) || cfg.apps.length === 0) {
     throw new Error('[fulgur:init] 配置缺少 apps（至少一个宿主或远程应用）')
+  }
+  for (const app of cfg.apps) {
+    if (!app.host && !app.remote) {
+      throw new Error(
+        `[fulgur:init] 应用 "${app.path}" 既无 host 也无 remote 角色\n根因：应用必须至少声明一个角色\n修法：宿主补 host: { pages, remotePrefixes, remotes }，远程补 remote: { exposes }`,
+      )
+    }
   }
   return cfg as FulgurRepoConfig
 }
