@@ -78,16 +78,16 @@ echo "== 4. dev 引擎断言（remote dev server 端点）=="
 cd "$T/remote"
 (npx vite --port 5199 --strictPort > "$T/remote-dev.log" 2>&1 &)
 sleep 8
-ENTRY=$(curl -s --noproxy '*' -o /tmp/h7-entry.js -w "%{http_code}" http://localhost:5199/@fulgur-entry.js)
-MANI=$(curl -s --noproxy '*' -o /tmp/h7-manifest.json -w "%{http_code}" http://localhost:5199/@fulgur-manifest.json)
+ENTRY=$(curl -s --noproxy '*' -o /tmp/h7-entry.js -w "%{http_code}" http://localhost:5199/@fulgurjs-entry.js)
+MANI=$(curl -s --noproxy '*' -o /tmp/h7-manifest.json -w "%{http_code}" http://localhost:5199/@fulgurjs-manifest.json)
 echo "entry: $ENTRY, manifest: $MANI"
 grep -q "export async function init" /tmp/h7-entry.js && echo "✓ dev 容器入口可用"
 grep -q "remote-a" /tmp/h7-manifest.json && echo "✓ dev manifest 可用"
 
 echo "== 5. prod 引擎断言（双应用构建）=="
 cd "$T/remote" && npx vite build > "$T/remote-build.log" 2>&1 && echo "✓ remote 构建成功"
-test -f dist/fulgur-remoteEntry.js && echo "✓ remoteEntry 稳定文件名输出"
-test -f dist/fulgur-manifest.json && echo "✓ manifest 落盘"
+test -f dist/fulgurjs-remoteEntry.js && echo "✓ remoteEntry 稳定文件名输出"
+test -f dist/fulgurjs-manifest.json && echo "✓ manifest 落盘"
 cd "$T/host" && npx vite build > "$T/host-build.log" 2>&1 && echo "✓ host 构建成功"
 
 echo "== 6. 清理 =="

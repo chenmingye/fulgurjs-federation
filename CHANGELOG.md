@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0（2026-09-19）
+
+### 变更（品牌全面对齐，breaking）
+
+- 全品牌从 `fulgur` 对齐为 **`fulgurjs`**（npm 上 fulgur 组织名被占用）：
+  - CLI 命令：`fulgur` → **`fulgurjs`**（`npx fulgurjs init` / `npx fulgurjs doctor`）
+  - 虚拟模块：`virtual:fulgur-runtime` → **`virtual:fulgurjs-runtime`**（代理模块同步更名）
+  - 全局单例：`__FULGUR_RUNTIME__` → **`__FULGURJS_RUNTIME__`**（`__FULGURJS_APP_CONFIG__` / `__FULGURJS_SCOPE__` / `__FULGURJS_INFO__` 同步）
+  - 产物文件名：`fulgur-remoteEntry.js` / `fulgur-manifest.json` → **`fulgurjs-remoteEntry.js`** / **`fulgurjs-manifest.json`**（NGINX 规则同步更名）
+  - 配置文件：`fulgur.config.ts` → **`fulgurjs.config.ts`**；错误前缀 `[fulgur:*]` → `[fulgurjs:*]`；运行时事件 `fulgur:error` → `fulgurjs:error`
+  - GitHub 仓库：**fulgurjs-federation**（旧地址自动重定向）
+- 升级方式：0.4.x 用户全局替换 `fulgur` → `fulgurjs`（导入/全局名/NGINX 文件名/CLI 命令）即可。
+
 ## 0.4.2（2026-09-19）
 
 ### 修复（npm 发布面）
@@ -13,7 +26,7 @@
 
 ### 变更（规则自动化）
 
-- **任何文件都可以直接 `import { ... } from 'virtual:fulgur-runtime'`**（原 DEV-008 规则自动化）：
+- **任何文件都可以直接 `import { ... } from 'virtual:fulgurjs-runtime'`**（原 DEV-008 规则自动化）：
   exposes 目标文件（远程页面）里的静态导入，dev 下由插件自动改写为惰性单例委托模块
   （求值期零副作用、调用期转发页面级运行时单例）。用户不再需要知道
   「宿主/远程页面取运行时的不同姿势」，0.4.0 的手工 globalThis 写法已无需使用。
@@ -22,22 +35,22 @@
 
 ### 修复
 
-- runtime 两个存量 TS 断言错误（as Error → as FulgurError）与 fallback 源码契约断言同步。
+- runtime 两个存量 TS 断言错误（as Error → as FulgurjsError）与 fallback 源码契约断言同步。
 
 ## 0.4.0（2026-09-18）
 
 开箱即用批次（A→E）全部落地；W7 发布链按用户指示顺延（未发布 npm）。
 
 ### 新增
-- **CLI（主包内置 bin `fulgur`）**
-  - `fulgur init`：起步模板（带注释的 `fulgur.config.ts`：宿主/远程/页面路由表/部署形态，
+- **CLI（主包内置 bin `fulgurjs`）**
+  - `fulgurjs init`：起步模板（带注释的 `fulgurjs.config.ts`：宿主/远程/页面路由表/部署形态，
     单文件可入库可复跑）+ 配置校验（CFG 三段式报错）+ 输出可直接粘贴的样板
     （各应用 federation() vite 块、NGINX no-cache 站点模板、通用接入核对清单）；
     **项目无关**——不内置任何具体项目的模板、锚点或文件改写
-  - `fulgur doctor`：部署面体检——remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、
+  - `fulgurjs doctor`：部署面体检——remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、
     CORS、chunk 抽样可达（含 index.html 引用与一跳下钻、200-HTML 回退伪装识别）、
     版本协商 skew 预演、`--dev` 模式端口/容器入口探测；`--json` 供 CI
-- **W4 跨应用全局配置协商**：runtime 新增 `provideFulgurAppConfig` / `getFulgurAppConfig`
+- **W4 跨应用全局配置协商**：runtime 新增 `provideFulgurjsAppConfig` / `getFulgurjsAppConfig`
   （页面级单例、浅合并、globalThis 镜像）——EP locale/size 类跨副本配置的机制化收编
 - **W5 诊断补码**：CFG-007（remotes 对象形式误用 name@ 前缀）、CFG-008（shared 非法组合）、
   DEV-010（dev 冷启动预构建窗口提示）；BLD-003 必填 props 扫描器（按实测降级为手册核对项）
@@ -51,6 +64,6 @@
 
 ### 变更
 - **插件去项目化（2026-09-19 定调）**：移除 init 中曾内置的具体项目集成模板/锚点/补丁
-  （历史实现见 git 历史）；`fulgur init` 重写为纯通用脚手架，配置 schema 同步精简。
+  （历史实现见 git 历史）；`fulgurjs init` 重写为纯通用脚手架，配置 schema 同步精简。
   插件为所有项目服务，不做任何单一项目的形状。
 - runtime gzip 5212 B（红线 ≤5250 内）；单测 148/148；错误码 30 个全量文档对齐

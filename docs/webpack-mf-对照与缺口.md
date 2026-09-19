@@ -24,7 +24,7 @@
 |------|------|------|
 | SSR | ❌ | 仅警告并禁用钩子；无 SSR 渲染计划 |
 | React/其他框架适配 | ❌ | 首发仅 Vue 3（shared 门面按 Vue 3 语义生成） |
-| 浏览器 DevTools 扩展 | ❌ | 提供 `window.__FULGUR_SCOPE__ / __FULGUR_INFO__` 调试面 |
+| 浏览器 DevTools 扩展 | ❌ | 提供 `window.__FULGURJS_SCOPE__ / __FULGURJS_INFO__` 调试面 |
 | share 的 `import: false`（仅提供不消费） | ✅ import:false 已支持 | 与 webpack `eager`/share 语义对齐 |
 | 运行时动态 remote 版本浮动（promise remote 的 shared 注入） | ⚠️ | promise remote 可注册，但其 shared 需自带 |
 | Node.js 环境（SSR/构建外运行时） | ❌ | 仅浏览器 |

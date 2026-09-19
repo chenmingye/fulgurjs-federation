@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      '@fulgur/federation':
+      '@fulgurjs/federation':
         specifier: link:../../packages/plugin
         version: link:../../packages/plugin
       lodash-es:

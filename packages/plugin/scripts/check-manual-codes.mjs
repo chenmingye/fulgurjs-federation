@@ -17,7 +17,7 @@ for (const m of runtime.matchAll(/'(MFU-\d{3})'/g)) codes.add(m[1])
 
 const missing = [...codes].filter((c) => !manual.includes(c))
 if (missing.length) {
-  console.error(`[fulgur] 手册 §8 缺少以下错误码的条目：${missing.join('、')}`)
+  console.error(`[fulgurjs] 手册 §8 缺少以下错误码的条目：${missing.join('、')}`)
   process.exit(1)
 }
-console.log(`[fulgur] 手册 §8 码表一致（${codes.size} 个错误码全部有文档）`)
+console.log(`[fulgurjs] 手册 §8 码表一致（${codes.size} 个错误码全部有文档）`)

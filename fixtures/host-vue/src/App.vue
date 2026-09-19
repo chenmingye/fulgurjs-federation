@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1>FULGUR HOST</h1>
+    <h1>FULGURJS HOST</h1>
     <nav style="margin-bottom: 8px">
       <a href="#/" data-testid="nav-home">home</a> |
       <a href="#/utils" data-testid="nav-utils">utils</a> |

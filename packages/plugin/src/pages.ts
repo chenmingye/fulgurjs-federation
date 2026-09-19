@@ -1,5 +1,5 @@
 /**
- * D.2 宿主路由表校验器（defineFulgurPages）
+ * D.2 宿主路由表校验器（defineFulgurjsPages）
  *
  * 背景：带参路由缺省推导 spec 时会剥离 :参数 段，可能与其它条目（如列表页）的
  * expose 键收敛相同 → 静默加载错误组件（真实事故：复制流程误走更新语义）。
@@ -18,7 +18,7 @@
  * - R5 [WARN]  name 字段重复（vue-router 命名跳转歧义）
  */
 
-export interface FulgurPageRouteLike {
+export interface FulgurjsPageRouteLike {
   /** 宿主路由路径（:param 段） */
   route: string;
   /** 显式 spec（缺省走推导） */
@@ -35,7 +35,7 @@ export interface RemoteSchemaEntry {
   exists?: boolean;
 }
 
-export interface FulgurPagesOptions {
+export interface FulgurjsPagesOptions {
   /**
    * 带参路由的缺省 spec 推导规则（宿主私有约定，如
    * (route) => `pages/${route 去前缀去 :参}`）。
@@ -45,7 +45,7 @@ export interface FulgurPagesOptions {
   deriveSpec?: (route: string) => string;
   /** 路由前缀 → remote 名（R3 用：{'/remote-a/': 'remote-a'}）；缺省跳过 R3 */
   remotes?: Record<string, string>;
-  /** remote exposes 清单（dev 由 virtual:fulgur-remote-schema 提供）；缺省跳过 R3 */
+  /** remote exposes 清单（dev 由 virtual:fulgurjs-remote-schema 提供）；缺省跳过 R3 */
   schema?: Record<string, RemoteSchemaEntry>;
   /** false = ERROR 降级 console.error（默认 true = throw） */
   strict?: boolean;
@@ -98,9 +98,9 @@ export interface PageViolation {
 /**
  * 校验路由表（独立导出便于单测）：返回违例清单（不抛错）。
  */
-export function validateFulgurPages(
-  pages: FulgurPageRouteLike[],
-  options: FulgurPagesOptions = {},
+export function validateFulgurjsPages(
+  pages: FulgurjsPageRouteLike[],
+  options: FulgurjsPagesOptions = {},
 ): PageViolation[] {
   const deriveSpec = options.deriveSpec ?? defaultDeriveSpec;
   const violations: PageViolation[] = [];
@@ -212,10 +212,10 @@ function formatViolations(violations: PageViolation[]): string {
   const warns = violations.filter((v) => v.level === 'warn');
   let out = '';
   if (errors.length) {
-    out += `[fulgur] 路由表校验失败（${errors.length} 项，ERROR）：\n` + errors.map((v) => v.message).join('\n') + '\n';
+    out += `[fulgurjs] 路由表校验失败（${errors.length} 项，ERROR）：\n` + errors.map((v) => v.message).join('\n') + '\n';
   }
   if (warns.length) {
-    out += `[fulgur] 路由表校验警告（${warns.length} 项，WARN）：\n` + warns.map((v) => v.message).join('\n');
+    out += `[fulgurjs] 路由表校验警告（${warns.length} 项，WARN）：\n` + warns.map((v) => v.message).join('\n');
   }
   return out.trim();
 }
@@ -225,11 +225,11 @@ function formatViolations(violations: PageViolation[]): string {
  * 违反 ERROR 级规则时默认 throw（dev overlay / build 失败直接可见）；
  * strict: false 时降级 console.error。WARN 级始终 console.warn。
  */
-export function defineFulgurPages<P extends FulgurPageRouteLike[]>(
+export function defineFulgurjsPages<P extends FulgurjsPageRouteLike[]>(
   pages: P,
-  options: FulgurPagesOptions = {},
+  options: FulgurjsPagesOptions = {},
 ): P {
-  const violations = validateFulgurPages(pages, options);
+  const violations = validateFulgurjsPages(pages, options);
   const errors = violations.filter((v) => v.level === 'error');
   const warns = violations.filter((v) => v.level === 'warn');
   const text = formatViolations(violations);

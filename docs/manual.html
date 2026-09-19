@@ -55,12 +55,12 @@
 <h2 id="compare">1. 与 Webpack 原版对齐总表</h2>
 <p>结论先行：<b>在 Vite↔Vite 场景下，配置面与运行时行为 100% 对齐 webpack ModuleFederationPlugin</b>；
 唯二例外为 <code>remoteType: 'script'/'var'</code>（跨打包器互操作，P3 里程碑）与 Chrome DevTools 扩展（用
-<code>window.__FULGUR_SCOPE__</code> 调试出口替代）。</p>
+<code>window.__FULGURJS_SCOPE__</code> 调试出口替代）。</p>
 
 <h3>1.1 配置面（webpack 官方全选项）</h3>
 <table>
-  <tr><th>webpack 选项</th><th>fulgur</th><th>说明</th></tr>
-  <tr><td><code>name</code> / <code>filename</code></td><td class="ok">✅ 一致</td><td>容器名 + remoteEntry 稳定文件名（默认 <code>fulgur-remoteEntry.js</code>）</td></tr>
+  <tr><th>webpack 选项</th><th>fulgurjs</th><th>说明</th></tr>
+  <tr><td><code>name</code> / <code>filename</code></td><td class="ok">✅ 一致</td><td>容器名 + remoteEntry 稳定文件名（默认 <code>fulgurjs-remoteEntry.js</code>）</td></tr>
   <tr><td><code>exposes</code> 字符串 / 对象 <code>{import, name}</code></td><td class="ok">✅ 一致</td><td>对象形式 name = 稳定 chunk 名</td></tr>
   <tr><td><code>remotes</code> 的 <code>name@url</code> 语法</td><td class="ok">✅ 一致</td><td>@ 前自报名校验；键重命名（checkout: shop@…）</td></tr>
   <tr><td><code>remotes</code> 对象 <code>{external, shareScope}</code></td><td class="ok">✅ 一致</td><td>另支持 <code>dev</code>/<code>prod</code> 地址拆分（webpack 没有的增强）</td></tr>
@@ -71,17 +71,17 @@
   <tr><td><code>shareScope</code> 多作用域</td><td class="ok">✅ 一致</td><td>命名空间互相隔离</td></tr>
   <tr><td><code>eager</code></td><td class="ok">✅ 一致</td><td>初始 chunk 可用 + 总被下载</td></tr>
   <tr><td><code>runtime</code> / <code>runtimeChunk</code></td><td class="ok">✅ 一致</td><td>运行时与 init 独立产物、稳定命名</td></tr>
-  <tr><td><code>manifest</code></td><td class="ok">✅</td><td>fulgur-manifest.json（部署回滚 = 切 manifest 指针）</td></tr>
+  <tr><td><code>manifest</code></td><td class="ok">✅</td><td>fulgurjs-manifest.json（部署回滚 = 切 manifest 指针）</td></tr>
   <tr><td><code>runtimePlugins</code></td><td class="ok">✅</td><td>resolveShare / beforeLoadRemote / afterLoadRemote / onRemoteError 钩子</td></tr>
   <tr><td><code>dts</code></td><td class="ok">✅</td><td>dev 源码级类型直连</td></tr>
   <tr><td><code>automaticAsyncBoundary</code> / <code>dataPrefetch</code> / <code>usedExports</code></td><td class="warn">🔶 增强</td><td>TLA 自动异步边界（无需手工 bootstrap）、preloadRemote 常驻、Rollup 原生 tree-shaking</td></tr>
   <tr><td><code>remoteType: 'script'/'var'</code></td><td class="warn">🔶 P3</td><td>跨打包器互操作（webpack 宿主消费 Vite remote），首发不承诺</td></tr>
-  <tr><td>Chrome DevTools 扩展</td><td class="warn">🔶 替代</td><td><code>window.__FULGUR_SCOPE__ / __FULGUR_INFO__</code> 调试出口</td></tr>
+  <tr><td>Chrome DevTools 扩展</td><td class="warn">🔶 替代</td><td><code>window.__FULGURJS_SCOPE__ / __FULGURJS_INFO__</code> 调试出口</td></tr>
 </table>
 
 <h3>1.2 运行时行为语义（18 条逐条 e2e 验收）</h3>
 <table>
-  <tr><th>#</th><th>webpack 行为</th><th>fulgur</th></tr>
+  <tr><th>#</th><th>webpack 行为</th><th>fulgurjs</th></tr>
   <tr><td>1</td><td>协商取满足 requiredVersion 的<b>最高版本</b></td><td class="ok">✅</td></tr>
   <tr><td>2</td><td>非 singleton 多版本共存</td><td class="ok">✅</td></tr>
   <tr><td>3</td><td>已注册/已加载版本永不替换（first-wins）</td><td class="ok">✅</td></tr>
@@ -117,7 +117,7 @@ export default defineConfig({
     vue(),
     federation({
       name: 'remote-a',
-      filename: 'fulgur-remoteEntry.js',
+      filename: 'fulgurjs-remoteEntry.js',
       exposes: {
         './Button': './src/exposes/Button.vue',
         './utils': './src/exposes/utils.ts',
@@ -134,7 +134,7 @@ export default defineConfig({
 <pre>federation({
   name: 'host-app',
   remotes: {
-    // 单地址：dev 自动拼 @fulgur-entry.js，prod 自动拼 remoteEntry 文件名
+    // 单地址：dev 自动拼 @fulgurjs-entry.js，prod 自动拼 remoteEntry 文件名
     'remote-a': 'http://localhost:5101',
     // 显式拆分（推荐用于部署）
     'remote-b': { dev: 'http://localhost:5102', prod: 'https://cdn.example.com/remote-b/' },
@@ -159,18 +159,18 @@ import Btn from 'remote-a/Button'</pre>
 <table>
   <tr><th>环境</th><th>引擎</th><th>机制</th></tr>
   <tr><td><b>dev</b></td><td>双 dev-server 协作</td>
-    <td>remote 的 dev server 暴露 <code>/@fulgur-entry.js</code>（自包含容器）与 <code>/@fulgur-manifest.json</code>；
+    <td>remote 的 dev server 暴露 <code>/@fulgurjs-entry.js</code>（自包含容器）与 <code>/@fulgurjs-manifest.json</code>；
     宿主页面经运行时 <code>container.init(shareScopeMap)</code> 收养共享作用域；remote 模块的 shared 导入经
     <b>绑定门面</b>（按需生成的虚拟模块）协商到宿主实例；HMR 通过 remote 的 vite client 直连宿主页面。</td></tr>
   <tr><td><b>prod</b></td><td>构建期改写（Rollup/Rolldown）</td>
     <td>每个 expose 生成虚拟入口 → 独立 chunk；shared 经动态导入边界自动剥离；产出稳定文件名的
-    <code>fulgur-remoteEntry.js</code> + <code>fulgur-manifest.json</code>；宿主入口前置 init import 注册 remotes/provides。</td></tr>
+    <code>fulgurjs-remoteEntry.js</code> + <code>fulgurjs-manifest.json</code>；宿主入口前置 init import 注册 remotes/provides。</td></tr>
 </table>
 <div class="note">运行时内核 gzip 约 <b>5.0KB</b>（对标 @module-federation/runtime 的 40KB+），页面级单例：
-多应用各自打包的运行时副本经 <code>globalThis.__FULGUR_RUNTIME__</code> 合一。
+多应用各自打包的运行时副本经 <code>globalThis.__FULGURJS_RUNTIME__</code> 合一。
 跨源取运行时的官方入口：<code>getRuntime()</code>（独立产物导出，与全局单例同一实例），
 单例带 <code>version</code> 字段（与插件包版本同源）用于副本一致性诊断；方法面已冻结防意外覆写。
-注意：exposes 目标文件（远程页面）禁止静态导入 <code>virtual:fulgur-runtime</code>，插件 dev 下会显式报错（见 §8）。</div>
+注意：exposes 目标文件（远程页面）禁止静态导入 <code>virtual:fulgurjs-runtime</code>，插件 dev 下会显式报错（见 §8）。</div>
 
 <h2 id="feat">4. 功能章节（含实测截图）</h2>
 
@@ -196,7 +196,7 @@ import Btn from 'remote-a/Button'</pre>
 </div>
 
 <h3>4.4 Share Scope 协商可视化（调试出口）</h3>
-<p>宿主任意页面可用 <code>window.__FULGUR_SCOPE__</code> / <code>__FULGUR_INFO__</code> 查看协商结果与加载状态。</p>
+<p>宿主任意页面可用 <code>window.__FULGURJS_SCOPE__</code> / <code>__FULGURJS_INFO__</code> 查看协商结果与加载状态。</p>
 <img class="shot" src="screenshots/dev-scope-debug-panel.png">
 
 <h3>4.5 remotes 键重命名（checkout: shop@ 语法）</h3>
@@ -240,7 +240,7 @@ const mod = await import('promise-remote/Button')</pre>
 
 <h3>4.12 dts 类型直连（dev 源码级补全）</h3>
 <p>宿主 dev server 启动时自动拉取各远程的 dev manifest，为每个 exposes 生成 <code>declare module</code> 声明，
-映射到远程本机源码——补全与跳转都是源码级。产物写入 <code>src/fulgur-types/&lt;remote&gt;.d.ts</code>，
+映射到远程本机源码——补全与跳转都是源码级。产物写入 <code>src/fulgurjs-types/&lt;remote&gt;.d.ts</code>，
 确保 tsconfig include 包含该目录即可。</p>
 <pre>declare module 'remote-a/Button' {
   import type { DefineComponent } from 'vue'
@@ -252,7 +252,7 @@ const mod = await import('promise-remote/Button')</pre>
 <figcaption>实测：host-vue 启动后自动生成 remote-a / remote-b / shop 三份类型声明（5 + 2 + 5 个 exposes）</figcaption>
 
 <h3>4.13 preloadRemote（manifest 驱动精确预载）</h3>
-<pre>import { preloadRemote } from 'virtual:fulgur-runtime' // 插件已全局注入
+<pre>import { preloadRemote } from 'virtual:fulgurjs-runtime' // 插件已全局注入
 await preloadRemote('remote-a')            // 按 manifest 精确预载全部 exposes chunk + CSS
 await preloadRemote('remote-a', { mode: 'prefetch' }) // 低优先级预取</pre>
 <p>实测注入的 modulepreload 链接（dev）：容器入口 + 全部 5 个 exposes 的源模块——
@@ -262,7 +262,7 @@ await preloadRemote('remote-a', { mode: 'prefetch' }) // 低优先级预取</pre
 <h2 id="tb">5. 示例工程 真实项目实战（qiankun 仓库 + 模块联邦平行通道）</h2>
 <p>复制 示例工程（三应用 monorepo） 到插件 testbed，保持 <b>qiankun 集成零改动</b>，新增联邦平行通道：
 示例宿主应用（Vite 6.4.3）作为宿主，示例 bpm 子应用（Vite 5.1.4，/flowable）与 示例 lowcode 子应用（Vite 5.2.12，/lowcode）
-作为远程。免登录演示路由 <code>/main/fulgur-demo</code>（meta.ignoreAuth）。</p>
+作为远程。免登录演示路由 <code>/main/fulgurjs-demo</code>（meta.ignoreAuth）。</p>
 <pre>// admin remotes（dev/prod 自动切换，prod 走 NGINX 同源路径）
 'bpm-app':   { dev: 'http://localhost:5102/bpm', prod: '/bpm' },
 'lowcode-app': { dev: 'http://localhost:5103/lowcode', prod: '/lowcode' },
@@ -276,13 +276,13 @@ const TaskCard = defineAsyncComponent(() =&gt; import('mes-bpm/TaskCard').then(m
 <img class="shot" src="screenshots/tb-dev-scope-negotiation.png">
 
 <h3>5.1 生产环境（NGINX 8662）：真实远程产物 + 最小宿主</h3>
-<p>bpm/lowcode 生产构建产物（fulgur-remoteEntry.js + fulgur-manifest.json）部署到 NGINX 8662，
+<p>bpm/lowcode 生产构建产物（fulgurjs-remoteEntry.js + fulgurjs-manifest.json）部署到 NGINX 8662，
 最小宿主页用<b>纯运行时容器 API</b>（无构建步骤）直接消费真实产物：</p>
-<pre>import { initSharing, registerRemotes, loadRemote, loadShare } from '/fulgur-runtime.js'
+<pre>import { initSharing, registerRemotes, loadRemote, loadShare } from '/fulgurjs-runtime.js'
 initSharing('default')
 registerRemotes([
-  { name: 'mes-bpm', entry: '/flowable/fulgur-remoteEntry.js' },
-  { name: 'mes-lowcode', entry: '/lowcode/fulgur-remoteEntry.js' },
+  { name: 'mes-bpm', entry: '/flowable/fulgurjs-remoteEntry.js' },
+  { name: 'mes-lowcode', entry: '/lowcode/fulgurjs-remoteEntry.js' },
 ])
 const TaskCard = (await loadRemote('mes-bpm/./TaskCard')).default
 const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: true })</pre>
@@ -409,11 +409,11 @@ const vueMod = await loadShare('vue', { requiredVersion: '^3.4.0', singleton: tr
       <td>remote 未启动或端口错位（server.origin 同款），核对 VITE_PORT 与 remotes[].dev</td></tr>
   <tr><td><code>DEV-006</code></td><td>宿主/远程插件版本不一致</td>
       <td>统一各应用 @fulgurjs/federation 版本并重启 dev server</td></tr>
-  <tr><td><code>DEV-008</code></td><td>exposes 目标文件（远程页面）静态导入 virtual:fulgur-runtime——宿主跨源加载时
+  <tr><td><code>DEV-008</code></td><td>exposes 目标文件（远程页面）静态导入 virtual:fulgurjs-runtime——宿主跨源加载时
           在远程模块图内求值第二份副本链，破坏渲染上下文。<strong>0.4.1 起插件自动把该导入改写为惰性单例委托
           （求值期零副作用、调用期转发页面级单例），不再报错</strong>；本码保留用于历史排查与极端场景说明</td>
-      <td>无需任何处理——任何文件直接 <code>import { loadRemote } from 'virtual:fulgur-runtime'</code> 即可；
-          调试时可绕过代理直取 <code>(globalThis as any).__FULGUR_RUNTIME__</code></td></tr>
+      <td>无需任何处理——任何文件直接 <code>import { loadRemote } from 'virtual:fulgurjs-runtime'</code> 即可；
+          调试时可绕过代理直取 <code>(globalThis as any).__FULGURJS_RUNTIME__</code></td></tr>
   <tr><td><code>DEV-009</code></td><td>联邦虚拟模块/门面请求 404（.vite 缓存漂移）——<strong>0.4.1 起插件在 dev server
           启动时自动检测插件版本变化并清除 .vite 缓存</strong></td>
       <td>重启 dev server 即可（缓存自清）；若自动清理失败按提示手工 <code>rm -rf node_modules/.vite</code>；

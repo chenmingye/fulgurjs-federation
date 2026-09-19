@@ -23,14 +23,14 @@ export default defineConfig({
         {
           command: 'pnpm dev',
           cwd: '../fixtures/remote-a',
-          url: 'http://localhost:5101/@fulgur-manifest.json',
+          url: 'http://localhost:5101/@fulgurjs-manifest.json',
           reuseExistingServer: true,
           timeout: 90_000,
         },
         {
           command: 'pnpm dev',
           cwd: '../fixtures/remote-b',
-          url: 'http://localhost:5102/@fulgur-manifest.json',
+          url: 'http://localhost:5102/@fulgurjs-manifest.json',
           reuseExistingServer: true,
           timeout: 90_000,
         },

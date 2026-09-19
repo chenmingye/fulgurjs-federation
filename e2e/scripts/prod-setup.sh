@@ -23,20 +23,20 @@ cp -R "$FIX/remote-a/dist/" "$PROD/remote-a/"
 cp -R "$FIX/remote-b/dist/" "$PROD/remote-b/"
 
 echo "== 产物清单（remoteEntry / manifest / init）=="
-ls -la "$PROD/remote-a/" | grep -E "fulgur" || true
-ls -la "$PROD/" | grep -E "fulgur" || true
+ls -la "$PROD/remote-a/" | grep -E "fulgurjs" || true
+ls -la "$PROD/" | grep -E "fulgurjs" || true
 
 # 3. 隔离 NGINX 实例（8999）
-mkdir -p /tmp/fulgur-nginx
+mkdir -p /tmp/fulgurjs-nginx
 sed "s|__PROD_DIST__|$PROD|g" "$NGX/nginx.conf.template" > "$NGX/nginx.conf"
-if [ -f /tmp/fulgur-nginx/nginx.pid ] && kill -0 "$(cat /tmp/fulgur-nginx/nginx.pid)" 2>/dev/null; then
-  nginx -c "$NGX/nginx.conf" -s stop -p /tmp/fulgur-nginx/ 2>/dev/null || true
+if [ -f /tmp/fulgurjs-nginx/nginx.pid ] && kill -0 "$(cat /tmp/fulgurjs-nginx/nginx.pid)" 2>/dev/null; then
+  nginx -c "$NGX/nginx.conf" -s stop -p /tmp/fulgurjs-nginx/ 2>/dev/null || true
   sleep 1
 fi
-nginx -t -c "$NGX/nginx.conf" -p /tmp/fulgur-nginx/
-nginx -c "$NGX/nginx.conf" -p /tmp/fulgur-nginx/
+nginx -t -c "$NGX/nginx.conf" -p /tmp/fulgurjs-nginx/
+nginx -c "$NGX/nginx.conf" -p /tmp/fulgurjs-nginx/
 sleep 1
-for u in "/" "/remote-a/fulgur-remoteEntry.js" "/remote-a/fulgur-manifest.json" "/remote-b/fulgur-remoteEntry.js"; do
+for u in "/" "/remote-a/fulgurjs-remoteEntry.js" "/remote-a/fulgurjs-manifest.json" "/remote-b/fulgurjs-remoteEntry.js"; do
   code=$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "http://localhost:8999$u")
   echo "nginx $u -> $code"
 done

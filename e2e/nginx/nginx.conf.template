@@ -1,6 +1,6 @@
-# fulgur e2e 专用隔离 NGINX 实例（端口 8999，与用户实例完全隔离）
-pid /tmp/fulgur-nginx/nginx.pid;
-error_log /tmp/fulgur-nginx/error.log warn;
+# fulgurjs e2e 专用隔离 NGINX 实例（端口 8999，与用户实例完全隔离）
+pid /tmp/fulgurjs-nginx/nginx.pid;
+error_log /tmp/fulgurjs-nginx/error.log warn;
 
 events {
   worker_connections 256;
@@ -9,7 +9,7 @@ events {
 http {
   include /opt/homebrew/etc/nginx/mime.types;
   default_type application/octet-stream;
-  access_log /tmp/fulgur-nginx/access.log;
+  access_log /tmp/fulgurjs-nginx/access.log;
   sendfile on;
   tcp_nopush on;
   keepalive_timeout 65;
@@ -32,8 +32,8 @@ http {
       try_files $uri $uri/ /remote-a/index.html;
 
       # remoteEntry 长缓存 + 跨域模块访问
-      location = /remote-a/fulgur-remoteEntry.js {
-        alias "__PROD_DIST__/remote-a/fulgur-remoteEntry.js";
+      location = /remote-a/fulgurjs-remoteEntry.js {
+        alias "__PROD_DIST__/remote-a/fulgurjs-remoteEntry.js";
         add_header Cache-Control "public, max-age=31536000, immutable";
         add_header Access-Control-Allow-Origin "*";
         add_header Access-Control-Expose-Headers "*";

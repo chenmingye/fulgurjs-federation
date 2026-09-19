@@ -83,7 +83,7 @@ export function serializeShareCallForFacade(item: NormalizedShared, fallbackUrl?
     const facadeUrl = fallbackUrl ?? SHARED_FACADE_PREFIX + item.shareKey
     opts.push(`fallback: () => import(${JSON.stringify(facadeUrl)})`)
   }
-  return `__fulgur_loadShare(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} })`
+  return `__fulgurjs_loadShare(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} })`
 }
 
 function serializeShareCall(item: NormalizedShared, devUrls?: TransformContext['devUrls']): string {
@@ -97,7 +97,7 @@ function serializeShareCall(item: NormalizedShared, devUrls?: TransformContext['
     const facadeUrl = devUrls ? devUrls.namespaceFacade(item.shareKey) : SHARED_FACADE_PREFIX + item.shareKey
     opts.push(`fallback: () => import(${JSON.stringify(facadeUrl)})`)
   }
-  return `__fulgur_loadShare(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} })`
+  return `__fulgurjs_loadShare(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} })`
 }
 
 interface Binding {
@@ -257,10 +257,10 @@ export async function transformModule(
   // ---- CJS/UMD 依赖的 require(<shared>) 重定向（avue UMD、element-plus lib 等）----
   // 必须赶在 vite:commonjs 转换之前：commonjs 会把 require("vue") 解析为本地模块导入，
   // 把整条依赖子树钉死在第二份 vue 运行时上（联邦渲染即 'ce'/renderSlot null 崩溃）。
-  // 这里把 require("vue") 重写为 require("virtual:fulgur-cjs-ns:vue")——保持 require 调用
+  // 这里把 require("vue") 重写为 require("virtual:fulgurjs-cjs-ns:vue")——保持 require 调用
   // 形态，commonjs 插件才会继续转换本模块（ESM import 前置会把文件变成 mixed 而被跳过，
   // module.exports 语义即断裂），并对垫片虚拟模块做 CJS→ESM interop。
-  // 仅 build 启用；dev 的 CJS 依赖走 optimizeDeps 预构建（fulgur:optimize-shared-external）。
+  // 仅 build 启用；dev 的 CJS 依赖走 optimizeDeps 预构建（fulgurjs:optimize-shared-external）。
   if (ctx.cjsRequireRewrite && /require\s*\(\s*["']/.test(code)) {
     const sharedByAlias = new Map<string, NormalizedShared>()
     for (const s of options.shared) {
@@ -271,7 +271,7 @@ export async function transformModule(
     for (const [alias, item] of sharedByAlias) {
       const re = new RegExp(`require\\((["'])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1\\)`, 'g')
       if (!re.test(code)) continue
-      code = code.replace(re, `require(${JSON.stringify(`virtual:fulgur-cjs-ns:${item.shareKey}`)})`)
+      code = code.replace(re, `require(${JSON.stringify(`virtual:fulgurjs-cjs-ns:${item.shareKey}`)})`)
       cjsEdited = true
     }
     if (!cjsEdited) return null
@@ -294,7 +294,7 @@ export async function transformModule(
   let usesRuntimeHelpers = false
   const tlaLines: string[] = [] // namespace / export * as 等少见形态的 TLA 兜底
   let tempIdx = 0
-  const genTemp = () => `__fulgur_m${tempIdx++}`
+  const genTemp = () => `__fulgurjs_m${tempIdx++}`
 
   const remap = (spec: string): string => ctx.remapSpecifier?.(spec) ?? spec
 
@@ -323,7 +323,7 @@ export async function transformModule(
     usesRuntimeHelpers = true
     const call = shared
       ? serializeShareCall(shared, ctx?.devUrls)
-      : `__fulgur_loadRemote(${JSON.stringify(`${remoteName}/${exposeName}`)})`
+      : `__fulgurjs_loadRemote(${JSON.stringify(`${remoteName}/${exposeName}`)})`
     const nsAs = clauseRaw.match(/export\s+\*\s+as\s+(\w+)\s+from/)
     if (nsAs) {
       s.overwrite(stmtStart, stmtEnd, `const ${nsAs[1]} = await ${call};\nexport { ${nsAs[1]} };`)
@@ -336,14 +336,14 @@ export async function transformModule(
     const tmp = genTemp()
     const parts: string[] = [`${tmp} = await ${call}`]
     if (clause.ns) parts.push(`${clause.ns} = ${tmp}`)
-    if (clause.defaultLocal) parts.push(`${clause.defaultLocal} = __fulgurU(${tmp})`)
+    if (clause.defaultLocal) parts.push(`${clause.defaultLocal} = __fulgurjsU(${tmp})`)
     const named = clause.bindings?.filter((b) => !b.isDefault) ?? []
     if (named.length) {
       const destructure = named.map((b) => (b.imported === b.local ? b.local : `${b.imported}: ${b.local}`))
       parts.push(`{ ${destructure.join(', ')} } = ${tmp}`)
     }
     for (const b of clause.bindings?.filter((x) => x.isDefault) ?? []) {
-      parts.push(`${b.local} = __fulgurU(${tmp})`)
+      parts.push(`${b.local} = __fulgurjsU(${tmp})`)
     }
     s.overwrite(stmtStart, stmtEnd, `const ${parts.join(', ')}`)
   }
@@ -387,7 +387,7 @@ export async function transformModule(
         const inner = clauseRaw.slice(clauseRaw.indexOf('{') + 1, clauseRaw.lastIndexOf('}'))
         if (/export\s+\*/.test(clauseRaw) && !clauseRaw.includes('{')) {
           throw new Error(
-            `[fulgur] "export * from '${spec}'" on a shared module is not supported (ESM cannot create dynamic export bindings). ` +
+            `[fulgurjs] "export * from '${spec}'" on a shared module is not supported (ESM cannot create dynamic export bindings). ` +
               `Use named re-exports: "export { a, b } from '${spec}'".`,
           )
         }
@@ -429,7 +429,7 @@ export async function transformModule(
       s.overwrite(
         callStart,
         closeParen + 1,
-        `__fulgur_loadRemote(${JSON.stringify(`${remote.name}/${exposeName}`)})`,
+        `__fulgurjs_loadRemote(${JSON.stringify(`${remote.name}/${exposeName}`)})`,
       )
     }
   }
@@ -437,9 +437,9 @@ export async function transformModule(
   if (!edited) return null
 
   if (usesRuntimeHelpers) {
-    const runtimeSpec = JSON.stringify(ctx.devUrls?.runtime ?? 'virtual:fulgur-runtime')
+    const runtimeSpec = JSON.stringify(ctx.devUrls?.runtime ?? 'virtual:fulgurjs-runtime')
     s.prepend(
-      `import { loadShare as __fulgur_loadShare, loadRemote as __fulgur_loadRemote, unwrapDefault as __fulgurU } from ${runtimeSpec};\n`,
+      `import { loadShare as __fulgurjs_loadShare, loadRemote as __fulgurjs_loadRemote, unwrapDefault as __fulgurjsU } from ${runtimeSpec};\n`,
     )
   }
   // 不生成 sourcemap：hires 映射在 3 万模块级工程会占用数 GB 内存；本插件仅做语句级改写

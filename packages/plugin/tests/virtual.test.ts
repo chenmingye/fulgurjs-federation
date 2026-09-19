@@ -28,13 +28,13 @@ describe('W3/U-7: genSharedFacade 枚举式再导出', () => {
   it('全部合法命名导出逐一显式转发（loadShare 后命名导出非 undefined 的生成物前提）', () => {
     const code = genSharedFacade('element-plus', EP_EXPORTS)
     for (const name of ['ElButton', 'ElInput', 'provideGlobalConfig', 'ElLoading', 'zhCn']) {
-      expect(code).toContain(`export const ${name} = __fulgur_facade[${JSON.stringify(name)}]`)
+      expect(code).toContain(`export const ${name} = __fulgurjs_facade[${JSON.stringify(name)}]`)
     }
   })
 
   it('default 走 interop（ns.default ?? ns）', () => {
     const code = genSharedFacade('element-plus', EP_EXPORTS)
-    expect(code).toContain('export default __fulgur_facade.default ?? __fulgur_facade;')
+    expect(code).toContain('export default __fulgurjs_facade.default ?? __fulgurjs_facade;')
   })
 
   it('非法导出名被过滤（default / 含空格 / 数字开头）', () => {
@@ -47,7 +47,7 @@ describe('W3/U-7: genSharedFacade 枚举式再导出', () => {
   it('无法枚举（ESM-only/相对路径）回退 export * 形态保持可用', () => {
     const code = genSharedFacade('./src/relative-module.ts', [])
     expect(code).toContain('export * from "./src/relative-module.ts"')
-    expect(code).toContain('export default __fulgur_facade.default ?? __fulgur_facade;')
+    expect(code).toContain('export default __fulgurjs_facade.default ?? __fulgurjs_facade;')
   })
 })
 
@@ -80,16 +80,16 @@ describe('运行时惰性委托模块（genRuntimeProxyModule）', () => {
   it('求值期零副作用：不 import 运行时、不创建副本，仅调用期动态转发', () => {
     const code = genRuntimeProxyModule()
     // 动态 import 只能出现在惰性函数体内
-    expect(code).toContain("import('virtual:fulgur-runtime')")
+    expect(code).toContain("import('virtual:fulgurjs-runtime')")
     expect(code).not.toMatch(/^import\s/m)
     for (const api of ['loadRemote', 'loadShare', 'preloadRemote', 'getContainer', 'registerRemote']) {
       expect(code).toContain(`export const ${api} =`)
     }
   })
 
-  it('同步 API 走全局单例/镜像（单例未建时 getFulgurAppConfig 仍可用）', () => {
+  it('同步 API 走全局单例/镜像（单例未建时 getFulgurjsAppConfig 仍可用）', () => {
     const code = genRuntimeProxyModule()
-    expect(code).toContain('__FULGUR_RUNTIME__')
-    expect(code).toContain('__FULGUR_APP_CONFIG__')
+    expect(code).toContain('__FULGURJS_RUNTIME__')
+    expect(code).toContain('__FULGURJS_APP_CONFIG__')
   })
 })

@@ -1,12 +1,12 @@
 /**
  * D.2 Tier2 + D.5 DEV 段启动检查：remote dev manifest 探针与
- * virtual:fulgur-remote-schema 虚拟模块生成。
+ * virtual:fulgurjs-remote-schema 虚拟模块生成。
  *
  * 单次快连（3s 超时，不阻塞启动）：宿主常先于 remote 启动，失败属常态，
  * 一律 WARN 级列事实（端口是否监听、URL、状态码），不猜对错不阻塞。
  */
 import type { NormalizedOptions } from './options'
-import { formatFulgurDiagnostic, isPortReachable } from './diagnostics'
+import { formatFulgurjsDiagnostic, isPortReachable } from './diagnostics'
 
 export interface RemoteSchemaEntry {
   exposes: string[]
@@ -20,7 +20,7 @@ export interface RemoteSchema {
 function manifestUrlOf(devEntry: string): URL | null {
   try {
     const u = new URL(devEntry)
-    u.pathname = u.pathname.replace('@fulgur-entry.js', '@fulgur-manifest.json')
+    u.pathname = u.pathname.replace('@fulgurjs-entry.js', '@fulgurjs-manifest.json')
     return u
   } catch {
     return null
@@ -53,7 +53,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       // DEV-002：manifest 可达但 exposes 为空（remote 侧插件/配置问题）
       if (exposes.length === 0) {
         console.warn(
-          formatFulgurDiagnostic({
+          formatFulgurjsDiagnostic({
             code: 'DEV-002',
             symptom: `remote "${remote.key}" 的 dev manifest 可达但 exposes 为空（${u.href}）`,
             cause: 'remote 侧 federation({ exposes }) 为空，或其插件版本过旧导致 manifest 缺字段',
@@ -67,7 +67,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       const remoteVersion = manifest?.buildInfo?.version
       if (remoteVersion && remoteVersion !== options.pluginVersion) {
         console.warn(
-          formatFulgurDiagnostic({
+          formatFulgurjsDiagnostic({
             code: 'DEV-006',
             symptom: `宿主与 remote "${remote.key}" 的 @fulgurjs/federation 版本不一致`,
             cause: `宿主 ${options.pluginVersion} vs 远程 ${remoteVersion}（pnpm tarball 断链/漏升级常见）`,
@@ -82,7 +82,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80
       const portOpen = await isPortReachable(u.hostname, port)
       console.warn(
-        formatFulgurDiagnostic({
+        formatFulgurjsDiagnostic({
           code: 'DEV-001',
           symptom: `remote "${remote.key}" 的 dev manifest 不可达（${u.href}）——该 remote 的路由存在性校验将跳过`,
           cause: portOpen
@@ -99,6 +99,6 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
 
 /** build 期：远程 manifest 不在本地，诚实降级为空 schema（校验器跳过 R3） */
 export function genEmptyRemoteSchemaModule(): string {
-  console.info('[fulgur] build 期跳过路由 spec 存在性校验（远程 manifest 不在构建机本地；dev 下自动启用）')
+  console.info('[fulgurjs] build 期跳过路由 spec 存在性校验（远程 manifest 不在构建机本地；dev 下自动启用）')
   return 'export default {}'
 }

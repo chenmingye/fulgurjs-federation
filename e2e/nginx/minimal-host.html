@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>fulgur 最小宿主（纯运行时容器 API · 无构建步骤）</title>
+    <title>fulgurjs 最小宿主（纯运行时容器 API · 无构建步骤）</title>
     <style>
       body {
         margin: 0;
@@ -67,14 +67,14 @@
     </style>
   </head>
   <body>
-    <h1>fulgur 最小宿主 — 纯运行时容器 API（无构建步骤）</h1>
+    <h1>fulgurjs 最小宿主 — 纯运行时容器 API（无构建步骤）</h1>
     <p class="desc">
-      NGINX 8662 真实 prod 产物：mes-bpm（/flowable/fulgur-remoteEntry.js）+ mes-lowcode（/lowcode/fulgur-remoteEntry.js），
+      NGINX 8662 真实 prod 产物：mes-bpm（/flowable/fulgurjs-remoteEntry.js）+ mes-lowcode（/lowcode/fulgurjs-remoteEntry.js），
       宿主侧零构建，直接 initSharing → registerRemotes → loadRemote / loadShare 消费。
     </p>
     <div id="app"><p class="desc">加载中…</p></div>
     <div class="runtime-info">
-      <h3>联邦运行时信息（实测读取 window.__FULGUR_INFO__ / __FULGUR_SCOPE__）</h3>
+      <h3>联邦运行时信息（实测读取 window.__FULGURJS_INFO__ / __FULGURJS_SCOPE__）</h3>
       <div id="info">读取中…</div>
       <p class="hint">多版本条目并存，消费方按 requiredVersion 取最高满足版本；数据由运行时注册表实时读取。</p>
     </div>
@@ -87,12 +87,12 @@
         loadShare,
         unwrapDefault,
         shareScopeMap
-      } from '/fulgur-runtime.js'
+      } from '/fulgurjs-runtime.js'
 
       initSharing('default')
       registerRemotes([
-        { name: 'mes-bpm', entry: '/flowable/fulgur-remoteEntry.js' },
-        { name: 'mes-lowcode', entry: '/lowcode/fulgur-remoteEntry.js' }
+        { name: 'mes-bpm', entry: '/flowable/fulgurjs-remoteEntry.js' },
+        { name: 'mes-lowcode', entry: '/lowcode/fulgurjs-remoteEntry.js' }
       ])
 
       // 先 loadRemote（remoteEntry 执行时向 default scope 注册各自 shared），宿主再取 share
@@ -112,7 +112,7 @@
       // remotes 状态 + shared 协商表（注册表非响应式，读快照；等两个 remote 都 loaded）
       const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
       const renderInfo = () => {
-        const remotes = window.__FULGUR_INFO__?.remotes ?? {}
+        const remotes = window.__FULGURJS_INFO__?.remotes ?? {}
         const defScope = shareScopeMap.default ?? {}
         const remoteRows = Object.entries(remotes)
           .map(([name, v]) => {

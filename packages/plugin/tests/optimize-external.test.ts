@@ -33,19 +33,19 @@ describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
     const ret = (await pre.config?.({ root: ROOT }, { command: 'serve' } as never)) as Record<string, any>
     const plugins = ret?.optimizeDeps?.esbuildOptions?.plugins
     expect(Array.isArray(plugins)).toBe(true)
-    expect(plugins[0].name).toBe('fulgur:optimize-shared-external')
+    expect(plugins[0].name).toBe('fulgurjs:optimize-shared-external')
 
     const { resolve, load } = captureResolver(plugins[0])
     const r = resolve('magic-string')
     // 改道到 bundled 桩（非 external）：esbuild 对 CJS 依赖的 require(external) 会生成
     // 运行时抛错的动态 require 垫片，bundled 桩让门面 URL 被提升为 chunk 顶部静态 import
-    expect(r?.namespace).toBe('fulgur-opt-stub')
-    expect(r?.path).toBe('fulgur-stub:magic-string')
+    expect(r?.namespace).toBe('fulgurjs-opt-stub')
+    expect(r?.path).toBe('fulgurjs-stub:magic-string')
 
-    const stub = load('fulgur-stub:magic-string')
+    const stub = load('fulgurjs-stub:magic-string')
     expect(stub?.loader).toBe('js')
     expect(stub?.contents).toContain(
-      `export * from "/@id/__x00__virtual:fulgur-shared-ns:magic-string?import"`,
+      `export * from "/@id/__x00__virtual:fulgurjs-shared-ns:magic-string?import"`,
     )
     expect(stub?.contents).toContain(`export { default } from`)
 
@@ -90,13 +90,13 @@ describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
     })
     await pre.config?.({ root: ROOT }, { command: 'serve' } as never)
     // resolveId：/@id/__x00__ 与 query 透传
-    const resolved = pre.resolveId?.('/@id/__x00__virtual:fulgur-shared-ns:magic-string?import', undefined, {}) as string
-    expect(resolved).toBe('virtual:fulgur-shared-ns:magic-string?import')
-    const code = (await pre.load?.('virtual:fulgur-shared-ns:magic-string')) as string
+    const resolved = pre.resolveId?.('/@id/__x00__virtual:fulgurjs-shared-ns:magic-string?import', undefined, {}) as string
+    expect(resolved).toBe('virtual:fulgurjs-shared-ns:magic-string?import')
+    const code = (await pre.load?.('virtual:fulgurjs-shared-ns:magic-string')) as string
     expect(code).toContain('loadShare')
-    expect(code).toContain('export default __fulgur_d;')
+    expect(code).toContain('export default __fulgurjs_d;')
     // magic-string 的 CJS 入口可枚举（含 default 与 MagicString）
-    expect(code).toMatch(/export const \w+ = __fulgur_d\[/)
+    expect(code).toMatch(/export const \w+ = __fulgurjs_d\[/)
   })
 
   it('vue 键自动补 vue-demi 兼容导出（isVue2/set/del 等缺失名致命问题）', async () => {
@@ -107,12 +107,12 @@ describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
     })
     await pre.config?.({ root: ROOT }, { command: 'serve' } as never)
     // 枚举在插件包内可能失败（本包无 vue 依赖）走降级路径，但兼容名必须无条件补上
-    const code = (await pre.load?.('virtual:fulgur-shared-ns:vue')) as string
-    expect(code).toContain('export const isVue2 = __fulgur_d["isVue2"];')
-    expect(code).toContain('export const isVue3 = __fulgur_d["isVue3"];')
-    expect(code).toContain('export const del = __fulgur_d["del"];')
-    expect(code).toContain('export const set = __fulgur_d["set"];')
-    expect(code).toContain('export const Vue2 = __fulgur_d["Vue2"];')
+    const code = (await pre.load?.('virtual:fulgurjs-shared-ns:vue')) as string
+    expect(code).toContain('export const isVue2 = __fulgurjs_d["isVue2"];')
+    expect(code).toContain('export const isVue3 = __fulgurjs_d["isVue3"];')
+    expect(code).toContain('export const del = __fulgurjs_d["del"];')
+    expect(code).toContain('export const set = __fulgurjs_d["set"];')
+    expect(code).toContain('export const Vue2 = __fulgurjs_d["Vue2"];')
   })
 
   it('枚举失败的包（ESM-only）降级为仅 default，不抛错', async () => {
@@ -122,8 +122,8 @@ describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
       shared: { '不存在的包-xyz': { singleton: true } },
     })
     await pre.config?.({ root: ROOT }, { command: 'serve' } as never)
-    const code = (await pre.load?.('virtual:fulgur-shared-ns:不存在的包-xyz')) as string
-    expect(code).toContain('export default __fulgur_d;')
+    const code = (await pre.load?.('virtual:fulgurjs-shared-ns:不存在的包-xyz')) as string
+    expect(code).toContain('export default __fulgurjs_d;')
     expect(code).not.toMatch(/export const /)
   })
 })
@@ -143,18 +143,18 @@ describe('genSharedNsFacade 生成规则', () => {
     eager: false,
   }
   it('命名导出全量转发、default 走 unwrapDefault、非法标识符跳过', () => {
-    const code = genSharedNsFacade(item, '__fulgur_loadShare("vue", {})', [
+    const code = genSharedNsFacade(item, '__fulgurjs_loadShare("vue", {})', [
       'default',
       'ref',
       'reactive',
       'not-a-valid',
       'ref',
     ])
-    expect(code).toContain('const __fulgur_m = await __fulgur_loadShare("vue", {});')
-    expect(code).toContain('const __fulgur_d = __fulgurU(__fulgur_m);')
-    expect(code).toContain('export default __fulgur_d;')
-    expect(code).toContain('export const ref = __fulgur_d["ref"];')
-    expect(code).toContain('export const reactive = __fulgur_d["reactive"];')
+    expect(code).toContain('const __fulgurjs_m = await __fulgurjs_loadShare("vue", {});')
+    expect(code).toContain('const __fulgurjs_d = __fulgurjsU(__fulgurjs_m);')
+    expect(code).toContain('export default __fulgurjs_d;')
+    expect(code).toContain('export const ref = __fulgurjs_d["ref"];')
+    expect(code).toContain('export const reactive = __fulgurjs_d["reactive"];')
     expect(code).not.toContain('not-a-valid')
     expect(code.match(/export const ref/g)?.length).toBe(1)
   })
@@ -176,7 +176,7 @@ describe('CJS/UMD require(shared) 静态改写（防 commonjs 转换内联本地
       cjsRequireRewrite: true,
     })
     expect(r).not.toBeNull()
-    expect(r!.code).toContain('require("virtual:fulgur-cjs-ns:vue")')
+    expect(r!.code).toContain('require("virtual:fulgurjs-cjs-ns:vue")')
     expect(r!.code).not.toContain('require("vue")')
     // 保持 require 调用形态：ESM import 前置会把文件变 mixed，commonjs 插件即跳过转换
   })

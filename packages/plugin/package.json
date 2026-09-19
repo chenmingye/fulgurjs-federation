@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -65,13 +65,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chenmingye/fulgur-federation.git",
+    "url": "git+https://github.com/chenmingye/fulgurjs-federation.git",
     "directory": "packages/plugin"
   },
-  "homepage": "https://github.com/chenmingye/fulgur-federation#readme",
+  "homepage": "https://github.com/chenmingye/fulgurjs-federation#readme",
   "author": "chenmingye (Jason)",
   "bugs": {
-    "url": "https://github.com/chenmingye/fulgur-federation/issues"
+    "url": "https://github.com/chenmingye/fulgurjs-federation/issues"
   },
   "keywords": [
     "vite",
@@ -85,6 +85,6 @@
     "node": ">=18"
   },
   "bin": {
-    "fulgur": "./dist/cli.js"
+    "fulgurjs": "./dist/cli.js"
   }
 }

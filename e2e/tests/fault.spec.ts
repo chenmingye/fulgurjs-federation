@@ -19,7 +19,7 @@ async function startRemote(): Promise<ReturnType<typeof spawn>> {
   })
   for (let i = 0; i < 60; i++) {
     try {
-      const res = await fetch(`http://localhost:${PORT}/@fulgur-manifest.json`, { signal: AbortSignal.timeout(500) })
+      const res = await fetch(`http://localhost:${PORT}/@fulgurjs-manifest.json`, { signal: AbortSignal.timeout(500) })
       if (res.ok) return child
     } catch {}
     await new Promise((r) => setTimeout(r, 500))
@@ -40,11 +40,11 @@ test.describe('容错专项（B-15 完整链路）', () => {
       await page.goto(`${HOST}/#/`)
       // 运行时动态注册独立 remote 并加载成功（名称与容器自报名一致）
       await page.evaluate(async (port) => {
-        const rt = (window as any).__FULGUR_RUNTIME__
-        rt.registerRemote({ name: 'remote-a-sa', entry: `http://localhost:${port}/@fulgur-entry.js` })
+        const rt = (window as any).__FULGURJS_RUNTIME__
+        rt.registerRemote({ name: 'remote-a-sa', entry: `http://localhost:${port}/@fulgurjs-entry.js` })
       }, PORT)
       const ns1 = await page.evaluate(async () => {
-        const m = await (window as any).__FULGUR_RUNTIME__.loadRemote('remote-a-sa/utils')
+        const m = await (window as any).__FULGURJS_RUNTIME__.loadRemote('remote-a-sa/utils')
         return m.ANSWER
       })
       expect(ns1).toBe(42)
@@ -54,7 +54,7 @@ test.describe('容错专项（B-15 完整链路）', () => {
       stopRemote(child)
       await page.waitForTimeout(500)
       const err = await page.evaluate(async () => {
-        const rt = (window as any).__FULGUR_RUNTIME__
+        const rt = (window as any).__FULGURJS_RUNTIME__
         try {
           await rt.loadRemote('remote-a-sa/Button')
           return 'NO ERROR (unexpected)'
@@ -69,8 +69,8 @@ test.describe('容错专项（B-15 完整链路）', () => {
       child = await startRemote()
       await page.waitForTimeout(1500)
       const ns2 = await page.evaluate(async (port) => {
-        const rt = (window as any).__FULGUR_RUNTIME__
-        rt.registerRemote({ name: 'remote-a-sa', entry: `http://localhost:${port}/@fulgur-entry.js` })
+        const rt = (window as any).__FULGURJS_RUNTIME__
+        rt.registerRemote({ name: 'remote-a-sa', entry: `http://localhost:${port}/@fulgurjs-entry.js` })
         const m = await rt.loadRemote('remote-a-sa/Button')
         return typeof m.default
       }, PORT)

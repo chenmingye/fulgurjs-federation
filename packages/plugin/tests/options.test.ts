@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOptions, type FulgurOptions } from '../src/options'
+import { normalizeOptions, type FulgurjsOptions } from '../src/options'
 
 const ROOT = process.cwd()
 
-function norm(opts: FulgurOptions) {
+function norm(opts: FulgurjsOptions) {
   return normalizeOptions(opts, ROOT, 'build')
 }
 
@@ -21,7 +21,7 @@ describe('options: remotes 解析（webpack 语法 + 单地址自动切换）', 
   it('键重命名语义（checkout: shop@...）', () => {
     const n = norm({
       name: 'host',
-      remotes: { checkout: 'shop@http://localhost:3001/fulgur-remoteEntry.js' },
+      remotes: { checkout: 'shop@http://localhost:3001/fulgurjs-remoteEntry.js' },
     })
     expect(n.remotes[0].key).toBe('checkout')
     expect(n.remotes[0].name).toBe('shop')
@@ -29,14 +29,14 @@ describe('options: remotes 解析（webpack 语法 + 单地址自动切换）', 
 
   it('单个 base 地址自动切换 dev/prod', () => {
     const n = norm({ name: 'host', remotes: { 'remote-a': 'http://localhost:5101' } })
-    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/@fulgur-entry.js')
-    expect(n.remotes[0].prodEntry).toBe('http://localhost:5101/fulgur-remoteEntry.js')
+    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/@fulgurjs-entry.js')
+    expect(n.remotes[0].prodEntry).toBe('http://localhost:5101/fulgurjs-remoteEntry.js')
   })
 
   it('带路径 base（微前端子应用场景）', () => {
     const n = norm({ name: 'host', remotes: { bpm: 'http://localhost:5101/bpm' } })
-    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/bpm/@fulgur-entry.js')
-    expect(n.remotes[0].prodEntry).toBe('http://localhost:5101/bpm/fulgur-remoteEntry.js')
+    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/bpm/@fulgurjs-entry.js')
+    expect(n.remotes[0].prodEntry).toBe('http://localhost:5101/bpm/fulgurjs-remoteEntry.js')
   })
 
   it('dev/prod 显式拆分', () => {
@@ -46,8 +46,8 @@ describe('options: remotes 解析（webpack 语法 + 单地址自动切换）', 
         'remote-a': { dev: 'http://localhost:5101', prod: 'https://cdn.example.com/ra/' },
       },
     })
-    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/@fulgur-entry.js')
-    expect(n.remotes[0].prodEntry).toBe('https://cdn.example.com/ra/fulgur-remoteEntry.js')
+    expect(n.remotes[0].devEntry).toBe('http://localhost:5101/@fulgurjs-entry.js')
+    expect(n.remotes[0].prodEntry).toBe('https://cdn.example.com/ra/fulgurjs-remoteEntry.js')
   })
 
   it('@ 位置非法 → 抛错（对齐 webpack Invalid request）', () => {
@@ -127,7 +127,7 @@ describe('options: exposes / 其余选项', () => {
   })
 
   it('filename 默认值', () => {
-    expect(norm({ name: 'h' }).filename).toBe('fulgur-remoteEntry.js')
+    expect(norm({ name: 'h' }).filename).toBe('fulgurjs-remoteEntry.js')
     expect(norm({ name: 'h', filename: 'customEntry.js' }).filename).toBe('customEntry.js')
   })
 })
@@ -185,7 +185,7 @@ describe('配置校验（DX：清晰报错）', () => {
 
   it('合法最小配置不被误杀：host + remote 双形态', () => {
     const host = norm({ name: 'h', remotes: { r: { dev: 'http://localhost:5101', prod: '/r' } } })
-    expect(host.remotes[0].devEntry).toContain('@fulgur-entry.js')
+    expect(host.remotes[0].devEntry).toContain('@fulgurjs-entry.js')
     const remote = norm({ name: 'r', exposes: { './Button': './src/Button.vue' } })
     expect(remote.exposes[0].name).toBe('./Button')
   })

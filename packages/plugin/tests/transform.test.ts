@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { federation } from '../src/index'
-import { normalizeOptions, type FulgurOptions } from '../src/options'
+import { normalizeOptions, type FulgurjsOptions } from '../src/options'
 import { transformModule, isExposeTargetFile, staticRuntimeImportError } from '../src/transform'
 import { genBindingFacade, genBuildRemoteEntry, genDevRemoteEntry } from '../src/virtual'
 
 const ROOT = process.cwd()
 
-function ctx(opts: FulgurOptions) {
+function ctx(opts: FulgurjsOptions) {
   return { options: normalizeOptions(opts, ROOT, 'serve'), rewriteShared: true }
 }
 
-async function x(code: string, opts: FulgurOptions = { name: 'host', shared: { vue: '^3.4.0' } }) {
+async function x(code: string, opts: FulgurjsOptions = { name: 'host', shared: { vue: '^3.4.0' } }) {
   return transformModule(code, '/src/a.ts', ctx(opts))
 }
 
 describe('transform: shared 导入改写（绑定门面）', () => {
   it('默认导入：specifier 换为绑定门面（default）', async () => {
     const r = await x(`import Vue from 'vue'\nconsole.log(Vue)\n`)
-    expect(r?.code).toMatch(/import Vue from 'virtual:fulgur-shared:vue(\?f=[\w-]+)?'/)
+    expect(r?.code).toMatch(/import Vue from 'virtual:fulgurjs-shared:vue(\?f=[\w-]+)?'/)
     expect(r?.code).not.toContain(`from 'vue'`)
   })
 
@@ -36,34 +36,34 @@ describe('transform: shared 导入改写（绑定门面）', () => {
 
   it('命名空间导入 → TLA loadShare 兜底', async () => {
     const r = await x(`import * as Vue from 'vue'\nconsole.log(Vue)\n`)
-    expect(r?.code).toContain('__fulgur_loadShare("vue"')
-    expect(r?.code).toContain('Vue = __fulgur_m0')
+    expect(r?.code).toContain('__fulgurjs_loadShare("vue"')
+    expect(r?.code).toContain('Vue = __fulgurjs_m0')
   })
 
   it('副作用导入 → 无绑定门面（仅协商）', async () => {
     const r = await x(`import 'vue'\nconsole.log(1)\n`)
-    expect(r?.code).toContain("import 'virtual:fulgur-shared:vue'")
+    expect(r?.code).toContain("import 'virtual:fulgurjs-shared:vue'")
   })
 
   it('动态导入 → loadShare 表达式（保持 Promise 语义）', async () => {
     const r = await x(`const m = await import('vue')\nconsole.log(m)\n`)
-    expect(r?.code).toContain(`await __fulgur_loadShare("vue", {`)
+    expect(r?.code).toContain(`await __fulgurjs_loadShare("vue", {`)
     expect(r?.code).not.toContain(`import('vue')`)
   })
 
   it('export { x } from → 门面 specifier', async () => {
     const r = await x(`export { ref } from 'vue'\n`)
-    expect(r?.code).toMatch(/export \{ ref \} from 'virtual:fulgur-shared:vue(\?f=[\w-]+)?'/)
+    expect(r?.code).toMatch(/export \{ ref \} from 'virtual:fulgurjs-shared:vue(\?f=[\w-]+)?'/)
   })
 
   it('export { default as D } from → 门面 specifier（default）', async () => {
     const r = await x(`export { default as V } from 'vue'\n`)
-    expect(r?.code).toMatch(/export \{ default as V \} from 'virtual:fulgur-shared:vue(\?f=[\w-]+)?'/)
+    expect(r?.code).toMatch(/export \{ default as V \} from 'virtual:fulgurjs-shared:vue(\?f=[\w-]+)?'/)
   })
 
   it('export * as N from → TLA 兜底 + re-export', async () => {
     const r = await x(`export * as N from 'vue'\n`)
-    expect(r?.code).toContain('const N = await __fulgur_loadShare')
+    expect(r?.code).toContain('const N = await __fulgurjs_loadShare')
     expect(r?.code).toContain('export { N };')
   })
 
@@ -103,13 +103,13 @@ describe('transform: shared 导入改写（绑定门面）', () => {
       `loadShare("vue", { shareScope: "default", shareKey: "vue", requiredVersion: "^3.4.0", singleton: true, fallback: () => import("vue") })`,
     )
     expect(content).toContain('singleton: true')
-    expect(content).toContain('export const ref = __fulgur_m.ref;')
-    expect(content).toContain('export default __fulgurU(__fulgur_m);')
+    expect(content).toContain('export const ref = __fulgurjs_m.ref;')
+    expect(content).toContain('export default __fulgurjsU(__fulgurjs_m);')
   })
 })
 
 describe('transform: remote 导入改写', () => {
-  const OPTS: FulgurOptions = {
+  const OPTS: FulgurjsOptions = {
     name: 'host',
     remotes: { 'remote-a': 'http://localhost:5101' },
   }
@@ -120,7 +120,7 @@ describe('transform: remote 导入改写', () => {
       '/src/a.ts',
       ctx(OPTS),
     )
-    expect(r?.code).toMatch(/import Btn from 'virtual:fulgur-shared:__remote__remote-a\/\.\/Button(\?f=[\w-]+)?'/)
+    expect(r?.code).toMatch(/import Btn from 'virtual:fulgurjs-shared:__remote__remote-a\/\.\/Button(\?f=[\w-]+)?'/)
   })
 
   it('无 ./ 前缀自动补齐', async () => {
@@ -138,7 +138,7 @@ describe('transform: remote 导入改写', () => {
       '/src/a.ts',
       ctx(OPTS),
     )
-    expect(r?.code).toContain(`await __fulgur_loadRemote("remote-a/./Button")`)
+    expect(r?.code).toContain(`await __fulgurjs_loadRemote("remote-a/./Button")`)
   })
 
   it('命名空间导入 → TLA 兜底', async () => {
@@ -147,8 +147,8 @@ describe('transform: remote 导入改写', () => {
       '/src/a.ts',
       ctx(OPTS),
     )
-    expect(r?.code).toContain('__fulgur_loadRemote("remote-a/./Button")')
-    expect(r?.code).toContain('RA = __fulgur_m0')
+    expect(r?.code).toContain('__fulgurjs_loadRemote("remote-a/./Button")')
+    expect(r?.code).toContain('RA = __fulgurjs_m0')
   })
 
   it('非远程导入不受影响', async () => {
@@ -165,12 +165,12 @@ describe('transform: dev .vue post 阶段（依赖 URL 重映射）', () => {
       rewriteShared: true,
       remapSpecifier: (spec) => spec.match(/deps\/([^/?]+)\.js/)?.[1] ?? null,
       devUrls: {
-        runtime: '/@id/__x00__virtual:fulgur-runtime?import',
-        namespaceFacade: (k) => `/@id/__x00__virtual:fulgur-shared:${k}?import`,
+        runtime: '/@id/__x00__virtual:fulgurjs-runtime?import',
+        namespaceFacade: (k) => `/@id/__x00__virtual:fulgurjs-shared:${k}?import`,
         bindingFacade: (id) => `/@id/__x00__${id}&import`,
       },
     })
-    expect(r?.code).toMatch(/from "\/@id\/__x00__virtual:fulgur-shared:vue\?f=[\w-]+&import"/)
+    expect(r?.code).toMatch(/from "\/@id\/__x00__virtual:fulgurjs-shared:vue\?f=[\w-]+&import"/)
     expect(r?.code).not.toContain('/node_modules/.vite/deps/vue.js')
   })
 
@@ -222,8 +222,8 @@ describe('dev 容器入口：注册自身 remotes（回归：双向联邦 MFU-00
     )
     expect(entry).toContain('registerRemotes(')
     expect(entry).toContain('"name":"host-remote"')
-    expect(entry).toContain('http://localhost:5100/main/@fulgur-entry.js')
-    expect(entry).toContain('@id/virtual:fulgur-runtime')
+    expect(entry).toContain('http://localhost:5100/main/@fulgurjs-entry.js')
+    expect(entry).toContain('@id/virtual:fulgurjs-runtime')
   })
 
   it('无 remotes 时不生成 registerRemotes', () => {
@@ -252,8 +252,8 @@ describe('prod 容器入口：注册自身 remotes（回归：双向联邦 prod 
     )
     expect(entry).toContain('registerRemotes(')
     expect(entry).toContain('"name":"host-app"')
-    expect(entry).toContain('/main/fulgur-remoteEntry.js')
-    expect(entry).toContain('virtual:fulgur-runtime')
+    expect(entry).toContain('/main/fulgurjs-remoteEntry.js')
+    expect(entry).toContain('virtual:fulgurjs-runtime')
   })
 
   it('无 remotes 时不生成 registerRemotes', () => {
@@ -272,7 +272,7 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
   const DEP_CODE = `import { ref } from 'vue'\nexport const a = ref\n`
 
   /** 走真实插件 hook（config 初始化 normalized 后调 pre.transform）验证 build 门禁判定 */
-  async function buildPreTransform(opts: FulgurOptions, id: string, code = DEP_CODE) {
+  async function buildPreTransform(opts: FulgurjsOptions, id: string, code = DEP_CODE) {
     const [pre] = federation({ ...opts })
     await (pre.config as NonNullable<typeof pre.config>)({}, { command: 'build' } as never)
     return (pre.transform as NonNullable<typeof pre.transform>)(code, id)
@@ -289,7 +289,7 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
       },
       DEP_ID,
     )
-    expect(r?.code).toMatch(/virtual:fulgur-shared:vue(\?f=[\w-]+)?/)
+    expect(r?.code).toMatch(/virtual:fulgurjs-shared:vue(\?f=[\w-]+)?/)
     expect(r?.code).not.toContain(`from 'vue'`)
   })
 
@@ -311,7 +311,7 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
       { name: 'mes-lowcode', exposes: { './DesignPage': './src/DesignPage.vue' }, shared: { vue: '^3.4.0' } },
       DEP_ID,
     )
-    expect(r?.code).toMatch(/virtual:fulgur-shared:vue/)
+    expect(r?.code).toMatch(/virtual:fulgurjs-shared:vue/)
   })
 
   it('双向联邦下 .vue?type=script 子请求走同一门禁（build pre 分支）', async () => {
@@ -325,14 +325,14 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
       },
       '/proj/src/TaskCard.vue?vue&type=script&setup=true&lang.ts',
     )
-    expect(r?.code).toMatch(/virtual:fulgur-shared:vue/)
+    expect(r?.code).toMatch(/virtual:fulgurjs-shared:vue/)
   })
 })
 
 describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
   const exposes = [
     { name: './pages/detail', import: './src/views/detail/index.vue' },
-    { name: './federatedBoot', import: './src/fulgur-exposes/federatedBoot.ts' },
+    { name: './federatedBoot', import: './src/fulgurjs-exposes/federatedBoot.ts' },
   ]
   const root = '/proj'
 
@@ -347,8 +347,8 @@ describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
   })
 
   it('宿主侧非 expose 文件（demo 页/路由表）不命中', () => {
-    expect(isExposeTargetFile('/proj/src/views/fulgur/FulgurDemo.vue', root, exposes)).toBe(false)
-    expect(isExposeTargetFile('/proj/src/qiankun/fulgurPages.ts', root, exposes)).toBe(false)
+    expect(isExposeTargetFile('/proj/src/views/fulgurjs/FulgurjsDemo.vue', root, exposes)).toBe(false)
+    expect(isExposeTargetFile('/proj/src/qiankun/fulgurjsPages.ts', root, exposes)).toBe(false)
   })
 
   it('非本项目路径不命中', () => {

@@ -9,7 +9,7 @@
  * - hash chunk 抽样可达（manifest exposes[].file + remoteEntry 内 import 引用，
  *   覆盖「删一个 chunk」故障注入）
  * - 版本协商 skew 预演（各应用 manifest.shared 同键版本对比，singleton 漂移预警）
- * - dev 模式（--dev）：@fulgur-entry.js 直出 JS、manifest.devServer、端口监听
+ * - dev 模式（--dev）：@fulgurjs-entry.js 直出 JS、manifest.devServer、端口监听
  *
  * 配置合法性（name@ 对象形式、shared 非法组合等）在 normalizeOptions 配置期以 CFG 码
  * 拦截（见 options.ts），doctor 不重复读取 vite 配置，职责保持在部署面。
@@ -31,7 +31,7 @@ export interface DoctorOptions {
   base: string
   /** 应用路径列表（相对站点根），如 ['app-a', 'app-b'] */
   apps: string[]
-  /** dev 体检（检查 @fulgur-entry.js 与端口监听） */
+  /** dev 体检（检查 @fulgurjs-entry.js 与端口监听） */
   dev?: boolean
   /** remoteEntry 内 chunk 抽样上限（默认 8） */
   chunkSample?: number
@@ -200,7 +200,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
     const root = `${opts.base.replace(/\/$/, '')}/${app.replace(/^\//, '')}`
 
     // 1) remoteEntry：200 + JS 形态 + no-cache
-    const entry = await checkStatus(`${root}/fulgur-remoteEntry.js`, app, 'fulgur-remoteEntry.js', {
+    const entry = await checkStatus(`${root}/fulgurjs-remoteEntry.js`, app, 'fulgurjs-remoteEntry.js', {
       expectJs: true,
       expectNoCache: !opts.dev,
     })
@@ -220,7 +220,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
     }
 
     // 2) manifest：200 + 可解析 + no-cache
-    const manifestRes = await checkStatus(`${root}/fulgur-manifest.json`, app, 'fulgur-manifest.json', {
+    const manifestRes = await checkStatus(`${root}/fulgurjs-manifest.json`, app, 'fulgurjs-manifest.json', {
       expectNoCache: !opts.dev,
     })
     if (manifestRes.check) checks.push(manifestRes.check)
@@ -234,7 +234,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
           app,
           item: 'manifest 解析',
           level: 'FAIL',
-          symptom: 'fulgur-manifest.json 不是合法 JSON',
+          symptom: 'fulgurjs-manifest.json 不是合法 JSON',
           cause: '产物不完整或被中间层改写',
           fix: '重新构建部署；确认 nginx 未对该路径做 sub/拼接改写',
         })
@@ -249,9 +249,9 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
       htmlBody = html.res?.body ?? ''
     }
 
-    // 4) dev：@fulgur-entry.js 直出 JS
+    // 4) dev：@fulgurjs-entry.js 直出 JS
     if (opts.dev) {
-      const devEntry = await checkStatus(`${root}/@fulgur-entry.js`, app, '@fulgur-entry.js（dev 容器入口）', {
+      const devEntry = await checkStatus(`${root}/@fulgurjs-entry.js`, app, '@fulgurjs-entry.js（dev 容器入口）', {
         expectJs: true,
       })
       if (devEntry.check) checks.push(devEntry.check)
@@ -346,7 +346,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
 export function formatDoctorReport(checks: DoctorCheck[]): string {
   const lines: string[] = []
   for (const c of checks) {
-    const head = `[fulgur:doctor] ${c.level} [${c.app}] ${c.item}`
+    const head = `[fulgurjs:doctor] ${c.level} [${c.app}] ${c.item}`
     lines.push(c.level === 'PASS' ? `${head} — ${c.symptom}` : `${head}\n  现象：${c.symptom}`)
     if (c.cause) lines.push(`  根因：${c.cause}`)
     if (c.fix) lines.push(`  修法：${c.fix}`)
@@ -354,6 +354,6 @@ export function formatDoctorReport(checks: DoctorCheck[]): string {
   const fail = checks.filter((c) => c.level === 'FAIL').length
   const warn = checks.filter((c) => c.level === 'WARN').length
   const pass = checks.filter((c) => c.level === 'PASS').length
-  lines.push(`[fulgur:doctor] 汇总：${pass} PASS / ${warn} WARN / ${fail} FAIL`)
+  lines.push(`[fulgurjs:doctor] 汇总：${pass} PASS / ${warn} WARN / ${fail} FAIL`)
   return lines.join('\n')
 }

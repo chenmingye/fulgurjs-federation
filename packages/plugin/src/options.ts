@@ -119,7 +119,7 @@ export interface NormalizedOptions {
   devSharedSelf: boolean
 }
 
-export interface FulgurOptions {
+export interface FulgurjsOptions {
   name: string
   filename?: string
   exposes?: Record<string, string | ExposeHint>
@@ -149,27 +149,27 @@ export interface FulgurOptions {
   devSharedSelf?: boolean
 }
 
-export const DEFAULT_FILENAME = 'fulgur-remoteEntry.js'
-export const RUNTIME_VIRTUAL_ID = 'virtual:fulgur-runtime'
-export const RUNTIME_PROXY_VIRTUAL_ID = 'virtual:fulgur-runtime-proxy'
-export const INIT_VIRTUAL_ID = 'virtual:fulgur-init'
-export const PROVIDES_VIRTUAL_ID = 'virtual:fulgur-provides'
-export const REMOTE_ENTRY_VIRTUAL_ID = 'virtual:fulgur-remote-entry'
-export const SHARED_FACADE_PREFIX = 'virtual:fulgur-shared:'
+export const DEFAULT_FILENAME = 'fulgurjs-remoteEntry.js'
+export const RUNTIME_VIRTUAL_ID = 'virtual:fulgurjs-runtime'
+export const RUNTIME_PROXY_VIRTUAL_ID = 'virtual:fulgurjs-runtime-proxy'
+export const INIT_VIRTUAL_ID = 'virtual:fulgurjs-init'
+export const PROVIDES_VIRTUAL_ID = 'virtual:fulgurjs-provides'
+export const REMOTE_ENTRY_VIRTUAL_ID = 'virtual:fulgurjs-remote-entry'
+export const SHARED_FACADE_PREFIX = 'virtual:fulgurjs-shared:'
 /** 预构建协商门面前缀：optimizeDeps 外部化产物内对 shared 键的导入指向它（完整命名空间语义） */
-export const SHARED_NS_FACADE_PREFIX = 'virtual:fulgur-shared-ns:'
+export const SHARED_NS_FACADE_PREFIX = 'virtual:fulgurjs-shared-ns:'
 
 // 不用 \0 前缀：rollup 对 \0 虚拟模块做无副作用激进摇树，会剥掉 init 的顶层调用
 export const RESOLVED = {
-  runtime: 'virtual:fulgur-runtime',
-  runtimeProxy: 'virtual:fulgur-runtime-proxy',
-  init: 'virtual:fulgur-init',
-  provides: 'virtual:fulgur-provides',
-  remoteEntry: 'virtual:fulgur-remote-entry',
-  sharedFacade: (name: string) => `virtual:fulgur-shared:${name}`,
-  sharedNsFacade: (name: string) => `virtual:fulgur-shared-ns:${name}`,
+  runtime: 'virtual:fulgurjs-runtime',
+  runtimeProxy: 'virtual:fulgurjs-runtime-proxy',
+  init: 'virtual:fulgurjs-init',
+  provides: 'virtual:fulgurjs-provides',
+  remoteEntry: 'virtual:fulgurjs-remote-entry',
+  sharedFacade: (name: string) => `virtual:fulgurjs-shared:${name}`,
+  sharedNsFacade: (name: string) => `virtual:fulgurjs-shared-ns:${name}`,
   /** CJS require(<shared>) 垫片：与 sharedNsFacade 同体，仅 id 形态不同（保持 require 调用语义） */
-  cjsNsFacade: (name: string) => `virtual:fulgur-cjs-ns:${name}`,
+  cjsNsFacade: (name: string) => `virtual:fulgurjs-cjs-ns:${name}`,
 }
 
 function joinUrl(base: string, file: string): string {
@@ -180,8 +180,8 @@ function joinUrl(base: string, file: string): string {
 /**
  * 解析 remote 地址（webpack `name@url` 语法 + 单地址自动切换）：
  * - `shop@http://host/entry.js` → 自报名 shop（键可重命名）
- * - `http://host:port/base` → dev 拼 `@fulgur-entry.js`，prod 拼 filename
- * - 以 .js 结尾 → prod 原样使用；dev 仍按 base 拼 `@fulgur-entry.js`
+ * - `http://host:port/base` → dev 拼 `@fulgurjs-entry.js`，prod 拼 filename
+ * - 以 .js 结尾 → prod 原样使用；dev 仍按 base 拼 `@fulgurjs-entry.js`
  */
 function normalizeRemoteValue(
   key: string,
@@ -224,7 +224,7 @@ function normalizeRemoteValue(
       // dev 下给了完整 remoteEntry 地址：视为用户自管，直接使用
       return rawUrl
     }
-    return joinUrl(rawUrl, mode === 'dev' ? '@fulgur-entry.js' : filename)
+    return joinUrl(rawUrl, mode === 'dev' ? '@fulgurjs-entry.js' : filename)
   }
 
   const explicitDev = cfg.dev
@@ -385,7 +385,7 @@ function configError(what: string, got: unknown, expect: string, example: string
   const gotText = typeof got === 'string' ? `"${got}"` : JSON.stringify(got)
   throw new Error(
     [
-      `[fulgur] Invalid federation() config — ${what}`,
+      `[fulgurjs] Invalid federation() config — ${what}`,
       `  got:      ${gotText}`,
       `  expected: ${expect}`,
       `  example:  ${example}`,
@@ -397,7 +397,7 @@ function configError(what: string, got: unknown, expect: string, example: string
  * 配置前置校验：任何配置错误在 vite config 阶段立即以人话报出，
  * 不允许"带着错误配置静默运行、到运行时莫名其妙"。
  */
-function validateOptions(options: FulgurOptions): void {
+function validateOptions(options: FulgurjsOptions): void {
   if (options.name === undefined || options.name === null || options.name === '') {
     configError(
       '`name` is required (container name, also used as uniqueName)',
@@ -469,7 +469,7 @@ function validateOptions(options: FulgurOptions): void {
       }
       // CFG-007（remotes name@ 对象形式误用，2026-09-17 testbed 实踩）：name@ 前缀仅字符串
       // external 语法支持（normalizeRemoteValue 拆名重命名）；对象形式 dev/prod 槽位整串当
-      // URL 拼接，产出 "bpm@http://.../@fulgur-entry.js" 这类坏地址，运行时表现为无关的
+      // URL 拼接，产出 "bpm@http://.../@fulgurjs-entry.js" 这类坏地址，运行时表现为无关的
       // MFU-001 加载失败——配置期显式拦截
       if (slot !== 'external') {
         const slotUrl = (cfg as RemoteEntryConfig)[slot]
@@ -486,10 +486,10 @@ function validateOptions(options: FulgurOptions): void {
   }
 }
 
-export function normalizeOptions(options: FulgurOptions, root: string, command: 'serve' | 'build'): NormalizedOptions {
+export function normalizeOptions(options: FulgurjsOptions, root: string, command: 'serve' | 'build'): NormalizedOptions {
   const warnings: string[] = []
   validateOptions(options)
-  if (!options.name) throw new Error('[fulgur] option `name` is required.')
+  if (!options.name) throw new Error('[fulgurjs] option `name` is required.')
 
   if (options.remoteType && options.remoteType !== 'module') {
     warnings.push(
@@ -503,7 +503,7 @@ export function normalizeOptions(options: FulgurOptions, root: string, command: 
   }
   if (options.automaticAsyncBoundary === false) {
     warnings.push(
-      'automaticAsyncBoundary=false has no effect: fulgur uses TLA-based automatic async boundaries (better than webpack manual bootstrap).',
+      'automaticAsyncBoundary=false has no effect: fulgurjs uses TLA-based automatic async boundaries (better than webpack manual bootstrap).',
     )
   }
 

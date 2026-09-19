@@ -1,11 +1,11 @@
 /**
  * 通用起步样例：一个宿主 + 一个远程（应用名/路径均为虚构）。
- * 用法：npx fulgur init --config examples/fulgur.config.example.ts
- * 完整字段说明见 `fulgur init` 生成的起步模板（fulgur init --template fulgur.config.ts）。
+ * 用法：npx fulgurjs init --config examples/fulgurjs.config.example.ts
+ * 完整字段说明见 `fulgurjs init` 生成的起步模板（fulgurjs init --template fulgurjs.config.ts）。
  */
-import { defineFulgurConfig } from '@fulgurjs/federation/config'
+import { defineFulgurjsConfig } from '@fulgurjs/federation/config'
 
-export default defineFulgurConfig({
+export default defineFulgurjsConfig({
   root: process.cwd(),
   apps: [
     {

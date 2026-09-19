@@ -1,5 +1,5 @@
 /**
- * fulgur-federation 主入口。
+ * fulgurjs-federation 主入口。
  * 一套 API 两个引擎：serve → 双 dev-server 协作；build → 构建期改写（Rollup/Rolldown）。
  */
 import fs from 'node:fs'
@@ -17,7 +17,7 @@ import {
   SHARED_FACADE_PREFIX,
   SHARED_NS_FACADE_PREFIX,
   type NormalizedOptions,
-  type FulgurOptions,
+  type FulgurjsOptions,
 } from './options'
 import {
   getFacadeEntry,
@@ -42,7 +42,7 @@ import {
 } from './virtual'
 import { generateDevTypes } from './dts'
 import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, type RemoteSchema } from './remote-schema'
-import { formatFulgurDiagnostic } from './diagnostics'
+import { formatFulgurjsDiagnostic } from './diagnostics'
 import { syncViteCacheMarker } from './vite-cache'
 
 // 运行时代码由构建脚本生成（src/runtime-code.gen.ts），内联进插件产物，无文件定位问题
@@ -56,8 +56,8 @@ function normalizeBase(base: string): string {
   return base.endsWith('/') ? base : `${base}/`
 }
 
-/** 预构建外部化桩模块的 esbuild namespace（配合 fulgur-stub: 路径前缀使用） */
-const FULGUR_STUB_NAMESPACE = 'fulgur-opt-stub'
+/** 预构建外部化桩模块的 esbuild namespace（配合 fulgurjs-stub: 路径前缀使用） */
+const FULGURJS_STUB_NAMESPACE = 'fulgurjs-opt-stub'
 
 /**
  * 枚举本机安装包 CJS 入口的全部命名导出（预构建协商门面的命名导出清单生成用）。
@@ -75,7 +75,7 @@ function enumerateCjsExports(packageName: string, appRoot: string): string[] {
     names = Object.keys(mod)
   } catch {
     console.warn(
-      `[fulgur] cannot enumerate CJS exports of shared package "${packageName}" for the optimize-deps facade; ` +
+      `[fulgurjs] cannot enumerate CJS exports of shared package "${packageName}" for the optimize-deps facade; ` +
         `the facade will export default only. If consumers destructure named exports from it, add this package ` +
         `to optimizeDeps.exclude to serve it through the transform pipeline instead.`,
     )
@@ -98,7 +98,7 @@ function injectInitScript(html: string, scriptSrc: string): string {
   return tag + html
 }
 
-export function federation(options: FulgurOptions): Plugin[] {
+export function federation(options: FulgurjsOptions): Plugin[] {
   const warnedUnknownPrefixes = new Set<string>()
   let remoteSchemaPromise: Promise<string> | null = null
   const state: {
@@ -121,7 +121,7 @@ export function federation(options: FulgurOptions): Plugin[] {
   }
 
   const pre: Plugin = {
-    name: 'fulgur:core',
+    name: 'fulgurjs:core',
     enforce: 'pre',
     async config(userConfig, env) {
       state.command = env.command
@@ -148,10 +148,10 @@ export function federation(options: FulgurOptions): Plugin[] {
           const filter = new RegExp(`^(${[...aliasToShare.keys()].map(escapeRe).join('|')})$`)
           const devBase = normalizeBase(userConfig.base ?? '/')
           const sharedExternal: { name: string; setup: (build: unknown) => void } = {
-            name: 'fulgur:optimize-shared-external',
+            name: 'fulgurjs:optimize-shared-external',
             setup(build) {
               const facadeUrlFor = (shareKey: string) =>
-                `${devBase}@id/__x00__virtual:fulgur-shared-ns:${shareKey}?import`
+                `${devBase}@id/__x00__virtual:fulgurjs-shared-ns:${shareKey}?import`
               const b = build as {
                 onResolve: (
                   opts: { filter: RegExp },
@@ -164,21 +164,21 @@ export function federation(options: FulgurOptions): Plugin[] {
               }
               // 桩内容里的门面 URL（浏览器 URL，非文件系统路径）必须标记 external，
               // esbuild 原样保留为静态 import/export-from，不做文件解析
-              b.onResolve({ filter: /fulgur-shared-ns:/ }, (args) => ({ path: args.path, external: true }))
+              b.onResolve({ filter: /fulgurjs-shared-ns:/ }, (args) => ({ path: args.path, external: true }))
               b.onResolve({ filter }, (args) => {
                 // shared 键本身常是预构建入口（include/扫描发现）：入口解析放行走本地预构建，
                 // 只有依赖包内部的 import/require 才改道协商门面（esbuild 禁止 entry point external）
                 if (args.kind === 'entry-point' || args.kind === 'entry-point-render') return null
                 const s = aliasToShare.get(args.path)
                 if (!s) return null
-                return { path: `fulgur-stub:${s.shareKey}`, namespace: FULGUR_STUB_NAMESPACE }
+                return { path: `fulgurjs-stub:${s.shareKey}`, namespace: FULGURJS_STUB_NAMESPACE }
               })
               // re-export 桩：不能直接 external——esbuild 对 CJS 依赖内部的 require(external)
               // 会生成运行时抛错的动态 require 垫片（"Dynamic require of ... is not supported"）。
               // 改道到 bundled 桩模块后，esbuild 把门面 URL 提升为 chunk 顶部的静态 import，
               // 门面（TLA 协商）先于 chunk 求值完成，CJS require 拿到的命名空间同步可用。
-              b.onLoad({ filter: /^fulgur-stub:/, namespace: FULGUR_STUB_NAMESPACE }, (args) => {
-                const shareKey = args.path.slice('fulgur-stub:'.length)
+              b.onLoad({ filter: /^fulgurjs-stub:/, namespace: FULGURJS_STUB_NAMESPACE }, (args) => {
+                const shareKey = args.path.slice('fulgurjs-stub:'.length)
                 const url = facadeUrlFor(shareKey)
                 return {
                   contents: `export * from ${JSON.stringify(url)};\nexport { default } from ${JSON.stringify(url)};\n`,
@@ -208,7 +208,7 @@ export function federation(options: FulgurOptions): Plugin[] {
         if (userTarget) {
           if (/es20(0\d|1\d|20|21)/.test(String(userTarget))) {
             normalized.warnings.push(
-              `build.target="${String(userTarget)}" does not support top-level await; fulgur requires es2022 or higher.`,
+              `build.target="${String(userTarget)}" does not support top-level await; fulgurjs requires es2022 or higher.`,
             )
           }
         } else {
@@ -216,14 +216,14 @@ export function federation(options: FulgurOptions): Plugin[] {
         }
       }
 
-      for (const w of normalized.warnings) console.warn(`[fulgur] ${w}`)
+      for (const w of normalized.warnings) console.warn(`[fulgurjs] ${w}`)
       return extra
     },
 
     configResolved(resolved) {
       state.base = normalizeBase(resolved.base)
       if ((resolved as unknown as { build?: { ssr?: boolean } }).build?.ssr) {
-        console.warn('[fulgur] SSR builds are not supported in this version; plugin hooks disabled.')
+        console.warn('[fulgurjs] SSR builds are not supported in this version; plugin hooks disabled.')
       }
       // D.5 DEV-003/004：optimizeDeps 与联邦 shared/UMD 依赖的配置矛盾，启动前显式提示
       const n0 = state.normalized
@@ -241,7 +241,7 @@ export function federation(options: FulgurOptions): Plugin[] {
         for (const pkg of KNOWN_UMD) {
           if (n0.pkgDependencies[pkg] && !incl(pkg) && !excl(pkg)) {
             console.warn(
-              formatFulgurDiagnostic({
+              formatFulgurjsDiagnostic({
                 code: 'DEV-004',
                 symptom: `UMD-only 依赖 "${pkg}" 不在 optimizeDeps.include`,
                 cause: 'UMD 包只能经预构建消费；不声明会被裸 CJS 服务或内联本地 vue（页面空白/双实例）',
@@ -277,7 +277,7 @@ export function federation(options: FulgurOptions): Plugin[] {
           if (!known && !warnedUnknownPrefixes.has(prefix)) {
             warnedUnknownPrefixes.add(prefix)
             console.warn(
-              `[fulgur] "${source}" uses prefix "${prefix}/", which is not in federation({ remotes }) or shared. ` +
+              `[fulgurjs] "${source}" uses prefix "${prefix}/", which is not in federation({ remotes }) or shared. ` +
                 `If "${prefix}" is a federated remote, add it: remotes: { '${prefix}': '<url>' }. ` +
                 `(Ignore this if it is a plain npm package.)`,
             )
@@ -288,18 +288,18 @@ export function federation(options: FulgurOptions): Plugin[] {
       if (bareClean === RUNTIME_VIRTUAL_ID) return RESOLVED.runtime
       if (bareClean === RUNTIME_PROXY_VIRTUAL_ID) return RESOLVED.runtimeProxy
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
-      if (bareClean === 'virtual:fulgur-remote-schema') return bareClean
-      if (bareClean === 'virtual:fulgur-provides') return RESOLVED.provides
-      if (bareClean === 'virtual:fulgur-remote-entry') return RESOLVED.remoteEntry
+      if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
+      if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
+      if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
         return RESOLVED.sharedNsFacade(bareClean.slice(SHARED_NS_FACADE_PREFIX.length)) + query
       }
-      if (bareClean.startsWith('virtual:fulgur-cjs-ns:')) {
-        return RESOLVED.sharedNsFacade(bareClean.slice('virtual:fulgur-cjs-ns:'.length)) + query
+      if (bareClean.startsWith('virtual:fulgurjs-cjs-ns:')) {
+        return RESOLVED.sharedNsFacade(bareClean.slice('virtual:fulgurjs-cjs-ns:'.length)) + query
       }
-      if (bareClean.startsWith('virtual:fulgur-shared:')) {
+      if (bareClean.startsWith('virtual:fulgurjs-shared:')) {
         // 绑定门面（?f= 绑定签名）与命名空间门面共用前缀；query 透传
-        const body = bareClean.slice('virtual:fulgur-shared:'.length)
+        const body = bareClean.slice('virtual:fulgurjs-shared:'.length)
         return RESOLVED.sharedFacade(body) + query
       }
       return null
@@ -309,15 +309,15 @@ export function federation(options: FulgurOptions): Plugin[] {
       const raw = id.startsWith('\0') ? id.slice(1) : id
       const q = raw.indexOf('?')
       const clean = q === -1 ? raw : raw.slice(0, q)
-      if (clean === 'virtual:fulgur-runtime') return readRuntimeCode()
+      if (clean === 'virtual:fulgurjs-runtime') return readRuntimeCode()
       if (clean === RESOLVED.runtimeProxy || clean === RUNTIME_PROXY_VIRTUAL_ID) return genRuntimeProxyModule()
-      if (clean === 'virtual:fulgur-init' && state.normalized) {
+      if (clean === 'virtual:fulgurjs-init' && state.normalized) {
         return genInitModule(state.normalized, state.command)
       }
-      if (clean === 'virtual:fulgur-provides' && state.normalized) {
+      if (clean === 'virtual:fulgurjs-provides' && state.normalized) {
         return genDevProvides(state.normalized)
       }
-      if (clean === 'virtual:fulgur-remote-schema' && state.normalized) {
+      if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）
         if (state.command === 'build') return genEmptyRemoteSchemaModule()
         remoteSchemaPromise ??= probeRemotesAndBuildSchema(state.normalized).then(
@@ -325,7 +325,7 @@ export function federation(options: FulgurOptions): Plugin[] {
         )
         return remoteSchemaPromise
       }
-      if (clean === 'virtual:fulgur-remote-entry' && state.normalized) {
+      if (clean === 'virtual:fulgurjs-remote-entry' && state.normalized) {
         return genBuildRemoteEntry(state.normalized, state.exposeAbsPaths)
       }
       if (clean.startsWith(SHARED_NS_FACADE_PREFIX) && state.normalized) {
@@ -343,8 +343,8 @@ export function federation(options: FulgurOptions): Plugin[] {
         }
         return genSharedNsFacade(item, serializeShareCallForFacade(item), names)
       }
-      if (clean.startsWith('virtual:fulgur-shared:') && state.normalized) {
-        const body = clean.slice('virtual:fulgur-shared:'.length)
+      if (clean.startsWith('virtual:fulgurjs-shared:') && state.normalized) {
+        const body = clean.slice('virtual:fulgurjs-shared:'.length)
         const f = raw.indexOf('?f=')
         if (f === -1) {
           // 命名空间门面（provide/fallback 用）：本应用自己的副本。
@@ -373,7 +373,7 @@ export function federation(options: FulgurOptions): Plugin[] {
           ...(item.strictVersion ? ['strictVersion: true'] : []),
           'fallback: () => import(' + JSON.stringify(item.import) + ')',
         ]
-        const call = '__fulgur_loadShare(' + JSON.stringify(item.shareKey) + ', { ' + opts.join(', ') + ' })'
+        const call = '__fulgurjs_loadShare(' + JSON.stringify(item.shareKey) + ', { ' + opts.join(', ') + ' })'
         return genBindingFacade(item, entry.bindings, call)
       }
       return null
@@ -458,13 +458,13 @@ export function federation(options: FulgurOptions): Plugin[] {
           if (resolved) {
             state.exposeAbsPaths[e.import] = resolved.id.split('?')[0]
           } else {
-            this.error(`[fulgur] expose "${e.import}" could not be resolved from ${n.root}`)
+            this.error(`[fulgurjs] expose "${e.import}" could not be resolved from ${n.root}`)
           }
         }
         // emitFile 固定文件名：remoteEntry URL 稳定，CDN 长缓存友好
         this.emitFile({
           type: 'chunk',
-          id: 'virtual:fulgur-remote-entry',
+          id: 'virtual:fulgurjs-remote-entry',
           fileName: n.filename.replace(/^\//, ''),
           preserveSignature: 'allow-extension',
         })
@@ -497,7 +497,7 @@ export function federation(options: FulgurOptions): Plugin[] {
       const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
       this.emitFile({
         type: 'asset',
-        fileName: 'fulgur-manifest.json',
+        fileName: 'fulgurjs-manifest.json',
         source: JSON.stringify(manifest, null, 2),
       })
     },
@@ -510,10 +510,10 @@ export function federation(options: FulgurOptions): Plugin[] {
       // ---- D.5/W6 DEV-010：冷启动预构建窗口提示（一次性，防"开箱即坏"误判）----
       if (n.exposes.length > 0 || n.remotes.length > 0) {
         console.warn(
-          formatFulgurDiagnostic({
+          formatFulgurjsDiagnostic({
             code: 'DEV-010',
             symptom: 'dev 冷启动预构建窗口：首次启动或清 node_modules/.vite 后首轮 30~60s 内，联邦模块请求可能出现瞬时 504 / "ce" / Outdated Optimize Dep',
-            cause: 'vite 依赖预构建（含 fulgur 外部化桩）尚未就绪，属预构建暂态而非回归；首轮结束后自行恢复',
+            cause: 'vite 依赖预构建（含 fulgurjs 外部化桩）尚未就绪，属预构建暂态而非回归；首轮结束后自行恢复',
             fix: '先真实打开一次页面预热（等到网络空闲），再做验收断言或人工判断；重复出现才按 DEV-009 清缓存排查',
           }),
         )
@@ -525,7 +525,7 @@ export function federation(options: FulgurOptions): Plugin[] {
         server.middlewares.use((req, res, next) => {
           const raw = (req.url ?? '').split('?')[0]
           const stripped = raw.startsWith(baseNorm) ? `/${raw.slice(baseNorm.length)}` : raw
-          if (stripped === '/@fulgur-entry.js' || stripped === '/@fulgur-manifest.json') {
+          if (stripped === '/@fulgurjs-entry.js' || stripped === '/@fulgurjs-manifest.json') {
             res.setHeader('Access-Control-Allow-Origin', '*')
             res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS')
             res.setHeader('Access-Control-Allow-Headers', '*')
@@ -534,7 +534,7 @@ export function federation(options: FulgurOptions): Plugin[] {
               res.end()
               return
             }
-            if (stripped === '/@fulgur-entry.js') {
+            if (stripped === '/@fulgurjs-entry.js') {
               res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
               res.setHeader('Cache-Control', 'no-cache')
               res.end(genDevRemoteEntry(n, baseNorm))
@@ -568,14 +568,14 @@ export function federation(options: FulgurOptions): Plugin[] {
       }
 
       // ---- D.5 DEV-009：联邦虚拟模块 404 拦截（.vite 缓存漂移高频坑的显式指引）----
-      // configureServer 返回函数 = 内部中间件之后执行（此时仍未处理的 fulgur 相关请求即 404）
+      // configureServer 返回函数 = 内部中间件之后执行（此时仍未处理的 fulgurjs 相关请求即 404）
       return () => {
         server.middlewares.use((req: any, res: any, next: () => void) => {
           const url = req.url ?? ''
-          if (req.method === 'GET' && url.includes('fulgur')) {
+          if (req.method === 'GET' && url.includes('fulgurjs')) {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
             res.end(
-              formatFulgurDiagnostic({
+              formatFulgurjsDiagnostic({
                 code: 'DEV-009',
                 symptom: `联邦模块请求 404：${url.slice(0, 120)}`,
                 cause: 'node_modules/.vite 预构建缓存与当前插件产物不一致（immutable 缓存按 ?f= 签名长期持有，插件 dist 更新后旧签名必 404）',
@@ -592,7 +592,7 @@ export function federation(options: FulgurOptions): Plugin[] {
 
   // .vue 编译产物处理：vue 插件输出的 JS 仍带 bare import（build）或依赖 URL（dev）
   const post: Plugin = {
-    name: 'fulgur:vue-post',
+    name: 'fulgurjs:vue-post',
     enforce: 'post',
     async transform(code, id) {
       if (!state.normalized) return null
@@ -604,14 +604,14 @@ export function federation(options: FulgurOptions): Plugin[] {
       // 单例天然收敛。
       if (
         state.command === 'serve' &&
-        code.includes('virtual:fulgur-runtime') &&
-        !code.includes('virtual:fulgur-runtime-proxy') &&
+        code.includes('virtual:fulgurjs-runtime') &&
+        !code.includes('virtual:fulgurjs-runtime-proxy') &&
         isExposeTargetFile(clean, state.normalized.root, state.normalized.exposes)
       ) {
-        return { code: code.split('virtual:fulgur-runtime').join('virtual:fulgur-runtime-proxy'), map: null }
+        return { code: code.split('virtual:fulgurjs-runtime').join('virtual:fulgurjs-runtime-proxy'), map: null }
       }
       // pre 阶段已改写过的模块（build 入口/子请求）不再处理，防双重生成
-      if (code.includes('virtual:fulgur-runtime')) return null
+      if (code.includes('virtual:fulgurjs-runtime')) return null
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：仅 .vue 主请求（其余已由 pre 处理）
       if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) return null
       if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里
@@ -672,4 +672,4 @@ export function federation(options: FulgurOptions): Plugin[] {
 }
 
 export default federation
-export type { FulgurOptions } from './options'
+export type { FulgurjsOptions } from './options'

@@ -8,16 +8,16 @@
  * 三段式强制：现象 → 根因 → 修法；ERROR 级文案必须 cause/fix 非空（单测断言）。
  */
 
-export type FulgurStage = 'CFG' | 'DEV' | 'BLD' | 'MFU'
+export type FulgurjsStage = 'CFG' | 'DEV' | 'BLD' | 'MFU'
 
-export interface FulgurCodeMeta {
+export interface FulgurjsCodeMeta {
   code: string
-  stage: FulgurStage
+  stage: FulgurjsStage
   title: string
 }
 
 /** 全量错误码登记表（手册 §8 与之一一对应；新增报错必须先登记） */
-export const CODE_REGISTRY: FulgurCodeMeta[] = [
+export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   // ── CFG 配置期（normalizeOptions）──
   { code: 'CFG-001', stage: 'CFG', title: 'name 缺失或非法' },
   { code: 'CFG-002', stage: 'CFG', title: 'exposes 配置形状错误' },
@@ -34,7 +34,7 @@ export const CODE_REGISTRY: FulgurCodeMeta[] = [
   { code: 'DEV-004', stage: 'DEV', title: '已知 UMD-only 依赖不在 optimizeDeps.include（预构建内联本地 vue 风险）' },
   { code: 'DEV-005', stage: 'DEV', title: 'remotes dev URL 端口无监听（remote 未启动或端口错位）' },
   { code: 'DEV-006', stage: 'DEV', title: '宿主/远程插件版本不一致' },
-  { code: 'DEV-008', stage: 'DEV', title: 'exposes 目标文件静态导入 virtual:fulgur-runtime（原 D.1 检测）' },
+  { code: 'DEV-008', stage: 'DEV', title: 'exposes 目标文件静态导入 virtual:fulgurjs-runtime（原 D.1 检测）' },
   { code: 'DEV-009', stage: 'DEV', title: '门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启）' },
   { code: 'DEV-010', stage: 'DEV', title: 'dev 冷启动预构建窗口（首轮 30~60s 瞬态 504/\'ce\' 假错误）' },
   // ── BLD 构建期 ──
@@ -54,7 +54,7 @@ export const CODE_REGISTRY: FulgurCodeMeta[] = [
   { code: 'MFU-010', stage: 'MFU', title: 'singleton 共享版本漂移（使用作用域版本）' },
 ]
 
-export interface FulgurDiagnosticInput {
+export interface FulgurjsDiagnosticInput {
   code: string
   /** 现象：什么操作、什么对象、什么结果 */
   symptom: string
@@ -66,10 +66,10 @@ export interface FulgurDiagnosticInput {
 }
 
 /** 三段式格式化（现象 → 根因 → 修法，附上下文快照） */
-export function formatFulgurDiagnostic(input: FulgurDiagnosticInput): string {
+export function formatFulgurjsDiagnostic(input: FulgurjsDiagnosticInput): string {
   const ctx = input.details ? `\n上下文：${JSON.stringify(input.details)}` : ''
   return (
-    `[fulgur:${input.code}] ${input.symptom}\n` +
+    `[fulgurjs:${input.code}] ${input.symptom}\n` +
     `根因：${input.cause}\n` +
     `修法：${input.fix}` +
     ctx

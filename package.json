@@ -1,5 +1,5 @@
 {
-  "name": "fulgur-federation-monorepo",
+  "name": "fulgurjs-federation-monorepo",
   "private": true,
   "version": "0.1.0",
   "type": "module",

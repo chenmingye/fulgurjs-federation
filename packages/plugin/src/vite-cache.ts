@@ -11,14 +11,14 @@ import path from 'node:path'
 
 export function syncViteCacheMarker(root: string, pluginVersion: string, log: (msg: string) => void): void {
   const viteDir = path.join(root, 'node_modules', '.vite')
-  const marker = path.join(viteDir, 'fulgur-version.txt')
+  const marker = path.join(viteDir, 'fulgurjs-version.txt')
   try {
     if (fs.existsSync(viteDir)) {
       const prev = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : ''
       if (prev === pluginVersion) return
       fs.rmSync(viteDir, { recursive: true, force: true })
       log(
-        `[fulgur] 插件版本变化（${prev || '无记录'} → ${pluginVersion}），已自动清除 ${path.relative(root, viteDir)} 预构建缓存` +
+        `[fulgurjs] 插件版本变化（${prev || '无记录'} → ${pluginVersion}），已自动清除 ${path.relative(root, viteDir)} 预构建缓存` +
           `（避免旧门面签名 404 / DEV-009）。本次启动将重新预构建，首轮 30~60s 属暂态（DEV-010）。`,
       )
     }
@@ -26,7 +26,7 @@ export function syncViteCacheMarker(root: string, pluginVersion: string, log: (m
     fs.writeFileSync(marker, pluginVersion)
   } catch (e) {
     log(
-      `[fulgur] 自动清理 .vite 缓存失败（不影响启动；如遇联邦模块 404 请手工执行 rm -rf ${viteDir}）：` +
+      `[fulgurjs] 自动清理 .vite 缓存失败（不影响启动；如遇联邦模块 404 请手工执行 rm -rf ${viteDir}）：` +
         `${String((e as Error).message ?? e)}`,
     )
   }

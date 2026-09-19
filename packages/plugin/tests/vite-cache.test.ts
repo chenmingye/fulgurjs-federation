@@ -5,13 +5,13 @@ import path from 'node:path'
 import { syncViteCacheMarker } from '../src/vite-cache'
 
 describe('DEV-009 自动化：syncViteCacheMarker', () => {
-  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'fulgur-cache-'))
+  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-cache-'))
 
   it('无 .vite 时仅写版本标记，不清任何东西', () => {
     const root = tmp()
     const logs: string[] = []
     syncViteCacheMarker(root, '0.4.1', (m) => logs.push(m))
-    expect(fs.readFileSync(path.join(root, 'node_modules/.vite/fulgur-version.txt'), 'utf8')).toBe('0.4.1')
+    expect(fs.readFileSync(path.join(root, 'node_modules/.vite/fulgurjs-version.txt'), 'utf8')).toBe('0.4.1')
     expect(logs).toHaveLength(0)
   })
 
@@ -32,7 +32,7 @@ describe('DEV-009 自动化：syncViteCacheMarker', () => {
     const logs: string[] = []
     syncViteCacheMarker(root, '0.4.1', (m) => logs.push(m))
     expect(fs.existsSync(path.join(root, 'node_modules/.vite/deps-old.js'))).toBe(false)
-    expect(fs.readFileSync(path.join(root, 'node_modules/.vite/fulgur-version.txt'), 'utf8')).toBe('0.4.1')
+    expect(fs.readFileSync(path.join(root, 'node_modules/.vite/fulgurjs-version.txt'), 'utf8')).toBe('0.4.1')
     expect(logs[0]).toContain('0.4.0 → 0.4.1')
     expect(logs[0]).toContain('DEV-009')
   })
@@ -43,6 +43,6 @@ describe('DEV-009 自动化：syncViteCacheMarker', () => {
     const logs: string[] = []
     syncViteCacheMarker(root, '0.4.1', (m) => logs.push(m))
     expect(logs[0]).toContain('无记录')
-    expect(fs.readFileSync(path.join(root, 'node_modules/.vite/fulgur-version.txt'), 'utf8')).toBe('0.4.1')
+    expect(fs.readFileSync(path.join(root, 'node_modules/.vite/fulgurjs-version.txt'), 'utf8')).toBe('0.4.1')
   })
 })
