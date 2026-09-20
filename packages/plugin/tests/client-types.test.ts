@@ -50,7 +50,7 @@ describe('client.d.ts：virtual:fulgurjs-runtime 类型声明（随包发布）'
     expect(pkg.files).toContain('client.d.ts')
   })
 
-  it('类型垫片用 import 式加载 client 声明（dev 自动生成进 fulgurjs-types）', () => {
+  it('类型垫片用 import 式加载 client 声明（dev 自动生成进 .fulgurjs/types）', () => {
     const shim = genRuntimeTypesShim()
     expect(shim).toContain("import '@fulgurjs/federation/client'")
     expect(shim).not.toContain('reference types=')
@@ -84,5 +84,15 @@ describe('extractTsExportNames（环境模块显式重导出）', () => {
     }
     expect(names).not.toContain('default')
     expect(names).not.toContain('hidden')
+  })
+})
+
+describe('dts 默认目录收敛到根目录点文件夹（src 零污染）', () => {
+  it('默认 .fulgurjs/types；dts.dir 可覆盖；dts:false 不生成', async () => {
+    const { resolveDtsDir } = await import('../src/dts')
+    expect(resolveDtsDir(undefined)).toBe('.fulgurjs/types')
+    expect(resolveDtsDir(true)).toBe('.fulgurjs/types')
+    expect(resolveDtsDir({ dir: 'types/federation' })).toBe('types/federation')
+    expect(resolveDtsDir(false)).toBe('')
   })
 })

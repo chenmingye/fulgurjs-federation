@@ -92,7 +92,7 @@ export function extractTsExportNames(text: string): string[] {
 }
 
 /**
- * 运行时虚拟模块类型垫片：写入宿主 fulgurjs-types 目录，被 tsconfig include 后
+ * 运行时虚拟模块类型垫片：写入宿主类型目录（默认 .fulgurjs/types），被 tsconfig include 后
  * 'virtual:fulgurjs-runtime' 的导入自动获得类型（无需手工往 types 数组加 client 子路径）。
  * 用副作用 import 加载包内 client.d.ts 的 declare module 声明——不用 /// <reference types>：
  * 该指令解析不了 npm 包子路径（实验坐实，import 式全部场景可用）。
@@ -106,11 +106,19 @@ export function genRuntimeTypesShim(): string {
   ].join('\n')
 }
 
+/**
+ * 解析 dts 输出目录：默认收敛到根目录点文件夹 `.fulgurjs/types`（Nuxt .nuxt 同款，
+ * src 零污染）；`dts: { dir }` 显式覆盖；`dts: false` 返回空串（不生成）。
+ */
+export function resolveDtsDir(dtsOpt: boolean | { dir?: string } | undefined): string {
+  if (dtsOpt === false) return ''
+  return (typeof dtsOpt === 'object' ? dtsOpt.dir : undefined) ?? '.fulgurjs/types'
+}
+
 export async function generateDevTypes(options: NormalizedOptions, _server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
-  const defaultDir = fs.existsSync(path.join(options.root, 'src')) ? 'src/fulgurjs-types' : 'fulgurjs-types'
-  const dir = typeof dtsOpt === 'object' ? (dtsOpt.dir ?? defaultDir) : defaultDir
+  const dir = resolveDtsDir(dtsOpt)
   const outDir = path.join(options.root, dir)
   fs.mkdirSync(outDir, { recursive: true })
 

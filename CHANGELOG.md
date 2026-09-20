@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.9（2026-09-20）
+
+### 变更（默认值，src 零污染）
+
+- **dts 生成目录默认收敛到根目录 `.fulgurjs/types/`**（原 `src/fulgurjs-types/`，Nuxt `.nuxt` 同款体验）：插件的自动生成物不再出现在用户 src 里；tsconfig `include` 加一行 `".fulgurjs"` 即全量生效（远程模块类型直连 + 运行时类型垫片）。`federation({ dts: { dir } })` 可自定义/回退旧位置。迁移方式：删除旧目录 → 升级后重启 dev → tsconfig include 换成 `".fulgurjs"`。
+- 迁移指南新增「目录约定说明」：`src/fulgurjs-exposes/` 等为迁移工具脚手架约定而非插件要求，可按团队习惯重组。
+
 ## 0.5.8（2026-09-20）
 
 ### 修复
