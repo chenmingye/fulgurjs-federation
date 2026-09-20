@@ -57,6 +57,31 @@ declare module 'virtual:fulgurjs-runtime' {
     fallback?: () => Promise<any>
   }
 
+  /**
+   * 跨应用上下文标准字段表（0.8.0，docs/跨应用传值与方法引用设计方案-2026-09-20.md §4.3）。
+   * 值 API 在 '@fulgurjs/federation/context' 子路径（runtime.js 不导出 context 函数，
+   * 此处仅类型随虚拟模块声明供 type-only import）；读写约定：宿主桥先写标准字段，
+   * 远程 boot 只增不改宿主键；嵌套对象（如 events）引用共享。
+   */
+  export interface FulgurjsAppContext {
+    /** 宿主登录用户原始形态（只读约定） */
+    user: Record<string, any>
+    /** 当前 token 快照（只读约定；实时取值用 getToken） */
+    token?: string
+    /** 取最新 token（拉取式防过期） */
+    getToken?: () => string | undefined
+    /** 宿主 pinia 实例：子应用 useUserStore(ctx.store) 拿共享响应式状态 */
+    store?: unknown
+    /** 宿主 Vue App 实例（同 realm 直引用）：全局组件/指令注册目标 */
+    hostApp?: unknown
+    /** EP locale 等 UI 配置（原 W4 字段） */
+    locale?: unknown
+    /** 事件/方法池：events.main.* 宿主提供、events.bpm.* / events.lowcode.* 子应用反向注册 */
+    events?: Record<string, any>
+    /** 项目扩展位（formUrl/baseUrl 等自定义键） */
+    [key: string]: unknown
+  }
+
   /** 运行时单例（与 globalThis.__FULGURJS_RUNTIME__ 同一实例，方法面冻结） */
   export interface FulgurjsRuntime {
     shareScopeMap: Record<string, Record<string, Record<string, ShareEntry>>>
@@ -76,7 +101,9 @@ declare module 'virtual:fulgurjs-runtime' {
     getContainer(name: string): Promise<{ name: string; init: (scope: unknown) => void | Promise<void>; get: (module: string) => Promise<any> }>
     preloadRemote(spec: string, opts?: PreloadRemoteOptions): Promise<void>
     parseSpec(spec: string): { remote: string; module: string }
+    /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 provideFulgurjsAppContext（存储同一份，新名语义更准） */
     provideFulgurjsAppConfig(config: Record<string, any>): void
+    /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 getFulgurjsAppContext（存储同一份，新名语义更准） */
     getFulgurjsAppConfig(): Record<string, any>
   }
 
@@ -102,7 +129,9 @@ declare module 'virtual:fulgurjs-runtime' {
   ): Promise<{ name: string; init: (scope: unknown) => void | Promise<void>; get: (module: string) => Promise<any> }>
   export function preloadRemote(spec: string, opts?: PreloadRemoteOptions): Promise<void>
   export function parseSpec(spec: string): { remote: string; module: string }
+  /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 provideFulgurjsAppContext（存储同一份，新名语义更准） */
   export function provideFulgurjsAppConfig(config: Record<string, any>): void
+  /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 getFulgurjsAppContext（存储同一份，新名语义更准） */
   export function getFulgurjsAppConfig(): Record<string, any>
   /** 兜底解包：命名空间有 default 取 default，否则原样返回 */
   export function unwrapDefault<T>(ns: { default?: T } | T): T

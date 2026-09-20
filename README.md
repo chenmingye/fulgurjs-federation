@@ -32,9 +32,10 @@
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
 - **CLI（主包内置 bin）**：`fulgurjs init`——`fulgurjs.config.ts` 单配置驱动的迁移生成器（模板 = 真实工程验证形态：vite 配置/路由表/桥/联邦启动器/NGINX conf 全量编码，锚点补丁幂等可续跑）；`fulgurjs doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
-- **跨应用全局配置协商（W4）**：`provideFulgurjsAppConfig({ locale, size, ... })` 一次写入运行时页面级单例，各远程副本经 `getFulgurjsAppConfig()` 消费注入（EP locale/size 类问题的机制化收编）
+- **跨应用传值与方法引用（0.8.0 起）**：`@fulgurjs/federation/context` 子路径——`provideFulgurjsAppContext` / `getFulgurjsAppContext` / `requireFulgurjsAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。旧名 `provideFulgurjsAppConfig/getFulgurjsAppConfig` 保留为 deprecated 别名（存储同一份，0.9 删）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）
 - **Vue 直渲染（0.7.0 起）**：`remoteComponent('remote/X')`（`@fulgurjs/federation/vue` 子路径）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法），runtime.js 零框架依赖零体积增量
-- **全链路错误码体系（30 码）**：CFG/DEV/BLD/MFU 四段 + 手册 §8 码表防漂移校验
+- **CSP 友好**：原生 ESM 加载路径全程无 `eval` / `new Function`，可在严格 CSP（无 `unsafe-eval`）下运行
+- **全链路错误码体系（32 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §8 码表防漂移校验
 
 ## 安装
 
@@ -248,8 +249,8 @@ import { loadRemote, provideFulgurjsAppConfig } from 'virtual:fulgurjs-runtime'
 | `registerShare` | `(scope, name, version, get, opts?) => void` | 手工注册共享模块（一般由 init 模块自动完成） |
 | `initSharing` | `(scopeName?) => ShareScopeMap` | 初始化共享作用域（一般由 init 模块自动完成） |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | 注册运行时插件（见下） |
-| `provideFulgurjsAppConfig` | `(config: Record<string, any>) => void` | **跨应用全局配置写入**（宿主桥一次写入；浅合并；镜像到 `globalThis.__FULGURJS_APP_CONFIG__`） |
-| `getFulgurjsAppConfig` | `() => Record<string, any>` | 读取全局配置（远程 federatedBoot 消费注入 locale/size 等） |
+| `provideFulgurjsAppConfig` | `(config: Record<string, any>) => void` | **@deprecated（0.8.0）** 改用 `@fulgurjs/federation/context` 的 `provideFulgurjsAppContext`（存储同一份；见 §9） |
+| `getFulgurjsAppConfig` | `() => Record<string, any>` | **@deprecated（0.8.0）** 改用 `@fulgurjs/federation/context` 的 `getFulgurjsAppContext`（存储同一份；见 §9） |
 | `getRuntime` | `() => FulgurjsRuntime` | 取运行时单例本体（与 `__FULGURJS_RUNTIME__` 同一实例） |
 | `version` | `string` | 运行时/插件版本（跨源副本一致性诊断用） |
 | `unwrapDefault` | `(ns: any) => any` | ESM/CJS default interop 工具 |
@@ -366,7 +367,7 @@ export default defineFulgurjsConfig({
 | `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出各应用 `federation()` 粘贴块、NGINX no-cache 站点模板、8 条通用核对清单 |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
-### 6. 错误码总表（30 个）
+### 6. 错误码总表（32 个）
 
 | 段 | 码 | 含义 |
 |---|---|---|
@@ -400,6 +401,8 @@ export default defineFulgurjsConfig({
 | | `MFU-008` | 未知远程 |
 | | `MFU-009` | 加载到的模块没有任何导出 |
 | | `MFU-010` | singleton 共享版本漂移（使用作用域版本，告警） |
+| CC 跨应用上下文 | `CC-001` | AppContext 必需字段缺失（三段式：got/expected/example，修法指向宿主桥 `provideFulgurjsAppContext`） |
+| | `CC-002` | 运行时单例不可用（独立直开远程页；修法 = 经宿主联邦加载，时序契约 bridge → federatedBoot → loadRemote） |
 
 每个码的完整排查文案见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) §8；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
 
@@ -442,6 +445,69 @@ const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
 - 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
 - `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：仅使用 `./vue` 子路径时才需要安装 Vue；runtime.js 保持框架无关（不 import vue），体积零增量；
 - 运行时实例经 `globalThis.__FULGURJS_RUNTIME__` 页面级单例复用，与 `virtual:fulgurjs-runtime` 的导入殊途同归，无需额外接线。
+
+### 9. `FulgurjsAppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/context`，0.8.0 起）
+
+宿主向子应用传值、子应用向宿主反向注册方法，一律走这条一等公民通道（对标乾坤 `props`，但带类型与错误契约）——不再各自挂 `window.*` 裸口子。
+
+```ts
+// —— 宿主桥（host/src/fulgurjs/host/bridge.ts）：登录完成后一次性提供 ——
+import { provideFulgurjsAppContext } from '@fulgurjs/federation/context'
+
+provideFulgurjsAppContext({
+  user,                                  // 宿主登录用户原始形态
+  token, getToken,                       // token 快照 + 取最新 token（拉取式防过期）
+  store: piniaInstance,                  // 宿主 pinia：子应用 useUserStore(ctx.store) 共享响应式状态
+  hostApp: app,                          // 宿主 Vue App 实例：全局组件/指令注册目标
+  locale,                                // EP locale 等 UI 配置
+  events: { main: mainEvents },          // 事件/方法池：宿主提供 main；子应用反向注册 bpm.* / lowcode.*
+  formUrl: '/flowable', baseUrl: '/demo', // 项目扩展位（自定义键）
+})
+
+// —— 远程 boot（exposes/federatedBoot.ts）：显式校验消费 ——
+import { requireFulgurjsAppContext } from '@fulgurjs/federation/context'
+
+const { store, user, hostApp } = requireFulgurjsAppContext('store', 'user', 'hostApp')
+// 缺任一键 → [fulgurjs:CC-001] 三段式抛错（got / expected / example 指向宿主桥）；
+// 页面无运行时单例（独立直开远程页）→ [fulgurjs:CC-002] 显式，修法 = 经宿主联邦加载。
+
+// —— 远程页面读点 ——
+import { getFulgurjsAppContext } from '@fulgurjs/federation/context'
+const dict = getFulgurjsAppContext().events?.main?.getDictItems?.('sex')
+
+// —— 子应用反向注册方法给宿主（页面 onUnmounted 时记得摘除，见迁移指南「页面卸载清理清单」）——
+getFulgurjsAppContext().events!.bpm = { formEvent, formSubmitEvent }
+```
+
+标准字段表：
+
+| 字段 | 类型 | 语义 | 写方 |
+|---|---|---|---|
+| `user` | `Record<string, any>` | 宿主登录用户原始形态 | 宿主桥（只读约定） |
+| `token` | `string \| undefined` | 当前 token 快照 | 宿主桥（只读约定） |
+| `getToken` | `() => string \| undefined` | **取最新 token**（拉取式防过期） | 宿主桥（只读约定） |
+| `store` | `unknown`（运行时为宿主 pinia） | 子应用挂载/读取宿主共享响应式状态 | 宿主桥（只读约定） |
+| `hostApp` | Vue App 实例（同 realm 直引用） | 全局组件/指令注册目标 | 宿主桥（只读约定） |
+| `locale` | `unknown` | EP locale 等 UI 配置 | 宿主桥（只读约定） |
+| `events` | `Record<string, any>` | 事件/方法池：`events.main.*` 宿主提供、`events.bpm.*` / `events.lowcode.*` 子应用反向注册 | 宿主桥建池，子应用挂载 |
+| （扩展位） | `[key: string]: unknown` | `formUrl` / `baseUrl` 等项目自定义键 | 宿主桥；远程 boot 只增不改宿主键 |
+
+变更语义与时序契约：
+
+- `provide` = 顶层 merge（后写覆盖，幂等可多次）；约定「宿主先写标准字段，远程只增不改宿主键」；嵌套对象（如 `events`）是**引用共享**，子应用挂属性即时可见（同 realm 直引用）；
+- 时序契约：**bridge（provide）→ federatedBoot（require）→ 页面 loadRemote**——违反即在 boot 处显式失败（CC-001），不静默；
+- 数据语义 = **传输层快照 + 函数引用，非响应式**（与乾坤 props 同语义）。"实时"由三条正规通道承担：① `getToken()` / `events.main.*` 函数引用每次调用执行宿主最新闭包；② `context.store` 把宿主 pinia 递给子应用（共享响应式实例）；③ 登录态变更 = 重新登录 = 页面刷新 = bridge 重跑全新 context。context 本体不做 Vue reactive（runtime 框架无关 + gzip 红线 + 跨包 proxy 双份陷阱）；"中途变更需通知"的场景 0.9 预留 `onAppContextChange` 订阅。
+
+方法引用两条通道：
+
+| 通道 | 语义 | 适用 |
+|---|---|---|
+| **context 携带函数引用** | 同步直调（bridge 先于一切页面加载） | 高频热路径（`getToken` / `getDictItems` / `getFileAccessHttpUrl`）、子应用反向注册（`formEvent`） |
+| **exposes 方法模块** | `exposes: { './api': './src/fulgurjs/exposes/api.ts' }` → `const { xxx } = await loadRemote('remote/api')` | 低频/重逻辑跨应用调用；任意 expose 任意消费；dts 类型直连自动覆盖 |
+
+方法模块规范：`src/fulgurjs/exposes/` 下的 `api.ts` 导出纯函数/服务对象（不挂 Vue 组件）；依赖宿主单例的函数（如 defHttp 走 shared）直接写，联邦协商保证同模块图。
+
+存储说明：context 与旧 W4 存储（`__FULGURJS_APP_CONFIG__`）是**同一份**——旧名 `provideFulgurjsAppConfig / getFulgurjsAppConfig`（`virtual:fulgurjs-runtime`）继续可用但已标 `@deprecated`（0.9 删除）；runtime.js 逻辑 0.8.0 零改动，全部新 API 落在 context 子路径（~2KB 独立文件）。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 

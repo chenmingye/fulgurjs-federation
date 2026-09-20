@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 const pkgRoot = path.resolve(__dirname, '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'))
 
-const SUBPATHS = ['./pages', './config', './vue'] as const
+const SUBPATHS = ['./pages', './config', './vue', './context'] as const
 
 describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () => {
   it('每个带 types 的 exports 子路径都有 typesVersions 映射', () => {

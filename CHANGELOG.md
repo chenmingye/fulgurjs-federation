@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0（2026-09-20）
+
+### 新增（跨应用传值与方法引用收编 + 乾坤功能融合，设计文档 docs/跨应用传值与方法引用设计方案-2026-09-20.md 定稿实施）
+
+- **`@fulgurjs/federation/context` 新子路径（~2KB 独立文件，与 `./vue` 同模式）**：
+  - `provideFulgurjsAppContext(config)`——宿主桥一次性写入跨应用上下文（merge 语义，幂等可多次，后写覆盖）；
+  - `getFulgurjsAppContext()`——读快照（传输层快照 + 函数引用，非响应式，与乾坤 props 同语义；嵌套对象如 `events` 引用共享）；
+  - `requireFulgurjsAppContext(...keys)`——远程 boot 显式校验消费：缺任一键 → **`CC-001`** 三段式抛错（got/expected/example 指向宿主桥），页面无运行时单例（独立直开远程页）→ **`CC-002`** 显式（修法 = 经宿主联邦加载）；
+  - `FulgurjsAppContext` 类型（标准字段表：`user` / `token` / `getToken` / `store` / `hostApp` / `locale` / `events` + `[key: string]` 项目扩展位）随子路径与 `client.d.ts` 双发布。
+- **方法引用一等公民两条通道**：① context 携带函数引用（`getToken` / `events.main.getDictItems` 高频热路径直调、子应用反向注册 `events.bpm.formEvent`）；② exposes 方法模块 `loadRemote('remote/api')`（低频/重逻辑跨应用调用，dts 类型直连自动覆盖）。
+- **架构边界（gzip 红线不破）**：runtime.js 逻辑 0.8.0 **零改动**（仅版本常量随版本走）——context 子路径内部经 `globalThis.__FULGURJS_RUNTIME__` 单例委托运行时既有方法，存储与旧 W4（`__FULGURJS_APP_CONFIG__`）同一份。
+- **旧名 deprecated**：`provideFulgurjsAppConfig / getFulgurjsAppConfig` 继续可用（存储同一份），`client.d.ts` 与 README 标 `@deprecated` 指向新名，0.9 删除。
+- **错误码总表 30 → 32**：新增 CC 段（`CC-001` context 必需字段缺失 / `CC-002` 运行时单例不可用）。
+
+### 文档（乾坤功能融合配套，全部宿主/模板侧，插件 runtime 零改动）
+
+- README 特性声明新增「CSP 友好（原生 ESM 无 eval）」；新增 §9 AppContext API 参考（字段表/时序契约/方法模块规范）；迁移指南新增「跨应用传值」节与「页面卸载清理清单」节（乾坤 unmount 强制清理的联邦等价物：`onUnmounted` 摘除 window 级监听/定时器/context.events 反向注册）。
+- 乾坤功能融合三件套（保活 keep-alive 白名单 / 页面加载骨架屏 / 空闲预载编排）与联邦诊断面板均为**集成器模板/宿主项目侧**能力，用法见迁移指南与 `fulgurjs.config.ts` 模板注释；调研依据见 docs/qiankun功能融合调研-2026-09-20.md（16 项逐项对照：9 项已有、4 项与架构哲学冲突不搬、3 项值得搬 + inspector 概念轻量化落地）。
+
 ## 0.7.1（2026-09-20）
 
 ### 修复（TS 子路径类型兼容，demo-app testbed 用户 IDE 实测暴露）
