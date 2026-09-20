@@ -417,7 +417,11 @@ export function genDevManifest(options: NormalizedOptions, base: string): Record
     exposes: options.exposes.map((e) => ({
       name: e.name,
       src: e.import,
-      file: `${b}@fulgurjs-src/${e.import.replace(/^\.?\//, '')}`,
+      // 真实可请求的模块 URL（dev 容器 get 的 import 同款裸 URL，base 前缀补齐）——
+      // preloadRemote 会把该字段注入 <link rel=modulepreload>，必须是浏览器可 200 的地址。
+      // 回归：曾写 dts 虚拟路径 /@fulgurjs-src/...（dts 实际只用 fsRoot+src，不用 file），
+      // dev 下 preload 全部 404。
+      file: `${b}${e.import.replace(/^\.?\//, '')}`,
     })),
     shared: options.shared.map((s) => ({
       name: s.shareKey,

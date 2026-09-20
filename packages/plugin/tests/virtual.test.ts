@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { genSharedFacade, genRuntimeProxyModule } from '../src/virtual'
+import { genSharedFacade, genRuntimeProxyModule, genDevManifest } from '../src/virtual'
 import { scanExposeRequiredProps } from '../src/diagnostics'
+import { normalizeOptions } from '../src/options'
+
+const ROOT = process.cwd()
 
 /**
  * U-7 回归防线：rolldown 产物下 `export *` + TLA 展开会丢掉全部命名绑定
@@ -91,5 +94,17 @@ describe('运行时惰性委托模块（genRuntimeProxyModule）', () => {
     const code = genRuntimeProxyModule()
     expect(code).toContain('__FULGURJS_RUNTIME__')
     expect(code).toContain('__FULGURJS_APP_CONFIG__')
+  })
+})
+
+describe('dev manifest file 字段 = 真实可请求 URL（preloadRemote 回归）', () => {
+  it('exposes[].file 是裸模块 URL（含 base），不是 dts 虚拟路径', () => {
+    const opts = normalizeOptions({
+      name: 'remote-a',
+      exposes: { './Button': './src/Button.vue' },
+    }, ROOT, 'serve')
+    const m = genDevManifest(opts, '/remote-a/') as { exposes: Array<{ file: string }> }
+    expect(m.exposes[0].file).toBe('/remote-a/src/Button.vue')
+    expect(m.exposes[0].file).not.toContain('@fulgurjs-src')
   })
 })
