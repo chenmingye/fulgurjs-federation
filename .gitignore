@@ -51,3 +51,6 @@ packages/plugin/docs/
 packages/plugin/CHANGELOG.md
 packages/plugin/DESIGN.md
 packages/plugin/examples
+
+# npm pack 产物
+packages/plugin/*.tgz
