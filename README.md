@@ -165,7 +165,7 @@ import { federation } from '@fulgurjs/federation'
 | `runtimeChunk` | `boolean \| 'single'` | — | 运行时是否拆独立 chunk |
 | `manifest` | `boolean` | `true` | prod 构建生成 `fulgurjs-manifest.json`（preloadRemote 依赖它） |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（写法见「运行时插件」） |
-| `dts` | `boolean \| { dir?: string }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 补全直达远程源码。**产物写入根目录 `.fulgurjs/types/`（0.5.9 起默认，src 零污染）**，tsconfig `include` 加一行 `".fulgurjs"` 即生效；`{ dir }` 可自定义位置 |
+| `dts` | `boolean \| { dir?: string }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 补全直达远程源码。**产物写入 `src/fulgurjs/types/`（0.6.0 起默认，联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`）**，src 布局项目 tsconfig 零配置即生效；`{ dir }` 可自定义位置 |
 | `devSharedSelf` | `boolean` | 纯远程 `true`；有 `remotes` 的宿主 `false` | dev 下自身源码（含依赖）是否参与 shared 协商改写。**双向联邦**（既 expose 又消费 remote）的宿主/远程需显式 `true`，否则 prod 双 vue 实例 |
 | `automaticAsyncBoundary` | — | 恒为 `true` | 接受任意值：TLA 自动异步边界，无需手工 bootstrap |
 | `dataPrefetch` | — | 恒为 `true` | 接受任意值：`preloadRemote` 始终可用 |
@@ -230,7 +230,7 @@ import { loadRemote, provideFulgurjsAppConfig } from 'virtual:fulgurjs-runtime'
 
 #### 函数总表
 
-> **TS 提示（0.5.3 起）**：`virtual:fulgurjs-runtime` 的类型随包发布。dev 启动时插件自动在类型目录（**0.5.9 起默认根目录 `.fulgurjs/types/`**，src 零污染）生成远程模块声明与运行时类型垫片——tsconfig `include` 加一行 `".fulgurjs"` 即全量生效；手工方式则在 tsconfig `compilerOptions.types` 加 `"@fulgurjs/federation/client"`。
+> **TS 提示（0.5.3 起）**：`virtual:fulgurjs-runtime` 的类型随包发布。dev 启动时插件自动在类型目录（**0.6.0 起默认 `src/fulgurjs/types/`**，联邦产物集中一个文件夹）生成远程模块声明与运行时类型垫片——src 布局项目零配置即全量生效；手工方式则在 tsconfig `compilerOptions.types` 加 `"@fulgurjs/federation/client"`。
 
 | 函数 | 签名 | 说明 |
 |---|---|---|

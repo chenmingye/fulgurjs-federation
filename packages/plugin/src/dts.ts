@@ -107,18 +107,20 @@ export function genRuntimeTypesShim(): string {
 }
 
 /**
- * 解析 dts 输出目录：默认收敛到根目录点文件夹 `.fulgurjs/types`（Nuxt .nuxt 同款，
- * src 零污染）；`dts: { dir }` 显式覆盖；`dts: false` 返回空串（不生成）。
+ * 解析 dts 输出目录：默认统一进 `src/fulgurjs/types`（联邦所有产物集中一个文件夹，
+ * src 布局项目 tsconfig include "src/**" 天然覆盖=零配置）；无 src 布局回退根目录
+ * `.fulgurjs/types`。`dts: { dir }` 显式覆盖；`dts: false` 返回空串（不生成）。
+ * ⚠️ 插件只写 types/ 子目录，src/fulgurjs/exposes/ 等用户代码绝不触碰。
  */
-export function resolveDtsDir(dtsOpt: boolean | { dir?: string } | undefined): string {
+export function resolveDtsDir(dtsOpt: boolean | { dir?: string } | undefined, rootHasSrc: boolean): string {
   if (dtsOpt === false) return ''
-  return (typeof dtsOpt === 'object' ? dtsOpt.dir : undefined) ?? '.fulgurjs/types'
+  return (typeof dtsOpt === 'object' ? dtsOpt.dir : undefined) ?? (rootHasSrc ? 'src/fulgurjs/types' : '.fulgurjs/types')
 }
 
 export async function generateDevTypes(options: NormalizedOptions, _server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
-  const dir = resolveDtsDir(dtsOpt)
+  const dir = resolveDtsDir(dtsOpt, fs.existsSync(path.join(options.root, 'src')))
   const outDir = path.join(options.root, dir)
   fs.mkdirSync(outDir, { recursive: true })
 
