@@ -45,6 +45,67 @@ function sourceHasDefaultExport(file: string): boolean {
   }
 }
 
+/**
+ * 源码 re-export 的导入路径：非 .vue 一律去扩展名——TS 默认禁止 `.ts` 后缀导入
+ * （allowImportingTsExtensions 才行），带后缀的 `export * from 'x.ts'` 在用户
+ * skipLibCheck 下静默解析失败 → 模块类型为空（回归：SharedState 类型直连失效）。
+ * .vue 保留扩展名（SFC 必须带后缀才能解析）。
+ */
+export function sourceImportPath(rel: string): string {
+  return rel.startsWith('.') ? rel : `./${rel}`
+}
+
+export function stripTsExtension(importPath: string): string {
+  return importPath.replace(/\.(mts|cts|ts|tsx)$/, '')
+}
+
+/**
+ * 枚举 TS 源文件的顶层具名导出（正则面，够声明生成用）。
+ * 环境模块（declare module）里的 `export *` 不转发具名导出（TS 实测限制，
+ * 回归：SharedState 类型直连为空）——必须显式 `export { names } from`。
+ */
+export function extractTsExportNames(text: string): string[] {
+  const names = new Set<string>()
+  const push = (n: string | undefined) => {
+    if (n && /^[A-Za-z_$][\w$]*$/.test(n) && n !== 'default') names.add(n)
+  }
+  for (const m of text.matchAll(/export\s+(?:declare\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) push(m[1])
+  for (const m of text.matchAll(/export\s+(?:declare\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/g)) push(m[1])
+  for (const m of text.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) push(m[1])
+  for (const m of text.matchAll(/export\s+(?:interface|type|enum)\s+([A-Za-z_$][\w$]*)/g)) push(m[1])
+  for (const m of text.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const part of m[1].split(',')) {
+      const seg = part.trim()
+      if (!seg) continue
+      const typeOnly = /^type\s/.test(seg)
+      const base = typeOnly ? seg.replace(/^type\s+/, '') : seg
+      const asMatch = base.match(/^([\w$]+)\s+as\s+([\w$]+)$/)
+      // export { a as b } → 导出名是别名 b；无别名 → 本名；default 不进具名列表
+      if (asMatch) {
+        if (asMatch[2] !== 'default') names.add(asMatch[2])
+      } else if (base !== 'default') {
+        names.add(base)
+      }
+    }
+  }
+  return [...names]
+}
+
+/**
+ * 运行时虚拟模块类型垫片：写入宿主 fulgurjs-types 目录，被 tsconfig include 后
+ * 'virtual:fulgurjs-runtime' 的导入自动获得类型（无需手工往 types 数组加 client 子路径）。
+ * 用副作用 import 加载包内 client.d.ts 的 declare module 声明——不用 /// <reference types>：
+ * 该指令解析不了 npm 包子路径（实验坐实，import 式全部场景可用）。
+ */
+export function genRuntimeTypesShim(): string {
+  return [
+    '// 自动生成：fulgurjs-federation 运行时类型（virtual:fulgurjs-runtime）',
+    "import '@fulgurjs/federation/client'",
+    'export {}',
+    '',
+  ].join('\n')
+}
+
 export async function generateDevTypes(options: NormalizedOptions, _server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
@@ -53,6 +114,7 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
   const outDir = path.join(options.root, dir)
   fs.mkdirSync(outDir, { recursive: true })
 
+  fs.writeFileSync(path.join(outDir, 'fulgurjs-runtime.d.ts'), genRuntimeTypesShim())
   for (const remote of options.remotes) {
     if (!remote.devEntry || remote.promise) continue
     const manifest = await fetchManifest(remote.devEntry)
@@ -76,7 +138,7 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       const abs = path.join(remoteRoot, expose.src.replace(/^\//, ''))
       if (!fs.existsSync(abs)) continue
       const rel = path.relative(outDir, abs).split(path.sep).join('/')
-      const importPath = rel.startsWith('.') ? rel : `./${rel}`
+      const importPath = abs.endsWith('.vue') ? sourceImportPath(rel) : stripTsExtension(sourceImportPath(rel))
       const moduleSpecifier = `${remote.key}/${expose.name.replace(/^\.\//, '')}` // 'remote-a' + './Button' → 'remote-a/Button'
       lines.push('')
       if (abs.endsWith('.vue')) {
@@ -88,7 +150,13 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
         lines.push(`}`)
       } else {
         lines.push(`declare module '${moduleSpecifier}' {`)
-        lines.push(`  export * from '${importPath}'`)
+        const names = extractTsExportNames(fs.readFileSync(abs, 'utf8'))
+        if (names.length > 0) {
+          lines.push(`  export { ${names.join(', ')} } from '${importPath}'`)
+        } else {
+          // 无具名导出可枚举：退回 export *（副作用导入至少可用）
+          lines.push(`  export * from '${importPath}'`)
+        }
         if (sourceHasDefaultExport(abs)) lines.push(`  export { default } from '${importPath}'`)
         lines.push(`}`)
       }

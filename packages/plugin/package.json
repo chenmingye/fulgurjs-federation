@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "0.5.2",
+  "version": "0.5.8",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -23,10 +23,14 @@
       "import": "./dist/config.js",
       "require": "./dist/config.cjs"
     },
+    "./client": {
+      "types": "./client.d.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "client.d.ts",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",

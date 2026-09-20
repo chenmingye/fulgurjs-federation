@@ -230,6 +230,8 @@ import { loadRemote, provideFulgurjsAppConfig } from 'virtual:fulgurjs-runtime'
 
 #### 函数总表
 
+> **TS 提示（0.5.3 起）**：`virtual:fulgurjs-runtime` 的类型随包发布。dev 启动时插件自动在 `src/fulgurjs-types/fulgurjs-runtime.d.ts` 生成引用垫片——只要 tsconfig include 了该目录（下方远程模块类型直连本就要求），运行时导入即有完整补全；手工方式则在 tsconfig `compilerOptions.types` 加 `"@fulgurjs/federation/client"`。
+
 | 函数 | 签名 | 说明 |
 |---|---|---|
 | `loadRemote` | `(spec: string, opts?) => Promise<模块命名空间>` | 加载远程模块。`spec = '远程名/./Expose键'`（`./` 可省）；opts 见下 |
