@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1（2026-09-20）
+
+### 修复（TS 子路径类型兼容，demo-app testbed 用户 IDE 实测暴露）
+
+- **`typesVersions` 子路径类型映射**：`moduleResolution: "node"`（node10 语义，vben/jeecg 一代工程常见，如 TS 4.9 + `moduleResolution: "node"`）不读 package.json `exports`，`import ... from '@fulgurjs/federation/pages'` 报 ts(2307)。新增 `typesVersions` 把 `./pages` / `./config` / `./vue` 映射到对应 `dist/*.d.ts`——TS 3.1+ 任意解析模式可用；TS ≥4.7 的 bundler/node16 仍走 `exports`，两者互不冲突。运行时无任何变化（Vite 一直认 exports）。
+- 新增清单防漂移测试（exports 子路径 ↔ typesVersions ↔ 磁盘 d.ts 三方一致）。
+
 ## 0.7.0（2026-09-20）
 
 ### 新增（Vue 直渲染 API，设计文档 docs/远程组件直渲染API设计方案-2026-09-20.md 定稿实施）

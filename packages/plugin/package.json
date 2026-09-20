@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -32,6 +32,19 @@
       "types": "./client.d.ts"
     },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "pages": [
+        "dist/pages.d.ts"
+      ],
+      "config": [
+        "dist/config.d.ts"
+      ],
+      "vue": [
+        "dist/vue.d.ts"
+      ]
+    }
   },
   "files": [
     "dist",
