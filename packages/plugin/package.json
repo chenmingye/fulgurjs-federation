@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -23,6 +23,11 @@
       "import": "./dist/config.js",
       "require": "./dist/config.cjs"
     },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js",
+      "require": "./dist/vue.cjs"
+    },
     "./client": {
       "types": "./client.d.ts"
     },
@@ -44,7 +49,7 @@
     "docs/vite-upstream-issue-irregexp.md"
   ],
   "scripts": {
-    "build": "cp ../../README.md README.md && mkdir -p docs && cp ../../docs/manual.html ../../docs/迁移指南.md ../../docs/webpack-mf-对照与缺口.md ../../docs/沙箱边界审计.md ../../docs/P5-vite7-8兼容矩阵.md ../../docs/vite-upstream-issue-irregexp.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && rm -rf examples && cp -r ../../examples examples && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/config.ts --format esm,cjs --dts --external vite --target node18 --clean && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js",
+    "build": "cp ../../README.md README.md && mkdir -p docs && cp ../../docs/manual.html ../../docs/迁移指南.md ../../docs/webpack-mf-对照与缺口.md ../../docs/沙箱边界审计.md ../../docs/P5-vite7-8兼容矩阵.md ../../docs/vite-upstream-issue-irregexp.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && rm -rf examples && cp -r ../../examples examples && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/config.ts src/vue.ts --format esm,cjs --dts --external vite --target node18 --clean && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -55,12 +60,15 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "jsdom": "^24.0.0",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.1.0"
+    "vitest": "^3.1.0",
+    "vue": "^3.5.22"
   },
   "peerDependencies": {
-    "vite": ">=5.0.0"
+    "vite": ">=5.0.0",
+    "vue": ">=3.2.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -90,5 +98,10 @@
   },
   "bin": {
     "fulgurjs": "./dist/cli.js"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
   }
 }

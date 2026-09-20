@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0（2026-09-20）
+
+### 新增（Vue 直渲染 API，设计文档 docs/远程组件直渲染API设计方案-2026-09-20.md 定稿实施）
+
+- **`remoteComponent(spec, opts)`（`@fulgurjs/federation/vue` 子路径）**：远程组件直渲染的标准封装——`defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`。选项：`loadingComponent` / `errorComponent`（不传时内置错误占位：错误码+根因+修法三段式）/ `retries`（透传 loadRemote）/ `delay` / `timeout`。H3 零兜底：加载失败显式进错误态，`fulgurjs:error` 事件照常发出；模块去重沿用 loadRemote Promise 缓存；`vue` 为可选 peerDependency。
+- **架构边界**：runtime.js 保持框架无关（不 import vue），gzip 红线零增量——Vue 封装独立子路径文件、按需引入。
+
+### 变更（集成模板与文档）
+
+- **集成器 detail 页模板简化**：30 行 D.1 防御式样板（`globalThis.__FULGURJS_RUNTIME__` 单例 + 手动 try/catch + shallowRef）替换为一行 `remoteComponent(spec)`；**删除 `isFederatedRealm()` + iframe 乾坤旧通道**（H3 零兜底 + 新插件定位，用户拍板）。后果：乾坤基线（如 8661）详情页表单区随 iframe 通道下线降级为存档；独立直开远程页从静默 iframe 改为显式错误态。
+- 迁移指南「三B-1 远程页面如何取宿主运行时」更新：0.4.1 起静态导入已是标准（自动惰性单例代理），globalThis 直取降级为特殊场景；坑 #10 同步改写。
+- README API 参考新增 §8（remoteComponent 选项表与语义）。
+
 ## 0.6.2（2026-09-20）
 
 ### 变更（目录结构定稿，宿主应用补齐）

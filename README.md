@@ -3,7 +3,7 @@
 > **fulgurjs** — 拉丁语「闪电 · 辉光」。
 > 一个把 Vite 模块联邦做到开箱即用的插件：**一套配置，dev / prod 双引擎，语义对齐 Webpack Module Federation**。
 
-![tests](https://img.shields.io/badge/tests-148%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-%3C%205KB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
+![tests](https://img.shields.io/badge/tests-173%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-%3C%205KB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
 
 ---
 
@@ -33,6 +33,7 @@
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
 - **CLI（主包内置 bin）**：`fulgurjs init`——`fulgurjs.config.ts` 单配置驱动的迁移生成器（模板 = 真实工程验证形态：vite 配置/路由表/桥/联邦启动器/NGINX conf 全量编码，锚点补丁幂等可续跑）；`fulgurjs doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
 - **跨应用全局配置协商（W4）**：`provideFulgurjsAppConfig({ locale, size, ... })` 一次写入运行时页面级单例，各远程副本经 `getFulgurjsAppConfig()` 消费注入（EP locale/size 类问题的机制化收编）
+- **Vue 直渲染（0.7.0 起）**：`remoteComponent('remote/X')`（`@fulgurjs/federation/vue` 子路径）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法），runtime.js 零框架依赖零体积增量
 - **全链路错误码体系（30 码）**：CFG/DEV/BLD/MFU 四段 + 手册 §8 码表防漂移校验
 
 ## 安装
@@ -100,6 +101,11 @@ import Button from 'remote-a/Button'
 import { loadRemote, registerRemote, preloadRemote } from 'virtual:fulgurjs-runtime'
 
 const Chart = defineAsyncComponent(() => loadRemote('remote-a/Chart').then(m => m.default))
+
+// Vue 组件直渲染（0.7.0 起推荐）：remoteComponent = 上行的标准封装
+// 加载失败显式错误占位（错误码+根因+修法），loading/错误组件可自定义
+import { remoteComponent } from '@fulgurjs/federation/vue'
+const ChartCard = remoteComponent('remote-a/Chart', { retries: 2 })
 
 // 构建时地址未知的远程？运行时注册（对齐 webpack promise remote 语义）
 registerRemote({ name: 'shop', entry: await (await fetch('/api/remote-url')).text() })
@@ -407,6 +413,35 @@ export default defineFulgurjsConfig({
 | prod | `/<base>/fulgurjs-manifest.json` | expose chunk/CSS 清单（preloadRemote 消费，**no-cache**） |
 
 NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgurjs init --config` 自动生成，样例见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html)。
+
+### 8. `remoteComponent` — Vue 远程组件直渲染（`@fulgurjs/federation/vue`，0.7.0 起）
+
+```ts
+import { remoteComponent } from '@fulgurjs/federation/vue'
+
+const FederatedBusinessForm = remoteComponent('demo-host/FormRouterPage')
+const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
+  loadingComponent: MyLoading,   // 可选：加载期组件
+  errorComponent: MyError,       // 可选：失败期组件（收到 error prop）
+  retries: 2,                    // 可选：透传 loadRemote 单次调用级重试覆盖
+})
+```
+
+| 选项 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `loadingComponent` | `Component` | — | 加载期间展示 |
+| `errorComponent` | `Component` | 内置错误占位 | 加载失败展示（Vue 会传入 `error` prop） |
+| `retries` | `number` | 远程注册值（默认 2） | 透传 `loadRemote` |
+| `delay` | `number` | `200` | 切到 loadingComponent 前的等待（ms） |
+| `timeout` | `number` | — | 超时进错误态（ms）；不设由 runtime 容器超时兜底 |
+
+语义与边界：
+
+- 内部 = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件，`props`（如 `form-params`）在使用处直接透传；
+- **无任何兜底/降级**（H3 零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法三段式文案），`window` 的 `fulgurjs:error` 事件由 runtime 层照常发出；
+- 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
+- `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：仅使用 `./vue` 子路径时才需要安装 Vue；runtime.js 保持框架无关（不 import vue），体积零增量；
+- 运行时实例经 `globalThis.__FULGURJS_RUNTIME__` 页面级单例复用，与 `virtual:fulgurjs-runtime` 的导入殊途同归，无需额外接线。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
