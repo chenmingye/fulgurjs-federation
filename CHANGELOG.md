@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.2（2026-09-21）
+
+### 修复（类型兼容，用户 IDE 实测暴露）
+
+- **`provideGlobalConfig(getFulgurjsAppContext(), app)` 的 ts(2345)**：EP `ConfigProviderProps.locale`
+  为 `Language` 类型，context 的 `locale` 按设计是 `unknown` 扩展位——集成模板三处消费端
+  （宿主桥 + bpm/lowcode federatedBoot）改为 `as Record<string, any>` 断言（消费端按 UI 库形状收窄）。
+
+### 精简（AppContext 默认 provide 9 键 → 6 键，用户反馈"互相传的东西太多"）
+
+- **`token` 一次性快照移出默认 provide**：与 `getToken` 函数引用重复且会过期（拉取式永不过期）；
+  `FulgurjsAppContext` 类型同步删除 `token` 字段。取值一律 `getToken()`。
+- **`formUrl` / `baseUrl` 移出默认 provide**：自 0.7.0 `remoteComponent` 直渲染（iframe 通道删除）后
+  无消费点。项目如需可经扩展位 `[key: string]: unknown` 自行提供。
+- 取证依据：testbed 全量 grep 上述三键零消费（除 bridge 传参本身）；`user` / `getToken` / `store` /
+  `hostApp` / `locale` / `events` 六键各有真实消费点（boot 双注入 / EP 注入 / 方法池 / 组件注册），保留。
+- 单测同步（扩展位语义用例）；README §9 示例与字段表、迁移指南三C 同步。
+
 ## 0.8.1（2026-09-21）
 
 ### 文档（0.8.0 使用文档补齐，零运行时变化）

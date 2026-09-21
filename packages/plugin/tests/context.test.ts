@@ -23,11 +23,12 @@ beforeEach(() => {
 describe('AppContext：provide merge 幂等', () => {
   it('两次 provide 叠加，后写覆盖同键，先写键保留', () => {
     provideFulgurjsAppContext({ user: { id: '101' }, locale: 'zh-cn' })
-    provideFulgurjsAppContext({ locale: 'en', token: 'tk-1' })
+    provideFulgurjsAppContext({ locale: 'en', baseUrl: '/demo' })
     const ctx = getFulgurjsAppContext()
     expect(ctx.user).toEqual({ id: '101' })
     expect(ctx.locale).toBe('en')
-    expect(ctx.token).toBe('tk-1')
+    // 扩展位：项目自定义键经 [key: string]: unknown 透传（0.8.2 起 token/formUrl/baseUrl 不在默认 provide）
+    expect(ctx.baseUrl).toBe('/demo')
   })
 
   it('同键重复 provide 幂等（值相同不抖动）', () => {

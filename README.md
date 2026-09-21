@@ -456,12 +456,12 @@ import { provideFulgurjsAppContext } from '@fulgurjs/federation/context'
 
 provideFulgurjsAppContext({
   user,                                  // 宿主登录用户原始形态
-  token, getToken,                       // token 快照 + 取最新 token（拉取式防过期）
+  getToken,                              // 取最新 token（拉取式防过期）
   store: piniaInstance,                  // 宿主 pinia：子应用 useUserStore(ctx.store) 共享响应式状态
   hostApp: app,                          // 宿主 Vue App 实例：全局组件/指令注册目标
   locale,                                // EP locale 等 UI 配置
   events: { main: mainEvents },          // 事件/方法池：宿主提供 main；子应用反向注册 bpm.* / lowcode.*
-  formUrl: '/flowable', baseUrl: '/demo', // 项目扩展位（自定义键）
+  // 0.8.2 精简：只传有真实消费的键。项目自定义键经扩展位按需自行提供（如 baseUrl: '/demo'）
 })
 
 // —— 远程 boot（exposes/federatedBoot.ts）：显式校验消费 ——
@@ -484,13 +484,12 @@ getFulgurjsAppContext().events!.bpm = { formEvent, formSubmitEvent }
 | 字段 | 类型 | 语义 | 写方 |
 |---|---|---|---|
 | `user` | `Record<string, any>` | 宿主登录用户原始形态 | 宿主桥（只读约定） |
-| `token` | `string \| undefined` | 当前 token 快照 | 宿主桥（只读约定） |
-| `getToken` | `() => string \| undefined` | **取最新 token**（拉取式防过期） | 宿主桥（只读约定） |
+| `getToken` | `() => string \| undefined` | **取最新 token**（拉取式防过期；0.8.2 起不再默认传一次性 token 快照——快照会过期） | 宿主桥（只读约定） |
 | `store` | `unknown`（运行时为宿主 pinia） | 子应用挂载/读取宿主共享响应式状态 | 宿主桥（只读约定） |
 | `hostApp` | Vue App 实例（同 realm 直引用） | 全局组件/指令注册目标 | 宿主桥（只读约定） |
 | `locale` | `unknown` | EP locale 等 UI 配置 | 宿主桥（只读约定） |
 | `events` | `Record<string, any>` | 事件/方法池：`events.main.*` 宿主提供、`events.bpm.*` / `events.lowcode.*` 子应用反向注册 | 宿主桥建池，子应用挂载 |
-| （扩展位） | `[key: string]: unknown` | `formUrl` / `baseUrl` 等项目自定义键 | 宿主桥；远程 boot 只增不改宿主键 |
+| （扩展位） | `[key: string]: unknown` | 项目自定义键（`formUrl` / `baseUrl` 等按需自行提供，模板默认不传） | 宿主桥；远程 boot 只增不改宿主键 |
 
 变更语义与时序契约：
 
