@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1（2026-09-21）
+
+### 文档（0.8.0 使用文档补齐，零运行时变化）
+
+- **README 新增 §9.1「乾坤功能融合三件套 + 联邦诊断面板」**：A 保活（`keepAlive: true` 页面级配置、include 白名单与 max=8 语义、默认关的原因）/ B 骨架屏（内置自动，无需配置）/ C 空闲预载（`PREFETCH_REMOTES` 开关）/ D 诊断面板（`/fulgurjs-demo` 六块内容表）/ E IDE 说明。
+- **README §9 方法模块补端到端示例**（exposes 声明 → api.ts 纯函数 → loadRemote 调用三步）。
+- **迁移指南新增「三E 乾坤融合三件套 + 诊断面板」速查表**（配置入口/默认值/行为），含 IDE 提示。
+- **IDE 说明**（同入每应用 `src/fulgurjs/README.md` 模板）：`types/*.d.ts` 生成物在 VSCode/Volar 打开时可能显示跨工程「找不到模块 '@/...'」波浪线（推断项目检查工程外 .vue 的显示问题）——命令行 `vue-tsc --noEmit` 走本应用 tsconfig 为 0 错误，构建不受影响；升级后 context 导入报 ts(2307) 为 IDE 旧包缓存，Restart TS Server 即消。
+- 修复：集成器 pages.ts 模板注释与现场对齐（`defineAsyncComponent` 不支持 `name` 选项的表述清理）。
+
 ## 0.8.0（2026-09-20）
 
 ### 新增（跨应用传值与方法引用收编 + 乾坤功能融合，设计文档 docs/跨应用传值与方法引用设计方案-2026-09-20.md 定稿实施）

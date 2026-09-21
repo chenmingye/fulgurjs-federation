@@ -507,7 +507,65 @@ getFulgurjsAppContext().events!.bpm = { formEvent, formSubmitEvent }
 
 方法模块规范：`src/fulgurjs/exposes/` 下的 `api.ts` 导出纯函数/服务对象（不挂 Vue 组件）；依赖宿主单例的函数（如 defHttp 走 shared）直接写，联邦协商保证同模块图。
 
+端到端示例（提供方 admin，消费方任意应用）：
+
+```ts
+// ① 提供方 vite.config.ts：exposes 加一条
+exposes: { './api': './src/fulgurjs/exposes/api.ts' }
+
+// ② 提供方 src/fulgurjs/exposes/api.ts：导出纯函数
+import { defHttp } from '/@/utils/http/axios'
+export function getDictItems(dictCode: string) {
+  return defHttp.get({ url: '/sys/dict/getDictItems/' + dictCode }, {})
+}
+
+// ③ 消费方（任意页面，类型直连自动覆盖）：
+const { getDictItems } = await loadRemote('demo-host/api')
+const res = await getDictItems('sex')
+```
+
 存储说明：context 与旧 W4 存储（`__FULGURJS_APP_CONFIG__`）是**同一份**——旧名 `provideFulgurjsAppConfig / getFulgurjsAppConfig`（`virtual:fulgurjs-runtime`）继续可用但已标 `@deprecated`（0.9 删除）；runtime.js 逻辑 0.8.0 零改动，全部新 API 落在 context 子路径（~2KB 独立文件）。
+
+### 9.1 乾坤功能融合三件套 + 联邦诊断面板（0.8.0，全部宿主/模板侧，runtime 零改动）
+
+以下能力由 `fulgurjs init` 集成器生成的模板直接带出（迁移指南「三E」有面向迁移者的同款说明）；手工集成的项目按下面的接入点自行落位。
+
+#### A. 联邦页面保活（多 tab 切走切回状态不丢）
+
+- **配置**：页面路由表条目加 `keepAlive: true`（集成器项目改 `fulgurjs.config.ts` 的 `host.pages` 后重跑 init 并**删除已生成产物**；手工项目直接改 `src/fulgurjs/host/pages.ts` 的页面表）：
+
+```ts
+{ route: '/flowable/bpm/task/todo', name: 'BpmTodoTask', title: '待办任务', keepAlive: true },
+```
+
+- **机制**：宿主 LayoutContent 联邦分支外包 `<keep-alive :include="fulgurjsKeepAliveNames" :max="8">`——include 白名单 = `keepAlive: true` 页面的 spec 清洗名，`max=8` 原生 LRU 防内存失控。**默认全部关闭**：重型组件（vxe-table/表单设计器）缓存成本高，按页显式开启。
+- **行为**：切走再切回，表单/筛选/滚动位置原样保留（组件 deactivate 而非销毁）；跳转参数（fullPath）不同视为不同缓存条目。
+
+#### B. 页面加载骨架屏（默认开启，无需配置）
+
+页面组件工厂的异步组件内置 `loadingComponent`（4 条渐变动画骨架条，`delay: 200ms` 防闪）——首次进入联邦页/冷启动预构建窗口期间内容区显示骨架而非白屏。
+
+#### C. 空闲预载（默认开启，可关闭）
+
+宿主桥登录完成后 `requestIdleCallback` 逐个 `preloadRemote(remote, { mode: 'prefetch' })`（低优先级不抢带宽）——首次点开子应用菜单不再等 chunk 下载。**开关**：`src/fulgurjs/host/bridge.ts` 顶部 `PREFETCH_REMOTES: string[]`（remote 名数组，置空 `[]` 即关闭）。预载失败走 MFU-007 语义（`fulgurjs:error` 事件 + console 警告，不阻断业务）。
+
+#### D. 联邦诊断面板（免登录页 `/fulgurjs-demo`）
+
+演示页升级为运行时诊断面板（源自乾坤 v3 inspector 概念的轻量化，不做浏览器扩展），六块信息实时读取：
+
+| 块 | 内容 |
+|---|---|
+| ① 方法模块调用演示 | 按钮实调 `loadRemote('demo-host/api')` → `getDictItems('sex')` 并显示结果（方法引用通道②的活样例） |
+| ② remotes 状态 | 各 remote 的 entry / 加载状态 / 容器加载耗时 |
+| ③ shared 协商 | 共享键 → version ← 提供方（多版本并存可见） |
+| ④ context 快照 | AppContext 每个键的值形态（函数引用/对象/字符串，含 events 池） |
+| ⑤ fulgurjs:error 历史日志 | window 事件累积（时间戳 + remote + 错误消息），本轮会话零错误则显示"无错误" |
+| ⑥ 远程资源加载耗时 | performance resource 中 fulgurjs/remoteEntry/chunk 相关条目与耗时 |
+
+#### E. IDE 说明（`src/fulgurjs/` 目录的红波浪线）
+
+- `types/` 下的 `*.d.ts` 是**插件每次 dev 自动生成**的类型直连声明（勿手改）：内部 `export * from '../../../demo-app-xxx/src/***.vue'` 指向**兄弟工程的源码**。命令行 `vue-tsc --noEmit`（走本应用 tsconfig，skipLibCheck 生效）为 **0 错误**；但 **VSCode/Volar 在打开这些 d.ts 时**可能把工程外 .vue 用推断项目（inferred project，无 tsconfig 上下文）展开检查，显示大片"找不到模块 '@/...'"——**仅编辑器显示问题，不影响命令行检查与构建**，不打开 `types/` 生成物即无感。
+- 升级插件版本后若 `import '@fulgurjs/federation/context'` 报 ts(2307)：是 IDE 的 TS 服务缓存了旧包——`Restart TS Server`（⌘⇧P）或重开窗口即可。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
