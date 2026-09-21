@@ -525,43 +525,95 @@ const res = await getDictItems('sex')
 
 存储说明：context 与旧 W4 存储（`__FULGURJS_APP_CONFIG__`）是**同一份**——旧名 `provideFulgurjsAppConfig / getFulgurjsAppConfig`（`virtual:fulgurjs-runtime`）继续可用但已标 `@deprecated`（0.9 删除）；runtime.js 逻辑 0.8.0 零改动，全部新 API 落在 context 子路径（~2KB 独立文件）。
 
-### 9.1 乾坤功能融合三件套 + 联邦诊断面板（0.8.0，全部宿主/模板侧，runtime 零改动）
+### 9.1 乾坤功能融合：保活 / 骨架屏 / 空闲预载 / 诊断面板（宿主与模板侧能力）
 
-以下能力由 `fulgurjs init` 集成器生成的模板直接带出（迁移指南「三E」有面向迁移者的同款说明）；手工集成的项目按下面的接入点自行落位。
+这些能力随 `fulgurjs init` 生成的模板直接带出（手工集成的项目按下述接入点自行落位），插件 runtime.js 零参与。配置面总览：
 
-#### A. 联邦页面保活（多 tab 切走切回状态不丢）
+| 能力 | 配置项 | 类型 | 默认值 | 配置位置 |
+|---|---|---|---|---|
+| 页面保活 | `keepAlive` | `boolean` | `false` | 页面路由表条目（`src/fulgurjs/host/pages.ts`） |
+| 页面加载骨架屏 | —（内置，无配置项） | — | 见下方内置参数 | `src/fulgurjs/host/pages.ts` 页面工厂 |
+| 空闲预载 | `PREFETCH_REMOTES` | `string[]` | 全部 remotes 键 | `src/fulgurjs/host/bridge.ts` 顶部常量 |
+| 联邦诊断面板 | —（内置页面） | — | 常驻 | 路由 `/fulgurjs-demo` |
 
-- **配置**：页面路由表条目加 `keepAlive: true`（集成器项目改 `fulgurjs.config.ts` 的 `host.pages` 后重跑 init 并**删除已生成产物**；手工项目直接改 `src/fulgurjs/host/pages.ts` 的页面表）：
+#### 9.1.1 页面保活 — `keepAlive`
+
+页面级布尔开关：开启后该页面切换到其他标签页时**组件实例不销毁**（deactivate），切回时表单输入、筛选条件、滚动位置原样恢复。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `keepAlive` | `boolean` | `false` | `true` = 该页面纳入 LayoutContent 联邦分支 `<keep-alive>` 的 include 白名单 |
 
 ```ts
-{ route: '/flowable/bpm/task/todo', name: 'BpmTodoTask', title: '待办任务', keepAlive: true },
+// src/fulgurjs/host/pages.ts — 页面路由表条目
+
+// 开启保活（显式）
+{ route: '/flowable/bpm/task/todo', name: 'BpmTodoTask', title: '待办任务', keepAlive: true }
+
+// 关闭保活：不写该字段，或显式 false（二者等价，默认即关）
+{ route: '/flowable/bpm/manager/form', name: 'BpmForm', title: '流程表单', keepAlive: false }
 ```
 
-- **机制**：宿主 LayoutContent 联邦分支外包 `<keep-alive :include="fulgurjsKeepAliveNames" :max="8">`——include 白名单 = `keepAlive: true` 页面的 spec 清洗名，`max=8` 原生 LRU 防内存失控。**默认全部关闭**：重型组件（vxe-table/表单设计器）缓存成本高，按页显式开启。
-- **行为**：切走再切回，表单/筛选/滚动位置原样保留（组件 deactivate 而非销毁）；跳转参数（fullPath）不同视为不同缓存条目。
+行为与边界：
 
-#### B. 页面加载骨架屏（默认开启，无需配置）
+- 缓存上限 `max: 8`（Vue 原生 LRU，超出后最久未访问的页面实例被销毁）；
+- 缓存键 = 页面 spec 清洗名（`Fulgurjs_<remote>_<expose键>`），同一路由不同参数（fullPath 不同）各占一个缓存条目；
+- **默认全关的原因**：vxe-table、表单设计器等重型组件的缓存内存成本高，按页面逐个显式开启；
+- 开启页面的组件若注册了 `window` 级监听/定时器/context 反向注册，须遵循迁移指南「三D 页面卸载清理清单」（保活页只在真正被 LRU 淘汰时才 unmount）。
 
-页面组件工厂的异步组件内置 `loadingComponent`（4 条渐变动画骨架条，`delay: 200ms` 防闪）——首次进入联邦页/冷启动预构建窗口期间内容区显示骨架而非白屏。
+#### 9.1.2 页面加载骨架屏 — 内置 `loadingComponent`（无配置项）
 
-#### C. 空闲预载（默认开启，可关闭）
+页面组件工厂的 `defineAsyncComponent` 内置了加载期占位：联邦页面 chunk 下载/模块执行期间，内容区显示 4 条渐变动画骨架条而非白屏。**本能力无配置项**，内置参数如下：
 
-宿主桥登录完成后 `requestIdleCallback` 逐个 `preloadRemote(remote, { mode: 'prefetch' })`（低优先级不抢带宽）——首次点开子应用菜单不再等 chunk 下载。**开关**：`src/fulgurjs/host/bridge.ts` 顶部 `PREFETCH_REMOTES: string[]`（remote 名数组，置空 `[]` 即关闭）。预载失败走 MFU-007 语义（`fulgurjs:error` 事件 + console 警告，不阻断业务）。
+| 内置参数 | 值 | 说明 |
+|---|---|---|
+| `loadingComponent` | `FulgurjsSkeleton`（4 条渐变动画条） | 工厂内置组件，位于 `src/fulgurjs/host/pages.ts` |
+| `delay` | `200`（毫秒） | 超过 200ms 未加载完成才显示骨架——快速加载时不闪烁 |
+| `errorComponent` | 内置错误占位 | 加载失败显示 spec + 完整错误（错误码 + 根因 + 修法） |
 
-#### D. 联邦诊断面板（免登录页 `/fulgurjs-demo`）
+如需自定义加载占位（如品牌 logo 动画），不经页面工厂，改用 `remoteComponent(spec, { loadingComponent })`（见 §8）。
 
-演示页升级为运行时诊断面板（源自乾坤 v3 inspector 概念的轻量化，不做浏览器扩展），六块信息实时读取：
+#### 9.1.3 空闲预载 — `PREFETCH_REMOTES`
+
+宿主桥（登录完成后）经 `requestIdleCallback` 在浏览器空闲期逐个调用 `preloadRemote(name, { mode: 'prefetch' })`，把各远程的 remoteEntry / expose chunk / CSS 以**低优先级**（`fetchPriority="low"` 的 modulepreload）预取到本地——用户首次点开子应用菜单时无需等待网络。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `PREFETCH_REMOTES` | `string[]` | 全部 remotes 键 | 参与空闲预载的 remote 名单（与 vite.config `remotes` 键一致） |
+
+```ts
+// src/fulgurjs/host/bridge.ts 顶部
+
+// 默认：预载全部 remote（init 集成器按 fulgurjs.config.ts 的 remotes 自动生成）
+const PREFETCH_REMOTES: string[] = ['mes-bpm', 'mes-lowcode']
+
+// 只预载部分 remote
+const PREFETCH_REMOTES: string[] = ['mes-bpm']
+
+// 关闭空闲预载：置空数组
+const PREFETCH_REMOTES: string[] = []
+```
+
+行为与边界：
+
+- 预载失败**不阻断业务**：runtime 按 MFU-007 语义发出 `window` 的 `fulgurjs:error` 事件并 console 警告（诊断面板⑤可查历史）；
+- 预载仅注入 `<link rel="modulepreload">`，不执行模块——首次打开页面时才真正初始化容器；
+- 触发时机：宿主桥每次页面加载同步执行（幂等），实际预取发生在浏览器空闲回调中。
+
+#### 9.1.4 联邦诊断面板（免登录页，无配置项）
+
+演示页升级为运行时诊断面板（源自乾坤 v3 inspector 概念的轻量化），访问路由 `meta.ignoreAuth` 的 `/fulgurjs-demo`（prod 为 `/main/fulgurjs-demo`），六块信息实时读取运行时注册表：
 
 | 块 | 内容 |
 |---|---|
 | ① 方法模块调用演示 | 按钮实调 `loadRemote('demo-host/api')` → `getDictItems('sex')` 并显示结果（方法引用通道②的活样例） |
-| ② remotes 状态 | 各 remote 的 entry / 加载状态 / 容器加载耗时 |
+| ② remotes 状态 | 各 remote 的 entry / 加载状态（idle/loading/loaded/failed）/ 容器加载耗时 |
 | ③ shared 协商 | 共享键 → version ← 提供方（多版本并存可见） |
-| ④ context 快照 | AppContext 每个键的值形态（函数引用/对象/字符串，含 events 池） |
-| ⑤ fulgurjs:error 历史日志 | window 事件累积（时间戳 + remote + 错误消息），本轮会话零错误则显示"无错误" |
-| ⑥ 远程资源加载耗时 | performance resource 中 fulgurjs/remoteEntry/chunk 相关条目与耗时 |
+| ④ context 快照 | AppContext 每个键的值形态（函数引用 / 对象 / 字符串，含 events 池） |
+| ⑤ fulgurjs:error 历史日志 | window 事件累积（时间戳 + remote + 错误消息），本轮会话零错误显示"无错误" |
+| ⑥ 远程资源加载耗时 | performance resource 中 fulgurjs / remoteEntry / chunk 相关条目与耗时 |
 
-#### E. IDE 说明（`src/fulgurjs/` 目录的红波浪线）
+#### 9.1.5 IDE 说明（`src/fulgurjs/` 目录的红波浪线）
 
 - `types/` 下的 `*.d.ts` 是**插件每次 dev 自动生成**的类型直连声明（勿手改）：内部 `export * from '../../../demo-app-xxx/src/***.vue'` 指向**兄弟工程的源码**。命令行 `vue-tsc --noEmit`（走本应用 tsconfig，skipLibCheck 生效）为 **0 错误**；但 **VSCode/Volar 在打开这些 d.ts 时**可能把工程外 .vue 用推断项目（inferred project，无 tsconfig 上下文）展开检查，显示大片"找不到模块 '@/...'"——**仅编辑器显示问题，不影响命令行检查与构建**，不打开 `types/` 生成物即无感。
 - 升级插件版本后若 `import '@fulgurjs/federation/context'` 报 ts(2307)：是 IDE 的 TS 服务缓存了旧包——`Restart TS Server`（⌘⇧P）或重开窗口即可。
