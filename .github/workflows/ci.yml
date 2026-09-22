@@ -68,5 +68,7 @@ jobs:
       - name: Playwright chromium
         run: pnpm --dir e2e exec playwright install --with-deps chromium
       - name: e2e（dev + fault 套件）
-        run: pnpm --dir e2e exec playwright test --project=dev --project=fault
+        run: pnpm --dir e2e exec playwright test --project=dev --project=fault --global-timeout=600000
+        # --global-timeout：Playwright 内部若卡死（如收尾等待进程退出），10 分钟强制结束并报告，
+        # 不依赖外层 timeout-minutes 才发现问题（2026-09-22 曾出现测试全过后步骤空转 19 分钟）
 

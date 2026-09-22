@@ -1,5 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// dev server 的输出通道：CI 下必须与步骤 stdout 解耦——Playwright 收尾若未能杀净 dev server 的
+// 孙进程（pnpm → sh → vite → esbuild 的进程树），残留进程会占住 step 的 stdout 管道，
+// 使步骤永不结束（2026-09-22 实测：测试 12/12 全过后步骤空转 19 分钟被 timeout 取消）。
+// 本地保留 pipe 以便排障（本地 shell 不受此影响）。
+const serverStdio = process.env.CI ? ('ignore' as const) : ('pipe' as const)
+
 export default defineConfig({
   testDir: './tests',
   timeout: 60_000,
@@ -25,6 +31,8 @@ export default defineConfig({
           cwd: '../fixtures/remote-a',
           url: 'http://localhost:5101/@fulgurjs-manifest.json',
           reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
           timeout: 90_000,
         },
         {
@@ -32,6 +40,8 @@ export default defineConfig({
           cwd: '../fixtures/remote-b',
           url: 'http://localhost:5102/@fulgurjs-manifest.json',
           reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
           timeout: 90_000,
         },
         {
@@ -39,6 +49,8 @@ export default defineConfig({
           cwd: '../fixtures/host-vue',
           url: 'http://localhost:5100',
           reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
           timeout: 90_000,
         },
       ],
