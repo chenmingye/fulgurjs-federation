@@ -288,31 +288,3 @@ describe('D.3 运行时契约官方化：getRuntime / version / 冻结', () => {
   })
 })
 
-describe('W4: provideFulgurjsAppConfig / getFulgurjsAppConfig（跨应用全局配置协商）', () => {
-  it('宿主写入 → getFulgurjsAppConfig 原样读出', async () => {
-    const { provideFulgurjsAppConfig, getFulgurjsAppConfig } = await import('../src/runtime/index')
-    const locale = { name: 'zh-cn', el: { pagination: { total: '共 {total} 条' } } }
-    provideFulgurjsAppConfig({ locale })
-    expect(getFulgurjsAppConfig().locale).toBe(locale)
-    expect((globalThis as any).__FULGURJS_APP_CONFIG__.locale).toBe(locale)
-  })
-
-  it('多次 provide 为浅合并（locale 与 size 互不覆盖）', async () => {
-    const { provideFulgurjsAppConfig, getFulgurjsAppConfig } = await import('../src/runtime/index')
-    const locale = { name: 'zh-cn' }
-    provideFulgurjsAppConfig({ locale })
-    provideFulgurjsAppConfig({ size: 'small' })
-    const cfg = getFulgurjsAppConfig()
-    expect(cfg.locale).toBe(locale)
-    expect(cfg.size).toBe('small')
-  })
-
-  it('W3 回归：runtime 单例冻结后 W4 API 在方法面可用', async () => {
-    const { getRuntime } = await import('../src/runtime/index')
-    const rt = getRuntime()
-    expect(typeof rt.provideFulgurjsAppConfig).toBe('function')
-    expect(typeof rt.getFulgurjsAppConfig).toBe('function')
-    rt.provideFulgurjsAppConfig({ probe: 1 })
-    expect(rt.getFulgurjsAppConfig().probe).toBe(1)
-  })
-})

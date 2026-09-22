@@ -90,10 +90,10 @@ describe('运行时惰性委托模块（genRuntimeProxyModule）', () => {
     }
   })
 
-  it('同步 API 走全局单例/镜像（单例未建时 getFulgurjsAppConfig 仍可用）', () => {
+  it('委托模块走全局单例（不再携带跨应用配置 API——已收编至 context 子路径）', () => {
     const code = genRuntimeProxyModule()
     expect(code).toContain('__FULGURJS_RUNTIME__')
-    expect(code).toContain('__FULGURJS_APP_CONFIG__')
+    expect(code).not.toContain('FulgurjsAppConfig')
   })
 })
 

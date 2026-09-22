@@ -9,13 +9,11 @@ const PKG = join(__dirname, '..')
 const RUNTIME_EXPORTS = [
   'default',
   'getContainer',
-  'getFulgurjsAppConfig',
   'getRuntime',
   'initSharing',
   'loadRemote',
   'loadShare',
   'preloadRemote',
-  'provideFulgurjsAppConfig',
   'registerPlugins',
   'registerRemote',
   'registerRemotes',

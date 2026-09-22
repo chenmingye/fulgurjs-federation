@@ -16,7 +16,8 @@ import {
 
 // 存储在运行时单例闭包内、跨用例共享——每用例前清空防状态污染
 beforeEach(() => {
-  const ctx = runtime.getFulgurjsAppConfig() as Record<string, any>
+  // 存储本体 = globalThis 页面级镜像对象（context 直连，不经 runtime）
+  const ctx = ((globalThis as any).__FULGURJS_APP_CONFIG__ ?? {}) as Record<string, any>
   for (const k of Object.keys(ctx)) delete ctx[k]
 })
 
@@ -46,7 +47,7 @@ describe('AppContext：get 快照（传输层，嵌套引用共享）', () => {
     // 同 realm 直引用语义：子应用挂属性 / 宿主改属性，双方即时可见
     ;(ctx.events as any).main.newMethod = () => 42
     expect(mainEvents.newMethod()).toBe(42)
-    expect((runtime.getFulgurjsAppConfig() as any).events.main.newMethod()).toBe(42)
+    expect(((globalThis as any).__FULGURJS_APP_CONFIG__ as any).events.main.newMethod()).toBe(42)
   })
 })
 

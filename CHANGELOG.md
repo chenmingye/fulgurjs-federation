@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0（2026-09-22）
+
+### 破坏性变更（正式定版，API 面冻结）
+
+- **删除旧配置 API**：`provideFulgurjsAppConfig` / `getFulgurjsAppConfig` 从 runtime、虚拟门面
+  （`virtual:fulgurjs-runtime` 委托模块）、`client.d.ts` 类型面全部移除——跨应用传值**唯一通道**为
+  `@fulgurjs/federation/context` 的 `provideFulgurjsAppContext` / `getFulgurjsAppContext` /
+  `requireFulgurjsAppContext`。存储本体即全局镜像对象 `window.__FULGURJS_APP_CONFIG__`（不再经
+  runtime 转发），runtime 包体相应缩减。
+- 迁移：全局搜索 `provideFulgurjsAppConfig` / `getFulgurjsAppConfig` 替换为 context 子路径对应函数
+  （语义一一对应，仅函数名与导入路径变化）。
+
+### 清理（无历史遗留）
+
+- **移除 `docs/manual.html`**（早期手册的历史存档，其引用的截图已不在仓库）——README 为唯一权威文档。
+- 设计文档状态勘误：D.2 / D.4 / D.5 已实施项的状态标记修正（原标注"待执行/未实现"）。
+
+
 ## 0.9.0（2026-09-21）
 
 ### 新增（发布可靠性 + IDE 边界 + 配置面）

@@ -32,10 +32,10 @@
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
 - **CLI（主包内置 bin）**：`fulgurjs init`——`fulgurjs.config.ts` 单配置驱动的迁移生成器（模板 = 真实工程验证形态：vite 配置/路由表/桥/联邦启动器/NGINX conf 全量编码，锚点补丁幂等可续跑）；`fulgurjs doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
-- **跨应用传值与方法引用**：`@fulgurjs/federation/context` 子路径——`provideFulgurjsAppContext` / `getFulgurjsAppContext` / `requireFulgurjsAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。旧名 `provideFulgurjsAppConfig/getFulgurjsAppConfig` 保留为 deprecated 别名（存储同一份）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）
+- **跨应用传值与方法引用**：`@fulgurjs/federation/context` 子路径——`provideFulgurjsAppContext` / `getFulgurjsAppContext` / `requireFulgurjsAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）
 - **Vue 直渲染**：`remoteComponent('remote/X')`（`@fulgurjs/federation/vue` 子路径）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法），runtime.js 零框架依赖零体积增量
 - **CSP 友好**：原生 ESM 加载路径全程无 `eval` / `new Function`，可在严格 CSP（无 `unsafe-eval`）下运行
-- **全链路错误码体系（32 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §8 码表防漂移校验
+- **全链路错误码体系（30 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §8 码表防漂移校验
 
 ## 安装
 
@@ -147,7 +147,7 @@ npx fulgurjs doctor --base http://localhost:5173 --apps app-a --dev
 
 ## API 参考
 
-以下覆盖插件的全部公开 API，签名与默认值与源码一致——**本 README 为唯一权威文档**（仓库内 `docs/manual.html` 为早期补充手册，部分内容基于较早形态，仅作参考）。
+以下覆盖插件的全部公开 API，签名与默认值与源码一致——**本 README 为唯一权威文档**。
 
 ### 1. `federation(options)` — Vite 插件（宿主/远程同一份 API）
 
@@ -229,7 +229,7 @@ shared: {
 
 ```ts
 // 宿主页面、远程页面，写法完全一致
-import { loadRemote, provideFulgurjsAppConfig } from 'virtual:fulgurjs-runtime'
+import { loadRemote } from 'virtual:fulgurjs-runtime'
 ```
 
 > 仍可绕过代理直取全局单例（等价，调试用）：`(globalThis as any).__FULGURJS_RUNTIME__`。
@@ -248,8 +248,6 @@ import { loadRemote, provideFulgurjsAppConfig } from 'virtual:fulgurjs-runtime'
 | `registerShare` | `(scope, name, version, get, opts?) => void` | 手工注册共享模块（一般由 init 模块自动完成） |
 | `initSharing` | `(scopeName?) => ShareScopeMap` | 初始化共享作用域（一般由 init 模块自动完成） |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | 注册运行时插件（见下） |
-| `provideFulgurjsAppConfig` | `(config: Record<string, any>) => void` | **@deprecated** 改用 `@fulgurjs/federation/context` 的 `provideFulgurjsAppContext`（存储同一份；见 §9） |
-| `getFulgurjsAppConfig` | `() => Record<string, any>` | **@deprecated** 改用 `@fulgurjs/federation/context` 的 `getFulgurjsAppContext`（存储同一份；见 §9） |
 | `getRuntime` | `() => FulgurjsRuntime` | 取运行时单例本体（与 `__FULGURJS_RUNTIME__` 同一实例） |
 | `version` | `string` | 运行时/插件版本（跨源副本一致性诊断用） |
 | `unwrapDefault` | `(ns: any) => any` | ESM/CJS default interop 工具 |
@@ -366,7 +364,7 @@ export default defineFulgurjsConfig({
 | `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出各应用 `federation()` 粘贴块、NGINX no-cache 站点模板、8 条通用核对清单 |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
-### 6. 错误码总表（32 个）
+### 6. 错误码总表（30 个）
 
 | 段 | 码 | 含义 |
 |---|---|---|
@@ -380,11 +378,9 @@ export default defineFulgurjsConfig({
 | | `CFG-008` | shared 非法组合（eager+import:false / shareKey 重复声明） |
 | DEV 开发期 | `DEV-001` | remote dev server 不可达（manifest 拉取失败） |
 | | `DEV-002` | remote dev manifest 为空或格式不识别 |
-| | `DEV-003` | shared 键被 optimizeDeps.exclude（已撤回，码表保留） |
 | | `DEV-004` | 已知 UMD-only 依赖不在 optimizeDeps.include（预构建内联本地 vue 风险） |
 | | `DEV-005` | remotes dev URL 端口无监听 |
 | | `DEV-006` | 宿主/远程插件版本不一致 |
-| | `DEV-008` | 远程页面静态导入 virtual:fulgurjs-runtime（破坏渲染上下文） |
 | | `DEV-009` | 门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启） |
 | | `DEV-010` | dev 冷启动预构建窗口提示（首轮 30~60s 瞬态，非故障） |
 | BLD 构建期 | `BLD-001` | expose 源文件解析失败 |
@@ -403,7 +399,7 @@ export default defineFulgurjsConfig({
 | CC 跨应用上下文 | `CC-001` | AppContext 必需字段缺失（三段式：got/expected/example，修法指向宿主桥 `provideFulgurjsAppContext`） |
 | | `CC-002` | 运行时单例不可用（独立直开远程页；修法 = 经宿主联邦加载，时序契约 bridge → federatedBoot → loadRemote） |
 
-错误排查三段式文案与「配置出错？报错看得懂」一节（下文）为准；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
+错误排查三段式文案见「配置出错？报错看得懂」一节（下文）；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
 
 ### 7. 产物与端点约定
 
@@ -494,7 +490,7 @@ getFulgurjsAppContext().events!.bpm = { formEvent, formSubmitEvent }
 
 - `provide` = 顶层 merge（后写覆盖，幂等可多次）；约定「宿主先写标准字段，远程只增不改宿主键」；嵌套对象（如 `events`）是**引用共享**，子应用挂属性即时可见（同 realm 直引用）；
 - 时序契约：**bridge（provide）→ federatedBoot（require）→ 页面 loadRemote**——违反即在 boot 处显式失败（CC-001），不静默；
-- 数据语义 = **传输层快照 + 函数引用，非响应式**（与乾坤 props 同语义）。"实时"由三条正规通道承担：① `getToken()` / `events.main.*` 函数引用每次调用执行宿主最新闭包；② `context.store` 把宿主 pinia 递给子应用（共享响应式实例）；③ 登录态变更 = 重新登录 = 页面刷新 = bridge 重跑全新 context。context 本体不做 Vue reactive（runtime 框架无关 + gzip 红线 + 跨包 proxy 双份陷阱）；"中途变更需通知"的场景 0.9 预留 `onAppContextChange` 订阅。
+- 数据语义 = **传输层快照 + 函数引用，非响应式**（与乾坤 props 同语义）。"实时"由三条正规通道承担：① `getToken()` / `events.main.*` 函数引用每次调用执行宿主最新闭包；② `context.store` 把宿主 pinia 递给子应用（共享响应式实例）；③ 登录态变更 = 重新登录 = 页面刷新 = bridge 重跑全新 context。context 本体不做 Vue reactive（runtime 框架无关 + gzip 红线 + 跨包 proxy 双份陷阱）；"中途变更需通知"的场景：等真实需求出现再设计（当前无此场景，不预留空 API）。
 
 方法引用两条通道：
 
@@ -522,7 +518,7 @@ const { getDictItems } = await loadRemote('demo-host/api')
 const res = await getDictItems('sex')
 ```
 
-存储说明：context 与全局镜像 `window.__FULGURJS_APP_CONFIG__` 是**同一份**存储——旧名 `provideFulgurjsAppConfig / getFulgurjsAppConfig`（`virtual:fulgurjs-runtime`）继续可用但已标 `@deprecated`，请统一使用 context 子路径。
+存储说明：context 的存储本体即全局镜像对象 `window.__FULGURJS_APP_CONFIG__`（页面级单例，跨 bundle 副本共享同一份；调试面板可直接查看）。
 
 ### 9.1 乾坤功能融合：保活 / 骨架屏 / 空闲预载 / 诊断面板（宿主与模板侧能力）
 
@@ -705,7 +701,6 @@ const Panel = await loadRemote('shop/Panel', {
 
 ## 文档
 
-- [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) — 早期使用手册（历史存档，不再随 npm 包发布）：webpack 逐项对齐总表与部分实测截图；**当前形态以本 README 为准**
 - [`docs/迁移指南.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md) — qiankun 微前端 → 联邦的真实迁移案例（七步法 + 验收清单）
 - [`docs/webpack-mf-对照与缺口.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md) — webpack MF 逐项对照与明确不支持清单
 - [`docs/沙箱边界审计.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/沙箱边界审计.md) — CSS / 全局变量 / 公共依赖三维度互扰实测

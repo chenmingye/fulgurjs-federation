@@ -244,7 +244,7 @@ function registerRemotesLines(options: NormalizedOptions, command: 'serve' | 'bu
  * - 模块求值期不做任何事（不创建副本、不注册）；
  * - Promise 型 API 在调用期经页面级单例（globalThis.__FULGURJS_RUNTIME__）转发，
  *   动态 import 确保单例已初始化（宿主 init 先行，或独立运行时自建）；
- * - 同步 API 直接读全局单例/镜像（getFulgurjsAppConfig 读 W4 镜像，单例未建也可用）。
+ * - 同步 API（getRuntime/version）直接读全局单例，单例未建时返回 undefined。
  * 用户因此可以在任何文件直接 import { loadRemote } from 'virtual:fulgurjs-runtime'，
  * 无需知道「宿主/远程页面取运行时的不同姿势」。
  */
@@ -269,13 +269,6 @@ export function genRuntimeProxyModule(): string {
     `};`,
     ...promiseApis.map((m) => `export const ${m} = (...a) => __fulgurjs_rt().then((m2) => m2.${m}(...a));`),
     `export const getRuntime = () => (globalThis).__FULGURJS_RUNTIME__;`,
-    `export const getFulgurjsAppConfig = () =>`,
-    `  (globalThis).__FULGURJS_RUNTIME__?.getFulgurjsAppConfig?.() ?? (globalThis).__FULGURJS_APP_CONFIG__ ?? {};`,
-    `export const provideFulgurjsAppConfig = (c) => {`,
-    `  const g = (globalThis);`,
-    `  g.__FULGURJS_APP_CONFIG__ = { ...(g.__FULGURJS_APP_CONFIG__ ?? {}), ...c };`,
-    `  g.__FULGURJS_RUNTIME__?.provideFulgurjsAppConfig?.(c);`,
-    `};`,
     `export const unwrapDefault = (ns) =>`,
     `  ns && typeof ns === 'object' && 'default' in ns ? (ns.default !== undefined ? ns.default : ns) : ns;`,
     `export const version = (globalThis).__FULGURJS_RUNTIME__?.version;`,

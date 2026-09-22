@@ -99,23 +99,6 @@ function createRuntime() {
   const loadedModules = new Map<string, Promise<any>>()
   const containerInitScopes = new WeakMap<object, string>()
 
-  // W4 跨应用全局配置协商：宿主桥 provideFulgurjsAppConfig({ locale, size, ... }) 写入一次，
-  // 各远程 federatedBoot 经 getFulgurjsAppConfig() 消费并注入自身 app 实例（如 EP
-  // provideGlobalConfig）。值由调用方携带（runtime 不依赖任何 UI 库）；页面级单例保证
-  // 跨副本读到同一份——收编 testbed 双侧手工 locale 注入为机制。
-  let fulgurjsAppConfig: Record<string, any> = {}
-
-  function provideFulgurjsAppConfig(config: Record<string, any>): void {
-    fulgurjsAppConfig = { ...fulgurjsAppConfig, ...config }
-    if (typeof globalThis !== 'undefined') {
-      ;(globalThis as any).__FULGURJS_APP_CONFIG__ = fulgurjsAppConfig
-    }
-  }
-
-  function getFulgurjsAppConfig(): Record<string, any> {
-    return fulgurjsAppConfig
-  }
-
   const hooks: RuntimeHooks = {}
   const applyPlugins = () => {
     for (const p of plugins) {
@@ -618,8 +601,6 @@ function createRuntime() {
     getContainer,
     preloadRemote,
     parseSpec,
-    provideFulgurjsAppConfig,
-    getFulgurjsAppConfig,
   }
 }
 
@@ -663,8 +644,6 @@ export const loadRemote = runtime.loadRemote
 export const getContainer = runtime.getContainer
 export const preloadRemote = runtime.preloadRemote
 export const shareScopeMap = runtime.shareScopeMap
-export const provideFulgurjsAppConfig = runtime.provideFulgurjsAppConfig
-export const getFulgurjsAppConfig = runtime.getFulgurjsAppConfig
 
 /** default 导出 interop：ESM 取 .default；CJS 命名空间回退整体 */
 export function unwrapDefault(ns: any): any {

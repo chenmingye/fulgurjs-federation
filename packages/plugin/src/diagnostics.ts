@@ -2,7 +2,7 @@
  * D.5 全链路错误诊断体系（node 侧：CFG/DEV/BLD 段 + 码表 + 文案生成器）
  *
  * 运行时段（MFU-0xx）定义在 runtime/errors.ts（浏览器 bundle，保持精简）；
- * 本模块服务配置期/开发期/构建期报错与手册 §8 的一致性校验
+ * 本模块服务配置期/开发期/构建期报错与 README 错误码总表的一致性校验
  * （scripts/check-manual-codes.mjs 消费 CODE_REGISTRY 防文档漂移）。
  *
  * 三段式强制：现象 → 根因 → 修法；ERROR 级文案必须 cause/fix 非空（单测断言）。
@@ -16,7 +16,7 @@ export interface FulgurjsCodeMeta {
   title: string
 }
 
-/** 全量错误码登记表（手册 §8 与之一一对应；新增报错必须先登记） */
+/** 全量错误码登记表（README 错误码总表与之一一对应；新增报错必须先登记） */
 export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   // ── CFG 配置期（normalizeOptions）──
   { code: 'CFG-001', stage: 'CFG', title: 'name 缺失或非法' },
@@ -30,11 +30,9 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   // ── DEV 开发启动/转换期 ──
   { code: 'DEV-001', stage: 'DEV', title: 'remote dev server 不可达（manifest 拉取失败）' },
   { code: 'DEV-002', stage: 'DEV', title: 'remote dev manifest 为空或格式不识别' },
-  { code: 'DEV-003', stage: 'DEV', title: 'shared 键被 optimizeDeps.exclude（dev 裸 CJS 无 interop 风险）' },
   { code: 'DEV-004', stage: 'DEV', title: '已知 UMD-only 依赖不在 optimizeDeps.include（预构建内联本地 vue 风险）' },
   { code: 'DEV-005', stage: 'DEV', title: 'remotes dev URL 端口无监听（remote 未启动或端口错位）' },
   { code: 'DEV-006', stage: 'DEV', title: '宿主/远程插件版本不一致' },
-  { code: 'DEV-008', stage: 'DEV', title: 'exposes 目标文件静态导入 virtual:fulgurjs-runtime（原 D.1 检测）' },
   { code: 'DEV-009', stage: 'DEV', title: '门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启）' },
   { code: 'DEV-010', stage: 'DEV', title: 'dev 冷启动预构建窗口（首轮 30~60s 瞬态 504/\'ce\' 假错误）' },
   // ── BLD 构建期 ──

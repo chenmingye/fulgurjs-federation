@@ -100,10 +100,6 @@ declare module 'virtual:fulgurjs-runtime' {
     getContainer(name: string): Promise<{ name: string; init: (scope: unknown) => void | Promise<void>; get: (module: string) => Promise<any> }>
     preloadRemote(spec: string, opts?: PreloadRemoteOptions): Promise<void>
     parseSpec(spec: string): { remote: string; module: string }
-    /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 provideFulgurjsAppContext（存储同一份，新名语义更准） */
-    provideFulgurjsAppConfig(config: Record<string, any>): void
-    /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 getFulgurjsAppContext（存储同一份，新名语义更准） */
-    getFulgurjsAppConfig(): Record<string, any>
   }
 
   export const version: string
@@ -128,10 +124,6 @@ declare module 'virtual:fulgurjs-runtime' {
   ): Promise<{ name: string; init: (scope: unknown) => void | Promise<void>; get: (module: string) => Promise<any> }>
   export function preloadRemote(spec: string, opts?: PreloadRemoteOptions): Promise<void>
   export function parseSpec(spec: string): { remote: string; module: string }
-  /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 provideFulgurjsAppContext（存储同一份，新名语义更准） */
-  export function provideFulgurjsAppConfig(config: Record<string, any>): void
-  /** @deprecated 0.8.0 起改用 '@fulgurjs/federation/context' 的 getFulgurjsAppContext（存储同一份，新名语义更准） */
-  export function getFulgurjsAppConfig(): Record<string, any>
   /** 兜底解包：命名空间有 default 取 default，否则原样返回 */
   export function unwrapDefault<T>(ns: { default?: T } | T): T
   /** 与 globalThis.__FULGURJS_RUNTIME__ 同一实例（方法面冻结） */

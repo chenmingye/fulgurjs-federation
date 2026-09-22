@@ -1,11 +1,10 @@
 /**
- * 跨应用传值契约：FulgurjsAppContext（0.8.0）。
+ * 跨应用传值契约：FulgurjsAppContext。
  *
  * 定位（docs/跨应用传值与方法引用设计方案-2026-09-20.md §四）：
- * - runtime.js 逻辑零改动（gzip 红线）：本子路径独立成文件，内部经
- *   globalThis.__FULGURJS_RUNTIME__ 单例读写——provide/get 委托运行时既有的
- *   provideFulgurjsAppConfig/getFulgurjsAppConfig（旧 W4 存储即 context 存储，
- *   旧名后续版本删除）；状态在运行时单例内，本模块自身零状态，多副本天然一致。
+ * - 独立子路径（'@fulgurjs/federation/context'），与 runtime bundle 解耦：状态存在
+ *   globalThis 的页面级镜像对象（__FULGURJS_APP_CONFIG__）里，本模块自身零状态，
+ *   多副本天然一致。
  * - 数据语义：传输层快照 + 函数引用，非响应式（与乾坤 props 同语义）；
  *   "实时"由函数引用拉取 / 宿主 pinia 共享响应式 / 登录刷新三条正规通道承担。
  * - H3 零兜底：require 缺键 → CC-001 三段式；页面无运行时单例（独立直开远程页）
@@ -14,8 +13,7 @@
 import { FulgurjsError } from './runtime/errors'
 
 /**
- * CC 段错误码（context 子路径自持）：src/runtime/ 对 v0.7.1 零 diff 红线，
- * 不回填 runtime/errors.ts 的 ErrorCodes 总表（README 错误码总表同步 CC 段）。
+ * CC 段错误码（context 子路径自持）：与 README 错误码总表 CC 段一一对应。
  */
 export const ContextErrorCodes = {
   /** context 必需字段缺失（三段式，修法指向宿主桥） */
@@ -51,13 +49,17 @@ export interface FulgurjsAppContext {
   [key: string]: unknown
 }
 
-/** 取运行时单例（globalThis 守卫：跨 bundle 副本一律读全局这一份；缺失 → CC-002 显式） */
-function requireRuntime(): {
-  provideFulgurjsAppConfig: (config: Record<string, any>) => void
-  getFulgurjsAppConfig: () => Record<string, any>
-} {
+/** 上下文存储键：页面级单例镜像对象（context 的读写都落在这里；跨 bundle 副本共享同一份） */
+const APP_CONTEXT_STORAGE_KEY = '__FULGURJS_APP_CONFIG__'
+
+/**
+ * 取运行时单例（globalThis 守卫：跨 bundle 副本一律读全局这一份；缺失 → CC-002 显式）。
+ * 判据 = 单例存在且方法面完整（loadRemote 为运行时核心 API 的代表）——context 自身的
+ * 存储不经 runtime（1.0.0 起直连 globalThis 镜像对象），此处只做"页面是否经宿主联邦加载"的守卫。
+ */
+function requireRuntime(): { loadRemote: (...args: any[]) => any } {
   const rt = (globalThis as any).__FULGURJS_RUNTIME__
-  if (!rt || typeof rt.provideFulgurjsAppConfig !== 'function') {
+  if (!rt || typeof rt.loadRemote !== 'function') {
     throw new FulgurjsError(
       ContextErrorCodes.CONTEXT_NO_RUNTIME,
       'fulgurjs runtime singleton not found on this page (globalThis.__FULGURJS_RUNTIME__ is undefined).\n' +
@@ -77,7 +79,9 @@ function requireRuntime(): {
  * provideFulgurjsAppContext({ user, token, getToken, store, hostApp, locale, events: { main: mainEvents }, ... })
  */
 export function provideFulgurjsAppContext(config: Partial<FulgurjsAppContext> & Record<string, unknown>): void {
-  requireRuntime().provideFulgurjsAppConfig(config)
+  requireRuntime()
+  const g = globalThis as any
+  g[APP_CONTEXT_STORAGE_KEY] = { ...(g[APP_CONTEXT_STORAGE_KEY] ?? {}), ...config }
 }
 
 /**
@@ -85,7 +89,8 @@ export function provideFulgurjsAppContext(config: Partial<FulgurjsAppContext> & 
  * 页面无运行时单例（独立直开远程页）→ CC-002 显式抛错，不静默回空。
  */
 export function getFulgurjsAppContext(): FulgurjsAppContext {
-  return requireRuntime().getFulgurjsAppConfig() as FulgurjsAppContext
+  requireRuntime()
+  return ((globalThis as any)[APP_CONTEXT_STORAGE_KEY] ?? {}) as FulgurjsAppContext
 }
 
 /**
