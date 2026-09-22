@@ -32,7 +32,12 @@
 4. **prerelease 版本自动进 `prerelease` dist-tag，`latest` 不受污染**（workflow 内按版本号是否含 `-` 自动分流 `--tag prerelease`）；
 5. 测试版已 `npm deprecate` 并删除对应 tag/release。
 
-**已知限制：`--provenance` 在私有仓库不可用**——npm/sigstore 只接受公开源仓库（报
+**✅ provenance 已启用（2026-09-22，仓库转 public 后）**：`npm publish --provenance` 验证发布
+`0.9.1-test.1` 成功，npm 侧确认 `dist.attestations.provenance.predicateType =
+https://slsa.dev/provenance/v1` + 双签名——npm 包页面显示 "Built and signed on GitHub Actions" 徽章。
+（此前私有仓库阶段的限制与处理见下方历史记录。）
+
+**历史记录：private 阶段的限制**——npm/sigstore 只接受公开源仓库（报
 `Unsupported GitHub Actions source repository visibility: "private"`）。workflow 已去掉该参数；
 **仓库转 public 后可加回**（`npm publish --provenance --access public`），届时 npm 页面会出现
 provenance 徽章。
