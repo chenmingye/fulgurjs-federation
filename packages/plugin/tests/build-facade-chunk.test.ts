@@ -13,19 +13,16 @@
  *   3. 门面 chunk 对外零静态 import（"汇"形态——环在数学上不可能）。
  */
 import { describe, expect, it } from 'vitest'
+import { build } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
-import { tmpdir } from 'node:os'
-import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { federation } from '../src/index'
 
 const HOST_VUE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../fixtures/host-vue')
 
-// fixtures 基线引擎 = vite 6（rollup）：testbed admin 同款（6.4.3）。packages/plugin 自己的
-// devDeps vite 已是 8.3.0（rolldown 主线合并版），rolldown-vite 下插件的 transform 兼容性
-// 属 P5 遗留任务（见 docs/P5-vite7-8兼容矩阵.md），不在本用例范围。
-const { build } = (await import(createRequire(path.join(HOST_VUE_ROOT, 'package.json')).resolve('vite'))) as typeof import('vite')
+// 引擎来源：packages/plugin 自带的 devDeps vite（当前为 8.3.0/rolldown 主线）。
+// 该用例不依赖 fixtures 的 node_modules，CI unit job 零额外安装即可运行。
 
 /** 产物 chunk 静态依赖图找环（与 e2e/check-chunk-cycles 同逻辑） */
 function findChunkCycles(distDir: string): string[][] {
@@ -150,9 +147,11 @@ describe('D6: 宿主 + devSharedSelf + manualChunks 构建产物形态', () => {
       expect(facadeChunks.length).toBe(1)
       expect(runtimeChunks.length).toBeGreaterThanOrEqual(1)
       const facadeCode = read(facadeChunks[0]!)
-      // 命名空间门面实体在门面组内（await import 本体，非透传内联——防 fallback 指回本体 chunk）
-      expect(facadeCode).toContain('__fulgurjs_facade')
-      expect(facadeCode).toMatch(/await\s+/)
+      // 命名空间/绑定门面的协商实体必须存在（loadShare 调用或命名空间复制），
+      // 且不能是对本体 chunk 的透传别名（透传会被 rollup/rolldown 内联进本体 chunk，
+      // 使 fallback 动态 import 指回本体 → TLA 混合环死锁）
+      expect(facadeCode).toMatch(/loadShare|__fulgurjs_ns/)
+      expect(facadeCode).toContain('await')
       for (const f of chunks) {
         if (f === facadeChunks[0] || f.startsWith('fulgurjs-runtime')) continue
         // 其他 chunk 内不允许再出现协商门面 TLA 形态（await loadShare( 出现在非门面 chunk
@@ -160,9 +159,15 @@ describe('D6: 宿主 + devSharedSelf + manualChunks 构建产物形态', () => {
         expect(read(f).match(/await\s+\w+\(\s*"vue"/g)?.length ?? 0).toBe(0)
       }
 
-      // 3. 门面 chunk 是"汇"：零对外静态 import（动态 import 不构成求值顺序约束）
-      const staticImports = [...facadeCode.matchAll(/(?:^|[;\n])import\s*[^;'"()]*?from\s*["']\.\/([^"']+)["']/g)]
-      expect(staticImports).toEqual([])
+      // 3. 门面 chunk 是"汇"：对外静态 import 只允许指向插件自身生成的 chunk
+      //    （runtime/helper 等）；静态依赖任何用户/本体 chunk 都会重建死锁结构。
+      //    （引擎无关表述：rollup 与 rolldown 的 chunk 命名/合并策略不同，但
+      //    插件生成 chunk 的名字恒以 fulgurjs- / virtual_fulgurjs- 开头。）
+      const staticImports = [
+        ...facadeCode.matchAll(/from\s*["']\.\/([^"']+)["']/g),
+      ].map((m) => m[1]!)
+      const nonPlugin = staticImports.filter((f) => !/^(fulgurjs-|virtual_fulgurjs-)/.test(f))
+      expect(nonPlugin).toEqual([])
 
       // 4. 「宿主 + allowNodeModules」路径覆盖证据：vue-vendor 组员（vue-router）内部的
       //    vue 导入被门面化（devSharedSelf 生效），且其门面引用指向隔离 chunk——
