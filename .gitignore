@@ -41,6 +41,7 @@ docs/screenshots/npm-install/
 # 验证证据截图（e2e 与 testbed 两套，每次跑都重生成／本地留证不上传）
 docs/screenshots/dev-*
 docs/screenshots/tb-*
+docs/screenshots/INDEX.md
 # 项目本地工作区（不入库：验证产物/截图/工作记录）
 docs/_workspace/
 docs/func-results/
