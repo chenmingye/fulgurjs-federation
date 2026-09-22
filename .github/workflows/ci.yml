@@ -19,6 +19,13 @@ jobs:
       - name: Build + 门禁（gzip 体积 / 错误码三方一致性）
         working-directory: packages/plugin
         run: npm run build
+      - name: Install fixtures host-vue deps（D6 产物形态用例经 fixtures 解析 vue/vue-router；pnpm 因 link: 协议，CI=true 免批准交互）
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - name: Install fixtures host-vue deps
+        working-directory: fixtures/host-vue
+        run: CI=true pnpm install --no-frozen-lockfile
       - name: Unit tests
         working-directory: packages/plugin
         run: npm test
