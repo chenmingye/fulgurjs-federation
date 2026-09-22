@@ -59,8 +59,8 @@ declare module 'virtual:fulgurjs-runtime' {
   }
 
   /**
-   * 跨应用上下文标准字段表（0.8.0，docs/跨应用传值与方法引用设计方案-2026-09-20.md §4.3；
-   * 0.8.2 精简：token 快照 / formUrl / baseUrl 移出默认 provide，用 getToken 拉取、扩展位自定）。
+   * 跨应用上下文标准字段表见 README §9。token 快照 / formUrl / baseUrl 不在默认 provide 内——
+   * 取 token 用 getToken()（拉取式不过期），其余按项目需要经扩展位自定。
    * 值 API 在 '@fulgurjs/federation/context' 子路径（runtime.js 不导出 context 函数，
    * 此处仅类型随虚拟模块声明供 type-only import）；读写约定：宿主桥先写标准字段，
    * 远程 boot 只增不改宿主键；嵌套对象（如 events）引用共享。

@@ -1,7 +1,7 @@
 /**
  * 跨应用传值契约：AppContext。
  *
- * 定位（docs/跨应用传值与方法引用设计方案-2026-09-20.md §四）：
+ * 定位（用法见 README §9）：
  * - 独立子路径（'@fulgurjs/federation/context'），与 runtime bundle 解耦：状态存在
  *   globalThis 的页面级镜像对象（__FULGURJS_APP_CONFIG__）里，本模块自身零状态，
  *   多副本天然一致。

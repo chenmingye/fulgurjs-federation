@@ -152,8 +152,10 @@ npx fulgurjs doctor --base http://localhost:5173 --apps app-a --dev
 ### 1. `federation(options)` — Vite 插件（宿主/远程同一份 API）
 
 ```ts
-import { federation } from '@fulgurjs/federation'
+import { federation, type FederationOptions } from '@fulgurjs/federation'
 ```
+
+插件选项类型为 `FederationOptions`（下表即其字段全集）。
 
 #### 全部选项
 
@@ -326,6 +328,8 @@ export const PAGES = definePages(
 
 `validatePages(pages, options)` 为独立导出：返回违例清单不抛错，便于自测。
 
+同子路径的类型：`PageRouteLike`（路由条目形状）、`PagesOptions`（校验选项，含 `deriveSpec` / `remotes` / `schema` / `strict`）、`PageViolation`（`validatePages` 的返回条目，含 `level` 与说明）、`RemoteSchemaEntry`（`schema` 里每个远程的条目形状）。
+
 ### 4. `fulgurjs.config.ts` — CLI 单配置文件（`@fulgurjs/federation/config`）
 
 ```ts
@@ -354,6 +358,11 @@ export default defineRepoConfig({
   ],
   deploy: { webRoot: '/var/www/your-site', listen: 8080 }, // 仅供 init 输出 NGINX 样板
 })
+```
+
+程序化加载：`loadRepoConfig(configPath): Promise<RepoConfig>` —— 读 `fulgurjs.config.ts` / `.js` / `.json` 并做 CFG 段校验（CLI 内部同款；配置文件里 `@fulgurjs/federation/config` 的导入会被重写为包内绝对路径，故在工程依赖装好之前也能加载）。
+
+同子路径的类型：`RepoConfig`（整个配置文件）／`UserConfig`（`defineRepoConfig` 的入参形状，字段全可选）／`AppConfig`（`apps[]` 的一个应用）／`HostConfig`（应用的 `host` 段，宿主角色）／`RemoteConfig`（应用的 `remote` 段，远程角色）／`DeployConfig`（`deploy` 段）／`PageEntry`（`host.pages[]` 的一条页面）／`RemoteAddress`（`remotes` 值的 `{ dev, prod, external }` 形态）。
 ```
 
 ### 5. CLI 命令参考

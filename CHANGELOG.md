@@ -72,7 +72,7 @@
 - **`dts: { mode: 'source' | 'shim' }`**（默认 `source`，行为不变）：`shim` 形态的类型声明不引用跨工程源文件（宽松占位），根治 VSCode/Volar 打开 `types/*.d.ts` 时的跨工程诊断红波浪线；取舍为无源码级补全/跳转（README §9.1.5）。
 - **`fulgurjs.config.ts` 新增 `host.prefetch: 'all' | string[] | false`**（默认 `'all'`，行为不变）：空闲预载名单成为正式配置面，init 生成 bridge.ts 时注入 `PREFETCH_REMOTES` 常量（README §9.1.3）。
 - **`npm run typecheck:latest`**：用最新 TypeScript + vue-tsc 对 `tests/types-repro/` 典型消费形态做类型回归——根治"工程内旧 TS 绿、用户 IDE（新 TS）红"的盲区（0.8.2 的 EP locale ts2345 即由此暴露）。
-- **CI 流水线**：`.github/workflows/ci.yml`（push/PR：单测 + 双口径 typecheck + build/gzip 门禁）与 `.github/workflows/publish.yml`（GitHub Release 触发 `npm publish --provenance`，Trusted Publishing 迁移见 docs/trusted-publishing-迁移清单.md）。
+- **CI 流水线**：`.github/workflows/ci.yml`（push/PR：单测 + 双口径 typecheck + build/gzip 门禁）与 `.github/workflows/publish.yml`（GitHub Release 触发 `npm publish --provenance`，Trusted Publishing 迁移已完成）。
 
 ### 变更
 
@@ -133,7 +133,7 @@
 
 ## 0.8.0（2026-09-20）
 
-### 新增（跨应用传值与方法引用收编 + 乾坤功能融合，设计文档 docs/跨应用传值与方法引用设计方案-2026-09-20.md 定稿实施）
+### 新增（跨应用传值与方法引用收编 + 乾坤功能融合，设计文档定稿后实施）
 
 - **`@fulgurjs/federation/context` 新子路径（~2KB 独立文件，与 `./vue` 同模式）**：
   - `provideFulgurjsAppContext(config)`——宿主桥一次性写入跨应用上下文（merge 语义，幂等可多次，后写覆盖）；
@@ -148,7 +148,7 @@
 ### 文档（乾坤功能融合配套，全部宿主/模板侧，插件 runtime 零改动）
 
 - README 特性声明新增「CSP 友好（原生 ESM 无 eval）」；新增 §9 AppContext API 参考（字段表/时序契约/方法模块规范）；迁移指南新增「跨应用传值」节与「页面卸载清理清单」节（乾坤 unmount 强制清理的联邦等价物：`onUnmounted` 摘除 window 级监听/定时器/context.events 反向注册）。
-- 乾坤功能融合三件套（保活 keep-alive 白名单 / 页面加载骨架屏 / 空闲预载编排）与联邦诊断面板均为**集成器模板/宿主项目侧**能力，用法见迁移指南与 `fulgurjs.config.ts` 模板注释；调研依据见 docs/qiankun功能融合调研-2026-09-20.md（16 项逐项对照：9 项已有、4 项与架构哲学冲突不搬、3 项值得搬 + inspector 概念轻量化落地）。
+- 乾坤功能融合三件套（保活 keep-alive 白名单 / 页面加载骨架屏 / 空闲预载编排）与联邦诊断面板均为**集成器模板/宿主项目侧**能力，用法见迁移指南与 `fulgurjs.config.ts` 模板注释；调研依据：16 项逐项对照（：9 项已有、4 项与架构哲学冲突不搬、3 项值得搬 + inspector 概念轻量化落地）。
 
 ## 0.7.1（2026-09-20）
 
@@ -159,7 +159,7 @@
 
 ## 0.7.0（2026-09-20）
 
-### 新增（Vue 直渲染 API，设计文档 docs/远程组件直渲染API设计方案-2026-09-20.md 定稿实施）
+### 新增（Vue 直渲染 API，设计文档定稿后实施）
 
 - **`remoteComponent(spec, opts)`（`@fulgurjs/federation/vue` 子路径）**：远程组件直渲染的标准封装——`defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`。选项：`loadingComponent` / `errorComponent`（不传时内置错误占位：错误码+根因+修法三段式）/ `retries`（透传 loadRemote）/ `delay` / `timeout`。H3 零兜底：加载失败显式进错误态，`fulgurjs:error` 事件照常发出；模块去重沿用 loadRemote Promise 缓存；`vue` 为可选 peerDependency。
 - **架构边界**：runtime.js 保持框架无关（不 import vue），gzip 红线零增量——Vue 封装独立子路径文件、按需引入。

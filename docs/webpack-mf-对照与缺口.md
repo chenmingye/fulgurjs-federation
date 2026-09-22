@@ -1,6 +1,6 @@
 # webpack Module Federation 逐项对照与缺口清单（P1-3）
 
-> 基准：webpack 5 Module Federation（ModuleFederationPlugin）语义；日期 2026-09-15；版本 @fulgurjs/federation 0.2.0
+> 基准：webpack 5 Module Federation（ModuleFederationPlugin）语义——逐项对照本插件的对应实现，并列出明确不支持的缺口。
 
 ## 一、已实现（与 webpack MF 对齐）
 
