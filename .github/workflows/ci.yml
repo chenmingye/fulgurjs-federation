@@ -68,7 +68,22 @@ jobs:
       - name: Playwright chromium
         run: pnpm --dir e2e exec playwright install --with-deps chromium
       - name: e2e（dev + fault 套件）
-        run: pnpm --dir e2e exec playwright test --project=dev --project=fault --global-timeout=600000
-        # --global-timeout：Playwright 内部若卡死（如收尾等待进程退出），10 分钟强制结束并报告，
-        # 不依赖外层 timeout-minutes 才发现问题（2026-09-22 曾出现测试全过后步骤空转 19 分钟）
+        run: |
+          # 预起三个 fixture dev server：Playwright 的 reuseExistingServer 会复用现成服务，
+          # 因而不接管其生命周期——它自己启的服务在 Linux runner 上收尾杀不净（进程树残留），
+          # teardown 会一直等到 global timeout（2026-09-22 实测：12/12 全过后 "Timed out waiting
+          # 600s for the teardown"，日志尾部还列出 sh/node/esbuild 孤儿）。输出落文件避免占住步骤 stdout。
+          pnpm --dir fixtures/remote-a exec vite --port 5101 --strictPort >/tmp/remote-a.log 2>&1 &
+          pnpm --dir fixtures/remote-b exec vite --port 5102 --strictPort >/tmp/remote-b.log 2>&1 &
+          pnpm --dir fixtures/host-vue exec vite --port 5100 --strictPort >/tmp/host-vue.log 2>&1 &
+          for u in http://localhost:5101/@fulgurjs-manifest.json http://localhost:5102/@fulgurjs-manifest.json http://localhost:5100; do
+            for i in $(seq 1 60); do curl -sf --max-time 2 "$u" >/dev/null && break; sleep 1; done
+            curl -sf --max-time 2 "$u" >/dev/null || { echo "dev server 未就绪：$u"; tail -30 /tmp/*.log; exit 1; }
+          done
+          set +e
+          pnpm --dir e2e exec playwright test --project=dev --project=fault --global-timeout=600000
+          code=$?
+          pkill -f 'vite --port 510' || true   # 收尾（失败路径也要执行，避免留下占端口的孤儿）
+          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -40 /tmp/remote-a.log /tmp/remote-b.log /tmp/host-vue.log
+          exit $code
 
