@@ -28,12 +28,12 @@ jobs:
       - name: Install
         working-directory: packages/plugin
         run: pnpm install --frozen-lockfile --ignore-workspace --dangerously-allow-all-builds
-      - name: Unit tests
-        working-directory: packages/plugin
-        run: pnpm test
       - name: Build + gzip gate
         working-directory: packages/plugin
         run: pnpm build
+      - name: Unit tests
+        working-directory: packages/plugin
+        run: pnpm test
       - name: Publish
         working-directory: packages/plugin
         run: npm publish --provenance --access public
