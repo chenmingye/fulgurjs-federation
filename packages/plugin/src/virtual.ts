@@ -21,23 +21,54 @@ function jsonReplacer(_k: string, v: unknown) {
  * 对 export * 的展开。exportNames 来自 enumerateCjsExports（index.ts）；无法枚举时
  * （ESM-only/相对路径）回退 export * 形态——此时不存在 CJS 命名空间可枚举，TLA 展开风险
  * 由「无 CJS 入口 → 消费方解构命名导出本就不可用」兜底。
+ *
+ * D6（2026-09-22 修复）：shared 本体的导入从顶层静态 import 改为 TLA 内动态 import。
+ * 原因：静态 import 会把「门面 chunk → shared 本体 chunk」固定成静态边；当宿主开启
+ * devSharedSelf（node_modules 参与门面化）且用户配置 manualChunks 强制分组时，本体的
+ * 被改写消费方（如 vue-router）的门面在门面 chunk、门面又静态依赖本体 chunk →
+ * chunk 级循环依赖 → 求值顺序错位 → 运行时 TypeError（协商函数未初始化）。
+ * 动态化后门面 chunk 对外零静态依赖（"汇"），与任何 manualChunks 分组正交、无环。
+ *
+ * D6 补丁（实机死锁）：`export const X = ns.X` 直接转发仍会被 rollup 识别为「纯透传模块」
+ * 而内联进本体所在 chunk（导出别名指向本体 chunk），fallback 的动态 import 随之指回本体
+ * chunk——与「本体组消费方静态 import 门面 chunk」构成 TLA 混合环，页面死锁在骨架屏
+ * （无任何报错）。改为先把动态命名空间**复制成本地对象**再逐名导出：导出值来自本地绑定，
+ * rollup 不再内联透传，门面模块保持实体留在门面组。
  */
-export function genSharedFacade(specifier: string, exportNames?: string[]): string {
+export function genSharedFacade(specifier: string, exportNames?: string[], dynamic = false): string {
   const names = (exportNames ?? []).filter(
     (n) => n !== 'default' && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(n),
   )
-  if (names.length === 0) {
+  if (!dynamic) {
+    // 2.0.0 静态形态：本体为静态依赖，rollup 拓扑排序保证本体 chunk 先完成求值
+    if (names.length === 0) {
+      return [
+        `import * as __fulgurjs_facade from ${JSON.stringify(specifier)};`,
+        `export * from ${JSON.stringify(specifier)};`,
+        `export default __fulgurjs_facade.default ?? __fulgurjs_facade;`,
+        '',
+      ].join('\n')
+    }
     return [
       `import * as __fulgurjs_facade from ${JSON.stringify(specifier)};`,
+      ...names.map((n) => `export const ${n} = __fulgurjs_facade[${JSON.stringify(n)}];`),
+      `export default __fulgurjs_facade.default ?? __fulgurjs_facade;`,
+      '',
+    ].join('\n')
+  }
+  if (names.length === 0) {
+    return [
+      `const __fulgurjs_facade = await import(${JSON.stringify(specifier)});`,
       `export * from ${JSON.stringify(specifier)};`,
       `export default __fulgurjs_facade.default ?? __fulgurjs_facade;`,
       '',
     ].join('\n')
   }
   return [
-    `import * as __fulgurjs_facade from ${JSON.stringify(specifier)};`,
-    ...names.map((n) => `export const ${n} = __fulgurjs_facade[${JSON.stringify(n)}];`),
-    `export default __fulgurjs_facade.default ?? __fulgurjs_facade;`,
+    `const __fulgurjs_facade = await import(${JSON.stringify(specifier)});`,
+    `const __fulgurjs_ns = { ...__fulgurjs_facade };`,
+    ...names.map((n) => `export const ${n} = __fulgurjs_ns[${JSON.stringify(n)}];`),
+    `export default __fulgurjs_ns.default ?? __fulgurjs_ns;`,
     '',
   ].join('\n')
 }
@@ -48,9 +79,16 @@ export function genSharedFacade(specifier: string, exportNames?: string[]): stri
  * ESM 无法动态枚举导出，命名导出按本机安装包 CJS 入口的真实导出在生成期列全
  * （见 index.ts 的 enumerateCjsExports）；宿主实例缺少个别新导出时对应值为 undefined，语义不变。
  */
-export function genSharedNsFacade(item: NormalizedShared, loadShareCall: string, exportNames: string[]): string {
+export function genSharedNsFacade(
+  item: NormalizedShared,
+  loadShareCall: string,
+  exportNames: string[],
+  dynamic = false,
+): string {
   const lines: string[] = [
-    `import { loadShare as __fulgurjs_loadShare, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    dynamic
+      ? `const { loadShare: __fulgurjs_loadShare, unwrapDefault: __fulgurjsU } = await import("virtual:fulgurjs-runtime");`
+      : `import { loadShare as __fulgurjs_loadShare, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
     `const __fulgurjs_m = await ${loadShareCall};`,
     `const __fulgurjs_d = __fulgurjsU(__fulgurjs_m);`,
     `export default __fulgurjs_d;`,
@@ -74,9 +112,12 @@ export function genBindingFacade(
   item: NormalizedShared,
   bindings: string[],
   loadShareCall: string,
+  dynamic = false,
 ): string {
   const lines: string[] = [
-    `import { loadShare as __fulgurjs_loadShare, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    dynamic
+      ? `const { loadShare: __fulgurjs_loadShare, unwrapDefault: __fulgurjsU } = await import("virtual:fulgurjs-runtime");`
+      : `import { loadShare as __fulgurjs_loadShare, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
     `const __fulgurjs_m = await ${loadShareCall};`,
   ]
   // 门面导出名 = 消费方导入的 imported 名（消费方的 as 别名由其 import 语句自行处理）
@@ -96,9 +137,11 @@ export function genBindingFacade(
 }
 
 /** 远程绑定门面：静态 import 远程模块时指向它（内部走 loadRemote） */
-export function genRemoteBindingFacade(remoteSpec: string, bindings: string[]): string {
+export function genRemoteBindingFacade(remoteSpec: string, bindings: string[], dynamic = false): string {
   const lines: string[] = [
-    `import { loadRemote as __fulgurjs_loadRemote, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    dynamic
+      ? `const { loadRemote: __fulgurjs_loadRemote, unwrapDefault: __fulgurjsU } = await import("virtual:fulgurjs-runtime");`
+      : `import { loadRemote as __fulgurjs_loadRemote, unwrapDefault: __fulgurjsU } from "virtual:fulgurjs-runtime";`.replace('unwrapDefault: __fulgurjsU', 'unwrapDefault as __fulgurjsU'),
     `const __fulgurjs_m = await __fulgurjs_loadRemote(${JSON.stringify(remoteSpec)});`,
   ]
   const seen = new Set<string>()

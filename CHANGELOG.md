@@ -1,5 +1,55 @@
 # Changelog
 
+## 2.0.2（2026-09-22）
+
+### 修复（D6：双向宿主 devSharedSelf 开启后 prod 构建产物 chunk 循环崩溃）
+
+- **缺陷**：双向联邦宿主（既 expose 又消费 remote）按文档口径设置 `devSharedSelf: true` 后，
+  `vite build` 成功但 prod 运行时崩溃——`SyntaxError: Unexpected token '<'`（chunk 被 SPA 回退）
+  + `TypeError: _e is not a function`（协商函数未初始化）。仅在「宿主 + 用户 manualChunks 强制
+  分组（对象/函数形式）」组合下触发（实测 mes-zc admin：vue-vendor ⇄ antd-vue-vendor 环）。
+- **根因**：`devSharedSelf` 使 node_modules 参与门面化，被 manualChunks 强制分组的包
+  （如 vue-vendor 组内 vue-router）内部的 shared 导入被改写为协商门面；门面为静态
+  `import` 运行时的 TLA 模块，被 rollup 按消费方归组拖入其他强制组 → 跨组静态环 →
+  门面 TLA 求值顺序错位。
+- **修复 1（门面形态参数化，virtual.ts）**：`genSharedFacade` / `genSharedNsFacade` /
+  `genBindingFacade` / `genRemoteBindingFacade` 新增 dynamic 形态——门面对运行时与 shared
+  本体的依赖全部改为 TLA 内 `await import(...)`，命名空间门面以 `{ ...ns }` 复制阻断 rollup
+  透传内联——门面 chunk 对外零静态依赖（"汇"形态），与任何 manualChunks 分组正交，不可能成环。
+  **dynamic 仅在 devSharedSelf 宿主（build）启用；其余一切场景（纯 remote、dev serve）保持
+  2.0.0 静态形态，产物与行为零变化**（硬约束；纯 remote 若启用动态化会在自动分包下出现
+  「门面 TLA → 动态 import 本体 chunk ← 静态 import 门面」死锁，实测确认）。
+- **修复 2（shared 闭包静态化，transform.ts + index.ts）**：devSharedSelf 宿主（build）下，
+  provide 键本体闭包内的模块（如 vue-router 包、vue-demi 转发层——经 shared 本体文件解析
+  传递依赖）对 shared 键的导入**不做门面化**（同一 provide 闭包天然同实例）——斩断
+  「fallback 动态 import 本体 chunk ← 本体消费方静态 import 门面」的 TLA 混合环（实机死锁：
+  页面停在骨架屏、零报错）。别名转发层的 `export * from <key>` 因此保持静态、不再触发
+  ESM 门面化硬报错。纯 remote 不启用，行为零变化（硬约束）。
+- **修复 3（manualChunks 包装注入，index.ts）**：devSharedSelf 宿主 + 用户配置了
+  manualChunks 时，插件包装注入归组函数——运行时隔离进 `fulgurjs-runtime` 组、协商门面按
+  shareKey 隔离进 `fulgurjs-shared-<key>` 组、远程绑定门面进 `fulgurjs-remote-facades-*` 组。
+  对象形式的 specifier 解析延迟到 buildStart（走完整解析管线含 alias），解析失败丢组并告警。
+- **修复 4（post 阶段 auto-import 兜底，index.ts）**：build 下 post.transform 不再跳过非
+  `.vue` 文件——unplugin-auto-import 等后置插件注入的 `import { ref } from 'vue'` 发生在
+  pre.transform 之后，此前会绕过门面化、静态绑定本地 vue 副本，与协商实例形成**双响应性
+  系统**（实测：同一组件内 A ref 的赋值不触发渲染、B ref 的赋值正常；jsdelivr 级表现即
+  「弹窗 model 置 true 却不渲染」）。pre 已改写过的文件由 `isPluginProcessedModule` 守卫
+  拦下，不会双重改写。
+- **新增诊断**：`BLD-006`——output 为数组形态时无法自动注入，三段式提示手工加隔离分支。
+- **集成器**：宿主为双向（有 exposes 且有 remotes）时 vite.config 模板产出
+  `devSharedSelf: true`（落实 README 口径；须配合本版插件使用）。
+- **测试**：+10（门面 dynamic/static 双形态断言 ×6、真实 vite build 产物形态用例 ×1——
+  覆盖「宿主 + devSharedSelf + manualChunks 对象形式」这条此前零覆盖的路径，断言产物无环、
+  门面隔离、"汇"形态、node_modules 门面化指向隔离 chunk；post 兜底源码契约 ×3）。
+
+### 已知边界
+
+- devSharedSelf 宿主的协商门面 chunk 集中在插件专属组：与「门面分散在各业务 chunk」的
+  旧形态相比，首屏会多下载所属 shareKey 的门面 chunk（未压缩量级 = 门面行数，gzip 后显著
+  缩小）；这是换取「与 manualChunks 共存」的结构性代价。
+- 入口文件（index.html 直引的模块）内的 remote 导入在 build 下不参与改写（入口只内联 init
+  即短路返回，既有边界）：remote 导入请放在非入口模块。
+
 ## 2.0.1（2026-09-22）
 
 ### 变更（文档与包面，零运行时变化）

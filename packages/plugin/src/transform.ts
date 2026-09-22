@@ -156,6 +156,13 @@ export interface TransformContext {
    * dev 不启用——dev 的 CJS 依赖走 optimizeDeps 预构建外部化。
    */
   cjsRequireRewrite?: boolean
+  /**
+   * D6：shared 键本体闭包目录（仅 devSharedSelf 宿主传入；纯 remote 不传，行为不变）。
+   * 闭包内的模块（如 vue-router 包内部）对 shared 键的导入不做门面化：同一 provide 闭包
+   * 天然同实例，静态引用即可。若也门面化，会形成「门面 chunk fallback 动态 import 本体
+   * chunk + 本体 chunk 内消费方静态 import 门面 chunk」的 TLA 混合环 → 页面死锁（零报错）。
+   */
+  sharedClosureRoots?: Array<{ root: string; keys: Set<string> }>
   /** dev post 阶段：生成的运行时/门面引用必须是最终 URL（importAnalysis 已跑过） */
   devUrls?: {
     runtime: string
@@ -171,6 +178,15 @@ export interface TransformResult {
 }
 
 const JS_EXT_RE = /\.(m|c)?[jt]sx?$/
+
+/** D6：当前模块是否位于任一 shared 键的本体闭包目录内（即它是某个 provide 键的本体文件） */
+function inSharedClosure(
+  moduleId: string,
+  roots?: Array<{ root: string; keys: Set<string> }>,
+): boolean {
+  if (!roots || roots.length === 0) return false
+  return roots.some((r) => moduleId.startsWith(r.root))
+}
 
 export function isTransformableId(id: string, allowNodeModules = false): boolean {
   const clean = id.split('?')[0]
@@ -262,6 +278,7 @@ export async function transformModule(
   ctx: TransformContext,
 ): Promise<TransformResult | null> {
   const { options } = ctx
+  const clean = id.split('?')[0]
   if (options.shared.length === 0 && options.remotes.length === 0) return null
 
   // 快速预检：源码必须包含某个 shared 键或 remote 键，否则跳过（性能）
@@ -379,7 +396,10 @@ export async function transformModule(
       const head = code.slice(stmtStart, stmtStart + 24)
       if (/^\s*(import|export)\s+type[\s{]/.test(head)) continue // 仅类型导入
 
-      const shared = matcher ? matchShared(spec, matcher) : null
+      const matched = matcher ? matchShared(spec, matcher) : null
+      // D6：本模块若位于任一 shared 键的本体闭包内，其对 shared 键的导入跳过门面化（见 ctx 注释）
+      const shared =
+        matched && inSharedClosure(clean, ctx.sharedClosureRoots) ? null : matched
       const firstSeg = spec.split('/')[0]
       const remote = remotesByKey.get(firstSeg)
       const exposeName = remote ? remoteExposeName(spec, remote.key) : null
@@ -428,7 +448,9 @@ export async function transformModule(
     const literal = specExpr.match(/^['"](.*)['"]$/s)
     if (!literal) continue
     const spec = remap(literal[1])
-    const shared = matcher ? matchShared(spec, matcher) : null
+    const matched = matcher ? matchShared(spec, matcher) : null
+    const shared =
+      matched && inSharedClosure(clean, ctx.sharedClosureRoots) ? null : matched
     const firstSeg = spec.split('/')[0]
     const remote = remotesByKey.get(firstSeg)
     const exposeName = remote ? remoteExposeName(spec, remote.key) : null

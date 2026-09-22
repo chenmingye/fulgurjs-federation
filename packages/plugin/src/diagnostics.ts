@@ -41,6 +41,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'BLD-001', stage: 'BLD', title: 'expose 源文件解析失败' },
   { code: 'BLD-002', stage: 'BLD', title: '构建目标低于 es2022（TLA 需要）' },
   { code: 'BLD-003', stage: 'BLD', title: 'expose 目标组件含必填 props（联邦直挂无法传 props）' },
+  { code: 'BLD-006', stage: 'BLD', title: 'output 数组形态下无法自动注入协商门面 chunk 隔离（需手工加分支）' },
   // ── MFU 运行时（定义于 runtime/errors.ts，此处登记供手册一致性校验） ──
   { code: 'MFU-001', stage: 'MFU', title: '远程容器/模块加载失败（网络/超时/重试耗尽/熔断）' },
   { code: 'MFU-002', stage: 'MFU', title: 'remoteEntry 自报名与配置名不一致' },

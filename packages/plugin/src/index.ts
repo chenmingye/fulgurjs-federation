@@ -99,6 +99,44 @@ function injectInitScript(html: string, scriptSrc: string): string {
   return tag + html
 }
 
+/**
+ * D6（2026-09-22）：门面/运行时虚拟模块的强制分组与判定。
+ * 背景：双向宿主开启 devSharedSelf 后 node_modules 参与门面化；若用户配置 manualChunks
+ * 强制分组（对象/函数形式），被分组包（如 vue-vendor 组内的 vue-router）内部对 shared 键
+ * 的导入被改写为协商门面，而门面又被 rollup 归入其他强制组（跟随其最大消费方），
+ * 形成跨组静态环 → 门面 TLA 的求值顺序错位，运行时 TypeError（协商函数未初始化）。
+ * 修复：manualChunks 包装注入——门面/运行时虚拟模块按 shareKey 隔离进插件专属组
+ * （fulgurjs-runtime 单独一组作为公共底座；各 shareKey 门面一组，按需下载不拖累首屏）。
+ * 门面组对外零静态依赖（virtual.ts 门面动态化：runtime/本体均 await import），
+ * 与任何用户分组正交，数学上不可能成环。
+ */
+const RUNTIME_CHUNK_NAME = 'fulgurjs-runtime'
+const REMOTE_FACADE_CHUNK_NAME = 'fulgurjs-remote-facades'
+function facadeChunkOf(id: string): string | null {
+  const bare = id.split('?')[0]
+  if (bare === 'virtual:fulgurjs-runtime' || bare === 'virtual:fulgurjs-runtime-proxy') {
+    return RUNTIME_CHUNK_NAME
+  }
+  if (bare.startsWith('virtual:fulgurjs-shared:')) {
+    const body = bare.slice('virtual:fulgurjs-shared:'.length)
+    // 远程绑定门面（__remote__/<name>/<expose>）：按 remote 名一组
+    if (body.startsWith('__remote__/')) {
+      const remoteName = body.slice('__remote__/'.length).split('/')[0] || 'unknown'
+      return REMOTE_FACADE_CHUNK_NAME + '-' + remoteName.replace(/[^A-Za-z0-9_-]/g, '_')
+    }
+    const shareKey = body.split('?')[0]
+    return 'fulgurjs-shared-' + (shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
+  }
+  if (bare.startsWith('virtual:fulgurjs-shared-ns:') || bare.startsWith('virtual:fulgurjs-cjs-ns:')) {
+    const prefix = bare.startsWith('virtual:fulgurjs-shared-ns:')
+      ? 'virtual:fulgurjs-shared-ns:'
+      : 'virtual:fulgurjs-cjs-ns:'
+    const shareKey = bare.slice(prefix.length)
+    return 'fulgurjs-shared-' + (shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
+  }
+  return null
+}
+
 export function federation(options: FederationOptions): Plugin[] {
   const warnedUnknownPrefixes = new Set<string>()
   let remoteSchemaPromise: Promise<string> | null = null
@@ -111,6 +149,15 @@ export function federation(options: FederationOptions): Plugin[] {
     resolvedSharedPaths: Map<string, string | null>
     entryAbsPaths: Set<string>
     entryInitInjected: Set<string>
+    /** D6：manualChunks 包装注入时保存的用户原始配置（对象形式 specifier 待 buildStart 解析） */
+    manualChunkSpecsPending?: Array<[group: string, specifier: string]>
+    /** D6：对象形式 manualChunks 解析结果（模块 id → 组名），包装函数运行时查表 */
+    manualChunkGroups: Map<string, string>
+    /** D6：shared 键本体闭包目录（仅 build + devSharedSelf 宿主解析填充） */
+    sharedClosureRoots: Array<{ root: string; keys: Set<string> }>
+    /** D6：门面形态。dynamic = devSharedSelf 宿主（build）专用：门面对运行时/本体全动态依赖
+     * （配合 manualChunks 包装注入与闭包静态化）。static = 其余一切场景，产物与 2.0.0 一致。 */
+    facadeDynamic: boolean
   } = {
     command: 'serve',
     base: '/',
@@ -119,6 +166,9 @@ export function federation(options: FederationOptions): Plugin[] {
     resolvedSharedPaths: new Map(),
     entryAbsPaths: new Set(),
     entryInitInjected: new Set(),
+    manualChunkGroups: new Map(),
+    sharedClosureRoots: [],
+    facadeDynamic: false,
   }
 
   const pre: Plugin = {
@@ -214,6 +264,51 @@ export function federation(options: FederationOptions): Plugin[] {
           }
         } else {
           ;(extra as any).build = { target: 'es2022' }
+        }
+
+        // D6：双向宿主（devSharedSelf）build 下的门面动态化 + manualChunks 包装注入——
+        // 门面/运行时虚拟模块隔离进插件专属 chunk，防用户强制分组与门面静态边互锁成环
+        // （见 facadeChunkOf 注）。纯 remote（remotes 为空）不启用，产物行为保持 2.0.0（硬约束）。
+        if (normalized.remotes.length > 0 && normalized.devSharedSelf) {
+          state.facadeDynamic = true
+          const userOutput = userConfig.build?.rollupOptions?.output
+          if (Array.isArray(userOutput)) {
+            console.warn(
+              formatFulgurjsDiagnostic({
+                code: 'BLD-006',
+                symptom: 'build.rollupOptions.output is an array; fulgurjs cannot inject the shared-facade chunk guard automatically',
+                cause: 'devSharedSelf 门面化 + manualChunks 强制分组可能形成 chunk 循环依赖（运行时 TypeError：协商函数未初始化）',
+                fix: `在每个 output 项的 manualChunks 最前面加分支：if (id.startsWith('virtual:fulgurjs-')) return 'fulgurjs-shared-facades'`,
+              }),
+            )
+          } else {
+            const userManualChunks = userOutput?.manualChunks
+            if (typeof userManualChunks === 'function') {
+              const userFn = userManualChunks
+              const wrapped = (id: string, meta: unknown) => {
+                const facade = facadeChunkOf(id)
+                if (facade) return facade
+                return userFn(id, meta as never)
+              }
+              const extraBuild = ((extra as any).build ??= {})
+              extraBuild.rollupOptions = { ...(extraBuild.rollupOptions ?? {}), output: { manualChunks: wrapped } }
+            } else if (userManualChunks && typeof userManualChunks === 'object') {
+              // 对象形式：specifier → 模块 id 的解析要等 buildStart（rollup 上下文可用），
+              // 这里只登记待解析清单；包装函数运行时（归组期，晚于 buildStart）查表
+              state.manualChunkSpecsPending = Object.entries(userManualChunks as Record<string, string[]>).flatMap(
+                ([group, specs]) => specs.map((s) => [group, s] as [string, string]),
+              )
+              const wrapped = (id: string): string | undefined => {
+                const facade = facadeChunkOf(id)
+                if (facade) return facade
+                return state.manualChunkGroups.get(id.split('?')[0]) ?? state.manualChunkGroups.get(id)
+              }
+              const extraBuild = ((extra as any).build ??= {})
+              extraBuild.rollupOptions = { ...(extraBuild.rollupOptions ?? {}), output: { manualChunks: wrapped } }
+            }
+            // 未配置 manualChunks：仅门面动态化生效，不注入包装（自动分包下门面归组交给
+            // rollup；配合闭包静态化已无静态互锁边）
+          }
         }
       }
 
@@ -342,7 +437,7 @@ export function federation(options: FederationOptions): Plugin[] {
             if (!names.includes(compat)) names.push(compat)
           }
         }
-        return genSharedNsFacade(item, serializeShareCallForFacade(item), names)
+        return genSharedNsFacade(item, serializeShareCallForFacade(item), names, state.facadeDynamic)
       }
       if (clean.startsWith('virtual:fulgurjs-shared:') && state.normalized) {
         const body = clean.slice('virtual:fulgurjs-shared:'.length)
@@ -354,7 +449,7 @@ export function federation(options: FederationOptions): Plugin[] {
           const item = state.normalized.shared.find((x) => x.shareKey === body)
           if (item && item.import !== false) {
             const names = /^(\.|\/)/.test(item.import) ? [] : enumerateCjsExports(item.import, state.normalized.root)
-            return genSharedFacade(item.import, names)
+            return genSharedFacade(item.import, names, state.facadeDynamic)
           }
           return null
         }
@@ -362,7 +457,7 @@ export function federation(options: FederationOptions): Plugin[] {
         const entry = getFacadeEntry(raw.slice(f + 3))
         if (!entry) return null
         if (entry.remoteName && entry.exposeName) {
-          return genRemoteBindingFacade(entry.remoteName + '/' + entry.exposeName, entry.bindings)
+          return genRemoteBindingFacade(entry.remoteName + '/' + entry.exposeName, entry.bindings, state.facadeDynamic)
         }
         const item = state.normalized.shared.find((x) => x.shareKey === entry.shareKey)
         if (!item || item.import === false) return null
@@ -375,7 +470,7 @@ export function federation(options: FederationOptions): Plugin[] {
           'fallback: () => import(' + JSON.stringify(item.import) + ')',
         ]
         const call = '__fulgurjs_loadShare(' + JSON.stringify(item.shareKey) + ', { ' + opts.join(', ') + ' })'
-        return genBindingFacade(item, entry.bindings, call)
+        return genBindingFacade(item, entry.bindings, call, state.facadeDynamic)
       }
       return null
     },
@@ -412,6 +507,7 @@ export function federation(options: FederationOptions): Plugin[] {
             rewriteShared: true,
             allowNodeModules,
             cjsRequireRewrite: true,
+            sharedClosureRoots: state.sharedClosureRoots,
           })
         }
         return null
@@ -424,6 +520,7 @@ export function federation(options: FederationOptions): Plugin[] {
         rewriteShared: state.command === 'build' || state.normalized.devSharedSelf,
         allowNodeModules,
         cjsRequireRewrite: state.command === 'build',
+        sharedClosureRoots: state.sharedClosureRoots,
       })
     },
 
@@ -452,6 +549,81 @@ export function federation(options: FederationOptions): Plugin[] {
     async buildStart() {
       if (state.command !== 'build' || !state.normalized) return
       const n = state.normalized
+      // D6：对象形式 manualChunks 的 specifier → 模块 id 解析（此阶段 rollup 上下文可用，
+      // 走完整解析管线含 alias；归组期调用包装函数时查表）。解析失败的 specifier 丢组并
+      // 显式告警——行为降级可见，不静默。
+      if (state.manualChunkSpecsPending) {
+        for (const [group, specifier] of state.manualChunkSpecsPending) {
+          try {
+            const r = await this.resolve(specifier, path.join(n.root, 'index.html'))
+            if (r?.id) {
+              state.manualChunkGroups.set(r.id, group)
+              state.manualChunkGroups.set(r.id.split('?')[0], group)
+            } else {
+              console.warn(
+                `[fulgurjs] manualChunks: could not resolve "${specifier}" for group "${group}"; ` +
+                  `those modules will fall back to automatic chunking. (Their shared-negotiation facades are still guarded.)`,
+              )
+            }
+          } catch {
+            console.warn(
+              `[fulgurjs] manualChunks: resolving "${specifier}" (group "${group}") failed; ` +
+                `those modules will fall back to automatic chunking.`,
+            )
+          }
+        }
+        state.manualChunkSpecsPending = undefined
+      }
+      // D6：解析 shared 键本体闭包目录（仅 devSharedSelf 宿主）。闭包内模块对 shared 键的
+      // 导入跳过门面化（transform.ts inSharedClosure），斩断 fallback → 本体 chunk 的
+      // TLA 混合环（详见 transform.ts TransformContext.sharedClosureRoots 注释）。
+      if (n.remotes.length > 0 && n.devSharedSelf && state.sharedClosureRoots.length === 0) {
+        const rootKeys = new Map<string, Set<string>>()
+        const pkgRootOf = (file: string): string | null => {
+          const NM = '/node_modules/'
+          const i = file.lastIndexOf(NM)
+          if (i === -1) return null
+          const rest = file.slice(i + NM.length)
+          const segs = rest.split('/')
+          const pkgDir = segs[0]!.startsWith('@') ? segs.slice(0, 2).join('/') : segs[0]!
+          return file.slice(0, i + NM.length) + pkgDir + '/'
+        }
+        for (const item of n.shared) {
+          if (item.import === false) continue
+          // 别名包（vue-demi 等转发层）一并纳入闭包：它们是 provide 键的一部分，
+          // 且其 `export * from <key>` 无法门面化（ESM 限制），必须静态引用本体。
+          // 解析顺序：先从 shared 本体文件解析（pnpm 严格布局下别名包多为传递依赖，
+          // 不在应用根 node_modules——如 pinia→vue-demi），失败再从应用根解析。
+          const selfFile = await this.resolve(item.import, path.join(n.root, 'index.html')).then(
+            (r) => r?.id?.split('?')[0] ?? null,
+          ).catch(() => null)
+          for (const alias of item.aliases) {
+            if (alias.endsWith('/')) continue
+            let file: string | null = null
+            if (selfFile) {
+              // pnpm 布局：从 shared 本体文件出发解析其传递依赖（vue-demi 不在应用根 node_modules）
+              try {
+                const req = createRequire(selfFile)
+                file = req.resolve(`${alias}/package.json`, { paths: [selfFile] }).replace(/\/package\.json$/, '')
+              } catch {
+                file = null
+              }
+            }
+            if (!file) {
+              file = await this.resolve(alias, path.join(n.root, 'index.html')).then(
+                (r) => r?.id?.split('?')[0] ?? null,
+              ).catch(() => null)
+            }
+            if (!file) continue
+            const root = pkgRootOf(file)
+            if (!root) continue
+            let keys = rootKeys.get(root)
+            if (!keys) rootKeys.set(root, (keys = new Set()))
+            keys.add(item.shareKey)
+          }
+        }
+        state.sharedClosureRoots = [...rootKeys.entries()].map(([root, keys]) => ({ root, keys }))
+      }
       if (n.exposes.length > 0) {
         // 解析 exposes 源模块绝对路径（容器入口与 manifest 映射依赖）
         for (const e of n.exposes) {
@@ -616,8 +788,7 @@ export function federation(options: FederationOptions): Plugin[] {
       // 一刀切——用户源码本可合法直接导入该虚拟模块（README §2 标准用法），同文件再写
       // 远程动态导入属正常混用，一刀切会让远程导入漏改写（vite:import-analysis 500）。
       if (isPluginProcessedModule(code)) return null
-      // dev：所有 JS/TS/Vue 模块统一在此改写；build：仅 .vue 主请求（其余已由 pre 处理）
-      if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) return null
+      // dev：所有 JS/TS/Vue 模块统一在此改写；build：.vue 主请求 + D6 兜底（见下）
       if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里
       const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
       if (!isJsLike) return null
@@ -626,7 +797,27 @@ export function federation(options: FederationOptions): Plugin[] {
       // 纯 remote（有 exposes、无 remotes）全量改写，含 node_modules——依赖包对 shared 的导入
       // 必须走门面防双运行时；dev 下需配合 optimizeDeps.exclude（预构建产物内联代码无法改写）。
       const devRewriteAll = state.command === 'serve' && state.normalized.devSharedSelf
-      if (clean.includes('node_modules') && !id.includes('.vite/deps') && !devRewriteAll) return null
+      const isPureRemoteBuild =
+        state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
+      if (state.command === 'serve' && clean.includes('node_modules') && !id.includes('.vite/deps') && !devRewriteAll) {
+        return null
+      }
+      // D6（2026-09-23）：build 下的 post 兜底。unplugin-auto-import 等后置插件向源码注入的
+      // `import { ref } from 'vue'` 发生在本插件 pre.transform 之后——pre 看到的文件还没有这行
+      // 导入，注入的 shared 导入因此绕过门面化、静态绑定本地副本，形成「协商系统 vs 本地系统」
+      // 双响应性并存（实测：同一 hook 的 ref 赋值不触发渲染，另一 hook 的赋值却触发）。
+      // post 在所有插件之后跑，此处兜底改写；pre 已改写过的文件由 isPluginProcessedModule 拦下。
+      if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) {
+        const quickCheck = /require\s*\(\s*["']|(?:from|import)\s*["']/.test(code)
+        if (!quickCheck) return null
+        const allowNodeModules = isPureRemoteBuild
+        return transformModule(code, id, {
+          options: state.normalized,
+          rewriteShared: true,
+          allowNodeModules,
+          sharedClosureRoots: state.sharedClosureRoots,
+        })
+      }
 
       // dev 改写范围 = devSharedSelf（默认：纯 remote 为 true，有 remotes 的宿主为 false，
       // 双向联邦的宿主可显式开启）。宿主自身 import 即自身 provide，其全局状态
@@ -648,7 +839,13 @@ export function federation(options: FederationOptions): Plugin[] {
         if (!cleanPath.startsWith('/')) return null
         return state.resolvedSharedPaths.get(cleanPath) ?? null
       }
-      return transformModule(code, id, { options: state.normalized!, remapSpecifier, rewriteShared })
+      return transformModule(code, id, {
+        options: state.normalized!,
+        remapSpecifier,
+        rewriteShared,
+        allowNodeModules: state.command === 'build' ? isPureRemoteBuild || state.normalized!.devSharedSelf : undefined,
+        sharedClosureRoots: state.sharedClosureRoots,
+      })
     },
   }
 

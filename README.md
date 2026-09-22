@@ -174,7 +174,7 @@ import { federation, type FederationOptions } from '@fulgurjs/federation'
 | `manifest` | `boolean` | `true` | prod 构建生成 `fulgurjs-manifest.json`（preloadRemote 依赖它） |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（写法见「运行时插件」） |
 | `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 获得类型。**产物写入 `src/fulgurjs/types/`（联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`）**，src 布局项目 tsconfig 零配置即生效；`{ dir }` 自定义位置；`mode: 'source'`（默认）跨工程源码直连（补全/跳转直达远程源码，VSCode 打开生成物可能显示工程外文件诊断）；`mode: 'shim'` 宽松占位（不引用源文件，IDE 全程干净，无源码级补全——见 §9.1.5） |
-| `devSharedSelf` | `boolean` | 纯远程 `true`；有 `remotes` 的宿主 `false` | dev 下自身源码（含依赖）是否参与 shared 协商改写。**双向联邦**（既 expose 又消费 remote）的宿主/远程需显式 `true`，否则 prod 双 vue 实例 |
+| `devSharedSelf` | `boolean` | 纯远程 `true`；有 `remotes` 的宿主 `false` | dev 下自身源码（含依赖）是否参与 shared 协商改写。**双向联邦**（既 expose 又消费 remote）的宿主/远程**必设 `true`**，否则 prod 双 vue 实例（症状：被消费页面渲染上下文错乱 / `'ce'` / renderSlot null）。2.0.1 起 build 下该路径的协商门面自动隔离进插件专属 chunk（`fulgurjs-runtime` + `fulgurjs-shared-<key>`），与用户 `manualChunks` 强制分组正交、不再产生 chunk 循环依赖（D6 修复，症状曾是 `SyntaxError: Unexpected token '<'` + `TypeError: _e is not a function`） |
 | `automaticAsyncBoundary` | — | 恒为 `true` | 接受任意值：TLA 自动异步边界，无需手工 bootstrap |
 | `dataPrefetch` | — | 恒为 `true` | 接受任意值：`preloadRemote` 始终可用 |
 | `usedExports` / `ignoreUnusedSharedExports` | — | no-op | 接受并忽略（Rollup/Rolldown 原生 tree-shaking 已覆盖） |
@@ -373,7 +373,7 @@ export default defineRepoConfig({
 | `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出各应用 `federation()` 粘贴块、NGINX no-cache 站点模板、8 条通用核对清单 |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
-### 6. 错误码总表（30 个）
+### 6. 错误码总表（31 个）
 
 | 段 | 码 | 含义 |
 |---|---|---|
@@ -395,6 +395,7 @@ export default defineRepoConfig({
 | BLD 构建期 | `BLD-001` | expose 源文件解析失败 |
 | | `BLD-002` | 构建目标低于 es2022（TLA 需要） |
 | | `BLD-003` | expose 目标组件含必填 props（文档化核对项） |
+| | `BLD-006` | output 数组形态下无法自动注入协商门面 chunk 隔离（需手工加分支） |
 | MFU 运行时 | `MFU-001` | 远程容器/模块加载失败（网络/超时/重试耗尽/熔断） |
 | | `MFU-002` | remoteEntry 自报名与配置名不一致 |
 | | `MFU-003` | strictVersion 版本不满足 |
@@ -697,7 +698,7 @@ const Panel = await loadRemote('shop/Panel', {
 
 运行时加载失败同样给排查指引（remote dev server 未启动 / 地址配错 / CORS / NGINX 回退），并携带统一错误码：
 
-统一错误码体系（CFG/DEV/BLD/MFU 四段共 30 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表30-个)**；报错文案一律「现象 → 根因 → 修法」三段式。
+统一错误码体系（CFG/DEV/BLD/MFU 四段共 31 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表31-个)**；报错文案一律「现象 → 根因 → 修法」三段式。
 
 调试出口：`window.__FULGURJS_SCOPE__`（share 协商实时结果）、`window.__FULGURJS_INFO__`（remote 状态/耗时/错误）。
 
