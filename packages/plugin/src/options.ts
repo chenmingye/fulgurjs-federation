@@ -108,7 +108,7 @@ export interface NormalizedOptions {
   runtimeChunk?: boolean | 'single'
   manifest: boolean
   runtimePlugins: string[]
-  dts: boolean | { dir?: string }
+  dts: boolean | { dir?: string; mode?: 'source' | 'shim' }
   root: string
   /** 本插件版本（D.5 DEV-006：宿主/远程版本一致性校验） */
   pluginVersion: string
@@ -132,7 +132,7 @@ export interface FulgurjsOptions {
   runtimeChunk?: boolean | 'single'
   manifest?: boolean | Record<string, unknown>
   runtimePlugins?: string[]
-  dts?: boolean | { dir?: string }
+  dts?: boolean | { dir?: string; mode?: 'source' | 'shim' }
   /** 接受并恒为 true：TLA 天然异步边界，无需手工 bootstrap（比 webpack 更进一步） */
   automaticAsyncBoundary?: boolean
   /** 接受并恒为 true：preloadRemote 能力始终可用 */

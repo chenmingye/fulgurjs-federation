@@ -54,3 +54,4 @@ packages/plugin/examples
 
 # npm pack 产物
 packages/plugin/*.tgz
+.typecheck-latest/

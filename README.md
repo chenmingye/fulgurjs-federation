@@ -147,7 +147,7 @@ npx fulgurjs doctor --base http://localhost:5173 --apps app-a --dev
 
 ## API 参考
 
-以下覆盖插件的全部公开 API，签名与默认值与源码一致；完整语义细节与实测截图见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html)。
+以下覆盖插件的全部公开 API，签名与默认值与源码一致——**本 README 为唯一权威文档**（仓库内 `docs/manual.html` 为早期补充手册，部分内容基于较早形态，仅作参考）。
 
 ### 1. `federation(options)` — Vite 插件（宿主/远程同一份 API）
 
@@ -171,7 +171,7 @@ import { federation } from '@fulgurjs/federation'
 | `runtimeChunk` | `boolean \| 'single'` | — | 运行时是否拆独立 chunk |
 | `manifest` | `boolean` | `true` | prod 构建生成 `fulgurjs-manifest.json`（preloadRemote 依赖它） |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（写法见「运行时插件」） |
-| `dts` | `boolean \| { dir?: string }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 补全直达远程源码。**产物写入 `src/fulgurjs/types/`（联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`）**，src 布局项目 tsconfig 零配置即生效；`{ dir }` 可自定义位置 |
+| `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 获得类型。**产物写入 `src/fulgurjs/types/`（联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`）**，src 布局项目 tsconfig 零配置即生效；`{ dir }` 自定义位置；`mode: 'source'`（默认）跨工程源码直连（补全/跳转直达远程源码，VSCode 打开生成物可能显示工程外文件诊断）；`mode: 'shim'` 宽松占位（不引用源文件，IDE 全程干净，无源码级补全——见 §9.1.5） |
 | `devSharedSelf` | `boolean` | 纯远程 `true`；有 `remotes` 的宿主 `false` | dev 下自身源码（含依赖）是否参与 shared 协商改写。**双向联邦**（既 expose 又消费 remote）的宿主/远程需显式 `true`，否则 prod 双 vue 实例 |
 | `automaticAsyncBoundary` | — | 恒为 `true` | 接受任意值：TLA 自动异步边界，无需手工 bootstrap |
 | `dataPrefetch` | — | 恒为 `true` | 接受任意值：`preloadRemote` 始终可用 |
@@ -403,7 +403,7 @@ export default defineFulgurjsConfig({
 | CC 跨应用上下文 | `CC-001` | AppContext 必需字段缺失（三段式：got/expected/example，修法指向宿主桥 `provideFulgurjsAppContext`） |
 | | `CC-002` | 运行时单例不可用（独立直开远程页；修法 = 经宿主联邦加载，时序契约 bridge → federatedBoot → loadRemote） |
 
-每个码的完整排查文案见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) §8；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
+错误排查三段式文案与「配置出错？报错看得懂」一节（下文）为准；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
 
 ### 7. 产物与端点约定
 
@@ -414,7 +414,7 @@ export default defineFulgurjsConfig({
 | prod | `/<base>/fulgurjs-remoteEntry.js` | 固定文件名容器入口（内容每次构建变——**必须 no-cache**） |
 | prod | `/<base>/fulgurjs-manifest.json` | expose chunk/CSS 清单（preloadRemote 消费，**no-cache**） |
 
-NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgurjs init --config` 自动生成，样例见 [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html)。
+NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgurjs init --config` 自动生成。
 
 ### 8. `remoteComponent` — Vue 远程组件直渲染（`@fulgurjs/federation/vue`）
 
@@ -578,13 +578,17 @@ const res = await getDictItems('sex')
 
 | 属性 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `PREFETCH_REMOTES` | `string[]` | 全部 remotes 键 | 参与空闲预载的 remote 名单（与 vite.config `remotes` 键一致） |
+| `host.prefetch`（fulgurjs.config.ts，集成器项目） | `'all' \| string[] \| false` | `'all'` | `'all'` = 预载全部 remotes 键；`string[]` = 指定名单；`false` = 关闭。init 生成 bridge.ts 时注入 |
+| `PREFETCH_REMOTES`（手工项目，bridge.ts 顶部常量） | `string[]` | 全部 remotes 键 | 与 vite.config `remotes` 键一致 |
 
 ```ts
-// src/fulgurjs/host/bridge.ts 顶部
+// 集成器项目：fulgurjs.config.ts → apps[].host.prefetch（改后删已生成 bridge.ts 重跑 fulgurjs init）
+prefetch: 'all'                  // 默认：全部 remote
+prefetch: ['mes-bpm']            // 部分 remote
+prefetch: false                  // 关闭
 
-// 默认：预载全部 remote（init 集成器按 fulgurjs.config.ts 的 remotes 自动生成）
-const PREFETCH_REMOTES: string[] = ['mes-bpm', 'mes-lowcode']
+// 手工项目：src/fulgurjs/host/bridge.ts 顶部常量
+const PREFETCH_REMOTES: string[] = ['mes-bpm', 'mes-lowcode'] // 默认（init 生成形态）
 
 // 只预载部分 remote
 const PREFETCH_REMOTES: string[] = ['mes-bpm']
@@ -616,6 +620,7 @@ const PREFETCH_REMOTES: string[] = []
 
 - `types/` 下的 `*.d.ts` 是**插件每次 dev 自动生成**的类型直连声明（勿手改）：内部 `export * from '../../../demo-app-xxx/src/***.vue'` 指向**兄弟工程的源码**。命令行 `vue-tsc --noEmit`（走本应用 tsconfig，skipLibCheck 生效）为 **0 错误**；但 **VSCode/Volar 在打开这些 d.ts 时**可能把工程外 .vue 用推断项目（inferred project，无 tsconfig 上下文）展开检查，显示大片"找不到模块 '@/...'"——**仅编辑器显示问题，不影响命令行检查与构建**，不打开 `types/` 生成物即无感。
 - 升级插件版本后若 `import '@fulgurjs/federation/context'` 报 ts(2307)：是 IDE 的 TS 服务缓存了旧包——`Restart TS Server`（⌘⇧P）或重开窗口即可。
+- **根治红波浪线**：`federation({ dts: { mode: 'shim' } })` —— 生成物不再引用跨工程源文件（宽松占位形态），IDE 全程干净；取舍是失去"跳转直达远程源码"的补全能力（默认 `source` 不变，按项目偏好选择）。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）
 
@@ -700,7 +705,7 @@ const Panel = await loadRemote('shop/Panel', {
 
 ## 文档
 
-- [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) — 完整使用手册：webpack 逐项对齐总表、每个功能的配置代码 + dev/prod 实测截图、错误码排查、NGINX 部署样例
+- [`docs/manual.html`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/manual.html) — 早期使用手册（历史存档，不再随 npm 包发布）：webpack 逐项对齐总表与部分实测截图；**当前形态以本 README 为准**
 - [`docs/迁移指南.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md) — qiankun 微前端 → 联邦的真实迁移案例（七步法 + 验收清单）
 - [`docs/webpack-mf-对照与缺口.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md) — webpack MF 逐项对照与明确不支持清单
 - [`docs/沙箱边界审计.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/沙箱边界审计.md) — CSS / 全局变量 / 公共依赖三维度互扰实测

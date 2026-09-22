@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0（2026-09-21）
+
+### 新增（发布可靠性 + IDE 边界 + 配置面）
+
+- **`dts: { mode: 'source' | 'shim' }`**（默认 `source`，行为不变）：`shim` 形态的类型声明不引用跨工程源文件（宽松占位），根治 VSCode/Volar 打开 `types/*.d.ts` 时的跨工程诊断红波浪线；取舍为无源码级补全/跳转（README §9.1.5）。
+- **`fulgurjs.config.ts` 新增 `host.prefetch: 'all' | string[] | false`**（默认 `'all'`，行为不变）：空闲预载名单成为正式配置面，init 生成 bridge.ts 时注入 `PREFETCH_REMOTES` 常量（README §9.1.3）。
+- **`npm run typecheck:latest`**：用最新 TypeScript + vue-tsc 对 `tests/types-repro/` 典型消费形态做类型回归——根治"工程内旧 TS 绿、用户 IDE（新 TS）红"的盲区（0.8.2 的 EP locale ts2345 即由此暴露）。
+- **CI 流水线**：`.github/workflows/ci.yml`（push/PR：单测 + 双口径 typecheck + build/gzip 门禁）与 `.github/workflows/publish.yml`（GitHub Release 触发 `npm publish --provenance`，Trusted Publishing 迁移见 docs/trusted-publishing-迁移清单.md）。
+
+### 变更
+
+- **gzip 门禁真实化**：`scripts/check-gzip.mjs` 接入 build（阈值 ≤6144B，实测基线 5232B）；`version.ts` 注释口径修正（原"≤5120 CI 守卫"与事实不符）。
+- **发布物移除 `docs/manual.html`**（早期手册，内容停留在较早形态，避免双源漂移）：本 README 为唯一权威文档；仓库内文件保留为历史存档。
+
+### 修复
+
+- types-repro 样例集 + `buildShimModule`/`resolveDtsMode` 单测（单测 183 → 188）。
+
 ## 0.8.4（2026-09-21）
 
 ### 文档（README / 迁移指南全面清理历史沿革表述，只保留当前形态，零代码变化）

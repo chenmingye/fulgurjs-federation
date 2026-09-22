@@ -1,0 +1,41 @@
+name: Publish
+
+# Trusted Publishing：在 npmjs.com 包设置里绑定本仓库与本 workflow 文件后，
+# 打 tag 建 GitHub Release 即自动 npm publish（--provenance）。
+# 首次迁移验证见 docs/trusted-publishing-迁移清单.md；验证通过前本地 token 通道保留。
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: packages/plugin/pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install
+        working-directory: packages/plugin
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        working-directory: packages/plugin
+        run: pnpm test
+      - name: Build + gzip gate
+        working-directory: packages/plugin
+        run: pnpm build
+      - name: Publish
+        working-directory: packages/plugin
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
