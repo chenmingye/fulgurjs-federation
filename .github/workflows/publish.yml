@@ -34,8 +34,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if [[ "$VERSION" == *-* ]]; then
-            npm publish --access public --tag prerelease
+            npm publish --provenance --access public --tag prerelease
           else
-            npm publish --access public
+            npm publish --provenance --access public
           fi
-      # 注：--provenance 需公开仓库（sigstore 校验拒绝 private 源）；仓库转 public 后可加回
