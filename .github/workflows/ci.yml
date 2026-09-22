@@ -23,7 +23,7 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 11
-      - name: Install fixtures host-vue deps（D6 产物形态用例经 fixtures 解析 vue/vue-router；link: 协议须 pnpm）
+      - name: Install fixtures host-vue deps（D6 产物形态用例经 fixtures 解析 vue/vue-router；link 协议须 pnpm）
         working-directory: fixtures/host-vue
         run: CI=true pnpm install --no-frozen-lockfile
       - name: Unit tests
