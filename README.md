@@ -709,15 +709,25 @@ const Panel = await loadRemote('shop/Panel', {
 ## 开发与测试
 
 ```bash
-pnpm install
-pnpm test        # 单测（148）+ fixtures dev e2e（10）+ prod e2e（8）
-pnpm test:unit   # 仅单测
-pnpm test:dev    # 仅 dev e2e（Vite 6/7/8 矩阵见 CI）
-pnpm test:prod   # 仅 prod e2e
+# 各子项目独立安装（根目录不是 workspace）；插件需先 build，
+# fixtures 经 link: 消费插件 dist，而 dist 运行时依赖就地安装在插件目录
+pnpm --dir packages/plugin install && pnpm --dir packages/plugin build
+for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b e2e; do pnpm --dir "$app" install; done
+
+pnpm test:unit   # 单测（188）
+pnpm test:dev    # dev e2e（10）
+pnpm test:prod   # prod e2e（8，需 NGINX，见 e2e/scripts/prod-setup.sh）
+pnpm test        # unit + dev + prod 全跑
+pnpm --dir e2e exec playwright test --project=dev --project=fault   # dev + 容错 e2e（12）
 bash e2e/h7-install-test.sh   # H7 装后实测：pack → 干净目录 → dev+prod 双引擎断言
 ```
 
-CI（GitHub Actions）：单测 + fixtures e2e（Vite 6.4.3 / 7.3.6 / 8.3.0 矩阵）+ runtime gzip 5KB 红线守卫，每次推送自动运行。
+CI（GitHub Actions，每次推送/PR 自动运行）两个作业：
+
+- `test`：单测 + 双口径 typecheck（pinned / latest）+ build 门禁（runtime gzip ≤ 6144B、错误码三方一致性）；
+- `e2e`：fixtures e2e（dev + fault 共 12 例）× Vite 6.4.3 / 7.3.6 / 8.3.0 兼容矩阵。
+
+prod e2e 需 NGINX，不进 CI（本地或真实项目 testbed 验证）。
 
 ## License
 
