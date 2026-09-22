@@ -1,5 +1,5 @@
 /**
- * D.2 宿主路由表校验器（defineFulgurjsPages）
+ * D.2 宿主路由表校验器（definePages）
  *
  * 背景：带参路由缺省推导 spec 时会剥离 :参数 段，可能与其它条目（如列表页）的
  * expose 键收敛相同 → 静默加载错误组件（真实事故：复制流程误走更新语义）。
@@ -18,7 +18,7 @@
  * - R5 [WARN]  name 字段重复（vue-router 命名跳转歧义）
  */
 
-export interface FulgurjsPageRouteLike {
+export interface PageRouteLike {
   /** 宿主路由路径（:param 段） */
   route: string;
   /** 显式 spec（缺省走推导） */
@@ -35,7 +35,7 @@ export interface RemoteSchemaEntry {
   exists?: boolean;
 }
 
-export interface FulgurjsPagesOptions {
+export interface PagesOptions {
   /**
    * 带参路由的缺省 spec 推导规则（宿主私有约定，如
    * (route) => `pages/${route 去前缀去 :参}`）。
@@ -98,9 +98,9 @@ export interface PageViolation {
 /**
  * 校验路由表（独立导出便于单测）：返回违例清单（不抛错）。
  */
-export function validateFulgurjsPages(
-  pages: FulgurjsPageRouteLike[],
-  options: FulgurjsPagesOptions = {},
+export function validatePages(
+  pages: PageRouteLike[],
+  options: PagesOptions = {},
 ): PageViolation[] {
   const deriveSpec = options.deriveSpec ?? defaultDeriveSpec;
   const violations: PageViolation[] = [];
@@ -225,11 +225,11 @@ function formatViolations(violations: PageViolation[]): string {
  * 违反 ERROR 级规则时默认 throw（dev overlay / build 失败直接可见）；
  * strict: false 时降级 console.error。WARN 级始终 console.warn。
  */
-export function defineFulgurjsPages<P extends FulgurjsPageRouteLike[]>(
+export function definePages<P extends PageRouteLike[]>(
   pages: P,
-  options: FulgurjsPagesOptions = {},
+  options: PagesOptions = {},
 ): P {
-  const violations = validateFulgurjsPages(pages, options);
+  const violations = validatePages(pages, options);
   const errors = violations.filter((v) => v.level === 'error');
   const warns = violations.filter((v) => v.level === 'warn');
   const text = formatViolations(violations);

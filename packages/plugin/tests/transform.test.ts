@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { federation } from '../src/index'
-import { normalizeOptions, type FulgurjsOptions } from '../src/options'
+import { normalizeOptions, type FederationOptions } from '../src/options'
 import { transformModule, isExposeTargetFile, isPluginProcessedModule, staticRuntimeImportError } from '../src/transform'
 import { genBindingFacade, genBuildRemoteEntry, genDevRemoteEntry, genInitModule, INIT_MODULE_MARKER } from '../src/virtual'
 
 const ROOT = process.cwd()
 
-function ctx(opts: FulgurjsOptions) {
+function ctx(opts: FederationOptions) {
   return { options: normalizeOptions(opts, ROOT, 'serve'), rewriteShared: true }
 }
 
-async function x(code: string, opts: FulgurjsOptions = { name: 'host', shared: { vue: '^3.4.0' } }) {
+async function x(code: string, opts: FederationOptions = { name: 'host', shared: { vue: '^3.4.0' } }) {
   return transformModule(code, '/src/a.ts', ctx(opts))
 }
 
@@ -109,7 +109,7 @@ describe('transform: shared 导入改写（绑定门面）', () => {
 })
 
 describe('transform: remote 导入改写', () => {
-  const OPTS: FulgurjsOptions = {
+  const OPTS: FederationOptions = {
     name: 'host',
     remotes: { 'remote-a': 'http://localhost:5101' },
   }
@@ -297,7 +297,7 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
   const DEP_CODE = `import { ref } from 'vue'\nexport const a = ref\n`
 
   /** 走真实插件 hook（config 初始化 normalized 后调 pre.transform）验证 build 门禁判定 */
-  async function buildPreTransform(opts: FulgurjsOptions, id: string, code = DEP_CODE) {
+  async function buildPreTransform(opts: FederationOptions, id: string, code = DEP_CODE) {
     const [pre] = federation({ ...opts })
     await (pre.config as NonNullable<typeof pre.config>)({}, { command: 'build' } as never)
     return (pre.transform as NonNullable<typeof pre.transform>)(code, id)

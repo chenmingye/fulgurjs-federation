@@ -17,7 +17,7 @@ import {
   SHARED_FACADE_PREFIX,
   SHARED_NS_FACADE_PREFIX,
   type NormalizedOptions,
-  type FulgurjsOptions,
+  type FederationOptions,
 } from './options'
 import {
   getFacadeEntry,
@@ -99,7 +99,7 @@ function injectInitScript(html: string, scriptSrc: string): string {
   return tag + html
 }
 
-export function federation(options: FulgurjsOptions): Plugin[] {
+export function federation(options: FederationOptions): Plugin[] {
   const warnedUnknownPrefixes = new Set<string>()
   let remoteSchemaPromise: Promise<string> | null = null
   const state: {
@@ -676,4 +676,4 @@ export function federation(options: FulgurjsOptions): Plugin[] {
 }
 
 export default federation
-export type { FulgurjsOptions } from './options'
+export type { FederationOptions } from './options'

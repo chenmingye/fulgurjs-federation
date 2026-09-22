@@ -11,7 +11,7 @@
  * - 自包含容器协议：remoteEntry 导出 { name, init(shareScopeMap), get(module) }，不 import 运行时。
  */
 import { satisfies, compareVersions } from '../semver'
-import { FulgurjsError, ErrorCodes } from './errors'
+import { FgError, ErrorCodes } from './errors'
 import { RUNTIME_VERSION } from '../version'
 
 export interface ShareEntry {
@@ -68,7 +68,7 @@ export interface RuntimeHooks {
   }) => Promise<ShareEntry | void> | ShareEntry | void
   beforeLoadRemote?: (info: { remote: string; module: string }) => void
   afterLoadRemote?: (info: { remote: string; module: string; module_ns?: any }) => void
-  onRemoteError?: (info: { remote: string; error: FulgurjsError }) => void
+  onRemoteError?: (info: { remote: string; error: FgError }) => void
 }
 
 export interface RemoteDebugInfo {
@@ -112,7 +112,7 @@ function createRuntime() {
 
   const getScope = (name: string): ShareScope => (shareScopeMap[name] ??= {})
 
-  function emitError(info: { remote: string; error: FulgurjsError }) {
+  function emitError(info: { remote: string; error: FgError }) {
     try {
       hooks.onRemoteError?.(info)
     } catch {}
@@ -194,7 +194,7 @@ function createRuntime() {
         const entry0 = byName[pick!]
         const msg = `singleton skew "${shareKey}": req "${req ?? 'any'}" use ${pick} from ${entry0.from}`
         if (opts.strictVersion) {
-          const err = new FulgurjsError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
+          const err = new FgError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
             shareKey,
             requiredVersion: req,
           })
@@ -208,7 +208,7 @@ function createRuntime() {
       pick = [...satisfying].sort(compareVersions).pop()
       if (!pick) {
         if (opts.strictVersion) {
-          const err = new FulgurjsError(
+          const err = new FgError(
             ErrorCodes.SHARE_STRICT_VERSION,
             `no satisfying version for "${shareKey}" (required "${req}") in share scope "${scopeName}"`,
           )
@@ -216,7 +216,7 @@ function createRuntime() {
           throw err
         }
         if (opts.fallback) return opts.fallback()
-        const err = new FulgurjsError(
+        const err = new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
           `shared "${shareKey}" (${req ?? 'any'}) unavailable in scope "${scopeName}" (no local fallback)`,
           { shareKey, requiredVersion: req },
@@ -291,7 +291,7 @@ function createRuntime() {
       // 缓存路径同样校验：对已 init 的容器换 scope → MFU-005（webpack 语义）
       const prevScope = containerInitScopes.get(remote.container)
       if (prevScope && prevScope !== scopeKey) {
-        throw new FulgurjsError(
+        throw new FgError(
           ErrorCodes.CONTAINER_REINIT_CONFLICT,
           `container "${remote.name}" already initialized with share scope "${prevScope}", cannot re-init with "${scopeKey}"`,
         )
@@ -303,7 +303,7 @@ function createRuntime() {
     // 熔断：连续失败达到阈值后快速失败
     const b = remote.breakerState
     if (b.openUntil > Date.now()) {
-      const err = new FulgurjsError(
+      const err = new FgError(
         ErrorCodes.REMOTE_LOAD_FAILED,
         `circuit breaker open for remote "${remote.name}" until ${new Date(b.openUntil).toISOString()}`,
         { remote: remote.name },
@@ -368,7 +368,7 @@ function createRuntime() {
           hints.push(`1. is the remote deployed and reachable?  try opening ${remote.entry} in the browser — it must return JS`)
           hints.push(`2. NGINX/CDN routing: the entry path must serve the remoteEntry JS file (check try_files / fallback rules)`)
         }
-        throw new FulgurjsError(
+        throw new FgError(
           ErrorCodes.REMOTE_LOAD_FAILED,
           `failed to load remote "${remote.name}" from ${remote.entry}: ${String((lastErr as Error)?.message ?? lastErr)}\n` +
             hints.join('\n'),
@@ -382,7 +382,7 @@ function createRuntime() {
       // 模块命名空间对象是密封的，init scope 标记存 WeakMap
       const prevScope = containerInitScopes.get(container)
       if (prevScope && prevScope !== scopeKey) {
-        throw new FulgurjsError(
+        throw new FgError(
           ErrorCodes.CONTAINER_REINIT_CONFLICT,
           `container "${remote.name}" already initialized with share scope "${prevScope}", cannot re-init with "${scopeKey}"`,
         )
@@ -411,16 +411,16 @@ function createRuntime() {
         b.openUntil = Date.now() + BREAKER_RESET_MS
         b.fails = 0
       }
-      if (err instanceof FulgurjsError) {
+      if (err instanceof FgError) {
         emitError({ remote: remote.name, error: err })
         throw err
       }
       // 带 code 的领域错误（如 MFU-002 名称不匹配）原样穿透，不重包装为 MFU-001
       if ((err as any)?.code) {
-        emitError({ remote: remote.name, error: err as FulgurjsError })
+        emitError({ remote: remote.name, error: err as FgError })
         throw err
       }
-      const wrapped = new FulgurjsError(ErrorCodes.REMOTE_LOAD_FAILED, String((err as Error)?.message ?? err), {
+      const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, String((err as Error)?.message ?? err), {
         remote: remote.name,
       })
       emitError({ remote: remote.name, error: wrapped })
@@ -456,7 +456,7 @@ function createRuntime() {
     hooks.beforeLoadRemote?.({ remote: name, module })
     const remote = remotes.get(name)
     if (!remote) {
-      throw new FulgurjsError(
+      throw new FgError(
         ErrorCodes.REMOTE_UNKNOWN,
         `unknown remote "${name}". Register it via federation({ remotes }) or registerRemote().`,
         { remote: name },
@@ -468,7 +468,7 @@ function createRuntime() {
     } catch (err) {
       if (opts?.fallbackModule) {
         console.error(`[fulgurjs] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
-        emitError({ remote: name, error: err as FulgurjsError })
+        emitError({ remote: name, error: err as FgError })
         return await opts.fallbackModule()
       }
       throw err
@@ -480,8 +480,8 @@ function createRuntime() {
         cacheKey,
         container.get(module).catch((err: unknown) => {
           loadedModules.delete(cacheKey)
-          if (err instanceof FulgurjsError || (err as any)?.code) throw err
-          throw new FulgurjsError(
+          if (err instanceof FgError || (err as any)?.code) throw err
+          throw new FgError(
             ErrorCodes.REMOTE_LOAD_FAILED,
             `failed to load module "${module}" from remote "${name}": ${String((err as Error)?.message ?? err)}`,
             { remote: name, module },
@@ -495,7 +495,7 @@ function createRuntime() {
     } catch (err) {
       if (opts?.fallbackModule) {
         console.error(`[fulgurjs] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
-        emitError({ remote: name, error: err as FulgurjsError })
+        emitError({ remote: name, error: err as FgError })
         return await opts.fallbackModule()
       }
       throw err
@@ -504,7 +504,7 @@ function createRuntime() {
     // MFU-009：加载到的模块没有任何导出——exposes 指向了不导出内容的文件（误导出/空文件）。
     // 仅告警不抛错：命名空间为空对调用方必然不可用，但保留返回值避免破坏既有容错路径
     if (ns && typeof ns === 'object' && Object.keys(ns).length === 0) {
-      const err = new FulgurjsError(
+      const err = new FgError(
         ErrorCodes.EMPTY_EXPORTS,
         `no exports: ${module} @ ${name}`,
         { remote: name, module },
@@ -518,7 +518,7 @@ function createRuntime() {
   function getContainer(name: string): Promise<any> {
     const remote = remotes.get(name)
     if (!remote) {
-      throw new FulgurjsError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
+      throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
     }
     return acquireContainer(remote)
   }
@@ -530,7 +530,7 @@ function createRuntime() {
     const { remote: name } = parseSpec(spec)
     const remote = remotes.get(name)
     if (!remote) {
-      throw new FulgurjsError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
+      throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
     }
     const mode = opts.mode ?? 'preload'
     const inject = (href: string, as: 'modulepreload' | 'style') => {
@@ -565,7 +565,7 @@ function createRuntime() {
       // 预加载失败不阻断业务，仅上报
       emitError({
         remote: name,
-        error: new FulgurjsError(ErrorCodes.PRELOAD_FAILED, String((err as Error)?.message ?? err), {
+        error: new FgError(ErrorCodes.PRELOAD_FAILED, String((err as Error)?.message ?? err), {
           remote: name,
         }),
       })
@@ -604,10 +604,10 @@ function createRuntime() {
   }
 }
 
-export type FulgurjsRuntime = ReturnType<typeof createRuntime>
+export type FgRuntime = ReturnType<typeof createRuntime>
 
 const g = globalThis as any
-export const runtime: FulgurjsRuntime = g.__FULGURJS_RUNTIME__ ?? createRuntime()
+export const runtime: FgRuntime = g.__FULGURJS_RUNTIME__ ?? createRuntime()
 g.__FULGURJS_RUNTIME__ = runtime
 
 // 运行时单例契约固化：跨源消费方（远程页面/最小宿主）只允许经 globalThis.__FULGURJS_RUNTIME__
@@ -630,7 +630,7 @@ export const version: string = RUNTIME_VERSION
  * （resolveComponent / withDirectives / ref owner 告警、内容区空白）。
  * 跨源取运行时一律用本入口，或直接读全局单例。
  */
-export function getRuntime(): FulgurjsRuntime {
+export function getRuntime(): FgRuntime {
   return runtime
 }
 

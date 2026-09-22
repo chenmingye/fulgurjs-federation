@@ -119,7 +119,7 @@ export interface NormalizedOptions {
   devSharedSelf: boolean
 }
 
-export interface FulgurjsOptions {
+export interface FederationOptions {
   name: string
   filename?: string
   exposes?: Record<string, string | ExposeHint>
@@ -397,7 +397,7 @@ function configError(what: string, got: unknown, expect: string, example: string
  * 配置前置校验：任何配置错误在 vite config 阶段立即以人话报出，
  * 不允许"带着错误配置静默运行、到运行时莫名其妙"。
  */
-function validateOptions(options: FulgurjsOptions): void {
+function validateOptions(options: FederationOptions): void {
   if (options.name === undefined || options.name === null || options.name === '') {
     configError(
       '`name` is required (container name, also used as uniqueName)',
@@ -486,7 +486,7 @@ function validateOptions(options: FulgurjsOptions): void {
   }
 }
 
-export function normalizeOptions(options: FulgurjsOptions, root: string, command: 'serve' | 'build'): NormalizedOptions {
+export function normalizeOptions(options: FederationOptions, root: string, command: 'serve' | 'build'): NormalizedOptions {
   const warnings: string[] = []
   validateOptions(options)
   if (!options.name) throw new Error('[fulgurjs] option `name` is required.')

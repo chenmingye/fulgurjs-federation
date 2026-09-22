@@ -39,7 +39,7 @@ const ERROR_STYLE = {
 
 /**
  * 内置默认错误占位：错误码 + 根因 + 修法三段式，显式非静默（H3）。
- * defineAsyncComponent 把 loader 抛出的错误（FulgurjsError，message 已带
+ * defineAsyncComponent 把 loader 抛出的错误（FgError，message 已带
  * [fulgurjs:MFU-xxx] 前缀）作为 error prop 传入。
  */
 const RemoteErrorPlaceholder = defineComponent({

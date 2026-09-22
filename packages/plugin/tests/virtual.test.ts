@@ -93,7 +93,7 @@ describe('运行时惰性委托模块（genRuntimeProxyModule）', () => {
   it('委托模块走全局单例（不再携带跨应用配置 API——已收编至 context 子路径）', () => {
     const code = genRuntimeProxyModule()
     expect(code).toContain('__FULGURJS_RUNTIME__')
-    expect(code).not.toContain('FulgurjsAppConfig')
+    expect(code).not.toContain('AppConfig')
   })
 })
 

@@ -3,7 +3,7 @@
  * 主包内置 bin + 单配置文件驱动，可入库可复跑）。
  * init 只消费该配置生成通用样板（见 init.ts）；插件运行时（federation()）不读取本文件。
  */
-export interface FulgurjsPageEntry {
+export interface PageEntry {
   /** 宿主路由路径（参数段用 :xx） */
   route: string
   /** 路由 name（命名跳转依赖） */
@@ -14,28 +14,28 @@ export interface FulgurjsPageEntry {
   title?: string
 }
 
-export interface FulgurjsRemoteAddress {
+export interface RemoteAddress {
   dev: string
   prod: string
 }
 
-export interface FulgurjsHostConfig {
+export interface HostConfig {
   /** 页面路由表 */
-  pages: FulgurjsPageEntry[]
+  pages: PageEntry[]
   /** 路由前缀 → 远程名 */
   remotePrefixes: Record<string, string>
   /** 消费的远程地址（键 = import 前缀；裸 URL，对象形式不支持 name@ 前缀） */
-  remotes: Record<string, FulgurjsRemoteAddress>
+  remotes: Record<string, RemoteAddress>
 }
 
-export interface FulgurjsRemoteConfig {
+export interface RemoteConfig {
   /** exposes：./键 → 源文件（独立页） */
   exposes: Record<string, string>
   /** 反向消费的远程（双向联邦时；dev 下自身源码参与协商需 devSharedSelf: true） */
-  remotes?: Record<string, FulgurjsRemoteAddress>
+  remotes?: Record<string, RemoteAddress>
 }
 
-export interface FulgurjsAppConfig {
+export interface AppConfig {
   /** 相对 root 的应用目录 */
   path: string
   /** 联邦容器名 */
@@ -47,31 +47,31 @@ export interface FulgurjsAppConfig {
   /** 部署目录名（缺省取 base 去斜杠） */
   deployDir?: string
   /** 宿主角色 */
-  host?: FulgurjsHostConfig
+  host?: HostConfig
   /** 远程角色 */
-  remote?: FulgurjsRemoteConfig
+  remote?: RemoteConfig
   /** 该应用的 shared 表（缺省建议 vue/vue-router/pinia singleton，见 init 输出的样板） */
   shared?: Record<string, { singleton?: boolean; requiredVersion?: string }>
 }
 
-export interface FulgurjsDeployConfig {
+export interface DeployConfig {
   /** NGINX 站点根（样板输出用，可选） */
   webRoot?: string
   /** 监听端口（样板输出用，可选） */
   listen?: number
 }
 
-export interface FulgurjsRepoConfig {
+export interface RepoConfig {
   /** 工程根（monorepo 根或单应用仓库根） */
   root: string
-  apps: FulgurjsAppConfig[]
-  deploy?: FulgurjsDeployConfig
+  apps: AppConfig[]
+  deploy?: DeployConfig
 }
 
-export type FulgurjsUserConfig = Partial<FulgurjsRepoConfig>
+export type UserConfig = Partial<RepoConfig>
 
 /** 用户配置文件入口：仅做类型收窄（identity），不引入运行时逻辑 */
-export function defineFulgurjsConfig(config: FulgurjsUserConfig): FulgurjsUserConfig {
+export function defineRepoConfig(config: UserConfig): UserConfig {
   return config
 }
 
@@ -82,7 +82,7 @@ export function defineFulgurjsConfig(config: FulgurjsUserConfig): FulgurjsUserCo
  * - TS 走 Node 原生类型剥离（Node ≥23.6 默认开启；配置文件须用可擦除语法——纯对象无 enum/namespace）；
  *   老版本 Node 回退 esbuild 转译（先试配置工程，再试 CLI 自带依赖树）。
  */
-export async function loadFulgurjsConfig(configPath: string): Promise<FulgurjsRepoConfig> {
+export async function loadRepoConfig(configPath: string): Promise<RepoConfig> {
   const { pathToFileURL, fileURLToPath } = await import('node:url')
   const { createRequire } = await import('node:module')
   const fs = await import('node:fs')
@@ -98,10 +98,10 @@ export async function loadFulgurjsConfig(configPath: string): Promise<FulgurjsRe
     source.replace(/(['"])@fulgurjs\/federation\/config\1/g, (_m, q) => `${q}${SELF_SPEC}${q}`)
 
   const importConfigs = async (cacheKey: string) => {
-    return (await import(`${cacheKey}?t=${Date.now()}`)) as { default: FulgurjsUserConfig }
+    return (await import(`${cacheKey}?t=${Date.now()}`)) as { default: UserConfig }
   }
 
-  let mod: { default: FulgurjsUserConfig }
+  let mod: { default: UserConfig }
   if (configPath.endsWith('.json')) {
     mod = { default: JSON.parse(fs.readFileSync(configPath, 'utf8')) }
   } else {
@@ -153,5 +153,5 @@ export async function loadFulgurjsConfig(configPath: string): Promise<FulgurjsRe
       )
     }
   }
-  return cfg as FulgurjsRepoConfig
+  return cfg as RepoConfig
 }

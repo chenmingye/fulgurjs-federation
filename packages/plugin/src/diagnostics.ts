@@ -53,7 +53,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-009', stage: 'MFU', title: '加载到的模块没有任何导出' },
   { code: 'MFU-010', stage: 'MFU', title: 'singleton 共享版本漂移（使用作用域版本）' },
   // ── CC 跨应用上下文（定义于 context.ts，此处登记供手册一致性校验） ──
-  { code: 'CC-001', stage: 'CC', title: 'AppContext 必需字段缺失（修法指向宿主桥 provideFulgurjsAppContext）' },
+  { code: 'CC-001', stage: 'CC', title: 'AppContext 必需字段缺失（修法指向宿主桥 provideAppContext）' },
   { code: 'CC-002', stage: 'CC', title: '运行时单例不可用（独立直开远程页，须经宿主联邦加载）' },
 ]
 

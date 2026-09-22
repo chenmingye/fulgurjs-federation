@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOptions, type FulgurjsOptions } from '../src/options'
+import { normalizeOptions, type FederationOptions } from '../src/options'
 
 const ROOT = process.cwd()
 
-function norm(opts: FulgurjsOptions) {
+function norm(opts: FederationOptions) {
   return normalizeOptions(opts, ROOT, 'build')
 }
 

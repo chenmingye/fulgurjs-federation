@@ -3,9 +3,9 @@
  * 用法：npx fulgurjs init --config examples/fulgurjs.config.example.ts
  * 完整字段说明见 `fulgurjs init` 生成的起步模板（fulgurjs init --template fulgurjs.config.ts）。
  */
-import { defineFulgurjsConfig } from '@fulgurjs/federation/config'
+import { defineRepoConfig } from '@fulgurjs/federation/config'
 
-export default defineFulgurjsConfig({
+export default defineRepoConfig({
   root: process.cwd(),
   apps: [
     {

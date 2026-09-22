@@ -1,5 +1,5 @@
 /**
- * 跨应用传值契约：FulgurjsAppContext。
+ * 跨应用传值契约：AppContext。
  *
  * 定位（docs/跨应用传值与方法引用设计方案-2026-09-20.md §四）：
  * - 独立子路径（'@fulgurjs/federation/context'），与 runtime bundle 解耦：状态存在
@@ -10,7 +10,7 @@
  * - H3 零兜底：require 缺键 → CC-001 三段式；页面无运行时单例（独立直开远程页）
  *   → CC-002，绝不静默。
  */
-import { FulgurjsError } from './runtime/errors'
+import { FgError } from './runtime/errors'
 
 /**
  * CC 段错误码（context 子路径自持）：与 README 错误码总表 CC 段一一对应。
@@ -32,7 +32,7 @@ export const ContextErrorCodes = {
  * token 快照与 getToken 函数引用重复（快照会过期），formUrl/baseUrl 自 0.7.0
  * remoteComponent 直渲染后无消费点；项目如需可经扩展位自行提供。
  */
-export interface FulgurjsAppContext {
+export interface AppContext {
   /** 宿主登录用户原始形态（只读约定） */
   user: Record<string, any>
   /** 取最新 token（拉取式防过期；0.8.2 起 bridge 不再传一次性 token 快照，用本函数取值） */
@@ -60,12 +60,12 @@ const APP_CONTEXT_STORAGE_KEY = '__FULGURJS_APP_CONFIG__'
 function requireRuntime(): { loadRemote: (...args: any[]) => any } {
   const rt = (globalThis as any).__FULGURJS_RUNTIME__
   if (!rt || typeof rt.loadRemote !== 'function') {
-    throw new FulgurjsError(
+    throw new FgError(
       ContextErrorCodes.CONTEXT_NO_RUNTIME,
       'fulgurjs runtime singleton not found on this page (globalThis.__FULGURJS_RUNTIME__ is undefined).\n' +
         '  根因: 当前页面没有经宿主的联邦运行时加载（独立直开远程页，或宿主桥晚于本调用执行）。\n' +
         '  修法: ① 从宿主应用的联邦路由打开本页面（宿主 bridge 会先加载运行时并提供 context）；\n' +
-        '        ② 若你是宿主桥作者：把 provideFulgurjsAppContext 放在 bridge 初始化尾部（时序契约 bridge → federatedBoot → loadRemote）。',
+        '        ② 若你是宿主桥作者：把 provideAppContext 放在 bridge 初始化尾部（时序契约 bridge → federatedBoot → loadRemote）。',
       { runtime: false },
     )
   }
@@ -76,9 +76,9 @@ function requireRuntime(): { loadRemote: (...args: any[]) => any } {
  * 宿主写入跨应用上下文（merge 语义，幂等可多次调用，后写覆盖同键）。
  *
  * 宿主桥（host/src/fulgurjs/host/bridge.ts）在登录完成后调用一次：
- * provideFulgurjsAppContext({ user, token, getToken, store, hostApp, locale, events: { main: mainEvents }, ... })
+ * provideAppContext({ user, token, getToken, store, hostApp, locale, events: { main: mainEvents }, ... })
  */
-export function provideFulgurjsAppContext(config: Partial<FulgurjsAppContext> & Record<string, unknown>): void {
+export function provideAppContext(config: Partial<AppContext> & Record<string, unknown>): void {
   requireRuntime()
   const g = globalThis as any
   g[APP_CONTEXT_STORAGE_KEY] = { ...(g[APP_CONTEXT_STORAGE_KEY] ?? {}), ...config }
@@ -88,29 +88,29 @@ export function provideFulgurjsAppContext(config: Partial<FulgurjsAppContext> & 
  * 读上下文快照（传输层快照：顶层 merge 结果 + 嵌套对象引用共享）。
  * 页面无运行时单例（独立直开远程页）→ CC-002 显式抛错，不静默回空。
  */
-export function getFulgurjsAppContext(): FulgurjsAppContext {
+export function getAppContext(): AppContext {
   requireRuntime()
-  return ((globalThis as any)[APP_CONTEXT_STORAGE_KEY] ?? {}) as FulgurjsAppContext
+  return ((globalThis as any)[APP_CONTEXT_STORAGE_KEY] ?? {}) as AppContext
 }
 
 /**
  * 显式校验读取（远程 boot 消费入口）：任一键缺失 → CC-001 三段式。
  *
- * 用法：const { store, user, hostApp } = requireFulgurjsAppContext('store', 'user', 'hostApp')
+ * 用法：const { store, user, hostApp } = requireAppContext('store', 'user', 'hostApp')
  * 时序契约：宿主 bridge 先 provide，远程 federatedBoot 后 require——违反即在 boot 处显式失败。
  */
-export function requireFulgurjsAppContext(...keys: string[]): FulgurjsAppContext {
-  const ctx = getFulgurjsAppContext()
+export function requireAppContext(...keys: string[]): AppContext {
+  const ctx = getAppContext()
   const missing = keys.filter((k) => ctx[k] === undefined)
   if (missing.length === 0) return ctx
 
   const got = Object.keys(ctx)
-  const err = new FulgurjsError(
+  const err = new FgError(
     ContextErrorCodes.CONTEXT_MISSING_KEY,
     `AppContext missing required key(s): ${missing.map((k) => `"${k}"`).join(', ')}\n` +
-      `  got: ${got.length ? got.map((k) => `"${k}"`).join(', ') : '(empty — 宿主桥从未调用 provideFulgurjsAppContext?)'}\n` +
+      `  got: ${got.length ? got.map((k) => `"${k}"`).join(', ') : '(empty — 宿主桥从未调用 provideAppContext?)'}\n` +
       `  expected: 宿主桥必须在任何远程页面加载前提供 ${missing.map((k) => `"${k}"`).join(' / ')}\n` +
-      `  example: host/src/fulgurjs/host/bridge.ts → provideFulgurjsAppContext({ ${keys.join(', ')}, ... })\n` +
+      `  example: host/src/fulgurjs/host/bridge.ts → provideAppContext({ ${keys.join(', ')}, ... })\n` +
       `  修法: 检查宿主应用 fulgurjs bridge 是否升级到 0.8.0 context 形态（时序契约 bridge → federatedBoot → loadRemote）`,
     { missing, got },
   )

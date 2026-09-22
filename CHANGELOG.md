@@ -1,5 +1,52 @@
 # Changelog
 
+## 2.0.0（2026-09-22）
+
+### 破坏性变更（公开 API 去掉冗余品牌前缀，无兼容别名）
+
+背景：包名与子路径已承担命名空间职责（`@fulgurjs/federation/context` 等），标识符再挂 `Fulgurjs`
+前缀属纯冗余，且长度失控（`provideFulgurjsAppContext` 达 26 字符）。本版统一去前缀，**旧名直接移除**。
+
+| 子路径 | 旧名 | 新名 |
+|---|---|---|
+| `/context` | `provideFulgurjsAppContext` | `provideAppContext` |
+| | `getFulgurjsAppContext` | `getAppContext` |
+| | `requireFulgurjsAppContext` | `requireAppContext` |
+| | `FulgurjsAppContext` | `AppContext` |
+| `/pages` | `defineFulgurjsPages` | `definePages` |
+| | `validateFulgurjsPages` | `validatePages` |
+| | `FulgurjsPagesOptions` / `FulgurjsPageRouteLike` | `PagesOptions` / `PageRouteLike` |
+| `/config` | `defineFulgurjsConfig` | `defineRepoConfig` |
+| | `loadFulgurjsConfig` | `loadRepoConfig` |
+| | `FulgurjsRepoConfig` / `FulgurjsAppConfig` / `FulgurjsUserConfig` | `RepoConfig` / `AppConfig` / `UserConfig` |
+| | `FulgurjsHostConfig` / `FulgurjsRemoteConfig` / `FulgurjsDeployConfig` | `HostConfig` / `RemoteConfig` / `DeployConfig` |
+| | `FulgurjsPageEntry` / `FulgurjsRemoteAddress` | `PageEntry` / `RemoteAddress` |
+| 主入口 | `FulgurjsOptions` | `FederationOptions` |
+| 运行时 | `FulgurjsRuntime`（类型） | `FgRuntime` |
+| | `FulgurjsError`（内部类，仅经 `err.name` 可见） | `FgError` |
+
+两处命名取舍：
+
+- `defineRepoConfig` 而非 `defineConfig`——避开与 vite 的 `defineConfig` 撞名（`fulgurjs.config.ts`
+  描述的是「一个仓库的多个应用」）。
+- 运行时错误 `err.name` 由 `FulgurjsError` 变为 `FgError`：该类不在导出面（用户从不 import，
+  只经 `err.code` / `err.name` 观察），若有按 `name` 匹配错误的监控配置需同步。`err.code`（MFU-xxx 等）
+  语义与取值不变。
+
+### 刻意保持不变的品牌元素
+
+- **跨应用单例键** `globalThis.__FULGURJS_RUNTIME__` / `__FULGURJS_APP_CONFIG__` / `__FULGURJS_SCOPE__`：
+  跨版本互操作契约——改了会让新旧版本互相看不见对方的运行时与 context 存储。
+- 虚拟模块 `virtual:fulgurjs-runtime`、CLI `fulgurjs`、配置文件 `fulgurjs.config.ts`、错误码前缀 `[fulgurjs:MFU-001]`。
+- 运行时函数名（`loadRemote` / `loadShare` / `preloadRemote` / `registerRemote(s)` / `initSharing` /
+  `getContainer` / `getRuntime` / `unwrapDefault` / `parseSpec`）：对齐 webpack Module Federation 命名，便于迁移对照。
+
+### 迁移
+
+按上表把旧名替换为新名即可，语义一一对应、无行为变化。注意 `provide/get/requireFulgurjsAppContext`
+三个是「含前缀的完整函数名」，新名为 `provide/get/requireAppContext`（去的是 `Fulgurjs` 与 `AppContext`
+之间的品牌词，`AppContext` 保留）。
+
 ## 1.0.0（2026-09-22）
 
 ### 破坏性变更（正式定版，API 面冻结）

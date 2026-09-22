@@ -65,7 +65,7 @@ declare module 'virtual:fulgurjs-runtime' {
    * 此处仅类型随虚拟模块声明供 type-only import）；读写约定：宿主桥先写标准字段，
    * 远程 boot 只增不改宿主键；嵌套对象（如 events）引用共享。
    */
-  export interface FulgurjsAppContext {
+  export interface AppContext {
     /** 宿主登录用户原始形态（只读约定） */
     user: Record<string, any>
     /** 取最新 token（拉取式防过期；0.8.2 起 bridge 不再传一次性 token 快照） */
@@ -83,9 +83,9 @@ declare module 'virtual:fulgurjs-runtime' {
   }
 
   /** 运行时单例（与 globalThis.__FULGURJS_RUNTIME__ 同一实例，方法面冻结） */
-  export interface FulgurjsRuntime {
+  export interface FgRuntime {
     shareScopeMap: Record<string, Record<string, Record<string, ShareEntry>>>
-    initSharing(scopeName?: string): FulgurjsRuntime['shareScopeMap']
+    initSharing(scopeName?: string): FgRuntime['shareScopeMap']
     registerShare(
       scopeName: string,
       name: string,
@@ -104,10 +104,10 @@ declare module 'virtual:fulgurjs-runtime' {
   }
 
   export const version: string
-  export const runtime: FulgurjsRuntime
-  export const shareScopeMap: FulgurjsRuntime['shareScopeMap']
-  export function getRuntime(): FulgurjsRuntime
-  export function initSharing(scopeName?: string): FulgurjsRuntime['shareScopeMap']
+  export const runtime: FgRuntime
+  export const shareScopeMap: FgRuntime['shareScopeMap']
+  export function getRuntime(): FgRuntime
+  export function initSharing(scopeName?: string): FgRuntime['shareScopeMap']
   export function registerShare(
     scopeName: string,
     name: string,
@@ -128,6 +128,6 @@ declare module 'virtual:fulgurjs-runtime' {
   /** 兜底解包：命名空间有 default 取 default，否则原样返回 */
   export function unwrapDefault<T>(ns: { default?: T } | T): T
   /** 与 globalThis.__FULGURJS_RUNTIME__ 同一实例（方法面冻结） */
-  const runtimeDefault: FulgurjsRuntime
+  const runtimeDefault: FgRuntime
   export default runtimeDefault
 }

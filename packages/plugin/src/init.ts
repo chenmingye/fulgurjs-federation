@@ -11,7 +11,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { loadFulgurjsConfig, type FulgurjsAppConfig, type FulgurjsRepoConfig } from './config'
+import { loadRepoConfig, type AppConfig, type RepoConfig } from './config'
 
 const MARK = '[fulgurjs:init]'
 
@@ -19,9 +19,9 @@ const MARK = '[fulgurjs:init]'
 export const STARTER_CONFIG = `// fulgurjs.config.ts —— @fulgurjs/federation 接入配置（单文件驱动，可入库、可复跑）
 // 用法：npx fulgurjs init --config fulgurjs.config.ts   校验配置并输出可粘贴样板与核对清单
 //       npx fulgurjs doctor --base http://<站点> --apps <应用目录名...>   部署体检
-import { defineFulgurjsConfig } from '@fulgurjs/federation/config'
+import { defineRepoConfig } from '@fulgurjs/federation/config'
 
-export default defineFulgurjsConfig({
+export default defineRepoConfig({
   // 工程根目录（monorepo 根或单应用仓库根）
   root: process.cwd(),
   apps: [
@@ -96,7 +96,7 @@ function exposesLiteral(exposes: Record<string, string>): string {
 }
 
 /** 生成某应用的 federation() vite 配置块（可直接粘贴进 vite.config.ts 的 plugins 数组） */
-function viteSnippetFor(app: FulgurjsAppConfig): string {
+function viteSnippetFor(app: AppConfig): string {
   const hostRemotes = app.host ? remoteEntriesLiteral(app.host.remotes) : ''
   const remoteRemotes = app.remote?.remotes ? remoteEntriesLiteral(app.remote.remotes) : ''
   const remotesBlock = hostRemotes || remoteRemotes
@@ -119,7 +119,7 @@ ${remotesBlock}${exposesBlock}${sharedBlock}})`
 }
 
 /** 生成 NGINX no-cache 站点模板（联邦部署通用知识，无任何项目特定垫片） */
-function nginxSnippetFor(cfg: FulgurjsRepoConfig): string {
+function nginxSnippetFor(cfg: RepoConfig): string {
   const listen = cfg.deploy?.listen ?? 8080
   const webRoot = cfg.deploy?.webRoot ?? '/var/www/your-site'
   const hostApp = cfg.apps.find((a) => a.host) ?? cfg.apps[0]
@@ -157,7 +157,7 @@ ${blocks}
 }`
 }
 
-function appSummary(app: FulgurjsAppConfig): string {
+function appSummary(app: AppConfig): string {
   const role = app.host ? (app.remote ? '宿主+远程' : '宿主') : '远程'
   const lines: string[] = []
   lines.push(`  ${app.name}（${role}，目录 ${app.path}，dev 端口 ${app.port}，base ${app.base}）`)
@@ -180,7 +180,7 @@ function appSummary(app: FulgurjsAppConfig): string {
 
 /** 校验配置并生成完整报告（校验失败以 Error 抛出，三段式文案来自 config 加载器） */
 export async function inspectConfig(configPath: string): Promise<string> {
-  const cfg = await loadFulgurjsConfig(configPath)
+  const cfg = await loadRepoConfig(configPath)
   const out: string[] = []
   out.push(`${MARK} 配置校验通过：root=${cfg.root}，apps=${cfg.apps.length}`)
   out.push('应用摘要：')
@@ -200,7 +200,7 @@ export async function inspectConfig(configPath: string): Promise<string> {
   out.push('2. expose 一律指向独立页（页面从路由取参）；组件需要必填 props 时给默认值（BLD-003）')
   out.push('3. shared 里 vue / vue-router / pinia 建议 singleton: true——跨应用必须同实例（全局响应性、getActivePinia、路由注入）')
   out.push('4. 远程的全局副作用（全局组件/指令/启动期初始化）封装为启动器模块并 expose，宿主在 loadRemote 页面前调用；')
-  out.push('   跨应用传值（locale/store/事件等）统一走 @fulgurjs/federation/context：宿主 provideFulgurjsAppContext 一次写入，远程 boot 用 getFulgurjsAppContext / requireFulgurjsAppContext 消费')
+  out.push('   跨应用传值（locale/store/事件等）统一走 @fulgurjs/federation/context：宿主 provideAppContext 一次写入，远程 boot 用 getAppContext / requireAppContext 消费')
   out.push('5. 远程页面可直接静态导入 virtual:fulgurjs-runtime（插件自动改写为惰性单例委托）；特需直取全局单例时用 getRuntime()')
   out.push('6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言')
   out.push('7. 部署后体检：fulgurjs doctor --base <URL> --apps <应用...>（缓存头/资源形态/CORS/chunk 可达/版本 skew）')
