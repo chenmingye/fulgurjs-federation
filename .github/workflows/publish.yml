@@ -23,7 +23,7 @@ jobs:
       - name: Install
         working-directory: packages/plugin
         run: npm install --no-audit --no-fund
-      - name: Build + gzip gate
+      - name: Build + 门禁（gzip 体积 / 错误码三方一致性）
         working-directory: packages/plugin
         run: npm run build
       - name: Unit tests

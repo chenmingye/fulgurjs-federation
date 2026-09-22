@@ -16,7 +16,7 @@ jobs:
       - name: Install（npm：esbuild postinstall 需可执行，pnpm11 CI 批准机制不适用）
         working-directory: packages/plugin
         run: npm install --no-audit --no-fund
-      - name: Build + gzip gate
+      - name: Build + 门禁（gzip 体积 / 错误码三方一致性）
         working-directory: packages/plugin
         run: npm run build
       - name: Unit tests
@@ -28,3 +28,43 @@ jobs:
       - name: Typecheck (latest TS — 防 CLI 绿 IDE 红)
         working-directory: packages/plugin
         run: npm run typecheck:latest
+
+  # 集成 e2e + Vite 兼容矩阵：README 声明 Vue3 + Vite5~8，5 由 peer 范围保证，此处守 6/7/8。
+  # prod 套件需 NGINX（e2e/scripts/prod-setup.sh），不进 CI；本地或 testbed 验证。
+  e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        vite: [6.4.3, 7.3.6, 8.3.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - name: Install + build plugin
+        working-directory: packages/plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+        # 用 npm 与 test 作业同路径；dist 运行时依赖（es-module-lexer / magic-string）须就地安装，
+        # 否则 fixtures 经 link: 消费插件时报 ERR_MODULE_NOT_FOUND
+      - name: Install fixtures + e2e
+        env:
+          VITE_VERSION: ${{ matrix.vite }}
+        run: |
+          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b; do
+            pnpm --dir "$app" install --no-frozen-lockfile
+            pnpm --dir "$app" add -D "vite@${VITE_VERSION}"
+          done
+          pnpm --dir e2e install --no-frozen-lockfile
+        # fixtures 以 link: 协议依赖本地插件，npm 不支持该协议（EUNSUPPORTEDPROTOCOL）→ 必须 pnpm
+      - name: Playwright chromium
+        run: pnpm --dir e2e exec playwright install --with-deps chromium
+      - name: e2e（dev + fault 套件）
+        run: pnpm --dir e2e exec playwright test --project=dev --project=fault
+
