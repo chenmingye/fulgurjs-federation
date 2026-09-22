@@ -1,8 +1,8 @@
 name: Publish
 
-# Trusted Publishing：在 npmjs.com 包设置里绑定本仓库与本 workflow 文件后，
-# 打 tag 建 GitHub Release 即自动 npm publish（--provenance）。
-# 首次迁移验证见 docs/trusted-publishing-迁移清单.md；验证通过前本地 token 通道保留。
+# Trusted Publishing：npmjs.com 包设置绑定本仓库 + publish.yml 后，
+# 打 GitHub Release 即自动 npm publish（--provenance）。
+# 本地 token 通道保留为回退（docs/trusted-publishing-迁移清单.md）。
 
 on:
   release:
@@ -16,24 +16,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: packages/plugin/pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'
       - name: Install
         working-directory: packages/plugin
-        run: pnpm install --frozen-lockfile --ignore-workspace --dangerously-allow-all-builds
+        run: npm install --no-audit --no-fund
       - name: Build + gzip gate
         working-directory: packages/plugin
-        run: pnpm build
+        run: npm run build
       - name: Unit tests
         working-directory: packages/plugin
-        run: pnpm test
+        run: npm test
       - name: Publish
         working-directory: packages/plugin
         run: npm publish --provenance --access public

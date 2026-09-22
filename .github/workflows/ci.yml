@@ -10,26 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: packages/plugin/pnpm-lock.yaml
-      - name: Install
+      - name: Install（npm：esbuild postinstall 需可执行，pnpm11 CI 批准机制不适用）
         working-directory: packages/plugin
-        run: pnpm install --frozen-lockfile --ignore-workspace --dangerously-allow-all-builds
-      - name: Unit tests
-        working-directory: packages/plugin
-        run: pnpm test
-      - name: Typecheck (pinned TS)
-        working-directory: packages/plugin
-        run: pnpm typecheck
-      - name: Typecheck (latest TS — 防 CLI 绿 IDE 红)
-        working-directory: packages/plugin
-        run: pnpm typecheck:latest
+        run: npm install --no-audit --no-fund
       - name: Build + gzip gate
         working-directory: packages/plugin
-        run: pnpm build
+        run: npm run build
+      - name: Unit tests
+        working-directory: packages/plugin
+        run: npm test
+      - name: Typecheck (pinned TS)
+        working-directory: packages/plugin
+        run: npm run typecheck
+      - name: Typecheck (latest TS — 防 CLI 绿 IDE 红)
+        working-directory: packages/plugin
+        run: npm run typecheck:latest
