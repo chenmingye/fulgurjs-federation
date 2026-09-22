@@ -4,4 +4,4 @@
  * （scripts/check-gzip.mjs，0.9.0 实测基线 5232B），内联整份 JSON 会挤占预算。
  * 漂移由 tests/runtime.test.ts 的「version 同源」用例拦截。
  */
-export const RUNTIME_VERSION = '0.9.0'
+export const RUNTIME_VERSION = '0.9.1-test.1'
