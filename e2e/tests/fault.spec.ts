@@ -17,6 +17,10 @@ async function startRemote(): Promise<ReturnType<typeof spawn>> {
     stdio: 'ignore',
     detached: true,
   })
+  // unref：不引用计数，子进程不得吊住 worker 事件循环——否则启动失败时 CI 步骤会永久挂起
+  // （2026-09-22 CI 实测：detached 子进程未回收 → 步骤 40 分钟不退出）
+  child.unref()
+  child.on('error', () => {})
   for (let i = 0; i < 60; i++) {
     try {
       const res = await fetch(`http://localhost:${PORT}/@fulgurjs-manifest.json`, { signal: AbortSignal.timeout(500) })
@@ -24,6 +28,7 @@ async function startRemote(): Promise<ReturnType<typeof spawn>> {
     } catch {}
     await new Promise((r) => setTimeout(r, 500))
   }
+  stopRemote(child) // 起不来也要收回，避免留一个占住 5199 的孤儿进程
   throw new Error('standalone remote failed to start')
 }
 
@@ -48,8 +53,10 @@ async function waitRemoteDown(): Promise<void> {
 
 test.describe('容错专项（B-15 完整链路）', () => {
   test('kill remote → MFU-001 → 重启 → 恢复', async ({ page }) => {
-    let child = await startRemote()
+    // child 的取得放在 try 内：startRemote 抛错时不至于漏掉回收路径
+    let child: ReturnType<typeof spawn> | undefined
     try {
+      child = await startRemote()
       await page.goto(`${HOST}/#/`)
       // 运行时动态注册独立 remote 并加载成功（名称与容器自报名一致）
       await page.evaluate(async (port) => {
@@ -120,7 +127,7 @@ test.describe('容错专项（B-15 完整链路）', () => {
       expect(ns2).toBe('object')
       await shot(page, 'dev-fault-recovered')
     } finally {
-      stopRemote(child)
+      if (child) stopRemote(child)
     }
   })
 })

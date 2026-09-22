@@ -34,6 +34,8 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: test
+    timeout-minutes: 20
+    # 超时兜底：若用例因环境差异卡住（曾出现步骤 40 分钟不退出），20 分钟强制失败并留下日志
     strategy:
       fail-fast: false
       matrix:
