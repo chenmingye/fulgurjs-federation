@@ -2,8 +2,9 @@
  * virtual:fulgurjs-runtime 客户端类型声明。
  *
  * 用法（二选一）：
- * 1. dev 启动后插件自动在 src/fulgurjs-types/fulgurjs-runtime.d.ts 生成加载垫片——
- *    只要 tsconfig include 了该目录（远程模块类型直连本就要求），运行时类型零配置生效；
+ * 1. dev 启动后插件自动在类型目录（默认 src/fulgurjs/types/，无 src 布局回退 .fulgurjs/types/）
+ *    生成 fulgurjs-runtime.d.ts 加载垫片——只要 tsconfig include 了该目录
+ *    （远程模块类型直连本就要求），运行时类型零配置生效；
  * 2. tsconfig.json → compilerOptions.types 加 "@fulgurjs/federation/client"（对齐 vite/client 模式）。
  *
  * ⚠️ 本文件必须是 script 形态（顶层不得出现 import/export）——环境模块声明

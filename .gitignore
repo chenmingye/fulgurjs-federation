@@ -5,6 +5,8 @@ node_modules/
 packages/plugin/dist/
 fixtures/*/dist/
 fixtures/*/dist-*/
+# fixtures 无 tsconfig，插件 dev 启动生成的类型目录（每次运行重生成）不入库
+fixtures/*/src/fulgurjs/
 
 # testbed（真实项目私有副本，7.6G，不入库——发 GitHub 时同样排除）
 testbed/
@@ -36,6 +38,8 @@ docs/screenshots/tb-prod-*
 # npm 真实用户视角验证截图（本轮验证证据，本地留证不上传）
 docs/screenshots/npm-testbed/
 docs/screenshots/npm-install/
+# fixtures e2e（dev / fault 套件）运行产物：每次跑都重生成，本地留证不上传
+docs/screenshots/dev-*
 
 # 项目本地工作区（不入库：验证产物/截图/工作记录）
 docs/_workspace/
