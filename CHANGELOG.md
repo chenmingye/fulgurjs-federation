@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.1（2026-09-22）
+
+### 变更（文档与包面，零运行时变化）
+
+- **README 补全公开类型/函数名**（对齐「README 写全所有 API」）：`FederationOptions`、
+  `PageRouteLike` / `PagesOptions` / `PageViolation` / `RemoteSchemaEntry`、
+  `RepoConfig` / `UserConfig` / `AppConfig` / `HostConfig` / `RemoteConfig` / `DeployConfig` /
+  `PageEntry` / `RemoteAddress`、`loadRepoConfig`；§1 与 §4 的 import 示例带上类型。
+- **peer 下限对齐实测值**：`vite` `>=5.0.0` → `>=5.1.0`（历史兼容矩阵实测下限为 5.1.4）。
+- **发布物收窄**：移出内部草稿 `docs/vite-upstream-issue-irregexp.md`（仅存档性质，非用户文档）。
+- **仓库公开面整理**：8 个内部工作文档（已执行的 0.9.0 任务书、Trusted Publishing 迁移清单、
+  改进项评估、三个设计方案、qiankun 调研、上述草稿）移入 `docs/_workspace/`（本地工作区、不入库），
+  `docs/` 只保留面向用户的四个文档；相关代码注释与 CHANGELOG 引用同步修正，全仓零失效引用。
+- 两处过时文档元数据修正：webpack-mf 对照文档的版本戳、vite-upstream 草稿的断链引用与失效 commit 号。
+
 ## 2.0.0（2026-09-22）
 
 ### 破坏性变更（公开 API 去掉冗余品牌前缀，无兼容别名）
