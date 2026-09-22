@@ -1,14 +1,16 @@
 /**
  * D.5 全链路错误诊断体系（node 侧：CFG/DEV/BLD 段 + 码表 + 文案生成器）
  *
- * 运行时段（MFU-0xx）定义在 runtime/errors.ts（浏览器 bundle，保持精简）；
- * 本模块服务配置期/开发期/构建期报错与 README 错误码总表的一致性校验
- * （scripts/check-manual-codes.mjs 消费 CODE_REGISTRY 防文档漂移）。
+ * 码表分两处定义，本模块登记供文档一致性校验：
+ * - 运行时段（MFU-0xx）定义在 runtime/errors.ts（浏览器 bundle，保持精简）；
+ * - 跨应用上下文段（CC-0xx）定义在 context.ts（子路径独立 bundle，保持精简）。
+ * CODE_REGISTRY 是二者的权威清单，scripts/check-manual-codes.mjs 消费它做
+ * 「源码定义 ⊆ 登记表 = README 错误码总表」三方防漂移校验。
  *
  * 三段式强制：现象 → 根因 → 修法；ERROR 级文案必须 cause/fix 非空（单测断言）。
  */
 
-export type FulgurjsStage = 'CFG' | 'DEV' | 'BLD' | 'MFU'
+export type FulgurjsStage = 'CFG' | 'DEV' | 'BLD' | 'MFU' | 'CC'
 
 export interface FulgurjsCodeMeta {
   code: string
@@ -50,6 +52,9 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-008', stage: 'MFU', title: '未知远程' },
   { code: 'MFU-009', stage: 'MFU', title: '加载到的模块没有任何导出' },
   { code: 'MFU-010', stage: 'MFU', title: 'singleton 共享版本漂移（使用作用域版本）' },
+  // ── CC 跨应用上下文（定义于 context.ts，此处登记供手册一致性校验） ──
+  { code: 'CC-001', stage: 'CC', title: 'AppContext 必需字段缺失（修法指向宿主桥 provideFulgurjsAppContext）' },
+  { code: 'CC-002', stage: 'CC', title: '运行时单例不可用（独立直开远程页，须经宿主联邦加载）' },
 ]
 
 export interface FulgurjsDiagnosticInput {
