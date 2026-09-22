@@ -15,12 +15,12 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: packages/plugin/pnpm-lock.yaml
       - name: Install
         working-directory: packages/plugin
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-workspace
       - name: Unit tests
         working-directory: packages/plugin
         run: pnpm test

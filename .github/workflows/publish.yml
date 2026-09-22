@@ -21,13 +21,13 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: packages/plugin/pnpm-lock.yaml
           registry-url: 'https://registry.npmjs.org'
       - name: Install
         working-directory: packages/plugin
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-workspace
       - name: Unit tests
         working-directory: packages/plugin
         run: pnpm test
@@ -37,5 +37,3 @@ jobs:
       - name: Publish
         working-directory: packages/plugin
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
