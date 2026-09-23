@@ -30,7 +30,7 @@ describe('buildShimModule', () => {
     const abs = path.join(tmp, 'api.ts')
     fs.writeFileSync(abs, 'export function getDictItems(code: string) { return [] }\nexport const VERSION = 1\nexport interface Foo { a: number }\n')
     const block = buildShimModule(abs, 'demo-host/api')
-    expect(block).toContain("declare module "demo-host/api"")
+    expect(block).toContain('declare module "demo-host/api"')
     expect(block).toContain('export const getDictItems: any')
     expect(block).toContain('export const VERSION: any')
     expect(block).toContain('export const Foo: any')
@@ -43,7 +43,7 @@ describe('buildShimModule', () => {
     const abs = path.join(tmp, 'Card.vue')
     fs.writeFileSync(abs, '<template><div /></template>')
     const block = buildShimModule(abs, 'mes-bpm/Card')
-    expect(block).toContain("declare module 'mes-bpm/Card'")
+    expect(block).toContain('declare module "mes-bpm/Card"')
     expect(block).toContain('DefineComponent')
     expect(block).toContain('export default component')
     // 关键语义：不引用跨工程源文件（import vue 类型合法；'..' 相对路径与源文件名不允许）
