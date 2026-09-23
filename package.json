@@ -7,7 +7,7 @@
     "build": "pnpm --dir packages/plugin build",
     "test:unit": "pnpm --dir packages/plugin test",
     "test:dev": "pnpm --dir e2e test:dev",
-    "test:prod": "bash e2e/scripts/prod-setup.sh && SKIP_DEV_SERVERS=1 pnpm --dir e2e test:prod",
+    "test:prod": "bash e2e/scripts/prod-setup.sh && (SKIP_DEV_SERVERS=1 pnpm --dir e2e test:prod; code=$?; bash e2e/scripts/prod-setup.sh --stop >/dev/null 2>&1; exit $code)",
     "test": "pnpm test:unit && pnpm test:dev && pnpm test:prod"
   }
 }

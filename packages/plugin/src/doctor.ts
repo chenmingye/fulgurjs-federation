@@ -16,6 +16,7 @@
  */
 import http from 'node:http'
 import https from 'node:https'
+import { parseManifest, type ProdFederationManifest } from './manifest'
 
 export interface DoctorCheck {
   app: string
@@ -224,11 +225,33 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
       expectNoCache: !opts.dev,
     })
     if (manifestRes.check) checks.push(manifestRes.check)
-    let manifest: any
+    let manifest: ProdFederationManifest | undefined
     if (manifestRes.res?.status === 200) {
       try {
-        manifest = JSON.parse(manifestRes.res.body)
-        perAppShared.push({ app, shared: manifest.shared ?? [] })
+        // WP4：manifest 经契约模块校验（缺 schemaVersion 按 v1 兼容；坏形状/未知版本 FAIL）
+        const parsed = parseManifest(JSON.parse(manifestRes.res.body))
+        if (parsed.unsupportedVersion) {
+          checks.push({
+            app,
+            item: 'manifest 契约',
+            level: 'FAIL',
+            symptom: `fulgurjs-manifest.json schemaVersion=${parsed.unsupportedVersion} 不受当前 doctor 支持（支持 1）`,
+            cause: '部署产物由更高主版本的插件生成',
+            fix: '用与产物匹配的 @fulgurjs/federation 版本运行 doctor，或重新构建部署',
+          })
+        } else if (parsed.issues.length > 0) {
+          checks.push({
+            app,
+            item: 'manifest 契约',
+            level: 'FAIL',
+            symptom: `fulgurjs-manifest.json 契约校验失败：${parsed.issues.map((x) => `${x.field}: ${x.message}`).join('；')}`,
+            cause: '产物不完整、被中间层改写，或由不兼容版本生成',
+            fix: '重新构建部署；确认 nginx 未对该路径做 sub/拼接改写',
+          })
+        } else {
+          manifest = parsed.manifest as ProdFederationManifest
+          perAppShared.push({ app, shared: manifest.shared ?? [] })
+        }
       } catch {
         checks.push({
           app,

@@ -134,3 +134,45 @@ test.describe('dev: HMR 全链路（remote 改 → host 页面热更）', () => 
     await shot(page, 'dev-hmr-restored')
   })
 })
+
+/**
+ * WP1：auto-import 插件链回归（host-auto 5110 / remote-auto 5111）。
+ * 宿主与纯远程都启用 unplugin-auto-import（vite 适配器硬编码 enforce:'post'，注册在
+ * federation() 之前——顺序颠倒场景由单测 build-plugin-chain.test.ts 双顺序覆盖）。
+ * 断言核心：注入的 ref/computed 必须经协商实例产生响应性（点击可更新），
+ * 且与远程组件内部使用的 ref 是同一个 Vue 实例（页内 identity 探针比对）。
+ */
+test.describe('dev: auto-import 插件链（WP1）', () => {
+  test('注入的 ref 经协商实例：双计数器响应 + 同一 Vue 实例', async ({ page }) => {
+    const consoleErrors: string[] = []
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text())
+    })
+    await page.goto('http://localhost:5110/')
+    // 宿主侧：auto-import 注入的 ref 是响应性的（isRef 判定 + 点击更新）
+    await expect(page.getByTestId('host-count')).toContainText('ref-ok')
+    await page.getByTestId('host-inc').click()
+    await page.getByTestId('host-inc').click()
+    await expect(page.getByTestId('host-count')).toContainText('host count: 2')
+
+    // 远程侧：动态 import 语法加载（同文件混用 runtime 显式导入 + 远程动态导入）
+    await page.getByTestId('load-remote-dynamic').click()
+    await expect(page.getByTestId('remote-count')).toContainText('remote count: 0')
+    await expect(page.getByTestId('remote-count')).toContainText('ref-ok')
+    // 注入的 ref 与远程组件内的 ref 是同一 Vue 实例（协商成功的判据）；
+    // 新旧入口（virtual:fulgurjs-api / virtual:fulgurjs-runtime）收敛同一运行时单例（WP7）
+    await expect(page.getByTestId('vue-identity')).toHaveText('vue identity: same / same-runtime / spec:remote-auto')
+    await page.getByTestId('remote-inc').click()
+    await expect(page.getByTestId('remote-count')).toContainText('remote count: 1 (x2 = 2')
+    await shot(page, 'dev-auto-import-shared-instance')
+    expect(consoleErrors).toEqual([])
+  })
+
+  test('loadRemote API 通道同样成立（注入 ref 与协商实例一致）', async ({ page }) => {
+    await page.goto('http://localhost:5110/')
+    await page.getByTestId('load-remote-api').click()
+    await expect(page.getByTestId('remote-count')).toContainText('ref-ok')
+    await expect(page.getByTestId('vue-identity')).toHaveText('vue identity: same / same-runtime / spec:remote-auto')
+    await shot(page, 'dev-auto-import-api-channel')
+  })
+})

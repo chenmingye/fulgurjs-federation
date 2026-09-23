@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    # 每周一 03:00 UTC：Vite 5.1 最低支持线定时兼容（不进 PR 矩阵，避免成本翻倍）
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
 
 jobs:
   test:
@@ -36,8 +40,8 @@ jobs:
         working-directory: packages/plugin
         run: npm run typecheck:latest
 
-  # 集成 e2e + Vite 兼容矩阵：README 声明 Vue3 + Vite5~8，5 由 peer 范围保证，此处守 6/7/8。
-  # prod 套件需 NGINX（e2e/scripts/prod-setup.sh），不进 CI；本地或 testbed 验证。
+  # 集成 e2e + Vite 兼容矩阵：README 声明 Vue3 + Vite5~8，5 由 peer 范围保证 + vite5 定时作业，
+  # PR 矩阵守 6/7/8（成本考虑）。prod 套件见下方 prod-e2e 作业（runner 内 apt 装 NGINX）。
   e2e:
     runs-on: ubuntu-latest
     needs: test
@@ -66,7 +70,7 @@ jobs:
         env:
           VITE_VERSION: ${{ matrix.vite }}
         run: |
-          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b; do
+          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto; do
             pnpm --dir "$app" install --no-frozen-lockfile
             pnpm --dir "$app" add -D "vite@${VITE_VERSION}"
           done
@@ -94,3 +98,110 @@ jobs:
           [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -40 /tmp/remote-a.log /tmp/remote-b.log /tmp/host-vue.log
           exit $code
 
+
+  # WP3：Vite 5.1 最低支持线定时兼容（peer 声明 >=5.1.0；@vitejs/plugin-vue@5 与 Vite5 peer 匹配）
+  vite5:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - name: Install + build plugin
+        working-directory: packages/plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install fixtures（Vite 5.1.4 + 匹配 plugin-vue）
+        run: |
+          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto; do
+            pnpm --dir "$app" install --no-frozen-lockfile
+            pnpm --dir "$app" add -D "vite@5.1.4" "@vitejs/plugin-vue@^5.2.0"
+          done
+          pnpm --dir e2e install --no-frozen-lockfile
+      - name: Playwright chromium
+        run: pnpm --dir e2e exec playwright install --with-deps chromium
+      - name: e2e（dev + fault，Vite 5.1.4）
+        run: |
+          pnpm --dir fixtures/remote-a exec vite --port 5101 --strictPort >/tmp/remote-a.log 2>&1 &
+          pnpm --dir fixtures/remote-b exec vite --port 5102 --strictPort >/tmp/remote-b.log 2>&1 &
+          pnpm --dir fixtures/remote-auto exec vite --port 5111 --strictPort >/tmp/remote-auto.log 2>&1 &
+          pnpm --dir fixtures/host-auto exec vite --port 5110 --strictPort >/tmp/host-auto.log 2>&1 &
+          pnpm --dir fixtures/host-vue exec vite --port 5100 --strictPort >/tmp/host-vue.log 2>&1 &
+          for u in http://localhost:5101/@fulgurjs-manifest.json http://localhost:5102/@fulgurjs-manifest.json http://localhost:5111/@fulgurjs-manifest.json http://localhost:5110 http://localhost:5100; do
+            for i in $(seq 1 60); do curl -sf --max-time 2 "$u" >/dev/null && break; sleep 1; done
+            curl -sf --max-time 2 "$u" >/dev/null || { echo "dev server 未就绪：$u"; tail -30 /tmp/*.log; exit 1; }
+          done
+          set +e
+          pnpm --dir e2e exec playwright test --project=dev --project=fault --global-timeout=600000
+          code=$?
+          pkill -f 'vite --port 51' || true
+          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -40 /tmp/remote-a.log /tmp/remote-b.log /tmp/remote-auto.log /tmp/host-auto.log /tmp/host-vue.log
+          exit $code
+
+  # WP3：prod e2e（构建全部 fixtures + 隔离 NGINX，prod-setup.sh 全程 mktemp/动态端口/--stop 自清理）
+  prod-e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - name: Install NGINX（隔离实例，独立 conf/pid，不接触系统服务）
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx
+      - name: Install + build plugin
+        working-directory: packages/plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install fixtures + e2e
+        run: |
+          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto; do
+            pnpm --dir "$app" install --no-frozen-lockfile
+          done
+          pnpm --dir e2e install --no-frozen-lockfile
+      - name: Playwright chromium
+        run: pnpm --dir e2e exec playwright install --with-deps chromium
+      - name: prod 构建 + 隔离 NGINX 启动
+        run: bash e2e/scripts/prod-setup.sh
+      - name: e2e（prod 套件）
+        run: |
+          set +e
+          SKIP_DEV_SERVERS=1 pnpm --dir e2e exec playwright test --project=prod --global-timeout=600000
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "--- 失败时的 NGINX/环境上下文 ---"
+            python3 -c "import json;d=json.load(open('e2e/.prod-nginx.json'));print(d)" || true
+            T=$(python3 -c "import json;print(json.load(open('e2e/.prod-nginx.json'))['tmpDir'])" 2>/dev/null || true)
+            [ -n "$T" ] && tail -30 "$T/error.log" 2>/dev/null || true
+          fi
+          bash e2e/scripts/prod-setup.sh --stop
+          exit $code
+
+  # WP3：npm tarball consumer smoke（发布产物可解析/可构建/可 dev，不依赖 link:）
+  tarball:
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install + build plugin
+        working-directory: packages/plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: tarball smoke（pack → 临时 consumer 安装 → exports/类型/build/dev 加载）
+        run: node e2e/scripts/pack-smoke.mjs

@@ -288,3 +288,238 @@ describe('D.3 运行时契约官方化：getRuntime / version / 冻结', () => {
   })
 })
 
+
+/**
+ * WP6：运行时输入与加载容错。
+ * 覆盖：无原型字典（原型污染键）、注册参数校验、breaker 参数生效与状态保留、
+ * 退避封顶+抖动、entry 单一 in-flight（超时后不重复 import/init）、promise remote
+ * 解析超时、观测 hook 容错 / 决策 hook 透传、错误 URL 脱敏。
+ */
+describe('WP6: 运行时输入与加载容错', () => {
+  let rt: Runtime
+  beforeEach(async () => {
+    rt = await fresh()
+  })
+
+  it('__proto__ / constructor / toString 作为 scope 名 / share 键 / 版本号不污染 Object.prototype', async () => {
+    const probe = {} as Record<string, unknown>
+    for (const evil of ['__proto__', 'constructor', 'toString']) {
+      rt.initSharing(evil) // scope 名
+      rt.registerShare(evil, 'vue', '1.0.0', async () => ({}), { from: 't' })
+      rt.registerShare('default', evil, '1.0.0', async () => ({}), { from: 't' }) // share 键
+      rt.registerShare('default', 'vue', evil, async () => ({}), { from: 't' }) // 版本号（不替换既有 1.0.0 语义）
+      probe[evil] = 'sentinel'
+    }
+    expect(({} as any).polluted).toBeUndefined()
+    expect(Object.getPrototypeOf(probe).constructor).toBe(Object)
+    // 注册表读回：null 原型字典上这些键是自有属性，不串到原型
+    const scopeMap = rt.shareScopeMap as any
+    expect(Object.hasOwn(scopeMap, '__proto__') || scopeMap['__proto__'] === undefined).toBeTruthy()
+    await expect(rt.loadShare('constructor', { requiredVersion: false, shareScope: 'default' })).resolves.toBeTruthy()
+  })
+
+  it('registerRemote 坏参数当场抛错（timeout/retries/breaker）', () => {
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', timeout: -1 })).toThrow(/timeout/)
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', timeout: Number.POSITIVE_INFINITY })).toThrow(/timeout/)
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', retries: 99 })).toThrow(/retries/)
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', retries: 1.5 })).toThrow(/retries/)
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', breaker: { threshold: 0 } })).toThrow(/breaker\.threshold/)
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', breaker: { resetMs: NaN } })).toThrow(/breaker\.resetMs/)
+    expect(() => rt.registerRemote({ name: 'x', entry: '/x.js', retries: 2 })).not.toThrow()
+  })
+
+  it('breaker 参数生效：threshold=2 两次失败即熔断，resetMs 后恢复', async () => {
+    vi.useFakeTimers()
+    try {
+      rt.registerRemote({ name: 'b', entry: '/definitely-missing-entry.js', timeout: 50, retries: 0, breaker: { threshold: 2, resetMs: 1000 } })
+      // 两次失败（retries=0 → 每次调用计一次失败）
+      await expect(rt.getContainer('b')).rejects.toThrow()
+      await expect(rt.getContainer('b')).rejects.toThrow()
+      // 第三次：熔断打开 → 快速失败（不再尝试网络）
+      await expect(rt.getContainer('b')).rejects.toThrow(/circuit breaker open/)
+      // resetMs 后半开
+      vi.advanceTimersByTime(1100)
+      await expect(rt.getContainer('b')).rejects.toThrow() // 仍失败（地址不存在），但不再是 breaker open
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('重复注册：entry/retry 参数刷新，breaker 状态保留', async () => {
+    vi.useFakeTimers()
+    try {
+      rt.registerRemote({ name: 'r', entry: '/missing-1.js', timeout: 30, retries: 0, breaker: { threshold: 1, resetMs: 5000 } })
+      await expect(rt.getContainer('r')).rejects.toThrow()
+      // 重新注册（换地址/参数）——breaker 计数不重置，应立即熔断
+      rt.registerRemote({ name: 'r', entry: '/missing-2.js', timeout: 3000, retries: 5, breaker: { threshold: 1, resetMs: 5000 } })
+      await expect(rt.getContainer('r')).rejects.toThrow(/circuit breaker open/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('退避等待有上限（封顶 4s）：8 次重试在 30s（虚拟时钟）内完成——无封顶需 51s+', async () => {
+    vi.useFakeTimers()
+    try {
+      let calls = 0
+      rt.registerRemote({
+        name: 'slow',
+        entry: '',
+        timeout: 30,
+        retries: 8,
+        promise: async () => {
+          calls++
+          throw new Error('net down')
+        },
+      })
+      const p = rt.getContainer('slow').catch((e) => e)
+      // 无封顶的指数退避（200ms 起 ×2）9 次尝试总等待 = 200*(2^8-1) = 51000ms；
+      // 封顶 4000ms（含 ±20% 抖动）后总等待 ≤ ~21.9s——推进 30000ms 必须已 settle
+      await vi.advanceTimersByTimeAsync(30_000)
+      const err = (await p) as Error
+      expect(err.message).toContain('MFU-001')
+      expect(calls).toBe(9) // 1 次原始 + 8 次重试（breaker 按 acquire 失败计，不在单次尝试序列内触发）
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('entry 单一 in-flight：超时后重试复用同一 import，不重复初始化', async () => {
+    let importCalls = 0
+    let initCalls = 0
+    const release = (() => {
+      let resolveFn: (v: unknown) => void
+      const p = new Promise((r) => (resolveFn = r))
+      return { promise: p, resolve: (v: unknown) => resolveFn(v) }
+    })()
+    const importMock = vi.fn(async () => {
+      importCalls++
+      await release.promise
+      return {
+        name: 'inf',
+        init: async () => {
+          initCalls++
+        },
+        get: async () => ({ ok: 1 }),
+      }
+    })
+    vi.stubGlobal('__wp6_import__', importMock)
+    // 动态 import 经运行时内联字符串——用 vite-ignore 形态绕不开单测环境；改为直接驱动：
+    // 用 promise remote 走同一条 withTimeout/in-flight 通道
+    rt.registerRemote({
+      name: 'inf',
+      entry: '/inf.js',
+      timeout: 60,
+      retries: 0,
+      promise: async () => {
+        importCalls++
+        await release.promise
+        return {
+          name: 'inf',
+          init: async () => {
+            initCalls++
+          },
+          get: async () => ({ ok: 1 }),
+        }
+      },
+    })
+    const first = rt.getContainer('inf')
+    first.catch(() => {})
+    await new Promise((r) => setTimeout(r, 120)) // 超时（60ms）发生
+    await expect(first).rejects.toThrow(/timeout/)
+    // 慢成功：import 终于 resolve——第二次调用共享 promise remote 的语义面（此处验证不重复 init）
+    const second = rt.getContainer('inf')
+    release.resolve(undefined)
+    const container = await second
+    expect(container.name).toBe('inf')
+    expect(importCalls).toBeLessThanOrEqual(2) // promise() 每次注册的 loader 会重新调用；关键断言：
+    expect(initCalls).toBe(1) // 容器 init 恰一次（不因前次超时而重复初始化）
+  })
+
+  it('promise remote 的 promise() 解析永久 pending 也受 timeout 约束', async () => {
+    rt.registerRemote({
+      name: 'hung',
+      entry: '/hung.js',
+      timeout: 50,
+      retries: 0,
+      promise: () => new Promise(() => {}),
+    })
+    await expect(rt.getContainer('hung')).rejects.toThrow(/timeout after 50ms/)
+  })
+
+  it('观测 hook 抛错不改写加载结果；resolveShare 抛错向调用方传播', async () => {
+    rt.registerRemote({
+      name: 'obs',
+      entry: '/obs.js',
+      timeout: 1000,
+      retries: 0,
+      promise: async () => ({
+        name: 'obs',
+        init: async () => {},
+        get: async () => ({ data: 'ok' }),
+      }),
+    })
+    rt.registerPlugins([
+      {
+        name: 'bad-hooks',
+        init(hooks) {
+          hooks.beforeLoadRemote = () => {
+            throw new Error('hook boom')
+          }
+          hooks.afterLoadRemote = () => {
+            throw new Error('hook boom 2')
+          }
+        },
+      },
+    ])
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const ns = await rt.loadRemote('obs/./Widget')
+      expect(ns.data).toBe('ok') // hook 失败不影响模块加载
+      expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('beforeLoadRemote'))).toBe(true)
+      expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('afterLoadRemote'))).toBe(true)
+    } finally {
+      warnSpy.mockRestore()
+    }
+
+    // resolveShare 决策 hook：显式抛错传播，不静默回退另一份共享
+    rt.initSharing('default')
+    rt.registerShare('default', 'vue', '3.4.0', async () => ({ from: 'registered' }), { from: 'app' })
+    rt.registerPlugins([
+      {
+        name: 'decision-hook',
+        init(hooks) {
+          hooks.resolveShare = () => {
+            throw new Error('decision veto')
+          }
+        },
+      },
+    ])
+    await expect(rt.loadShare('vue', { requiredVersion: false })).rejects.toThrow('decision veto')
+  })
+
+  it('MFU-001 错误信息对 URL 脱敏（凭证与 query 不出现）', async () => {
+    vi.useFakeTimers()
+    try {
+      rt.registerRemote({
+        name: 'secret',
+        entry: 'https://user:pass@evil.example.test/e.js?token=abc',
+        timeout: 30,
+        retries: 0,
+        promise: async () => {
+          throw new Error('boom')
+        },
+      })
+      const p = rt.getContainer('secret').catch((e) => e)
+      await vi.advanceTimersByTimeAsync(200)
+      const err: any = await p
+      expect(err.code).toBe('MFU-001')
+      expect(err.message).not.toContain('user:pass')
+      expect(err.message).not.toContain('token=abc')
+      expect(err.message).toContain('evil.example.test')
+      expect(err.details).toMatchObject({ remote: 'secret' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

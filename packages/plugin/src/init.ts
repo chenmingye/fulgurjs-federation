@@ -201,7 +201,7 @@ export async function inspectConfig(configPath: string): Promise<string> {
   out.push('3. shared 里 vue / vue-router / pinia 建议 singleton: true——跨应用必须同实例（全局响应性、getActivePinia、路由注入）')
   out.push('4. 远程的全局副作用（全局组件/指令/启动期初始化）封装为启动器模块并 expose，宿主在 loadRemote 页面前调用；')
   out.push('   跨应用传值（locale/store/事件等）统一走 @fulgurjs/federation/context：宿主 provideAppContext 一次写入，远程 boot 用 getAppContext / requireAppContext 消费')
-  out.push('5. 远程页面可直接静态导入 virtual:fulgurjs-runtime（插件自动改写为惰性单例委托）；特需直取全局单例时用 getRuntime()')
+  out.push('5. 联邦 API 统一从单一入口导入：import { loadRemote, definePages, remoteSchema } from \'virtual:fulgurjs-api\'（旧入口 virtual:fulgurjs-runtime / @fulgurjs/federation/pages / virtual:fulgurjs-remote-schema 仍可用且收敛同一运行时单例；远程页面直接静态导入任一入口都会被自动改写为惰性单例委托，特需直取全局单例时用 getRuntime()）')
   out.push('6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言')
   out.push('7. 部署后体检：fulgurjs doctor --base <URL> --apps <应用...>（缓存头/资源形态/CORS/chunk 可达/版本 skew）')
   out.push('8. 部署语义：remoteEntry/manifest/index.html 必须 no-cache（严禁 immutable）；带 hash 的 assets 长缓存')

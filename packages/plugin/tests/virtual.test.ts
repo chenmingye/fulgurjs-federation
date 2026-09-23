@@ -194,3 +194,23 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
     expect(code).toContain('await import("some/esm-only")')
   })
 })
+
+/** WP7：单一 API 门面（virtual:fulgurjs-api） */
+describe('WP7: genApiFacade 单一 API 门面', () => {
+  it('具名导出 runtime 全部公开 API + pages 契约 + remoteSchema', async () => {
+    const { genApiFacade } = await import('../src/virtual')
+    const code = genApiFacade()
+    for (const api of [
+      'initSharing', 'registerShare', 'registerRemotes', 'registerRemote', 'registerPlugins',
+      'loadShare', 'loadRemote', 'getContainer', 'preloadRemote', 'parseSpec',
+      'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
+    ]) {
+      expect(code).toContain(api)
+    }
+    expect(code).toContain('export { definePages, validatePages } from "@fulgurjs/federation/pages"')
+    expect(code).toContain('export { default as remoteSchema } from "virtual:fulgurjs-remote-schema"')
+    // 引用面全部是虚拟入口/包名，不复制 runtime 实现（单一实例由 globalThis 单例保证）
+    expect(code).toContain('from "virtual:fulgurjs-runtime"')
+    expect(code).not.toContain('__FULGURJS_RUNTIME__ ??')
+  })
+})

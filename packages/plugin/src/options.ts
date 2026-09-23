@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
 import { RUNTIME_VERSION } from './version'
+import { normalizeDevCorsOrigins, type DevCorsOrigins } from './dev-cors'
 
 export interface SharedHint {
   /** 放入共享作用域的本地模块；false 表示不提供本地副本 */
@@ -117,6 +118,10 @@ export interface NormalizedOptions {
   warnings: string[]
   /** dev 下自身源码是否参与 shared 协商改写（devSharedSelf 选项的规范化结果） */
   devSharedSelf: boolean
+  /** dev 跨源访问策略（devCorsOrigins 选项的规范化结果：undefined='*' / '*' / 来源数组） */
+  devCorsOrigins: DevCorsOrigins
+  /** dev manifest 是否携带 fsRoot（devFsRoot 选项，默认 true） */
+  devFsRoot: boolean
 }
 
 export interface FederationOptions {
@@ -147,6 +152,19 @@ export interface FederationOptions {
    * 双向联邦（宿主同时 expose 组件给更高层消费）显式设 true。
    */
   devSharedSelf?: boolean
+  /**
+   * dev 跨源访问策略（插件端点 /@fulgurjs-entry.js、/@fulgurjs-manifest.json 与 server.cors
+   * 共用同一来源）。缺省 = '*'（现状兼容：端点与 server.cors 全放开）；'*' = 显式全放开（不告警）；
+   * 数组 = 来源 allowlist（端点按 Origin 反射匹配，不匹配省略头；server.cors 传 { origin: [...] }，
+   * 用户显式配置的 server.cors 永远优先）。
+   */
+  devCorsOrigins?: string[] | '*'
+  /**
+   * dev manifest 是否携带 fsRoot（remote 根目录本机绝对路径，宿主 dts 类型直连用）。
+   * 默认 true（现状兼容）；false 时不写入 manifest，宿主 dts 降级为 any 桩并给出提示。
+   * fsRoot 是 dev-only 字段，永不进入 prod manifest。
+   */
+  devFsRoot?: boolean
 }
 
 export const DEFAULT_FILENAME = 'fulgurjs-remoteEntry.js'
@@ -462,6 +480,42 @@ function validateOptions(options: FederationOptions): void {
         `remotes: { '${key}': 'http://localhost:5101' }\n  // or split: { '${key}': { dev: 'http://localhost:5101', prod: '/${key}' } }`,
       )
     }
+    // CFG-009（WP6）：remote 运行参数在配置期校验——坏数值不留到运行时无限循环/永久等待
+    if (cfg.timeout !== undefined && (typeof cfg.timeout !== 'number' || !Number.isFinite(cfg.timeout) || cfg.timeout <= 0)) {
+      configError(
+        `CFG-009: remotes["${key}"].timeout must be a finite positive number (ms)`,
+        cfg.timeout,
+        'e.g. 15000（省略用默认 15s）',
+        `remotes: { '${key}': { external: '…', timeout: 15000 } }`,
+      )
+    }
+    if (cfg.retries !== undefined && (typeof cfg.retries !== 'number' || !Number.isInteger(cfg.retries) || cfg.retries < 0 || cfg.retries > 10)) {
+      configError(
+        `CFG-009: remotes["${key}"].retries must be an integer in 0..10`,
+        cfg.retries,
+        'e.g. 2（省略用默认 2；上限 10 防退避风暴）',
+        `remotes: { '${key}': { external: '…', retries: 2 } }`,
+      )
+    }
+    const brk = cfg.breaker
+    if (brk) {
+      if (brk.threshold !== undefined && (typeof brk.threshold !== 'number' || !Number.isFinite(brk.threshold) || brk.threshold <= 0)) {
+        configError(
+          `CFG-009: remotes["${key}"].breaker.threshold must be a finite positive number`,
+          brk.threshold,
+          'e.g. 5（连续失败 5 次后熔断）',
+          `remotes: { '${key}': { external: '…', breaker: { threshold: 5, resetMs: 30000 } } }`,
+        )
+      }
+      if (brk.resetMs !== undefined && (typeof brk.resetMs !== 'number' || !Number.isFinite(brk.resetMs) || brk.resetMs <= 0)) {
+        configError(
+          `CFG-009: remotes["${key}"].breaker.resetMs must be a finite positive number (ms)`,
+          brk.resetMs,
+          'e.g. 30000（熔断 30s 后半开）',
+          `remotes: { '${key}': { external: '…', breaker: { threshold: 5, resetMs: 30000 } } }`,
+        )
+      }
+    }
     for (const slot of ['dev', 'prod', 'external'] as const) {
       const v = (cfg as RemoteEntryConfig)[slot]
       if (v !== undefined && typeof v !== 'string') {
@@ -483,6 +537,23 @@ function validateOptions(options: FederationOptions): void {
         }
       }
     }
+  }
+  const corsCheck = normalizeDevCorsOrigins(options.devCorsOrigins)
+  if (!corsCheck.ok) {
+    configError(
+      `CFG-010: devCorsOrigins ${corsCheck.reason}`,
+      options.devCorsOrigins,
+      `'*'（全放开）或来源 allowlist 数组`,
+      `devCorsOrigins: ['http://localhost:5100', 'http://127.0.0.1:5100']`,
+    )
+  }
+  if (options.devFsRoot !== undefined && typeof options.devFsRoot !== 'boolean') {
+    configError(
+      '`devFsRoot` must be a boolean',
+      options.devFsRoot,
+      'true（dev manifest 携带 fsRoot，现状默认）或 false（不暴露本机路径）',
+      `devFsRoot: false`,
+    )
   }
 }
 
@@ -569,6 +640,8 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     warnings,
     // dev 改写开关：默认纯 remote 参与 shared 协商，宿主（有 remotes）不参与；可显式覆盖
     devSharedSelf: options.devSharedSelf ?? remotes.length === 0,
+    devCorsOrigins: options.devCorsOrigins,
+    devFsRoot: options.devFsRoot ?? true,
   }
 }
 

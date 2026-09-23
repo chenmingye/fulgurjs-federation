@@ -29,14 +29,17 @@ export interface RemoteConfig {
   name: string
   entry: string
   shareScope?: string
-  /** 加载超时 ms，默认 15000 */
+  /**
+   * 加载超时 ms，默认 15000。注意：超时只代表"调用方不再等待"，浏览器不会取消已发出的
+   * 动态 import——下一次调用复用同一条 in-flight 记录，不会重复初始化同一容器。
+   */
   timeout?: number
-  /** 失败重试次数，默认 2 */
+  /** 失败重试次数，默认 2（上限 10；配置期与运行时注册均校验，非法当场抛错） */
   retries?: number
   /** 备用 remoteEntry 地址（首个失败后依次尝试） */
   fallback?: string[]
   breaker?: { threshold?: number; resetMs?: number }
-  /** promise-based remote：运行时解析出容器或容器地址 */
+  /** promise-based remote：运行时解析出容器或容器地址（其解析同样受 timeout 约束） */
   promise?: () => Promise<any>
   /** 内部：远程自报的发布路径（preload 用） */
   manifestUrl?: string
@@ -83,7 +86,12 @@ interface RemoteInternal extends Omit<RemoteConfig, 'breaker'> {
   container?: any
   containerPromise?: Promise<any>
   lastLoadMs?: number
+  /** WP6：按 remote 生效的熔断参数（注册时从 breaker 配置归一；重复注册时刷新参数、保留状态） */
+  breakerThreshold: number
+  breakerResetMs: number
   breakerState: { fails: number; openUntil: number }
+  /** WP6：entry 动态 import 的单一 in-flight 记录（按 URL；超时不清除——import 无法取消） */
+  entryInflight: Map<string, Promise<any>>
   debug: RemoteDebugInfo
 }
 
@@ -91,9 +99,15 @@ const DEFAULT_TIMEOUT = 15000
 const DEFAULT_RETRIES = 2
 const BREAKER_THRESHOLD = 5
 const BREAKER_RESET_MS = 30000
+/** WP6：重试退避上限与抖动系数（指数退避 200ms 起，封顶 4s，±20% 抖动） */
+const BACKOFF_MAX_MS = 4000
+const BACKOFF_JITTER = 0.2
 
 function createRuntime() {
-  const shareScopeMap: ShareScopeMap = {}
+  // WP6：注册表全部使用无原型字典——scope 名 / share 键 / 版本号来自外部输入（配置或
+  // 远程 manifest），'__proto__'/'constructor' 一类键在普通对象上会命中原型链（读污染
+  // 判定、写污染原型），null 原型从根上消除该类歧义。
+  const shareScopeMap: ShareScopeMap = Object.create(null)
   const remotes = new Map<string, RemoteInternal>()
   const plugins: RuntimePlugin[] = []
   const loadedModules = new Map<string, Promise<any>>()
@@ -112,7 +126,7 @@ function createRuntime() {
     }
   }
 
-  const getScope = (name: string): ShareScope => (shareScopeMap[name] ??= {})
+  const getScope = (name: string): ShareScope => (shareScopeMap[name] ??= Object.create(null))
 
   function emitError(info: { remote: string; error: FgError }) {
     try {
@@ -136,24 +150,54 @@ function createRuntime() {
     opts: { from?: string; eager?: boolean; loaded?: boolean } = {},
   ): void {
     const scope = getScope(scopeName || 'default')
-    const byName = (scope[name] ??= {})
-    if (byName[version]) {
+    // own-property 判定 + null 原型字典：'__proto__'/'constructor' 等键不误读/误写原型
+    const own = Object.hasOwn(scope, name) ? scope[name] : undefined
+    let byName: Record<string, ShareEntry> = own && typeof own === 'object' ? (own as Record<string, ShareEntry>) : undefined as never
+    if (!byName) {
+      byName = Object.create(null)
+      scope[name] = byName
+    }
+    if (Object.hasOwn(byName, version) && byName[version]) {
       // 已注册版本永不替换（webpack 语义：first-wins）
       return
     }
     byName[version] = { version, get, from: opts.from ?? 'unknown', eager: !!opts.eager, loaded: !!opts.loaded }
   }
 
+  /** WP6：运行时注册参数校验（配置期 CFG-009 之外的直连防线）——坏数值当场抛错 */
+  function assertRemoteParams(r: RemoteConfig): void {
+    const check = (v: unknown, name: string, int10?: boolean) => {
+      if (v === undefined) return
+      const ok = typeof v === 'number' && (int10 ? Number.isInteger(v) && v >= 0 && v <= 10 : Number.isFinite(v) && v > 0)
+      if (!ok) {
+        throw new Error(
+          `[fulgurjs] registerRemote("${r.name}"): ${name} must be a ${int10 ? 'integer 0..10' : 'finite positive number'}, got ${String(v)}`,
+        )
+      }
+    }
+    check(r.timeout, 'timeout')
+    check(r.retries, 'retries', true)
+    if (r.breaker) {
+      check(r.breaker.threshold, 'breaker.threshold')
+      check(r.breaker.resetMs, 'breaker.resetMs')
+    }
+  }
+
   function registerRemotes(list: RemoteConfig[]): void {
     for (const r of list) {
+      assertRemoteParams(r)
       const prev = remotes.get(r.name)
       remotes.set(r.name, {
         timeout: DEFAULT_TIMEOUT,
         retries: DEFAULT_RETRIES,
         ...prev,
         ...r,
+        // 熔断参数随最新配置刷新；计数状态（fails/openUntil）跨注册保留——半开窗口不被重置
+        breakerThreshold: r.breaker?.threshold ?? prev?.breakerThreshold ?? BREAKER_THRESHOLD,
+        breakerResetMs: r.breaker?.resetMs ?? prev?.breakerResetMs ?? BREAKER_RESET_MS,
         state: prev?.state ?? 'idle',
         breakerState: prev?.breakerState ?? { fails: 0, openUntil: 0 },
+        entryInflight: prev?.entryInflight ?? new Map(),
         debug: prev?.debug ?? { entry: r.entry, status: 'idle' },
       })
     }
@@ -243,6 +287,16 @@ function createRuntime() {
     return entry.get()
   }
 
+  /** WP6：错误信息用的 URL 脱敏——去凭证（user:pass@）与 query/hash */
+  function sanitizeUrl(u: string): string {
+    try {
+      const x = new URL(u, typeof location < 'u' ? location.href : 'http://f.invalid')
+      return x.protocol + '//' + x.host + x.pathname
+    } catch {
+      return String(u).replace(/[?#].*$/, '')
+    }
+  }
+
   function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const t = setTimeout(() => reject(new Error(`timeout after ${ms}ms: ${label}`)), ms)
@@ -279,12 +333,16 @@ function createRuntime() {
   }
 
   async function importEntry(url: string, remote: RemoteInternal): Promise<any> {
-    // 动态地址导入：dev 下必须阻止 vite 对该 import 做转换
-    return withTimeout(
-      import(/* @vite-ignore */ url),
-      remote.timeout ?? DEFAULT_TIMEOUT,
-      `load remoteEntry ${url}`,
-    )
+    // WP6：单一 in-flight 记录——动态 import 无法取消，调用方超时只代表不再等待；
+    // 后续调用（含超时后的重试）复用同一条 promise，绝不重复发起同一 URL 的 import。
+    // 请求层失败（fetch error）后清除记录以允许真实重试。
+    const cached = remote.entryInflight.get(url)
+    const inflight = cached ?? import(/* @vite-ignore */ url)
+    if (!cached) {
+      remote.entryInflight.set(url, inflight)
+      inflight.catch(() => remote.entryInflight.delete(url))
+    }
+    return withTimeout(inflight, remote.timeout ?? DEFAULT_TIMEOUT, `load remoteEntry ${url}`)
   }
 
   async function acquireContainer(remote: RemoteInternal, overrides?: { retries?: number }): Promise<any> {
@@ -321,7 +379,12 @@ function createRuntime() {
       const loaders: Array<() => Promise<any>> = []
       if (remote.promise) {
         loaders.push(async () => {
-          const resolved = await remote.promise!()
+          // WP6：promise() 的异步解析同样受 timeout 约束（否则 promise remote 可永久 pending）
+          const resolved = await withTimeout(
+            remote.promise!(),
+            remote.timeout ?? DEFAULT_TIMEOUT,
+            `resolve promise remote "${remote.name}"`,
+          )
           const container = typeof resolved === 'string' ? await importEntry(resolved, remote) : resolved
           validateContainerInterface(container, remote)
           return container
@@ -354,25 +417,29 @@ function createRuntime() {
             // 领域错误（带 code）不重试，直接失败
             if ((err as any)?.code) throw err
             if (attempt < maxRetries) {
-              await sleep(200 * 2 ** attempt)
+              // WP6：指数退避封顶 + 随机抖动（防同批失败的重试风暴整齐共振）
+              await sleep(Math.min(BACKOFF_MAX_MS, 200 * 2 ** attempt) * (1 - BACKOFF_JITTER * (1 - 2 * Math.random())))
             }
           }
         }
         if (succeeded) break
       }
       if (!succeeded || !container) {
+        // WP6：错误信息中的 URL 脱敏——去用户名/密码与 query 参数（凭证可能藏在 query），
+        // 诊断保留 remote 名与 origin
+        const shown = sanitizeUrl(remote.entry)
         const hints: string[] = []
         if (/^https?:\/\//.test(remote.entry) && typeof location !== 'undefined') {
-          hints.push(`1. is the remote dev server running?  try opening ${remote.entry} in the browser — it must return JS, not HTML/an error`)
-          hints.push(`2. is the URL correct in federation({ remotes })?  dev and prod entries can differ`)
-          hints.push(`3. CORS: the remote dev server must allow cross-origin requests (fulgurjs-federation enables server.cors automatically; a custom server config may have disabled it)`)
+          hints.push(`1. is the remote dev server running?  open ${shown} in a browser — it must return JS, not HTML`)
+          hints.push(`2. is the URL correct in federation({ remotes })?  dev/prod entries can differ`)
+          hints.push(`3. CORS: the remote dev server must allow cross-origin requests (check its server.cors)`)
         } else {
-          hints.push(`1. is the remote deployed and reachable?  try opening ${remote.entry} in the browser — it must return JS`)
-          hints.push(`2. NGINX/CDN routing: the entry path must serve the remoteEntry JS file (check try_files / fallback rules)`)
+          hints.push(`1. is the remote deployed?  open ${shown} in a browser — it must return JS`)
+          hints.push(`2. NGINX/CDN routing: the entry path must serve the remoteEntry JS (check try_files)`)
         }
         throw new FgError(
           ErrorCodes.REMOTE_LOAD_FAILED,
-          `failed to load remote "${remote.name}" from ${remote.entry}: ${String((lastErr as Error)?.message ?? lastErr)}\n` +
+          `failed to load remote "${remote.name}" from ${shown}: ${String((lastErr as Error)?.message ?? lastErr)}\n` +
             hints.join('\n'),
           { remote: remote.name },
         )
@@ -409,8 +476,8 @@ function createRuntime() {
       remote.debug.status = 'failed'
       remote.debug.error = String((err as Error)?.message ?? err)
       b.fails += 1
-      if (b.fails >= BREAKER_THRESHOLD) {
-        b.openUntil = Date.now() + BREAKER_RESET_MS
+      if (b.fails >= remote.breakerThreshold) {
+        b.openUntil = Date.now() + remote.breakerResetMs
         b.fails = 0
       }
       if (err instanceof FgError) {
@@ -455,7 +522,12 @@ function createRuntime() {
     },
   ): Promise<any> {
     const { remote: name, module } = parseSpec(spec)
-    hooks.beforeLoadRemote?.({ remote: name, module })
+    // WP6：观测 hook 自身抛错不把成功的模块加载改成失败（仅告警）
+    try {
+      hooks.beforeLoadRemote?.({ remote: name, module })
+    } catch (hookErr) {
+      console.warn('[fulgurjs] beforeLoadRemote hook error (ignored):', hookErr)
+    }
     const remote = remotes.get(name)
     if (!remote) {
       throw new FgError(
@@ -503,7 +575,11 @@ function createRuntime() {
       }
       throw err
     }
-    hooks.afterLoadRemote?.({ remote: name, module, module_ns: ns })
+    try {
+      hooks.afterLoadRemote?.({ remote: name, module, module_ns: ns })
+    } catch (hookErr) {
+      console.warn('[fulgurjs] afterLoadRemote hook error (ignored):', hookErr)
+    }
     // MFU-009：加载到的模块没有任何导出——exposes 指向了不导出内容的文件（误导出/空文件）。
     // 仅告警不抛错：命名空间为空对调用方必然不可用，但保留返回值避免破坏既有容错路径
     if (ns && typeof ns === 'object' && Object.keys(ns).length === 0) {
@@ -587,6 +663,12 @@ function createRuntime() {
     const resolveAssetUrl = (asset: string) => {
       const pageUrl = typeof document !== 'undefined' ? document.baseURI : undefined
       const base = new URL(remote.entry, pageUrl || 'http://fulgurjs.invalid/')
+      // URL 相对基准 = entry 所在目录（manifest 契约）。entry 是文件（…/remoteEntry.js）时
+      // URL() 天然取其目录；entry 是目录形态（'/remote-a'，根相对配置）时补尾斜杠，
+      // 否则 'assets/x.js' 会被解析到站点根（404）。
+      if (!base.pathname.endsWith('/') && !base.pathname.split('/').pop()!.includes('.')) {
+        base.pathname += '/'
+      }
       return new URL(asset, base).href
     }
 
@@ -594,9 +676,11 @@ function createRuntime() {
       if (remote.manifestUrl) {
         let manifestPromise = remoteManifests.get(remote.manifestUrl)
         if (!manifestPromise) {
-          manifestPromise = fetch(remote.manifestUrl, { cache: 'no-cache' }).then((res) =>
-            res.ok ? res.json() : undefined,
-          )
+          // WP6：manifest fetch 带超时（不设超时的 fetch 可能让 preloadRemote 永久 pending）
+          manifestPromise = fetch(remote.manifestUrl, {
+            cache: 'no-cache',
+            signal: AbortSignal.timeout(8000),
+          }).then((res) => (res.ok ? res.json() : undefined))
           remoteManifests.set(remote.manifestUrl, manifestPromise)
           manifestPromise.then(
             (manifest) => {
@@ -607,6 +691,18 @@ function createRuntime() {
         }
         const manifest = await manifestPromise
         if (manifest) {
+          // WP4 契约：未知主版本拒绝消费（不静默当空 manifest），降级为仅预载 entry
+          const sv = (manifest as { schemaVersion?: unknown }).schemaVersion
+          if (typeof sv === 'number' && (!Number.isInteger(sv) || sv > 1)) {
+            emitError({
+              remote: name,
+              error: new FgError(ErrorCodes.PRELOAD_FAILED, `unsupported manifest schemaVersion ${String(sv)} (expected 1)`, {
+                remote: name,
+              }),
+            })
+            await inject(remote.entry, 'modulepreload')
+            return
+          }
           await inject(remote.entry, 'modulepreload')
           const exposes = manifest.exposes
           const entries: Array<[string, any]> = Array.isArray(exposes)
@@ -719,6 +815,7 @@ export const loadShare = runtime.loadShare
 export const loadRemote = runtime.loadRemote
 export const getContainer = runtime.getContainer
 export const preloadRemote = runtime.preloadRemote
+export const parseSpec = runtime.parseSpec
 export const shareScopeMap = runtime.shareScopeMap
 
 /** default 导出 interop：ESM 取 .default；CJS 命名空间回退整体 */

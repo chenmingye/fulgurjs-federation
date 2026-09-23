@@ -1,5 +1,8 @@
 /**
- * virtual:fulgurjs-runtime 客户端类型声明。
+ * virtual:fulgurjs-runtime / virtual:fulgurjs-api 客户端类型声明。
+ *
+ * `virtual:fulgurjs-api` 是单一 API 门面（推荐入口）：一个虚拟模块拿全联邦 API——
+ * runtime 全部函数 + definePages/validatePages + remoteSchema；类型由本声明聚合。
  *
  * 用法（二选一）：
  * 1. dev 启动后插件自动在类型目录（默认 src/fulgurjs/types/，无 src 布局回退 .fulgurjs/types/）
@@ -130,4 +133,17 @@ declare module 'virtual:fulgurjs-runtime' {
   /** 与 globalThis.__FULGURJS_RUNTIME__ 同一实例（方法面冻结） */
   const runtimeDefault: FgRuntime
   export default runtimeDefault
+}
+
+/**
+ * WP7：单一 API 门面。
+ * 与 runtime 旧入口共享同一单例（globalThis.__FULGURJS_RUNTIME__）；definePages/validatePages
+ * 来自 '@fulgurjs/federation/pages'，remoteSchema 为远程 exposes 清单（dev 探针结果；
+ * build 为空 schema）。
+ */
+declare module 'virtual:fulgurjs-api' {
+  export * from 'virtual:fulgurjs-runtime'
+  export { definePages, validatePages } from '@fulgurjs/federation/pages'
+  /** 远程 exposes 清单（dev：异步 probe 结果；build：空对象，路由存在性校验按 R3 降级） */
+  export const remoteSchema: { [remoteKey: string]: { exposes: string[]; exists: boolean } }
 }

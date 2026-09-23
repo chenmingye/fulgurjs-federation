@@ -42,6 +42,8 @@ docs/screenshots/npm-install/
 docs/screenshots/dev-*
 docs/screenshots/d6-*
 docs/screenshots/tb-*
+docs/screenshots/prod-auto-import-*
+docs/screenshots/prod-eager-pinia-*
 docs/screenshots/INDEX.md
 # 项目本地工作区（不入库：验证产物/截图/工作记录）
 docs/_workspace/
@@ -61,3 +63,7 @@ packages/plugin/examples
 # npm pack 产物
 packages/plugin/*.tgz
 .typecheck-latest/
+
+# e2e prod 隔离实例状态（prod-setup.sh 写入）
+e2e/.prod-port
+e2e/.prod-nginx.json

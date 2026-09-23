@@ -1,15 +1,16 @@
-# fulgurjs e2e 专用隔离 NGINX 实例（端口 8999，与用户实例完全隔离）
-pid /tmp/fulgurjs-nginx/nginx.pid;
-error_log /tmp/fulgurjs-nginx/error.log warn;
+# fulgurjs e2e 专用隔离 NGINX 实例（由 prod-setup.sh 生成到临时目录后加载；
+# __PORT__/__PROD_DIST__/__MIME_TYPES__ 由脚本替换，pid 与日志相对 -p 前缀目录落盘）
+pid nginx.pid;
+error_log error.log warn;
 
 events {
   worker_connections 256;
 }
 
 http {
-  include /opt/homebrew/etc/nginx/mime.types;
+  include __MIME_TYPES__;
   default_type application/octet-stream;
-  access_log /tmp/fulgurjs-nginx/access.log;
+  access_log access.log;
   sendfile on;
   tcp_nopush on;
   keepalive_timeout 65;
@@ -22,7 +23,7 @@ http {
   gzip_vary on;
 
   server {
-    listen 8999;
+    listen __PORT__;
     server_name localhost;
 
     # 远程应用 remote-a（子路径部署）
@@ -47,6 +48,21 @@ http {
       index index.html;
       try_files $uri $uri/ /remote-b/index.html;
       add_header Access-Control-Allow-Origin "*";
+    }
+
+    # 远程应用 remote-auto（auto-import 回归，子路径部署）
+    location /remote-auto/ {
+      alias "__PROD_DIST__/remote-auto/";
+      index index.html;
+      try_files $uri $uri/ /remote-auto/index.html;
+      add_header Access-Control-Allow-Origin "*";
+    }
+
+    # 宿主应用 host-auto（auto-import 回归，子路径部署）
+    location /host-auto/ {
+      alias "__PROD_DIST__/host-auto/";
+      index index.html;
+      try_files $uri $uri/ /host-auto/index.html;
     }
 
     # 宿主应用（根路径）

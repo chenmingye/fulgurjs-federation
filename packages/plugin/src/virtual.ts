@@ -6,6 +6,7 @@
  * - prod 容器入口（rollup 额外输入，输出稳定文件名 remoteEntry）
  */
 import type { NormalizedOptions, NormalizedRemote, NormalizedShared } from './options'
+import { MANIFEST_SCHEMA_VERSION, type DevFederationManifest, type ProdFederationManifest } from './manifest'
 
 function jsonReplacer(_k: string, v: unknown) {
   return v
@@ -444,18 +445,45 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
   ].join('\n')
 }
 
-/** dev manifest（remote 端中间件动态返回） */
-export function genDevManifest(options: NormalizedOptions, base: string): Record<string, unknown> {
+/**
+ * WP7：单一 API 门面（virtual:fulgurjs-api）。
+ * 用户侧一个虚拟入口拿全联邦 API：
+ * - runtime 全部公开 API re-export（经 'virtual:fulgurjs-runtime'——宿主/远程页面各自的
+ *   副本经 globalThis.__FULGURJS_RUNTIME__ 收敛为同一单例，与直接导入旧入口等价）；
+ * - definePages / validatePages re-export 自 '@fulgurjs/federation/pages'；
+ * - remoteSchema 具名导出自 'virtual:fulgurjs-remote-schema'（dev 异步 probe 结果；
+ *   build 为空 schema，沿用 R3 降级语义）。
+ * 旧入口（virtual:fulgurjs-runtime / /pages / virtual:fulgurjs-remote-schema）全部保留。
+ */
+export function genApiFacade(): string {
+  return [
+    'export {',
+    '  initSharing, registerShare, registerRemotes, registerRemote, registerPlugins,',
+    '  loadShare, loadRemote, getContainer, preloadRemote, parseSpec,',
+    '  getRuntime, shareScopeMap, unwrapDefault, version,',
+    '} from "virtual:fulgurjs-runtime";',
+    'export { definePages, validatePages } from "@fulgurjs/federation/pages";',
+    'export { default as remoteSchema } from "virtual:fulgurjs-remote-schema";',
+    '',
+  ].join('\n')
+}
+
+/** dev manifest（remote 端中间件动态返回；契约见 manifest.ts，消费端经 parseManifest 校验） */
+export function genDevManifest(options: NormalizedOptions, base: string): DevFederationManifest {
   const b = base.endsWith('/') ? base : `${base}/`
   return {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
     id: options.name,
     name: options.name,
     version: options.pkgDependencies?.['fulgurjs'] ?? '0.0.0',
     devServer: true,
     base: b,
     entry: `${b}@fulgurjs-entry.js`,
-    /** 本地联调时供宿主端 dts 类型直连（见 dts.ts）；远程不在本机时宿主回退 any 桩 */
-    fsRoot: options.root,
+    /**
+     * 本地联调时供宿主端 dts 类型直连（见 dts.ts）；远程不在本机时宿主回退 any 桩。
+     * WP5：devFsRoot: false 时不写入（本机路径不外发）；该字段永不进入 prod manifest。
+     */
+    ...(options.devFsRoot === false ? {} : { fsRoot: options.root }),
     exposes: options.exposes.map((e) => ({
       name: e.name,
       src: e.import,
@@ -486,8 +514,9 @@ export function genProdManifest(
   options: NormalizedOptions,
   exposeFiles: Record<string, ManifestExposeEntry>,
   entryFile: string,
-): Record<string, unknown> {
+): ProdFederationManifest {
   return {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
     id: options.name,
     name: options.name,
     entry: entryFile,

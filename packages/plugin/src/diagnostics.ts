@@ -10,6 +10,8 @@
  * 三段式强制：现象 → 根因 → 修法；ERROR 级文案必须 cause/fix 非空（单测断言）。
  */
 
+import path from 'node:path'
+
 export type FulgurjsStage = 'CFG' | 'DEV' | 'BLD' | 'MFU' | 'CC'
 
 export interface FulgurjsCodeMeta {
@@ -29,6 +31,8 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'CFG-006', stage: 'CFG', title: '孤岛配置（既不提供也不消费）' },
   { code: 'CFG-007', stage: 'CFG', title: 'remotes 对象形式误用 name@ 前缀（整串当 URL 拼接）' },
   { code: 'CFG-008', stage: 'CFG', title: 'shared 非法组合（eager+import:false / shareKey 重复声明）' },
+  { code: 'CFG-009', stage: 'CFG', title: 'remotes 运行参数非法（timeout/retries/breaker 非有限正数等）' },
+  { code: 'CFG-010', stage: 'CFG', title: 'devCorsOrigins 形态非法（须为 "*" 或 http(s) 来源数组）' },
   // ── DEV 开发启动/转换期 ──
   { code: 'DEV-001', stage: 'DEV', title: 'remote dev server 不可达（manifest 拉取失败）' },
   { code: 'DEV-002', stage: 'DEV', title: 'remote dev manifest 为空或格式不识别' },
@@ -37,6 +41,8 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'DEV-006', stage: 'DEV', title: '宿主/远程插件版本不一致' },
   { code: 'DEV-009', stage: 'DEV', title: '门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启）' },
   { code: 'DEV-010', stage: 'DEV', title: 'dev 冷启动预构建窗口（首轮 30~60s 瞬态 504/\'ce\' 假错误）' },
+  { code: 'DEV-011', stage: 'DEV', title: '非 loopback host + 通配 dev CORS（暴露面扩大提醒）' },
+  { code: 'DEV-012', stage: 'DEV', title: '非 loopback host + dev manifest 携带 fsRoot（本机路径外发提醒）' },
   // ── BLD 构建期 ──
   { code: 'BLD-001', stage: 'BLD', title: 'expose 源文件解析失败' },
   { code: 'BLD-002', stage: 'BLD', title: '构建目标低于 es2022（TLA 需要）' },
@@ -118,4 +124,46 @@ export function scanExposeRequiredProps(source: string): string[] {
     }
   }
   return [...required]
+}
+
+
+// ── WP8：受控诊断（DEBUG=fulgurjs:* / FULGURJS_DEBUG，默认关闭）─────────────────
+//
+// 分类记录阶段、模块类型、命中的导入、改写结果、门面/shareKey 归组与构建器版本。
+// 约束：不输出源码文本、URL query/凭证或未脱敏绝对路径；写 stderr（console.error），
+// 不写固定公共文件。默认零输出（环境变量未开时只有一次 env 读取 + 缓存查表）。
+
+let __debugEnvCache = ''
+let __debugEnabledCache: Record<string, boolean> = {}
+
+/** 诊断分类是否开启（FULGURJS_DEBUG 优先于 DEBUG；fulgurjs / fulgurjs:\* / fulgurjs:<分类> 三态） */
+export function debugEnabled(category: string): boolean {
+  const spec = process.env.FULGURJS_DEBUG ?? process.env.DEBUG ?? ''
+  if (spec !== __debugEnvCache) {
+    __debugEnvCache = spec
+    __debugEnabledCache = {}
+  }
+  if (category in __debugEnabledCache) return __debugEnabledCache[category]
+  const patterns = spec.split(',').map((x) => x.trim()).filter(Boolean)
+  const enabled = patterns.some((p) => p === 'fulgurjs' || p === 'fulgurjs:*' || p === `fulgurjs:${category}`)
+  __debugEnabledCache[category] = enabled
+  return enabled
+}
+
+/** 输出一条结构化诊断（JSON 到 stderr）；默认关闭时零输出 */
+export function debugLog(category: string, data: Record<string, unknown>): void {
+  if (!debugEnabled(category)) return
+  console.error(`[fulgurjs:debug:${category}] ${JSON.stringify(data)}`)
+}
+
+/** 模块路径脱敏：root 内显示相对路径；root 外只留 basename（不泄露本机绝对路径布局） */
+export function redactModulePath(id: string, root: string): string {
+  const clean = id.split('?')[0]
+  try {
+    const rel = path.relative(root, clean)
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel
+  } catch {
+    /* fallthrough */
+  }
+  return clean.split('/').pop() ?? clean
 }

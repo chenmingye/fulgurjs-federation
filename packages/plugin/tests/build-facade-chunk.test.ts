@@ -190,16 +190,25 @@ describe('D6: 宿主 + devSharedSelf + manualChunks 构建产物形态', () => {
  * 注入的 `import { ref } from 'vue'` 发生在本插件 pre.transform 之后，会绕过门面化并
  * 静态绑定本地 vue 副本，形成「协商系统 vs 本地系统」双响应性并存（实测症状：同一组件
  * 内 A ref 的赋值不触发渲染、B ref 的赋值正常）。post.transform 必须对 build 下的
- * 非 .vue 文件兜底改写。源码契约断言（分支存在 + isPluginProcessedModule 守卫前置）。
+ * 非 .vue 文件兜底改写。WP1（2026-09-23）起该逻辑提取为 buildFallbackTransform 共享函数，
+ * 并新增 resolveId 期兜底改道（覆盖 auto-import 注册在 federation() 之后的顺序）。
+ * 真实构建回归见 tests/build-plugin-chain.test.ts；此处为源码契约快速定位。
  */
 describe('D6: post 阶段 auto-import 兜底（源码契约）', () => {
   const src = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/index.ts'),
     'utf8',
   )
-  it('post.transform 在 build 下不再跳过非 .vue 文件（兜底分支存在）', () => {
-    expect(src).toContain("state.command === 'build' && !/\\.vue(\\?|$)/.test(id)")
-    expect(src).toContain('const quickCheck')
+  it('post.transform 在 build 下委托 buildFallbackTransform（非 .vue 文件不跳过）', () => {
+    expect(src).toContain("if (state.command === 'build') {")
+    expect(src).toContain('return buildFallbackTransform(code, id)')
+    // 兜底函数覆盖非 .vue 文件（isJsLike 含 .ts/.js），且带 import/require 快速预检
+    const fnStart = src.indexOf('async function buildFallbackTransform')
+    expect(fnStart).toBeGreaterThan(-1)
+    const fnBody = src.slice(fnStart, src.indexOf('\n  }', fnStart))
+    expect(fnBody).toContain("clean.endsWith('.vue')")
+    expect(fnBody).toContain('const quickCheck')
+    expect(fnBody).toContain('rewriteShared: true')
   })
   it('build 下 isPluginProcessedModule 守卫不拦截兜底（transformModule 幂等，依赖 collect 完成）', () => {
     // D6 补丁：守卫在 build 下会拦掉「pre 已处理 + auto-import 后置注入」的文件
@@ -207,11 +216,14 @@ describe('D6: post 阶段 auto-import 兜底（源码契约）', () => {
     const guardLine = src.match(/if \((state\.command === 'serve' && )?isPluginProcessedModule\(code\)\) return null/)
     expect(guardLine).toBeTruthy()
     expect(guardLine![1]).toContain("state.command === 'serve'")
-    const postIdx = src.indexOf('const quickCheck')
-    expect(postIdx).toBeGreaterThan(-1)
   })
   it('兜底传入 sharedClosureRoots（与 pre 一致的闭包静态化）', () => {
-    const post = src.slice(src.indexOf('const quickCheck'))
-    expect(post.slice(0, post.indexOf('}\n  }'))).toContain('sharedClosureRoots: state.sharedClosureRoots')
+    const fnStart = src.indexOf('async function buildFallbackTransform')
+    const fnBody = src.slice(fnStart, src.indexOf('\n  }', fnStart))
+    expect(fnBody).toContain('sharedClosureRoots: state.sharedClosureRoots')
+  })
+  it('WP1：resolveId 期兜底改道存在（覆盖 auto-import 注册在 federation() 之后的顺序）', () => {
+    expect(src).toContain('state.transformedModules.has(importer)')
+    expect(src).toContain('RESOLVED.sharedNsFacade(hit.shareKey)')
   })
 })

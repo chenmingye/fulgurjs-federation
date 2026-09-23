@@ -28,6 +28,7 @@ import {
   isExposeTargetFile,
 } from './transform'
 import {
+  genApiFacade,
   genBindingFacade,
   genRuntimeProxyModule,
   genBuildRemoteEntry,
@@ -43,7 +44,8 @@ import {
 } from './virtual'
 import { generateDevTypes } from './dts'
 import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, type RemoteSchema } from './remote-schema'
-import { formatFulgurjsDiagnostic } from './diagnostics'
+import { formatFulgurjsDiagnostic, debugLog, redactModulePath } from './diagnostics'
+import { corsHeadersFor, isNonLoopbackHost } from './dev-cors'
 import { syncViteCacheMarker } from './vite-cache'
 
 // 运行时代码由构建脚本生成（src/runtime-code.gen.ts），内联进插件产物，无文件定位问题
@@ -158,6 +160,9 @@ export function federation(options: FederationOptions): Plugin[] {
     /** D6：门面形态。dynamic = devSharedSelf 宿主（build）专用：门面对运行时/本体全动态依赖
      * （配合 manualChunks 包装注入与闭包静态化）。static = 其余一切场景，产物与 2.0.0 一致。 */
     facadeDynamic: boolean
+    /** WP1：已被本插件改写过的模块 id（含 query 与 clean 两种形态）。这些模块后续再出现
+     * 裸 shared specifier = 后置插件（auto-import 等）注入，由 resolveId 期兜底改道。 */
+    transformedModules: Set<string>
   } = {
     command: 'serve',
     base: '/',
@@ -169,6 +174,12 @@ export function federation(options: FederationOptions): Plugin[] {
     manualChunkGroups: new Map(),
     sharedClosureRoots: [],
     facadeDynamic: false,
+    transformedModules: new Set(),
+  }
+
+  const recordRewritten = (id: string) => {
+    state.transformedModules.add(id)
+    state.transformedModules.add(id.split('?')[0])
   }
 
   const pre: Plugin = {
@@ -248,10 +259,38 @@ export function federation(options: FederationOptions): Plugin[] {
       if (env.command === 'serve') {
         // DEV-009 自动化：插件版本变化时自清本应用 .vite 预构建缓存（用户无需手工 rm）
         syncViteCacheMarker(root, normalized.pluginVersion, (msg) => console.warn(msg))
-        // 跨 dev-server 模块加载需要 CORS（对齐双 dev-server 协作引擎）
+        // WP5：dev 跨源访问策略统一（devCorsOrigins）——插件端点与 server.cors 同一来源；
+        // 用户显式配置的 server.cors 永远优先（不允许插件端点策略绕过用户配置的语义）
+        const corsOption =
+          normalized.devCorsOrigins && normalized.devCorsOrigins !== '*'
+            ? ({ origin: normalized.devCorsOrigins } as Record<string, unknown>)
+            : true
         extra.server = {
           ...(userConfig.server ?? {}),
-          cors: userConfig.server?.cors ?? true,
+          cors: userConfig.server?.cors ?? corsOption,
+        }
+        const host = userConfig.server?.host
+        if (isNonLoopbackHost(host)) {
+          if (!normalized.devCorsOrigins || normalized.devCorsOrigins === '*') {
+            console.warn(
+              formatFulgurjsDiagnostic({
+                code: 'DEV-011',
+                symptom: `server.host=${String(host)} 非 loopback 且 dev 跨源策略为通配（*）：任何能访问该机的来源都可拉取本应用联邦端点与源码模块`,
+                cause: 'devCorsOrigins 未配置时保持现状兼容（*）；跨机开发暴露面随之扩大',
+                fix: `按宿主来源显式收紧：devCorsOrigins: ['http://<host>:<port>', ...]（或确认该机处于可信网络）`,
+              }),
+            )
+          }
+          if (normalized.devFsRoot) {
+            console.warn(
+              formatFulgurjsDiagnostic({
+                code: 'DEV-012',
+                symptom: `server.host=${String(host)} 非 loopback 且 dev manifest 携带 fsRoot（remote 根目录本机绝对路径）`,
+                cause: 'fsRoot 供同机联调的宿主 dts 类型直连；2.x 默认 true 保持现状，下个主版本拟改为显式开启',
+                fix: `同机联调无需动作；跨机/不可信网络可 devFsRoot: false（宿主 dts 将降级为 any 桩并有明确提示）`,
+              }),
+            )
+          }
         }
       } else {
         // build：TLA（自动异步边界）需要 es2022+；用户未配置时自动提升
@@ -266,11 +305,22 @@ export function federation(options: FederationOptions): Plugin[] {
           ;(extra as any).build = { target: 'es2022' }
         }
 
+        // WP1（2026-09-23）：后置插件注入的 shared 导入改在 resolveId 期兜底改道（见
+        // resolveId 的 transformedModules 分支）——config() 返回 plugins 不会进入 Vite
+        // 管线（实测 vite 6/8 均忽略），钩子级 order:'post' 又会排到 vite:build-import-analysis
+        // 之后，解析期改道是唯一与注册顺序无关的兜底位置。
+
         // D6：双向宿主（devSharedSelf）build 下的门面动态化 + manualChunks 包装注入——
         // 门面/运行时虚拟模块隔离进插件专属 chunk，防用户强制分组与门面静态边互锁成环
         // （见 facadeChunkOf 注）。纯 remote（remotes 为空）不启用，产物行为保持 2.0.0（硬约束）。
         if (normalized.remotes.length > 0 && normalized.devSharedSelf) {
           state.facadeDynamic = true
+          const userMc = (userConfig.build?.rollupOptions?.output as { manualChunks?: unknown } | undefined)?.manualChunks
+          debugLog('facade', {
+            stage: 'config',
+            facadeDynamic: true,
+            manualChunks: Array.isArray(userConfig.build?.rollupOptions?.output) ? 'array' : typeof userMc,
+          })
           const userOutput = userConfig.build?.rollupOptions?.output
           if (Array.isArray(userOutput)) {
             console.warn(
@@ -350,7 +400,7 @@ export function federation(options: FederationOptions): Plugin[] {
       }
     },
 
-    resolveId(source) {
+    resolveId(source, importer) {
       // 兼容三种形态：裸 specifier / __x00__ URL 编码（dev 生成代码被 importAnalysis 再解析）/ \0 历史形态；query 原样保留
       let s = source
       if (s.startsWith('/@id/')) s = s.slice(5)
@@ -359,6 +409,34 @@ export function federation(options: FederationOptions): Plugin[] {
       const bare = q === -1 ? s : s.slice(0, q)
       const query = q === -1 ? '' : s.slice(q)
       const bareClean = bare.startsWith('\0') ? bare.slice(1) : bare
+
+      // WP1（2026-09-23）：后置插件注入的 shared 导入解析期兜底改道（与插件注册顺序无关）。
+      // 背景：unplugin-auto-import 的 vite 适配器硬编码 enforce:'post'；用户把它注册在
+      // federation() 之后时，其注入的 `import { ref } from 'vue'` 晚于本插件全部 transform，
+      // 会静态绑定本地 vue 副本 → 与协商实例形成双响应性系统（ref 赋值不触发渲染）。
+      // 兜底判据：导入方是「已被本插件改写过的模块」，其最终代码里仍出现裸 shared
+      // specifier——正常改写后不会存留，存留者必为后置注入 → 改道协商命名空间门面
+      // （全命名空间再导出 + TLA 协商；对本地副本只有动态 fallback 边，不产生静态依赖，
+      // 不破坏 devSharedSelf 的 chunk 隔离形态）。
+      // 排除项：本插件自己的虚拟模块（提供方语义，shared 导入必须真身解析）、shared
+      // 本体闭包内模块（闭包静态化语义）、依赖预构建产物（内部是 URL 不是裸名）、
+      // 未被改写过的模块（dev 宿主自身源码不改写 = 自身 provide 语义，不得改道）。
+      if (state.normalized && importer) {
+        const impClean = importer.split('?')[0]
+        const isOurVirtual =
+          impClean.startsWith('virtual:fulgurjs-') || impClean.startsWith('\0virtual:fulgurjs-')
+        if (
+          !isOurVirtual &&
+          !impClean.includes('/node_modules/.vite/') &&
+          !state.sharedClosureRoots.some((r) => impClean.startsWith(r.root)) &&
+          (state.transformedModules.has(importer) || state.transformedModules.has(impClean))
+        ) {
+          const hit = state.normalized.shared.find((sh) => sh.aliases.includes(bareClean))
+          if (hit) {
+            return RESOLVED.sharedNsFacade(hit.shareKey) + query
+          }
+        }
+      }
 
       // 高频坑提示：import 'xxx/yyy' 但 xxx 不是已配置的 remote/shared——十有八九是 remotes
       // 键名拼错或漏配。只警告一次/前缀，不打断构建（也可能只是普通 npm 包）。
@@ -385,6 +463,7 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean === RUNTIME_PROXY_VIRTUAL_ID) return RESOLVED.runtimeProxy
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
       if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api') return bareClean
       if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
@@ -412,6 +491,9 @@ export function federation(options: FederationOptions): Plugin[] {
       }
       if (clean === 'virtual:fulgurjs-provides' && state.normalized) {
         return genDevProvides(state.normalized)
+      }
+      if (clean === 'virtual:fulgurjs-api') {
+        return genApiFacade()
       }
       if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）
@@ -503,6 +585,7 @@ export function federation(options: FederationOptions): Plugin[] {
         // dev 不走这里：dev 的 .vue 全部交给 post 阶段按 dev 角色判定处理（见 post.transform）。
         if (state.command === 'build' && /type=script/.test(id)) {
           return transformModule(code, id, {
+            onRewrite: () => recordRewritten(id),
             options: state.normalized,
             rewriteShared: true,
             allowNodeModules,
@@ -514,6 +597,10 @@ export function federation(options: FederationOptions): Plugin[] {
       }
       if (!isTransformableId(id, allowNodeModules)) return null
       return transformModule(code, id, {
+        onRewrite: () => {
+          debugLog('transform', { stage: 'pre', mode: state.command, module: redactModulePath(id, state.normalized!.root) })
+          recordRewritten(id)
+        },
         options: state.normalized,
         // build：全量改写；dev：默认仅纯 remote 改写 shared（被宿主消费的组件需协商到宿主实例），
         // 双角色宿主可显式 devSharedSelf: true 参与协商
@@ -623,6 +710,13 @@ export function federation(options: FederationOptions): Plugin[] {
           }
         }
         state.sharedClosureRoots = [...rootKeys.entries()].map(([root, keys]) => ({ root, keys }))
+        if (state.sharedClosureRoots.length > 0) {
+          debugLog('facade', {
+            stage: 'buildStart',
+            sharedClosureRoots: state.sharedClosureRoots.length,
+            keys: [...new Set(state.sharedClosureRoots.flatMap((r) => [...r.keys]))],
+          })
+        }
       }
       if (n.exposes.length > 0) {
         // 解析 exposes 源模块绝对路径（容器入口与 manifest 映射依赖）
@@ -685,6 +779,11 @@ export function federation(options: FederationOptions): Plugin[] {
         }
         const entryChunkName = Object.keys(bundle).find((k) => bundle[k].type === 'chunk' && k === n.filename)
         const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
+        debugLog('manifest', {
+          stage: 'generateBundle',
+          exposes: Object.keys(state.exposeFiles).length,
+          exposesWithCss: Object.values(state.exposeFiles).filter((e) => e.css.length > 0).length,
+        })
         this.emitFile({
           type: 'asset',
           fileName: 'fulgurjs-manifest.json',
@@ -717,7 +816,11 @@ export function federation(options: FederationOptions): Plugin[] {
           const raw = (req.url ?? '').split('?')[0]
           const stripped = raw.startsWith(baseNorm) ? `/${raw.slice(baseNorm.length)}` : raw
           if (stripped === '/@fulgurjs-entry.js' || stripped === '/@fulgurjs-manifest.json') {
-            res.setHeader('Access-Control-Allow-Origin', '*')
+            // WP5：端点 CORS 与 server.cors 同一来源策略（devCorsOrigins；缺省 '*' 保持现状）
+            const origin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin
+            for (const [k, v] of Object.entries(corsHeadersFor(origin, n.devCorsOrigins))) {
+              res.setHeader(k, v)
+            }
             res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS')
             res.setHeader('Access-Control-Allow-Headers', '*')
             if (req.method === 'OPTIONS') {
@@ -825,33 +928,18 @@ export function federation(options: FederationOptions): Plugin[] {
       if (state.command === 'serve' && clean.includes('node_modules') && !id.includes('.vite/deps') && !devRewriteAll) {
         return null
       }
-      // D6（2026-09-23）：build 下的 post 兜底。unplugin-auto-import 等后置插件向源码注入的
-      // `import { ref } from 'vue'` 发生在本插件 pre.transform 之后——pre 看到的文件还没有这行
-      // 导入，注入的 shared 导入因此绕过门面化、静态绑定本地副本，形成「协商系统 vs 本地系统」
-      // 双响应性并存（实测：同一 hook 的 ref 赋值不触发渲染，另一 hook 的赋值却触发）。
-      // post 在所有插件之后跑，此处兜底改写；pre 已改写过的文件由 isPluginProcessedModule 拦下。
-      if (state.command === 'build' && !/\.vue(\?|$)/.test(id)) {
-        const quickCheck = /require\s*\(\s*["']|(?:from|import)\s*["']/.test(code)
-        if (!quickCheck) return null
-        const allowNodeModules = isPureRemoteBuild
-        return transformModule(code, id, {
-          options: state.normalized,
-          rewriteShared: true,
-          allowNodeModules,
-          sharedClosureRoots: state.sharedClosureRoots,
-        })
+      // D6（2026-09-23）：build 下的 post 兜底见 buildFallbackTransform（与 fulgurjs:post-last
+      // 共用的共享函数）——auto-import 类后置插件在 pre 之后注入的 shared 导入在此兜底门面化。
+      if (state.command === 'build') {
+        return buildFallbackTransform(code, id)
       }
-      // build 的 .vue 主请求同样补跑（auto-import 可能已向 script 注入 shared 导入；
-      // 幂等，见上）——此前该路径由 isPluginProcessedModule 整体拦截
 
       // dev 改写范围 = devSharedSelf（默认：纯 remote 为 true，有 remotes 的宿主为 false，
       // 双向联邦的宿主可显式开启）。宿主自身 import 即自身 provide，其全局状态
       // （pinia/router）已初始化在本地副本上——被消费方协商到的实例本来就是这份；
       // 且不改写可避免巨型工程引入 TLA 与循环依赖求值顺序风险。
-      const rewriteShared = state.command === 'build' || state.normalized.devSharedSelf
+      const rewriteShared = state.normalized.devSharedSelf
       const remapSpecifier = (spec: string): string | null => {
-        // build：bare specifier 直接参与匹配
-        if (state.normalized!.shared.some((s) => s.aliases.includes(spec))) return spec
         // dev：依赖预构建 URL 映射回包名
         const depMatch = spec.match(/\/node_modules\/\.vite\/deps\/([^/?]+)\.js/)
         if (depMatch) {
@@ -864,14 +952,13 @@ export function federation(options: FederationOptions): Plugin[] {
         if (!cleanPath.startsWith('/')) return null
         return state.resolvedSharedPaths.get(cleanPath) ?? null
       }
-      const __r = await transformModule(code, id, {
+      return transformModule(code, id, {
+        onRewrite: () => recordRewritten(id),
         options: state.normalized!,
         remapSpecifier,
         rewriteShared,
-        allowNodeModules: state.command === 'build' ? isPureRemoteBuild || state.normalized!.devSharedSelf : undefined,
         sharedClosureRoots: state.sharedClosureRoots,
       })
-      return __r
     },
   }
 
@@ -888,6 +975,39 @@ export function federation(options: FederationOptions): Plugin[] {
         })
         .catch(() => {})
     }
+  }
+
+  /**
+   * build 下的 post 兜底改写（D6-4 / WP1）：unplugin-auto-import 等后置插件在 pre.transform
+   * 之后注入的 `import { ref } from 'vue'` 必须在此补跑门面化，否则静态绑定本地副本、
+   * 与协商实例形成双响应性系统（实测：ref 赋值不触发渲染）。
+   * 调用方：fulgurjs:vue-post（用户插件数组内）与 fulgurjs:post-last（config() 追加、
+   * 必然位于全部用户 post 插件之后——auto-import 的 vite 适配器硬编码 enforce:'post'，
+   * 用户把它注册在 federation() 之后时只有 post-last 能捕获）。transformModule 幂等。
+   * allowNodeModules 与 pre.transform 同判定（devSharedSelf || 纯 remote）。
+   */
+  async function buildFallbackTransform(
+    code: string,
+    id: string,
+  ): Promise<{ code: string; map: null } | null> {
+    if (/type=(style|template)/.test(id)) return null
+    const clean = id.split('?')[0]
+    const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
+    if (!isJsLike) return null
+    const quickCheck = /require\s*\(\s*["']|(?:from|import)\s*["']/.test(code)
+    if (!quickCheck) return null
+    const n = state.normalized!
+    const isPureRemoteBuild = n.exposes.length > 0 && n.remotes.length === 0
+    return transformModule(code, id, {
+      onRewrite: () => {
+        debugLog('transform', { stage: 'post-fallback', mode: 'build', module: redactModulePath(id, n.root) })
+        recordRewritten(id)
+      },
+      options: n,
+      rewriteShared: true,
+      allowNodeModules: isPureRemoteBuild || n.devSharedSelf,
+      sharedClosureRoots: state.sharedClosureRoots,
+    })
   }
 
   // W5/BLD-003 说明：expose 目标必填 props 的启发式扫描（scanExposeRequiredProps，见

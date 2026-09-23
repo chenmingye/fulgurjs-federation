@@ -129,6 +129,14 @@ const Panel = await loadRemote('shop/Panel', {
 
 > 以上只是最小面。**全部选项（remotes 四形态/shared 九个开关/dts/runtimePlugins…）、运行时 API、CLI、错误码见下方 [API 参考](#api-参考)。**
 
+**单一 API 入口（推荐）**：一个虚拟模块拿全联邦 API——
+
+```ts
+import { loadRemote, loadShare, preloadRemote, definePages, remoteSchema } from 'virtual:fulgurjs-api'
+```
+
+旧入口（`virtual:fulgurjs-runtime`、`@fulgurjs/federation/pages` 的 `definePages`、`virtual:fulgurjs-remote-schema`）**全部继续可用**，新旧入口取得的是同一个运行时单例（`globalThis.__FULGURJS_RUNTIME__`）；类型声明同样聚合在 `@fulgurjs/federation/client`。
+
 **没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgurjs-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
 ## CLI：init 起步模板 + doctor 部署体检
@@ -177,8 +185,10 @@ import { federation, type FederationOptions } from '@fulgurjs/federation'
 | `runtimeChunk` | `boolean \| 'single'` | — | 运行时是否拆独立 chunk |
 | `manifest` | `boolean` | `true` | prod 构建生成 `fulgurjs-manifest.json`（preloadRemote 依赖它） |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（写法见「运行时插件」） |
-| `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 获得类型。**产物写入 `src/fulgurjs/types/`（联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`）**，src 布局项目 tsconfig 零配置即生效；`{ dir }` 自定义位置；`mode: 'source'`（默认）跨工程源码直连（补全/跳转直达远程源码，VSCode 打开生成物可能显示工程外文件诊断）；`mode: 'shim'` 宽松占位（不引用源文件，IDE 全程干净，无源码级补全——见 §9.1.5） |
+| `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | dev 下拉取远程 manifest 生成类型声明——宿主写 `import X from 'remote-a/X'` 获得类型。**产物写入 `src/fulgurjs/types/`（联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`）**，src 布局项目 tsconfig 零配置即生效；`{ dir }` 自定义位置；`mode: 'source'`（默认）跨工程源码直连（补全/跳转直达远程源码，VSCode 打开生成物可能显示工程外文件诊断）；`mode: 'shim'` 宽松占位（不引用源文件，IDE 全程干净，无源码级补全——见 §9.1.5）。**注意**：两种 mode 都要读取 remote 本机源码来枚举导出名（shim 亦然），manifest 的 `fsRoot`/`src` 经过路径边界校验（相对路径、无 `..`、realpath 不得越出 fsRoot），但 `dts` 不是不可信 manifest 的安全边界——只对可信来源开启 |
 | `devSharedSelf` | `boolean` | 纯远程 `true`；有 `remotes` 的宿主 `false` | dev 下自身源码（含依赖）是否参与 shared 协商改写。**双向联邦**（既 expose 又消费 remote）的宿主/远程**必设 `true`**，否则 prod 双 vue 实例（症状：被消费页面渲染上下文错乱 / `'ce'` / renderSlot null）。2.0.1 起 build 下该路径的协商门面自动隔离进插件专属 chunk（`fulgurjs-runtime` + `fulgurjs-shared-<key>`），与用户 `manualChunks` 强制分组正交、不再产生 chunk 循环依赖（D6 修复，症状曾是 `SyntaxError: Unexpected token '<'` + `TypeError: _e is not a function`） |
+| `devCorsOrigins` | `string[] \| '*'` | `'*'`（现状兼容） | dev 跨源访问策略：插件端点（`/@fulgurjs-entry.js`、`/@fulgurjs-manifest.json`）与 `server.cors` 使用同一来源。缺省或 `'*'` 全放开（非 loopback host 时提醒 DEV-011）；数组按 Origin 反射 allowlist（未命中省略头）。用户显式配置的 `server.cors` 永远优先。开/关/自定义三态示例见下方 |
+| `devFsRoot` | `boolean` | `true`（现状兼容） | dev manifest 是否携带 `fsRoot`（remote 根目录本机绝对路径，宿主 dts 类型直连用）。`false` 不写入（本机路径不外发），宿主 dts 降级 any 桩并提示；该字段永不进入 prod manifest。非 loopback host 下默认值会提醒 DEV-012 |
 | `automaticAsyncBoundary` | — | 恒为 `true` | 接受任意值：TLA 自动异步边界，无需手工 bootstrap |
 | `dataPrefetch` | — | 恒为 `true` | 接受任意值：`preloadRemote` 始终可用 |
 | `usedExports` / `ignoreUnusedSharedExports` | — | no-op | 接受并忽略（Rollup/Rolldown 原生 tree-shaking 已覆盖） |
@@ -196,7 +206,7 @@ remotes: {
     dev: 'http://localhost:5103/remote-b',
     prod: '/remote-b',
     shareScope: 'default',
-    timeout: 15000,            // 加载超时 ms
+    timeout: 15000,            // 加载超时 ms（有限正数，配置期校验 CFG-009）
     retries: 2,                // 失败重试次数
     fallback: ['http://backup/remote-b'],  // 备用 remoteEntry，依次尝试
     breaker: { threshold: 5, resetMs: 30000 }, // 连续失败熔断
@@ -206,6 +216,26 @@ remotes: {
   'remote-c': () => fetch('/api/remote-url').then(r => r.text()),
 }
 ```
+
+#### devCorsOrigins / devFsRoot 三态示例
+
+```ts
+// ① 开（默认/现状）：全放开——跨 dev-server 协作开箱即用；非 loopback host 时提醒 DEV-011/012
+federation({ name: 'remote-a', exposes: { './Button': './src/Button.vue' } })
+
+// ② 显式全开：同 ①，但不再提醒（声明"我知情"）
+federation({ name: 'remote-a', exposes: { './Button': './src/Button.vue' }, devCorsOrigins: '*' })
+
+// ③ 自定义 allowlist：仅列出的宿主来源可跨源访问联邦端点与源码模块
+federation({
+  name: 'remote-a',
+  exposes: { './Button': './src/Button.vue' },
+  devCorsOrigins: ['http://localhost:5100', 'https://team.example.com'],
+  devFsRoot: false,   // 同时不把本机绝对路径写进 dev manifest（宿主 dts 降级 any 桩并提示）
+})
+```
+
+行为边界：`devCorsOrigins` 只作用于 dev（build 产物不受影响）；用户显式配置的 `server.cors` 永远优先于插件注入的 cors 选项；端点对未命中来源只是省略 `Access-Control-Allow-Origin` 响应头（同源请求不受任何影响）。`devFsRoot: false` 只影响 dev manifest 的 `fsRoot` 字段（该字段永不进入 prod manifest）。
 
 #### shared 的完整选项（SharedHint）
 
@@ -242,6 +272,8 @@ import { loadRemote } from 'virtual:fulgurjs-runtime'
 
 #### 函数总表
 
+> 下表全部函数与 `definePages` / `remoteSchema` 都可从**单一入口** `virtual:fulgurjs-api` 导入（推荐写法，见 §2）；旧入口全部继续可用且收敛同一运行时单例。
+
 > **TS 提示**：`virtual:fulgurjs-runtime` 的类型随包发布。dev 启动时插件自动在类型目录（默认 `src/fulgurjs/types/`，联邦产物集中一个文件夹）生成远程模块声明与运行时类型垫片——src 布局项目零配置即全量生效；手工方式则在 tsconfig `compilerOptions.types` 加 `"@fulgurjs/federation/client"`。
 
 | 函数 | 签名 | 说明 |
@@ -250,7 +282,7 @@ import { loadRemote } from 'virtual:fulgurjs-runtime'
 | `loadShare` | `(name: string, opts?) => Promise<命名空间>` | 共享模块协商（最高版本胜出/已加载优先/singleton 收敛）。opts：`{ requiredVersion?, singleton?, strictVersion?, shareKey?, shareScope?, fallback? }` |
 | `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | `remote/Expose` 只预载该 expose 的 chunk + CSS；仅传 remote 名则预载全部 exposes。`preload` 等待 CSS load/error，`prefetch` 低优先级并立即返回 |
 | `getContainer` | `(name: string) => Promise<容器>` | 取远程容器（触发加载 + init），容器协议 `{ name, init, get }` |
-| `registerRemote` / `registerRemotes` | `(config \| list) => void` | 运行时注册远程（promise remote / 动态地址）。`RemoteInput`：`{ name, entry, shareScope?, timeout?, retries?, fallback?, breaker? }` |
+| `registerRemote` / `registerRemotes` | `(config \| list) => void` | 运行时注册远程（promise remote / 动态地址）。`RemoteInput`：`{ name, entry, shareScope?, timeout?, retries?, fallback?, breaker? }`。参数校验：`timeout` 有限正数、`retries` 0..10 整数、`breaker.threshold/resetMs` 有限正数——非法值**注册当场抛错**（配置文件路径在配置期即报 CFG-009）；重复注册时 entry/timeout/retries/breaker 参数按最新配置刷新，熔断计数状态保留。`timeout` 语义：超时只代表"调用方不再等待"，浏览器不会取消已发出的动态 import——后续调用复用同一 in-flight 记录，不会重复初始化同一容器 |
 | `registerShare` | `(scope, name, version, get, opts?) => void` | 手工注册共享模块（一般由 init 模块自动完成） |
 | `initSharing` | `(scopeName?) => ShareScopeMap` | 初始化共享作用域（一般由 init 模块自动完成） |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | 注册运行时插件（见下） |
@@ -269,7 +301,11 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
-#### 运行时插件（`runtimePlugins: ['./src/fulgurjsPlugin.ts']`）
+#### 运行时插件
+
+（`runtimePlugins: ['./src/fulgurjsPlugin.ts']`）
+
+> hook 错误契约：`beforeLoadRemote` / `afterLoadRemote` 是**观测 hook**——自身抛错只告警、不改写加载结果；`resolveShare` 是**决策 hook**——显式抛错向调用方传播（绝不静默回退到另一份共享依赖）。
 
 ```ts
 import type { RuntimePlugin } from 'virtual:fulgurjs-runtime'
@@ -377,7 +413,7 @@ export default defineRepoConfig({
 | `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出各应用 `federation()` 粘贴块、NGINX no-cache 站点模板、8 条通用核对清单 |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
-### 6. 错误码总表（31 个）
+### 6. 错误码总表（35 个）
 
 | 段 | 码 | 含义 |
 |---|---|---|
@@ -389,6 +425,8 @@ export default defineRepoConfig({
 | | `CFG-006` | 孤岛配置（既不提供也不消费） |
 | | `CFG-007` | remotes 对象形式误用 name@ 前缀（整串当 URL 拼接） |
 | | `CFG-008` | shared 非法组合（eager+import:false / shareKey 重复声明） |
+| | `CFG-009` | remotes 运行参数非法（timeout/retries/breaker 非有限正数/超上限） |
+| | `CFG-010` | devCorsOrigins 形态非法（须为 "*" 或 http(s) 来源数组） |
 | DEV 开发期 | `DEV-001` | remote dev server 不可达（manifest 拉取失败） |
 | | `DEV-002` | remote dev manifest 为空或格式不识别 |
 | | `DEV-004` | 已知 UMD-only 依赖不在 optimizeDeps.include（预构建内联本地 vue 风险） |
@@ -396,6 +434,8 @@ export default defineRepoConfig({
 | | `DEV-006` | 宿主/远程插件版本不一致 |
 | | `DEV-009` | 门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启） |
 | | `DEV-010` | dev 冷启动预构建窗口提示（首轮 30~60s 瞬态，非故障） |
+| | `DEV-011` | 非 loopback host + 通配 dev CORS（暴露面扩大提醒） |
+| | `DEV-012` | 非 loopback host + dev manifest 携带 fsRoot（本机路径外发提醒） |
 | BLD 构建期 | `BLD-001` | expose 源文件解析失败 |
 | | `BLD-002` | 构建目标低于 es2022（TLA 需要） |
 | | `BLD-003` | expose 目标组件含必填 props（文档化核对项） |
@@ -636,6 +676,21 @@ const PREFETCH_REMOTES: string[] = []
 
 以下每一条都在真实企业工程（qiankun → 联邦迁移，3 万模块级）中实际踩到过：
 
+### 0. 受控诊断（DEBUG=fulgurjs:*，默认关闭）
+
+排查改写/门面/manifest 问题时开启结构化诊断（JSON 行 → stderr，不写文件）：
+
+```bash
+# 全部分类
+FULGURJS_DEBUG='fulgurjs:*' pnpm dev          # 或 DEBUG='fulgurjs:*'
+# 只开一个分类（transform / facade / manifest）
+FULGURJS_DEBUG='fulgurjs:transform' pnpm dev
+# build 同样适用
+FULGURJS_DEBUG='fulgurjs:*' pnpm build 2>fulgurjs-debug.log
+```
+
+输出示例：`[fulgurjs:debug:transform] {"stage":"pre","mode":"build","module":"src/pages/a.ts"}`、`[fulgurjs:debug:facade] {"stage":"config","facadeDynamic":true,"manualChunks":"object"}`。分类：`transform`（改写命中与阶段）、`facade`（门面形态/闭包归组）、`manifest`（expose 与 CSS 收集）。脱敏约定：模块路径 root 内显示相对路径、root 外只留文件名，不输出源码文本与 query/凭证。
+
 ### 1. 插件升级后，重启 dev server 即可（缓存自动清）
 
 vite 对 `node_modules/.vite` 预构建产物下发**一年 immutable 缓存**，插件 dist 更新后旧签名会 404。插件在 dev server 启动时**自动检测版本变化并清除缓存**——你只需要重启 dev server，无需手工 `rm -rf node_modules/.vite`。浏览器侧缓存建议 e2e/验收时换新 profile。
@@ -702,7 +757,7 @@ const Panel = await loadRemote('shop/Panel', {
 
 运行时加载失败同样给排查指引（remote dev server 未启动 / 地址配错 / CORS / NGINX 回退），并携带统一错误码：
 
-统一错误码体系（CFG/DEV/BLD/MFU 四段共 31 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表31-个)**；报错文案一律「现象 → 根因 → 修法」三段式。
+统一错误码体系（CFG/DEV/BLD/MFU/CC 五段共 35 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表35-个)**；报错文案一律「现象 → 根因 → 修法」三段式。
 
 调试出口：`window.__FULGURJS_SCOPE__`（share 协商实时结果）、`window.__FULGURJS_INFO__`（remote 状态/耗时/错误）。
 

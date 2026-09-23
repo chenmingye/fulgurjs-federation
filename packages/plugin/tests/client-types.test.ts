@@ -96,3 +96,15 @@ describe('dts 默认目录收敛到根目录点文件夹（src 零污染）', ()
     expect(resolveDtsDir(false)).toBe('')
   })
 })
+
+/** WP7：virtual:fulgurjs-api 门面类型声明（聚合 runtime 面 + pages + remoteSchema） */
+describe('WP7: virtual:fulgurjs-api 类型声明', () => {
+  it('声明存在且聚合旧入口全量导出面（export *）+ pages + remoteSchema', () => {
+    const text = readFileSync(join(__dirname, '../client.d.ts'), 'utf8')
+    expect(text).toContain("declare module 'virtual:fulgurjs-api'")
+    const block = text.split("declare module 'virtual:fulgurjs-api'")[1] ?? ''
+    expect(block).toContain("export * from 'virtual:fulgurjs-runtime'")
+    expect(block).toContain("export { definePages, validatePages } from '@fulgurjs/federation/pages'")
+    expect(block).toContain('export const remoteSchema')
+  })
+})

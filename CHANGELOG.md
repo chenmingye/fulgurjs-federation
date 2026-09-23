@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.0（2026-09-23）
+
+### 兼容性与健壮性强化（WP1~WP8，方案见 docs/兼容性与健壮性强化实施方案.md）
+
+- **新增单一 API 入口 `virtual:fulgurjs-api`**：一个虚拟模块拿全联邦 API（runtime 全部公开函数 + `definePages` / `validatePages` + `remoteSchema`）；旧入口（`virtual:fulgurjs-runtime`、`@fulgurjs/federation/pages`、`virtual:fulgurjs-remote-schema`）全部继续可用且与新旧入口收敛同一运行时单例。
+- **修复 auto-import 后置注入绕过门面化的一类缺陷**（WP1）：unplugin-auto-import 的 vite 适配器硬编码 `enforce: 'post'`，注册在 federation() 之后时其注入的 shared 导入会静态绑定本地副本（双响应性系统：ref 赋值不触发渲染）。修复 = 解析期兜底改道（已被本插件改写过的模块内后置出现的裸 shared specifier → 协商命名空间门面），与插件注册顺序无关。
+- **manifest 契约**（WP4）：`fulgurjs-manifest.json` / dev manifest 携带 `schemaVersion: 1`；Node 侧消费端（dts / remote-schema probe / doctor）统一经契约校验器取数；未知主版本拒绝消费并给出诊断（不再静默当空 manifest）；2.0.x 无 schemaVersion 形态按 v1 兼容。
+- **修复根相对 remote 地址的资产解析**（WP4）：`remotes: { x: { prod: '/xxx' } }` 目录形态 entry 下，manifest 相对资产此前解析到站点根（404）；现按 entry 所在目录解析。manifest fetch 增加 8s 超时。
+- **dts 路径边界**（WP5）：dev manifest 的 `exposes[].src` 只接受相对路径（拒绝绝对路径 / `..` / 空）；`fsRoot` 与目标 realpath 后做包含判定（symlink 逃逸拒绝）；异常 remote 只跳过自身不落半截声明；生成声明中的模块名统一合法 TS 字符串序列化。
+- **新增 `devCorsOrigins` / `devFsRoot` 选项**（WP5）：dev 跨源访问策略统一（插件端点与 server.cors 同一来源；用户显式 `server.cors` 永远优先；数组按 Origin 反射 allowlist）；`devFsRoot: false` 时 dev manifest 不携带本机路径。非 loopback host 下通配 CORS / fsRoot 暴露分别提醒（DEV-011 / DEV-012）。
+- **运行时容错**（WP6）：注册表全部无原型字典（`__proto__` / `constructor` 等键不再误读误写原型链）；`registerRemote` 参数校验当场抛错（`timeout` 有限正数 / `retries` 0..10 整数 / `breaker` 有限正数；配置期 CFG-009 先拦）；熔断 `threshold`/`resetMs` 按 remote 生效（重复注册刷新参数、保留计数状态）；重试退避封顶 4s + 随机抖动；entry 动态 import 单一 in-flight（超时≠取消，慢成功后容器 init 恰一次）；promise remote 的解析受 timeout 约束；观测 hook（`beforeLoadRemote`/`afterLoadRemote`）抛错只告警不改写加载结果、决策 hook（`resolveShare`）抛错向调用方传播；MFU-001 错误信息对 URL 脱敏（去凭证与 query）。
+- **新增 `parseSpec` 运行时导出**（WP7 顺带修复）：类型声明早已存在但 runtime bundle 未导出（导出面漂移），现补齐。
+- **受控诊断 `DEBUG=fulgurjs:*`**（WP8，默认关闭）：`FULGURJS_DEBUG` / `DEBUG` 环境变量开启分类诊断（`transform` / `facade` / `manifest`，JSON → stderr）；模块路径脱敏（root 内相对路径、root 外仅文件名），不输出源码文本与凭证；替代一切 /tmp 临时日志。
+- **错误码新增**：CFG-009（remote 运行参数非法）、CFG-010（devCorsOrigins 形态非法）、DEV-011 / DEV-012（非 loopback 暴露面提醒），总数 31 → 35（三方一致性门禁自动校验）。
+- **测试与 CI**（WP1~WP3）：新增 fixtures `remote-auto` / `host-auto`（auto-import 插件链回归）；真实构建单测覆盖双引擎（Rollup 6.4.3 / Rolldown 8.3.0）× 双注册顺序 / manualChunks 对象/函数/无/数组四形态 / 危险环检测器 / manifest 资产存在性；prod-setup.sh 隔离改造（mktemp 专属目录、8999 被占自动选空闲端口、`--stop` 只停自己启动的实例）；CI 新增 prod-e2e（runner 内 NGINX）、vite5 每周定时兼容（vite@5.1.4）、tarball consumer smoke（npm pack → 临时 consumer → exports/类型/build/dev 加载）作业。
+
+
 ## 2.0.3（2026-09-23）
 
 ### 修复（production remote CSS manifest / preload）

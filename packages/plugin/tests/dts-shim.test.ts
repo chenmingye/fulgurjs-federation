@@ -30,7 +30,7 @@ describe('buildShimModule', () => {
     const abs = path.join(tmp, 'api.ts')
     fs.writeFileSync(abs, 'export function getDictItems(code: string) { return [] }\nexport const VERSION = 1\nexport interface Foo { a: number }\n')
     const block = buildShimModule(abs, 'demo-host/api')
-    expect(block).toContain("declare module 'demo-host/api'")
+    expect(block).toContain("declare module "demo-host/api"")
     expect(block).toContain('export const getDictItems: any')
     expect(block).toContain('export const VERSION: any')
     expect(block).toContain('export const Foo: any')

@@ -65,7 +65,9 @@ describe('W2 doctor: runDoctor 故障注入（本地 http 形态）', () => {
       'access-control-allow-origin': '*',
     }, 'import"./chunk-x.js";export default 1')
     serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({
+      schemaVersion: 1,
       name: 'a',
+      entry: 'fulgurjs-remoteEntry.js',
       exposes: { './X': { file: 'chunk-expose.js' } },
       shared: [{ name: 'vue', version: '3.4.21' }],
     }))
@@ -80,7 +82,7 @@ describe('W2 doctor: runDoctor 故障注入（本地 http 形态）', () => {
   it('注入 immutable 头 → FAIL 且修法指向 no-cache（2026-09-17 用户踩坑复刻）', async () => {
     routes.clear()
     serve('/a/fulgurjs-remoteEntry.js', 200, { 'cache-control': 'public, max-age=31536000, immutable' }, 'export default 1')
-    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ name: 'a', exposes: {}, shared: [] }))
+    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ schemaVersion: 1, name: 'a', entry: 'fulgurjs-remoteEntry.js', exposes: {}, shared: [] }))
     serve('/a/index.html', 200, { 'cache-control': 'no-cache' }, '<html></html>')
     const { checks, failed } = await runDoctor({ base: base(), apps: ['a'] })
     expect(failed).toBe(true)
@@ -92,7 +94,7 @@ describe('W2 doctor: runDoctor 故障注入（本地 http 形态）', () => {
   it('注入 chunk 404 → FAIL（删一个 chunk 故障复刻）', async () => {
     routes.clear()
     serve('/a/fulgurjs-remoteEntry.js', 200, { 'cache-control': 'no-cache' }, 'import"./missing-chunk.js"')
-    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ name: 'a', exposes: {}, shared: [] }))
+    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ schemaVersion: 1, name: 'a', entry: 'fulgurjs-remoteEntry.js', exposes: {}, shared: [] }))
     serve('/a/index.html', 200, { 'cache-control': 'no-cache' }, '<html></html>')
     const { checks, failed } = await runDoctor({ base: base(), apps: ['a'] })
     expect(failed).toBe(true)
@@ -102,7 +104,7 @@ describe('W2 doctor: runDoctor 故障注入（本地 http 形态）', () => {
   it('remoteEntry 回退成 HTML（深链回退过宽）→ FAIL', async () => {
     routes.clear()
     serve('/a/fulgurjs-remoteEntry.js', 200, { 'cache-control': 'no-cache' }, '<!DOCTYPE html><html></html>')
-    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ name: 'a', exposes: {}, shared: [] }))
+    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ schemaVersion: 1, name: 'a', entry: 'fulgurjs-remoteEntry.js', exposes: {}, shared: [] }))
     serve('/a/index.html', 200, { 'cache-control': 'no-cache' }, '<html></html>')
     const { checks, failed } = await runDoctor({ base: base(), apps: ['a'] })
     expect(failed).toBe(true)
@@ -113,7 +115,7 @@ describe('W2 doctor: runDoctor 故障注入（本地 http 形态）', () => {
   it('报告格式：三段式（现象/根因/修法）+ 汇总行', async () => {
     routes.clear()
     serve('/a/fulgurjs-remoteEntry.js', 200, { 'cache-control': 'public, max-age=31536000, immutable' }, 'export default 1')
-    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ name: 'a', exposes: {}, shared: [] }))
+    serve('/a/fulgurjs-manifest.json', 200, { 'cache-control': 'no-cache' }, JSON.stringify({ schemaVersion: 1, name: 'a', entry: 'fulgurjs-remoteEntry.js', exposes: {}, shared: [] }))
     serve('/a/index.html', 200, { 'cache-control': 'no-cache' }, '<html></html>')
     const { checks } = await runDoctor({ base: base(), apps: ['a'] })
     const report = formatDoctorReport(checks)

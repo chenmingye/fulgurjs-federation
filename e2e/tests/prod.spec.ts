@@ -3,9 +3,20 @@
  * 前置：bash e2e/scripts/prod-setup.sh（构建 + NGINX 启动 + 冒烟 curl）。
  */
 import { expect, test } from '@playwright/test'
+import fs from 'node:fs'
+import path from 'node:path'
 import { shot, trackRequests } from './helpers'
 
-const HOST = 'http://localhost:8999'
+// 端口来自 prod-setup.sh 写入的 e2e/.prod-port（8999 被占用时脚本自动换端口）；无状态文件回退 8999
+function readProdPort(): number {
+  try {
+    return Number(fs.readFileSync(path.resolve(import.meta.dirname, '../.prod-port'), 'utf8').trim())
+  } catch {
+    return 8999
+  }
+}
+
+const HOST = `http://localhost:${process.env.FULGURJS_PROD_PORT || readProdPort()}`
 
 test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
   test('构建产物完备：remoteEntry 稳定文件名 / manifest / init 注入 / gzip / 长缓存头', async ({ request }) => {
@@ -25,7 +36,15 @@ test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
     const entrySrc = hostHtml.match(/<script[^>]+src="([^"]+index-[^"]+\.js)"/)?.[1]
     expect(entrySrc, 'host entry chunk referenced in html').toBeTruthy()
     const entryChunk = await (await request.get(entrySrc!)).text()
-    expect(entryChunk).toContain('initSharing')
+    // init 以"入口模块顶部前置 import"方式打进入口链——initSharing 调用可能在入口 chunk，
+    // 也可能经 minify 别名落在其直接静态依赖 chunk（chunk 图随依赖版本浮动；断言意图 =
+    // init 属于首屏静态链，而非字面量必须在某个文件）
+    const entryDeps = await Promise.all(
+      [...entryChunk.matchAll(/from"\.\/(.+?\.js)"/g)].map(async (m) =>
+        (await request.get(new URL(m[1]!, new URL(entrySrc!, HOST)).href)).text(),
+      ),
+    )
+    expect([entryChunk, ...entryDeps].join('\n')).toContain('initSharing')
   })
 
   test('B-16 prod 远程组件渲染（webpack 同款用法）', async ({ page }) => {
@@ -104,5 +123,38 @@ test.describe('prod(NGINX): 容错', () => {
     // 通过 scope 页确认初始状态正常
     await page.goto(`${HOST}/#/scope`)
     await expect(page.getByTestId('remotes-info')).toContainText('"remote-a"')
+  })
+})
+
+/**
+ * WP1：auto-import 插件链回归（prod）。auto-import 注入的 ref 必须经协商实例产生响应性，
+ * 且与远程组件内部的 ref 是同一个 Vue 实例——prod 构建是 D6-4 缺陷的原始现场
+ * （dev 正常、prod 双响应性），此用例是那条链路的浏览器级回归防线。
+ */
+test.describe('prod(NGINX): auto-import 插件链（WP1）', () => {
+  test('prod 注入的 ref 经协商实例：双计数器响应 + 同一 Vue 实例 + 样式注入', async ({ page }) => {
+    const consoleErrors: string[] = []
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text())
+    })
+    await page.goto(`${HOST}/host-auto/`)
+    await expect(page.getByTestId('host-count')).toContainText('ref-ok')
+    await page.getByTestId('host-inc').click()
+    await expect(page.getByTestId('host-count')).toContainText('host count: 1')
+
+    await page.getByTestId('load-remote-dynamic').click()
+    await expect(page.getByTestId('remote-count')).toContainText('remote count: 0')
+    await expect(page.getByTestId('remote-count')).toContainText('ref-ok')
+    await expect(page.getByTestId('vue-identity')).toHaveText('vue identity: same / same-runtime / spec:remote-auto')
+
+    await page.getByTestId('remote-inc').click()
+    await expect(page.getByTestId('remote-count')).toContainText('remote count: 1 (x2 = 2')
+
+    // scoped CSS 经 manifest 收录并注入（样式背景生效）
+    const bg = await page.getByTestId('remote-count').evaluate((el) => getComputedStyle(el).backgroundColor)
+    expect(bg).toBe('rgb(254, 240, 138)')
+
+    await shot(page, 'prod-auto-import-shared-instance')
+    expect(consoleErrors).toEqual([])
   })
 })

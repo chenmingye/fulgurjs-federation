@@ -169,6 +169,11 @@ export interface TransformContext {
     namespaceFacade: (shareKey: string) => string
     bindingFacade: (facadeId: string) => string
   }
+  /**
+   * WP1：改写生效时回调一次（index.ts 据此登记已改写模块；后续该模块内新出现的裸
+   * shared specifier = 后置插件注入，由 resolveId 期兜底改道，见 index.ts resolveId）。
+   */
+  onRewrite?: () => void
 }
 
 export interface TransformResult {
@@ -309,6 +314,7 @@ export async function transformModule(
     }
     if (!cjsEdited) return null
     // 继续走 ESM 词法分析无意义（CJS 文本），直接以纯文本改写结果返回
+    ctx.onRewrite?.()
     return { code, map: null }
   }
 
@@ -473,6 +479,7 @@ export async function transformModule(
   }
 
   if (!edited) return null
+  ctx.onRewrite?.()
 
   if (usesRuntimeHelpers) {
     const runtimeSpec = JSON.stringify(ctx.devUrls?.runtime ?? 'virtual:fulgurjs-runtime')

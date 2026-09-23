@@ -7,6 +7,7 @@
  */
 import type { NormalizedOptions } from './options'
 import { formatFulgurjsDiagnostic, isPortReachable } from './diagnostics'
+import { parseManifest, normalizeExposes, type DevFederationManifest } from './manifest'
 
 export interface RemoteSchemaEntry {
   exposes: string[]
@@ -46,8 +47,36 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
     try {
       const res = await fetch(u, { signal: AbortSignal.timeout(3000) })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const manifest = await res.json()
-      const exposes: string[] = (manifest?.exposes ?? []).map((e: { name: string }) => e.name)
+      // WP4：manifest 经契约模块校验与规范化取 exposes（坏形状不再裸读字段）
+      const parsed = parseManifest(await res.json())
+      if (parsed.unsupportedVersion) {
+        schema[remote.key] = { exposes: [], exists: false }
+        console.warn(
+          formatFulgurjsDiagnostic({
+            code: 'DEV-002',
+            symptom: `remote "${remote.key}" 的 manifest schemaVersion=${parsed.unsupportedVersion} 不受支持（本机支持 1）`,
+            cause: '宿主与远程的 @fulgurjs/federation 大版本不一致',
+            fix: '对齐宿主与远程的 @fulgurjs/federation 版本后重启 dev server',
+            details: { remote: remote.key, url: u.href },
+          }),
+        )
+        continue
+      }
+      if (parsed.issues.length > 0 || !parsed.manifest) {
+        schema[remote.key] = { exposes: [], exists: false }
+        console.warn(
+          formatFulgurjsDiagnostic({
+            code: 'DEV-002',
+            symptom: `remote "${remote.key}" 的 dev manifest 契约校验失败（${u.href}）`,
+            cause: parsed.issues.map((x) => `${x.field}: ${x.message}`).join('；'),
+            fix: '核对 remote 的 federation 配置 exposes，并确认 @fulgurjs/federation 版本与宿主一致',
+            details: { remote: remote.key, url: u.href, issues: parsed.issues.slice(0, 5) },
+          }),
+        )
+        continue
+      }
+      const manifest = parsed.manifest as DevFederationManifest
+      const exposes: string[] = [...normalizeExposes(manifest).keys()]
       schema[remote.key] = { exposes, exists: true }
 
       // DEV-002：manifest 可达但 exposes 为空（remote 侧插件/配置问题）
@@ -58,13 +87,13 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
             symptom: `remote "${remote.key}" 的 dev manifest 可达但 exposes 为空（${u.href}）`,
             cause: 'remote 侧 federation({ exposes }) 为空，或其插件版本过旧导致 manifest 缺字段',
             fix: '核对 remote 的 federation 配置 exposes，并确认 @fulgurjs/federation 版本与宿主一致',
-            details: { remote: remote.key, url: u.href, pluginVersion: manifest?.buildInfo?.version },
+            details: { remote: remote.key, url: u.href, pluginVersion: manifest.version },
           }),
         )
       }
 
-      // DEV-006：插件版本一致性（manifest.buildInfo.version 存在时才可比对）
-      const remoteVersion = manifest?.buildInfo?.version
+      // DEV-006：插件版本一致性（dev manifest.version 存在时才可比对）
+      const remoteVersion = manifest.version
       if (remoteVersion && remoteVersion !== options.pluginVersion) {
         console.warn(
           formatFulgurjsDiagnostic({

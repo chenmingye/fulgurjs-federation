@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -62,13 +62,13 @@
     "CHANGELOG.md",
     "DESIGN.md",
     "examples",
-    "docs/\u8fc1\u79fb\u6307\u5357.md",
-    "docs/webpack-mf-\u5bf9\u7167\u4e0e\u7f3a\u53e3.md",
-    "docs/\u6c99\u7bb1\u8fb9\u754c\u5ba1\u8ba1.md",
-    "docs/P5-vite7-8\u517c\u5bb9\u77e9\u9635.md"
+    "docs/迁移指南.md",
+    "docs/webpack-mf-对照与缺口.md",
+    "docs/沙箱边界审计.md",
+    "docs/P5-vite7-8兼容矩阵.md"
   ],
   "scripts": {
-    "build": "cp ../../README.md README.md && mkdir -p docs && cp ../../docs/\u8fc1\u79fb\u6307\u5357.md ../../docs/webpack-mf-\u5bf9\u7167\u4e0e\u7f3a\u53e3.md ../../docs/\u6c99\u7bb1\u8fb9\u754c\u5ba1\u8ba1.md ../../docs/P5-vite7-8\u517c\u5bb9\u77e9\u9635.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && rm -rf examples && cp -r ../../examples examples && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/config.ts src/vue.ts src/context.ts --format esm,cjs --dts --external vite --target node18 --clean && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/check-gzip.mjs && node scripts/check-manual-codes.mjs",
+    "build": "cp ../../README.md README.md && mkdir -p docs && cp ../../docs/迁移指南.md ../../docs/webpack-mf-对照与缺口.md ../../docs/沙箱边界审计.md ../../docs/P5-vite7-8兼容矩阵.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && rm -rf examples && cp -r ../../examples examples && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/config.ts src/vue.ts src/context.ts --format esm,cjs --dts --external vite --target node18 --clean && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/check-gzip.mjs && node scripts/check-manual-codes.mjs",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

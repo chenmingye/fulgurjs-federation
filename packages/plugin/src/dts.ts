@@ -7,14 +7,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ViteDevServer } from 'vite'
 import type { NormalizedOptions } from './options'
+import { parseManifest, type DevFederationManifest } from './manifest'
 
-interface DevManifest {
-  name: string
-  fsRoot?: string
-  exposes?: Array<{ name: string; src: string }>
-}
-
-async function fetchManifest(devEntry: string, attempts = 30, delayMs = 2000): Promise<DevManifest | null> {
+async function fetchManifest(devEntry: string, attempts = 30, delayMs = 2000): Promise<DevFederationManifest | null> {
   let manifestUrl: URL
   try {
     const u = new URL(devEntry)
@@ -27,7 +22,28 @@ async function fetchManifest(devEntry: string, attempts = 30, delayMs = 2000): P
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(manifestUrl, { signal: AbortSignal.timeout(3000) })
-      if (res.ok) return (await res.json()) as DevManifest
+      if (res.ok) {
+        // WP4：manifest 按契约模块校验（缺 schemaVersion 按 v1 兼容；坏形状/未知版本拒绝消费）
+        const parsed = parseManifest(await res.json())
+        if (parsed.unsupportedVersion) {
+          console.warn(
+            `[fulgurjs] dts: remote manifest schemaVersion=${parsed.unsupportedVersion} 不被当前插件支持（本机支持 1）；` +
+              `类型映射跳过。请对齐宿主与远程的 @fulgurjs/federation 版本。`,
+          )
+          return null
+        }
+        if (parsed.issues.length > 0) {
+          console.warn(
+            `[fulgurjs] dts: remote manifest 契约校验失败（${manifestUrl.href}）：` +
+              parsed.issues.map((x) => `${x.field}: ${x.message}`).join('；') +
+              `。类型映射跳过。`,
+          )
+          return null
+        }
+        // fsRoot 是 dev-only 可选字段：缺失（devFsRoot:false 或旧版本）由 generateDevTypes
+        // 给出明确的降级提示，这里不做契约拒绝
+        return parsed.manifest as DevFederationManifest
+      }
     } catch {
       // remote 可能尚未启动，静默重试
     }
@@ -128,7 +144,8 @@ export function resolveDtsMode(dtsOpt: boolean | { dir?: string; mode?: 'source'
  * 生成宽松占位——IDE 不会跟进跨工程源文件，红波浪线根治；代价是无源码级补全/跳转。
  */
 export function buildShimModule(abs: string, moduleSpecifier: string): string {
-  const lines: string[] = [`declare module '${moduleSpecifier}' {`]
+  // WP5：模块名统一合法 TS 字符串序列化（远程提供的 name 不直接拼进声明代码）
+  const lines: string[] = [`declare module ${JSON.stringify(moduleSpecifier)} {`]
   if (abs.endsWith('.vue')) {
     lines.push(`  import type { DefineComponent } from 'vue'`)
     lines.push(`  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, any>`)
@@ -168,9 +185,20 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       continue
     }
     const remoteRoot = manifest.fsRoot
-    if (!remoteRoot || !fs.existsSync(remoteRoot)) {
+    if (!remoteRoot) {
       console.warn(
-        `[fulgurjs] dts: remote "${remote.key}" is not on this machine; type mapping skipped (module types fall back to any).`,
+        `[fulgurjs] dts: remote "${remote.key}" 的 manifest 未携带 fsRoot（devFsRoot: false 或远程插件版本过旧）；` +
+          `类型映射降级为 any 桩。同机联调需远程 devFsRoot: true（默认）并重启其 dev server。`,
+      )
+      continue
+    }
+    // WP5 路径边界：fsRoot 经 realpath 解析后再做包含判定——symlink 指向 root 外同样越界
+    let realRoot: string
+    try {
+      realRoot = fs.realpathSync(remoteRoot)
+    } catch {
+      console.warn(
+        `[fulgurjs] dts: remote "${remote.key}" is not on this machine (fsRoot unreachable); type mapping skipped (module types fall back to any).`,
       )
       continue
     }
@@ -179,40 +207,77 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       `// 自动生成：fulgurjs-federation dev 类型直连（remote: ${remote.name}，mode: ${mode}）`,
       `// 重新生成：重启 host dev server`,
     ]
+    let accepted = 0
     for (const expose of manifest.exposes ?? []) {
-      const abs = path.join(remoteRoot, expose.src.replace(/^\//, ''))
-      if (!fs.existsSync(abs)) continue
-      const rel = path.relative(outDir, abs).split(path.sep).join('/')
-      const importPath = abs.endsWith('.vue') ? sourceImportPath(rel) : stripTsExtension(sourceImportPath(rel))
-      const moduleSpecifier = `${remote.key}/${expose.name.replace(/^\.\//, '')}` // 'remote-a' + './Button' → 'remote-a/Button'
-      lines.push('')
-      if (mode === 'shim') {
-        lines.push(buildShimModule(abs, moduleSpecifier))
+      const skipped = (reason: string) =>
+        console.warn(`[fulgurjs] dts: remote "${remote.key}" expose ${JSON.stringify(expose.name)} 跳过：${reason}`)
+      // WP5：expose src 只接受相对路径——绝对路径 / 含 .. / 空路径一律拒绝（不可信 manifest 防线）
+      const src = expose.src
+      if (!src || typeof src !== 'string') {
+        skipped('src 缺失')
         continue
       }
-      if (abs.endsWith('.vue')) {
-        lines.push(`declare module '${moduleSpecifier}' {`)
+      if (src.startsWith('/') || /^[a-z]+:/i.test(src)) {
+        skipped(`src 必须是相对路径，got ${JSON.stringify(src)}`)
+        continue
+      }
+      if (src.split('/').includes('..')) {
+        skipped(`src 不得包含 ..，got ${JSON.stringify(src)}`)
+        continue
+      }
+      const abs = path.join(realRoot, src)
+      // 越界判定在读取源码之前完成：realpath 解析 symlink 后 target 必须仍位于 realRoot 内
+      let realAbs: string
+      try {
+        realAbs = fs.realpathSync(abs)
+      } catch {
+        skipped(`源文件不存在（${src}）`)
+        continue
+      }
+      if (path.relative(realRoot, realAbs).startsWith('..')) {
+        skipped(`解析结果越出 fsRoot（${src} → ${realAbs}）`)
+        continue
+      }
+      if (!fs.existsSync(realAbs)) continue
+      const rel = path.relative(outDir, realAbs).split(path.sep).join('/')
+      const importPath = realAbs.endsWith('.vue') ? sourceImportPath(rel) : stripTsExtension(sourceImportPath(rel))
+      // WP5：模块名统一合法 TS 字符串序列化（远程提供的 name 不直接拼进声明代码）
+      const moduleSpecifier = `${remote.key}/${expose.name.replace(/^\.\//, '')}` // 'remote-a' + './Button' → 'remote-a/Button'
+      const moduleLiteral = JSON.stringify(moduleSpecifier)
+      const importLiteral = JSON.stringify(importPath)
+      lines.push('')
+      if (mode === 'shim') {
+        lines.push(buildShimModule(realAbs, moduleSpecifier))
+        accepted++
+        continue
+      }
+      if (realAbs.endsWith('.vue')) {
+        lines.push(`declare module ${moduleLiteral} {`)
         lines.push(`  import type { DefineComponent } from 'vue'`)
         lines.push(`  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>`)
         lines.push(`  export default component`)
-        lines.push(`  export * from '${importPath}'`)
+        lines.push(`  export * from ${importLiteral}`)
         lines.push(`}`)
       } else {
-        lines.push(`declare module '${moduleSpecifier}' {`)
-        const names = extractTsExportNames(fs.readFileSync(abs, 'utf8'))
+        lines.push(`declare module ${moduleLiteral} {`)
+        const names = extractTsExportNames(fs.readFileSync(realAbs, 'utf8'))
         if (names.length > 0) {
-          lines.push(`  export { ${names.join(', ')} } from '${importPath}'`)
+          lines.push(`  export { ${names.join(', ')} } from ${importLiteral}`)
         } else {
           // 无具名导出可枚举：退回 export *（副作用导入至少可用）
-          lines.push(`  export * from '${importPath}'`)
+          lines.push(`  export * from ${importLiteral}`)
         }
-        if (sourceHasDefaultExport(abs)) lines.push(`  export { default } from '${importPath}'`)
+        if (sourceHasDefaultExport(realAbs)) lines.push(`  export { default } from ${importLiteral}`)
         lines.push(`}`)
       }
+      accepted++
     }
-    fs.writeFileSync(path.join(outDir, `${remote.key}.d.ts`), `${lines.join('\n')}\n`)
+    // WP5：异常 remote 只跳过自身（continue 已处理）；此处仅在有产出时落盘，杜绝半截声明
+    if (accepted > 0) {
+      fs.writeFileSync(path.join(outDir, `${remote.key}.d.ts`), `${lines.join('\n')}\n`)
+    }
     console.log(
-      `[fulgurjs] dts: generated ${dir}/${remote.key}.d.ts (${manifest.exposes?.length ?? 0} exposes, mode=${mode}). ` +
+      `[fulgurjs] dts: generated ${dir}/${remote.key}.d.ts (${accepted}/${manifest.exposes?.length ?? 0} exposes, mode=${mode}). ` +
         `确保 tsconfig include 包含 "${dir}" 以获得类型补全。`,
     )
   }

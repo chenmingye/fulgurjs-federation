@@ -8,11 +8,12 @@ export default defineConfig({
     federation({
       name: 'host-vue',
       remotes: {
-        // dev/prod 显式拆分：dev 走各自 dev server，prod 走 NGINX(8999) 子路径
-        'remote-a': { dev: 'http://localhost:5101', prod: 'http://localhost:8999/remote-a' },
-        'remote-b': { dev: 'http://localhost:5102', prod: 'http://localhost:8999/remote-b' },
+        // dev/prod 显式拆分：dev 走各自 dev server，prod 走同源 NGINX 子路径（根相对地址，
+        // 与 prod-setup 的动态端口解耦——绝对地址会把页面钉死在单一端口）
+        'remote-a': { dev: 'http://localhost:5101', prod: '/remote-a' },
+        'remote-b': { dev: 'http://localhost:5102', prod: '/remote-b' },
         // webpack 语法 + 键重命名：导入前缀 shop/，容器自报名 remote-a
-        shop: { external: 'remote-a@http://localhost:5101', prod: 'http://localhost:8999/remote-a' },
+        shop: { external: 'remote-a@http://localhost:5101', prod: '/remote-a' },
         'promise-remote': () => Promise.resolve({ name: 'promise-remote', init: async () => {}, get: async () => ({}) }), // 运行时注册后生效（见 PromiseRemote.vue）
         // promise-based remote 无法静态序列化（对齐 webpack 'promise new Promise' 的运行时语义），
         // 在 /promise-remote 页面通过 registerRemote 运行时注册后按常规语法消费
