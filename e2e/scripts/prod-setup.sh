@@ -56,13 +56,13 @@ build_fix "$FIX/host-auto" '/host-auto/'
 TMP_PROD="$(mktemp -d "${TMPDIR:-/tmp}/fulgurjs-e2e-prod.XXXXXX")"
 PROD="$TMP_PROD/prod-dist"
 mkdir -p "$PROD"
-cp -R "$FIX/host-vue/dist/" "$PROD/"
-for app in remote-a remote-b remote-auto; do
+# 跨平台内容拷贝：BSD cp（macOS）`cp -R src/ dest` 拷内容，GNU cp（CI）忽略尾斜杠拷目录本身——
+# 统一为子 shell 内 `cp -R .`（两端语义一致），否则 CI 上产物会多套一层 dist/
+(cd "$FIX/host-vue/dist" && cp -R . "$PROD/")
+for app in remote-a remote-b remote-auto host-auto; do
   mkdir -p "$PROD/$app"
-  cp -R "$FIX/$app/dist/" "$PROD/$app/"
+  (cd "$FIX/$app/dist" && cp -R . "$PROD/$app/")
 done
-mkdir -p "$PROD/host-auto"
-cp -R "$FIX/host-auto/dist/" "$PROD/host-auto/"
 
 echo "== 产物清单（remoteEntry / manifest）=="
 ls "$PROD/remote-auto/" | grep -E "fulgurjs" || true

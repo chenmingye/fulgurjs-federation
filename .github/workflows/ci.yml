@@ -86,8 +86,10 @@ jobs:
           # 600s for the teardown"，日志尾部还列出 sh/node/esbuild 孤儿）。输出落文件避免占住步骤 stdout。
           pnpm --dir fixtures/remote-a exec vite --port 5101 --strictPort >/tmp/remote-a.log 2>&1 &
           pnpm --dir fixtures/remote-b exec vite --port 5102 --strictPort >/tmp/remote-b.log 2>&1 &
+          pnpm --dir fixtures/remote-auto exec vite --port 5111 --strictPort >/tmp/remote-auto.log 2>&1 &
+          pnpm --dir fixtures/host-auto exec vite --port 5110 --strictPort >/tmp/host-auto.log 2>&1 &
           pnpm --dir fixtures/host-vue exec vite --port 5100 --strictPort >/tmp/host-vue.log 2>&1 &
-          for u in http://localhost:5101/@fulgurjs-manifest.json http://localhost:5102/@fulgurjs-manifest.json http://localhost:5100; do
+          for u in http://localhost:5101/@fulgurjs-manifest.json http://localhost:5102/@fulgurjs-manifest.json http://localhost:5111/@fulgurjs-manifest.json http://localhost:5110 http://localhost:5100; do
             for i in $(seq 1 60); do curl -sf --max-time 2 "$u" >/dev/null && break; sleep 1; done
             curl -sf --max-time 2 "$u" >/dev/null || { echo "dev server 未就绪：$u"; tail -30 /tmp/*.log; exit 1; }
           done
@@ -95,7 +97,7 @@ jobs:
           pnpm --dir e2e exec playwright test --project=dev --project=fault --global-timeout=600000
           code=$?
           pkill -f 'vite --port 510' || true   # 收尾（失败路径也要执行，避免留下占端口的孤儿）
-          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -40 /tmp/remote-a.log /tmp/remote-b.log /tmp/host-vue.log
+          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -n 40 /tmp/remote-a.log /tmp/remote-b.log /tmp/remote-auto.log /tmp/host-auto.log /tmp/host-vue.log
           exit $code
 
 
@@ -141,7 +143,7 @@ jobs:
           pnpm --dir e2e exec playwright test --project=dev --project=fault --global-timeout=600000
           code=$?
           pkill -f 'vite --port 51' || true
-          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -40 /tmp/remote-a.log /tmp/remote-b.log /tmp/remote-auto.log /tmp/host-auto.log /tmp/host-vue.log
+          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -n 40 /tmp/remote-a.log /tmp/remote-b.log /tmp/remote-auto.log /tmp/host-auto.log /tmp/host-vue.log
           exit $code
 
   # WP3：prod e2e（构建全部 fixtures + 隔离 NGINX，prod-setup.sh 全程 mktemp/动态端口/--stop 自清理）
