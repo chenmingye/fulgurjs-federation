@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.3（2026-09-23）
+
+### 修复（production remote CSS manifest / preload）
+
+- **修复 expose manifest 漏报 CSS**：Vite 可将 expose 导入的全局 CSS 归属到其静态依赖 chunk；此前插件只读取 expose facade 自身的 `viteMetadata.importedCss`，导致样式不进入 `fulgurjs-manifest.json`。现在在 `generateBundle` post 阶段递归收集 expose 静态依赖图中的 CSS，再写入对应 expose 条目。
+- **修复根相对 remote 地址**：配置 `prod: '/lowcode'` 时也能生成 `/lowcode/fulgurjs-manifest.json`；保留绝对地址与协议相对地址的 origin/path 语义。
+- **运行时按 expose 加载样式**：`loadRemote('remote/Expose')` 在 manifest 可用时预载该 expose 的 JS chunk 与 CSS，并等待 stylesheet load/error 后再返回模块；仅传 remote 名时保留预载全部 exposes 的行为。CSS 失败报告 `MFU-007`，不阻断 JS 模块加载。
+- **补齐 build 后置转换**：build 阶段允许处理 pre 阶段标记过、但随后由 auto-import 等插件注入新 import 的模块；依赖 `transformModule` 幂等，serve 路径维持原有重复处理守卫。
+- **回归验证**：覆盖静态依赖 chunk 持有 CSS、根相对 manifest URL、请求 expose 的 CSS 预载与等待行为；8662 实际运行态认证弹窗验收 computed `z-index: 5000`。
+
 ## 2.0.2（2026-09-22）
 
 ### 修复（D6：双向宿主 devSharedSelf 开启后 prod 构建产物 chunk 循环崩溃）

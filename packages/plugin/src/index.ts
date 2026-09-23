@@ -363,7 +363,7 @@ export function federation(options: FederationOptions): Plugin[] {
       // 高频坑提示：import 'xxx/yyy' 但 xxx 不是已配置的 remote/shared——十有八九是 remotes
       // 键名拼错或漏配。只警告一次/前缀，不打断构建（也可能只是普通 npm 包）。
       const n = state.normalized
-      if (n && !bareClean.startsWith('\0') && !bareClean.startsWith('.') && !bareClean.startsWith('/') && !bareClean.startsWith('virtual:')) {
+      if (n && !bare.startsWith('\0') && !bareClean.startsWith('.') && !bareClean.startsWith('/') && !bareClean.startsWith('virtual:')) {
         const slash = bareClean.indexOf('/')
         if (slash > 0) {
           const prefix = bareClean.slice(0, slash)
@@ -644,35 +644,53 @@ export function federation(options: FederationOptions): Plugin[] {
       }
     },
 
-    async generateBundle(_opts, bundle) {
-      const n = state.normalized
-      if (state.command !== 'build' || !n || n.exposes.length === 0 || !n.manifest) return
+    generateBundle: {
+      order: 'post',
+      handler(_opts, bundle) {
+        const n = state.normalized
+        if (state.command !== 'build' || !n || n.exposes.length === 0 || !n.manifest) return
 
-      // 建立 expose 源文件 → 产物 chunk 的映射（facadeModuleId 匹配）
-      const facadeToChunk: Record<string, { file: string; css: string[] }> = {}
-      for (const [fileName, chunk] of Object.entries(bundle)) {
-        if (chunk.type !== 'chunk') continue
-        const facade = chunk.facadeModuleId?.split('?')[0]
-        if (facade) {
-          const viteMeta = (chunk as unknown as { viteMetadata?: { importedCss?: Set<string> } }).viteMetadata
-          facadeToChunk[facade] = {
-            file: fileName,
-            css: viteMeta ? [...(viteMeta.importedCss ?? [])] : [],
+        // Vite 在 post 阶段补齐 importedCss；样式也可能归属静态依赖 chunk，而非 expose facade。
+        const collectStaticCss = (entryFile: string): string[] => {
+          const visited = new Set<string>()
+          const cssFiles = new Set<string>()
+          const visit = (fileName: string) => {
+            if (visited.has(fileName)) return
+            visited.add(fileName)
+            const chunk = bundle[fileName]
+            if (!chunk || chunk.type !== 'chunk') return
+            const viteMeta = (chunk as unknown as { viteMetadata?: { importedCss?: Set<string> } }).viteMetadata
+            for (const css of viteMeta?.importedCss ?? []) cssFiles.add(css)
+            for (const importedFile of chunk.imports) visit(importedFile)
+          }
+          visit(entryFile)
+          return [...cssFiles]
+        }
+
+        const facadeToChunk: Record<string, { file: string; css: string[] }> = {}
+        for (const [fileName, chunk] of Object.entries(bundle)) {
+          if (chunk.type !== 'chunk') continue
+          const facade = chunk.facadeModuleId?.split('?')[0]
+          if (facade) {
+            facadeToChunk[facade] = {
+              file: fileName,
+              css: collectStaticCss(fileName),
+            }
           }
         }
-      }
-      for (const e of n.exposes) {
-        const abs = state.exposeAbsPaths[e.import]
-        const hit = abs ? facadeToChunk[abs] : undefined
-        if (hit) state.exposeFiles[e.name] = hit
-      }
-      const entryChunkName = Object.keys(bundle).find((k) => bundle[k].type === 'chunk' && k === n.filename)
-      const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
-      this.emitFile({
-        type: 'asset',
-        fileName: 'fulgurjs-manifest.json',
-        source: JSON.stringify(manifest, null, 2),
-      })
+        for (const e of n.exposes) {
+          const abs = state.exposeAbsPaths[e.import]
+          const hit = abs ? facadeToChunk[abs] : undefined
+          if (hit) state.exposeFiles[e.name] = hit
+        }
+        const entryChunkName = Object.keys(bundle).find((k) => bundle[k].type === 'chunk' && k === n.filename)
+        const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
+        this.emitFile({
+          type: 'asset',
+          fileName: 'fulgurjs-manifest.json',
+          source: JSON.stringify(manifest, null, 2),
+        })
+      },
     },
 
     configureServer(server: ViteDevServer): any {
@@ -787,7 +805,12 @@ export function federation(options: FederationOptions): Plugin[] {
       // 防双重生成。按插件生成物特征精确判定，不能按「含 virtual:fulgurjs-runtime 字样」
       // 一刀切——用户源码本可合法直接导入该虚拟模块（README §2 标准用法），同文件再写
       // 远程动态导入属正常混用，一刀切会让远程导入漏改写（vite:import-analysis 500）。
-      if (isPluginProcessedModule(code)) return null
+      // D6（2026-09-23）：build 下此守卫撤到 D6 兜底之后仅对 serve 生效——auto-import 类
+      // 后置插件会在 pre 之后向「pre 已处理过」的文件（尤其 .vue script 子请求）注入
+      // shared 导入，全量跳过会让这些注入绕过门面化（双响应性系统，lowcode 实测：
+      // 产物 201 个 chunk 直接引用本地 vue 碎片）。transformModule 幂等（已门面化的导入
+      // 不再匹配、helper 不重复 prepend），build 下重复跑安全；serve 语义不同保持原守卫。
+      if (state.command === 'serve' && isPluginProcessedModule(code)) return null
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：.vue 主请求 + D6 兜底（见下）
       if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里
       const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
@@ -818,6 +841,8 @@ export function federation(options: FederationOptions): Plugin[] {
           sharedClosureRoots: state.sharedClosureRoots,
         })
       }
+      // build 的 .vue 主请求同样补跑（auto-import 可能已向 script 注入 shared 导入；
+      // 幂等，见上）——此前该路径由 isPluginProcessedModule 整体拦截
 
       // dev 改写范围 = devSharedSelf（默认：纯 remote 为 true，有 remotes 的宿主为 false，
       // 双向联邦的宿主可显式开启）。宿主自身 import 即自身 provide，其全局状态
@@ -839,13 +864,14 @@ export function federation(options: FederationOptions): Plugin[] {
         if (!cleanPath.startsWith('/')) return null
         return state.resolvedSharedPaths.get(cleanPath) ?? null
       }
-      return transformModule(code, id, {
+      const __r = await transformModule(code, id, {
         options: state.normalized!,
         remapSpecifier,
         rewriteShared,
         allowNodeModules: state.command === 'build' ? isPureRemoteBuild || state.normalized!.devSharedSelf : undefined,
         sharedClosureRoots: state.sharedClosureRoots,
       })
+      return __r
     },
   }
 

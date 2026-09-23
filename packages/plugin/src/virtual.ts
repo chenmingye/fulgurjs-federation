@@ -244,14 +244,20 @@ function manifestUrlFor(r: NormalizedRemote, command: 'serve' | 'build'): string
   const entry = command === 'serve' ? r.devEntry : r.prodEntry
   if (!entry) return null
   try {
-    const u = new URL(entry)
+    // Production remotes commonly use root-relative paths (for example `/lowcode`).
+    // Resolve those against a dummy origin while preserving their path form in generated code.
+    const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(entry)
+    const isProtocolRelative = entry.startsWith('//')
+    const u = new URL(entry, hasScheme ? undefined : 'http://fulgurjs.invalid')
     // dev 容器入口 @fulgurjs-entry.js → @fulgurjs-manifest.json；prod remoteEntry 同目录 manifest
     if (u.pathname.includes('@fulgurjs-entry.js')) {
       u.pathname = u.pathname.replace('@fulgurjs-entry.js', '@fulgurjs-manifest.json')
     } else {
       u.pathname = u.pathname.replace(/[^/]*$/, '') + 'fulgurjs-manifest.json'
     }
-    return u.href
+    if (hasScheme) return u.href
+    if (isProtocolRelative) return `//${u.host}${u.pathname}${u.search}${u.hash}`
+    return `${u.pathname}${u.search}${u.hash}`
   } catch {
     return null
   }

@@ -97,6 +97,8 @@ function createRuntime() {
   const remotes = new Map<string, RemoteInternal>()
   const plugins: RuntimePlugin[] = []
   const loadedModules = new Map<string, Promise<any>>()
+  const remoteManifests = new Map<string, Promise<any | undefined>>()
+  const stylesheetLoads = new WeakMap<HTMLLinkElement, Promise<void>>()
   const containerInitScopes = new WeakMap<object, string>()
 
   const hooks: RuntimeHooks = {}
@@ -464,7 +466,8 @@ function createRuntime() {
     }
     let container: any
     try {
-      container = await acquireContainer(remote, { retries: opts?.retries })
+      const stylesReady = module && remote.manifestUrl ? preloadRemote(spec) : Promise.resolve()
+      ;[container] = await Promise.all([acquireContainer(remote, { retries: opts?.retries }), stylesReady])
     } catch (err) {
       if (opts?.fallbackModule) {
         console.error(`[fulgurjs] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
@@ -527,15 +530,48 @@ function createRuntime() {
     spec: string,
     opts: { mode?: 'preload' | 'prefetch' } = {},
   ): Promise<void> {
-    const { remote: name } = parseSpec(spec)
+    const { remote: name, module } = parseSpec(spec)
     const remote = remotes.get(name)
     if (!remote) {
       throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
     }
     const mode = opts.mode ?? 'preload'
-    const inject = (href: string, as: 'modulepreload' | 'style') => {
-      if (typeof document === 'undefined') return
-      if (document.querySelector(`link[href="${href}"]`)) return
+    const waitForStylesheet = (link: HTMLLinkElement, href: string): Promise<void> => {
+      if (link.sheet) return Promise.resolve()
+      const pending = stylesheetLoads.get(link)
+      if (pending) return pending
+      const loaded = new Promise<void>((resolve) => {
+        const finish = () => {
+          link.removeEventListener('load', finish)
+          link.removeEventListener('error', failed)
+          resolve()
+        }
+        const failed = () => {
+          emitError({
+            remote: name,
+            error: new FgError(ErrorCodes.PRELOAD_FAILED, `failed to load remote stylesheet ${href}`, {
+              remote: name,
+            }),
+          })
+          finish()
+        }
+        link.addEventListener('load', finish, { once: true })
+        link.addEventListener('error', failed, { once: true })
+        if (link.sheet) finish()
+      })
+      stylesheetLoads.set(link, loaded)
+      return loaded
+    }
+    const inject = (href: string, as: 'modulepreload' | 'style'): Promise<void> => {
+      if (typeof document === 'undefined') return Promise.resolve()
+      const existing = document.querySelector(`link[href="${href}"]`) as HTMLLinkElement | null
+      if (existing) {
+        // Only wait on stylesheets whose load event this runtime tracks; an unrelated existing
+        // link may have completed before listeners could be attached.
+        return as === 'style' && mode === 'preload'
+          ? (stylesheetLoads.get(existing) ?? Promise.resolve())
+          : Promise.resolve()
+      }
       const link = document.createElement('link')
       link.rel = as === 'style' ? 'stylesheet' : 'modulepreload'
       link.href = href
@@ -543,24 +579,64 @@ function createRuntime() {
         // prefetch 语义：低优先级，等浏览器空闲
         ;(link as any).fetchPriority = 'low'
       }
+      const loaded = as === 'style' ? waitForStylesheet(link, href) : Promise.resolve()
       document.head.appendChild(link)
+      return as === 'style' && mode === 'preload' ? loaded : Promise.resolve()
     }
+
+    const resolveAssetUrl = (asset: string) => {
+      const pageUrl = typeof document !== 'undefined' ? document.baseURI : undefined
+      const base = new URL(remote.entry, pageUrl || 'http://fulgurjs.invalid/')
+      return new URL(asset, base).href
+    }
+
     try {
       if (remote.manifestUrl) {
-        const res = await fetch(remote.manifestUrl, { cache: 'no-cache' })
-        if (res.ok) {
-          const manifest = await res.json()
-          inject(remote.entry, 'modulepreload')
-          const exposes = manifest.exposes ?? {}
-          for (const key of Object.keys(exposes)) {
-            const item = exposes[key]
-            if (item?.file) inject(new URL(item.file, remote.entry).href, 'modulepreload')
-            for (const css of item?.css ?? []) inject(new URL(css, remote.entry).href, 'style')
+        let manifestPromise = remoteManifests.get(remote.manifestUrl)
+        if (!manifestPromise) {
+          manifestPromise = fetch(remote.manifestUrl, { cache: 'no-cache' }).then((res) =>
+            res.ok ? res.json() : undefined,
+          )
+          remoteManifests.set(remote.manifestUrl, manifestPromise)
+          manifestPromise.then(
+            (manifest) => {
+              if (!manifest) remoteManifests.delete(remote.manifestUrl!)
+            },
+            () => remoteManifests.delete(remote.manifestUrl!),
+          )
+        }
+        const manifest = await manifestPromise
+        if (manifest) {
+          await inject(remote.entry, 'modulepreload')
+          const exposes = manifest.exposes
+          const entries: Array<[string, any]> = Array.isArray(exposes)
+            ? exposes
+                .filter((item: any) => item && typeof item === 'object')
+                .map((item: any) => [String(item.name ?? ''), item])
+            : exposes && typeof exposes === 'object'
+              ? Object.entries(exposes)
+              : []
+          const selected = module
+            ? entries.filter(([key, item]) => normalizeModuleName(String(item?.name ?? key)) === module)
+            : entries
+          const cssLoads: Promise<void>[] = []
+          for (const [, item] of selected) {
+            if (typeof item?.file === 'string') {
+              await inject(resolveAssetUrl(item.file), 'modulepreload')
+            }
+            if (Array.isArray(item?.css)) {
+              for (const css of item.css) {
+                if (typeof css !== 'string') continue
+                const loading = inject(resolveAssetUrl(css), 'style')
+                if (mode === 'preload') cssLoads.push(loading)
+              }
+            }
           }
+          await Promise.all(cssLoads)
           return
         }
       }
-      inject(remote.entry, 'modulepreload')
+      await inject(remote.entry, 'modulepreload')
     } catch (err) {
       // 预加载失败不阻断业务，仅上报
       emitError({

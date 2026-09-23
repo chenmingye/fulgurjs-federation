@@ -120,8 +120,12 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
-> **在任何文件都可以直接这样导入**——包括 exposes 目标文件（远程页面）。远程页面里的该导入会被
+> **普通源码文件都可以直接这样导入**——包括 exposes 目标文件（远程页面）。远程页面里的该导入会被
 > 插件自动改写为惰性单例委托：求值期零副作用、调用期转发页面级运行时单例，无需关心宿主/远程的区别。
+
+> **构建入口文件是边界**：Vite 的 HTML module entry 在 build 时由插件优先内联 init 并直接返回，入口文件自身的 remote import 不会进入改写管线。把 `import('remote-a/Page')` 放在入口导入的普通模块中；不要在 `main.ts` / `main.js` 里直接写 remote import。该边界是有意保留的，不代表入口文件中的语法也会被改写。
+
+`loadRemote('remote-a/Page')` 在 remote 配置提供 manifest 时，会先按 expose 预载对应 CSS，再解析返回模块；CSS 请求失败会报告 `MFU-007`，但不会阻断 JS 模块加载。expose 若依赖全局 CSS，需从该 expose 的依赖图中导入，确保资源进入 manifest。
 
 > 以上只是最小面。**全部选项（remotes 四形态/shared 九个开关/dts/runtimePlugins…）、运行时 API、CLI、错误码见下方 [API 参考](#api-参考)。**
 
@@ -244,7 +248,7 @@ import { loadRemote } from 'virtual:fulgurjs-runtime'
 |---|---|---|
 | `loadRemote` | `(spec: string, opts?) => Promise<模块命名空间>` | 加载远程模块。`spec = '远程名/./Expose键'`（`./` 可省）；opts 见下 |
 | `loadShare` | `(name: string, opts?) => Promise<命名空间>` | 共享模块协商（最高版本胜出/已加载优先/singleton 收敛）。opts：`{ requiredVersion?, singleton?, strictVersion?, shareKey?, shareScope?, fallback? }` |
-| `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | 按 manifest 精确预载该远程全部 expose chunk + CSS（prefetch = 空闲时低优先级） |
+| `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | `remote/Expose` 只预载该 expose 的 chunk + CSS；仅传 remote 名则预载全部 exposes。`preload` 等待 CSS load/error，`prefetch` 低优先级并立即返回 |
 | `getContainer` | `(name: string) => Promise<容器>` | 取远程容器（触发加载 + init），容器协议 `{ name, init, get }` |
 | `registerRemote` / `registerRemotes` | `(config \| list) => void` | 运行时注册远程（promise remote / 动态地址）。`RemoteInput`：`{ name, entry, shareScope?, timeout?, retries?, fallback?, breaker? }` |
 | `registerShare` | `(scope, name, version, get, opts?) => void` | 手工注册共享模块（一般由 init 模块自动完成） |
@@ -606,7 +610,7 @@ const PREFETCH_REMOTES: string[] = []
 行为与边界：
 
 - 预载失败**不阻断业务**：runtime 按 MFU-007 语义发出 `window` 的 `fulgurjs:error` 事件并 console 警告（诊断面板⑤可查历史）；
-- 预载仅注入 `<link rel="modulepreload">`，不执行模块——首次打开页面时才真正初始化容器；
+- 预载注入 `<link rel="modulepreload">` 与 `<link rel="stylesheet">`，不执行模块——首次打开页面时才真正初始化容器；`preload` 等待样式 load/error，`prefetch` 低优先级后台加载；
 - 触发时机：宿主桥每次页面加载同步执行（幂等），实际预取发生在浏览器空闲回调中。
 
 #### 9.1.4 联邦诊断面板（免登录页，无配置项）

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { genBindingFacade, genRemoteBindingFacade, genSharedFacade, genSharedNsFacade, genRuntimeProxyModule, genDevManifest } from '../src/virtual'
+import { genBindingFacade, genRemoteBindingFacade, genSharedFacade, genSharedNsFacade, genRuntimeProxyModule, genDevManifest, genInitModule } from '../src/virtual'
 import { scanExposeRequiredProps } from '../src/diagnostics'
 import { normalizeOptions } from '../src/options'
 
@@ -106,6 +106,28 @@ describe('dev manifest file 字段 = 真实可请求 URL（preloadRemote 回归�
     const m = genDevManifest(opts, '/remote-a/') as { exposes: Array<{ file: string }> }
     expect(m.exposes[0].file).toBe('/remote-a/src/Button.vue')
     expect(m.exposes[0].file).not.toContain('@fulgurjs-src')
+  })
+})
+
+describe('prod manifest URL in generated init', () => {
+  it('root-relative remote base keeps a root-relative manifest URL', () => {
+    const options = normalizeOptions(
+      { name: 'host', remotes: { lowcode: { prod: '/lowcode' } } },
+      ROOT,
+      'build',
+    )
+    const code = genInitModule(options, 'build')
+    expect(code).toContain('"manifestUrl":"/lowcode/fulgurjs-manifest.json"')
+  })
+
+  it('absolute remote base keeps its origin in the manifest URL', () => {
+    const options = normalizeOptions(
+      { name: 'host', remotes: { lowcode: { prod: 'https://cdn.example.test/lowcode' } } },
+      ROOT,
+      'build',
+    )
+    const code = genInitModule(options, 'build')
+    expect(code).toContain('"manifestUrl":"https://cdn.example.test/lowcode/fulgurjs-manifest.json"')
   })
 })
 
