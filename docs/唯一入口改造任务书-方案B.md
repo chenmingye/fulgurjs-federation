@@ -1,6 +1,6 @@
 # 唯一入口改造任务书（方案 B：`@fulgurjs/federation/runtime`）
 
-> **状态：4.0.0 代码已实施；此前隔离副本的测试仅作历史记录。MES-ZC 原目录未迁移，用户要求从 SVN 全量重新取回后再验收，见《4.0.0-MES-ZC-全新SVN测试计划.md》。**
+> **状态：4.0.0 代码已推送并通过 GitHub Release 发布到 npm；MES-ZC 验收待从 SVN 全量重新检出后执行，按《4.0.0-MES-ZC-全新SVN测试计划.md》使用 PNPM 安装正式包并重新采集证据。**
 > 编写基线：2026-09-24，HEAD `57a25a9`（v3.0.1，npm latest）。开工前必须重新核对现场：
 >
 > ```bash
@@ -201,12 +201,12 @@ import { defineRepoConfig } from '@fulgurjs/federation/config'
 19. `docs/_workspace/local-integrate/init.ts` + `init-templates.ts`：模板与补丁的导入来源全部换新；`integrate.mjs` 重编。
 20. `fixtures/host-auto/src/App.vue`：改用新入口（保留"新旧同单例"断言的替代形态：`/runtime` 与内部代理指向同一单例）。
 
-### 组 D：testbed 与双环境实测
+### 组 D：全新 SVN 工程与双环境实测
 
-21. 实测前记录 testbed 的准确绝对路径、源仓库 commit 和应用包管理器；验证源现场 git status 后只对一次性拷贝操作。testbed 现场 12 个文件的导入全局替换为 `@fulgurjs/federation/runtime`（精确来源串，大小写敏感；含 .vue/.ts 全类型），替换后 grep 复核当前代码零旧入口。
-22. 三应用重装本地 tarball → dev 三服务重启（清 `.vite`）→ 27 页矩阵 + 交互套件（含三按钮、签署认证 z）+ 待办闭环。
-23. prod：三应用删旧 dist 重建（admin 必须跑 postBuild）→ 部署 8662 → 五端点 + 矩阵 + 交互套件。
-24. 故障态证据（dev/prod 各一套）；测试数据用后即清；收尾关全部自起进程（按端口精确，8085/nginx 永不动）。
+21. 从 SVN 全量检出 MES-ZC，记录 URL、revision 和初始状态；只在新工程中接入 4.0.0，核对三应用零旧 API 引用。
+22. 三应用通过 PNPM 从 npm registry 安装正式 `@fulgurjs/federation@4.0.0`，核对锁文件 integrity 与实际安装版本；完成 dev 27 页矩阵、交互和待办闭环。
+23. prod：三应用从新工程重建（admin 必须跑 postBuild），使用本轮独立 NGINX 实例与端口执行五端点、页面矩阵和交互。
+24. dev/prod 故障证据及所有截图本轮重新采集；测试数据和本轮进程按归属收尾。细项与判定一律以[全新 SVN 测试计划](4.0.0-MES-ZC-全新SVN测试计划.md)为准。
 
 ---
 
@@ -231,15 +231,15 @@ import { defineRepoConfig } from '@fulgurjs/federation/config'
 - [ ] `import { loadRemote } from '@fulgurjs/federation'`（根）→ 明确失败（该名不是导出）
 - [ ] tsconfig 仍含 `"@fulgurjs/federation/client"` 的项目 → 报错信息可读，迁移文档给出删改法
 
-**双环境实测（testbed 全新拷贝既有现场）**
+**双环境实测（全新 SVN 工程，正式 npm 包）**
 
 - [ ] dev + prod：27 页矩阵 27/27、交互套件全过、待办闭环 5/5、三按钮、签署认证弹窗 z=5000 顶层
-- [ ] 证据归档 `docs/screenshots/tb-{dev,prod}-<新版本>/` + `INDEX.md` 更新
+- [ ] 证据归档到本轮新建的空目录，只收录本轮截图和数据；报告按全新 SVN 测试计划生成
 
 **发布**
 
-- [ ] 版本三处同步（package.json / version.ts / CHANGELOG）；测试守漂移
-- [ ] 实现与测试完成后先提交可审查代码；push/tag/Release/OIDC 发布作为单独发布阶段，在明确发布指令后执行 → `npm view dist-tags` / provenance / tarball 复核
+- [x] 版本三处同步（package.json / version.ts / CHANGELOG）；测试守漂移
+- [x] 代码与测试计划已 push；`v4.0.0` tag、GitHub Release、OIDC npm 发布完成；`npm view dist-tags`、provenance、正式包 PNPM 安装已核对
 - [ ] 旧大版本 deprecate 文案指向新版本（含 3.0.x）
 
 ---
@@ -269,9 +269,8 @@ import { defineRepoConfig } from '@fulgurjs/federation/config'
 
 ---
 
-## 8. 本轮实施记录（2026-09-24）
+## 8. 当前交付状态（2026-09-24）
 
-- 4.0.0 代码、类型入口、迁移文档与本地 tarball 已完成；`/runtime` 的 ESM 导入、CJS 拒绝、旧 `/client` 删除均由 pack smoke 覆盖。启动预热与按需探针的 `remoteSchema` 具名导出已统一，真实 dev 页面复测通过。
-- 核心包构建通过（`runtime.js` gzip 6100B），28 个测试文件 287 项通过，`typecheck` 与 `typecheck:latest`（bundler/node10）通过；fixture e2e dev/fault 14/14，prod 9/9，tarball smoke 通过。prod 测试的一次运行中双 Vue 版本断言曾出现 3.4.38，随后原样重跑 9/9；该竞态仍需后续观察。
-- 隔离 testbed 副本中，dev/prod 各完成 27/27 页矩阵、14/14 交互、按同一实例和任务 ID 核对的待办闭环 5/5、远程入口故障与恢复。六个 Lowcode 页面按原有 U2 规则记为 `u2-blank`，不代表功能内容已渲染；Lowcode/Monaco 的既有页面错误保留在交互 JSON。证据见 `docs/screenshots/INDEX.md`。
-- 自建测试流程已审批结束（实例状态 2，无遗留待办）。本轮启动的 8773/4529/4669 与独立 NGINX 9010 均已关闭；原有 8085 后端和 8662 站点未动。这些结果来自临时副本，不能代替新 SVN 工程验收。代码提交状态以 Git 历史为准；发布清单仍待单独指令。
+- 4.0.0 代码与测试计划已推送到 `master`；`v4.0.0` tag 对应提交 `d23566d`，GitHub Release 已发布。
+- GitHub CI 与 Publish 流程均成功。npm `latest` 为 4.0.0，registry 带 provenance；PNPM 在独立临时工程从 registry 安装到 4.0.0，并核对锁文件 integrity。
+- MES-ZC 全新 SVN 工程尚未检出和测试。后续页面、交互与审批结果及截图仅从新 SVN 工程重新生成。
