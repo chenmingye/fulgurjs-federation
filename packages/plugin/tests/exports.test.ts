@@ -10,7 +10,9 @@ import { describe, expect, it } from 'vitest'
 const pkgRoot = path.resolve(__dirname, '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'))
 
-const SUBPATHS = ['./pages', './config', './vue', './context'] as const
+// 3.0.0：公开带类型子路径只剩 ./config（./pages/./context/./vue 已并入 virtual:fulgurjs-api，
+// 产物保留为 ./internal/* 仅供门面引用，不进 typesVersions/文档）
+const SUBPATHS = ['./config'] as const
 
 describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () => {
   it('每个带 types 的 exports 子路径都有 typesVersions 映射', () => {
@@ -37,12 +39,32 @@ describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () =
       (k) => k.startsWith('./') && pkg.exports[k]?.types,
     )
     for (const sub of typedSubpaths) {
-      // ./client 本体在包根（node10 直接可解析），无需 typesVersions
-      if (sub === './client') continue
+      // ./client 本体在包根（node10 直接可解析）无需映射；./internal/* 是虚拟门面的
+      // 内部引用面（非公开 API），node10 兼容不承诺
+      if (sub === './client' || sub.startsWith('./internal/')) continue
       expect(
         pkg.typesVersions?.['*']?.[sub.slice(2)],
         `exports 新增带类型子路径 ${sub} 但未配 typesVersions`,
       ).toBeTruthy()
     }
+  })
+})
+
+describe('3.0.0 破坏性收敛：旧公开入口已删除', () => {
+  const REMOVED = ['./pages', './context', './vue'] as const
+  it('exports 白名单不再包含旧子路径（应用代码唯一运行时入口 = virtual:fulgurjs-api）', () => {
+    for (const sub of REMOVED) {
+      expect(pkg.exports[sub], `${sub} 应已从 exports 删除`).toBeUndefined()
+    }
+  })
+  it('typesVersions 不再映射旧子路径', () => {
+    for (const sub of REMOVED) {
+      expect(pkg.typesVersions?.['*']?.[sub.slice(2)], `${sub} 的 typesVersions 映射应已删除`).toBeUndefined()
+    }
+  })
+  it('内部引用键存在（虚拟门面 build 形态的 re-export 目标）', () => {
+    expect(pkg.exports['./internal/context.js']).toBeTruthy()
+    expect(pkg.exports['./internal/pages.js']).toBeTruthy()
+    expect(pkg.exports['./internal/vue.js']).toBeTruthy()
   })
 })

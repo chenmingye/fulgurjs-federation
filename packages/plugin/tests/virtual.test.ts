@@ -196,10 +196,10 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
 })
 
 /** WP7：单一 API 门面（virtual:fulgurjs-api） */
-describe('WP7: genApiFacade 单一 API 门面', () => {
-  it('具名导出 runtime 全部公开 API + pages 契约 + remoteSchema', async () => {
+describe('WP7/3.0: genApiFacade 唯一公开门面（双形态）', () => {
+  it('build 形态：静态 re-export runtime + internal context/pages/vue + remoteSchema', async () => {
     const { genApiFacade } = await import('../src/virtual')
-    const code = genApiFacade()
+    const code = genApiFacade('build')
     for (const api of [
       'initSharing', 'registerShare', 'registerRemotes', 'registerRemote', 'registerPlugins',
       'loadShare', 'loadRemote', 'getContainer', 'preloadRemote', 'parseSpec',
@@ -207,10 +207,20 @@ describe('WP7: genApiFacade 单一 API 门面', () => {
     ]) {
       expect(code).toContain(api)
     }
-    expect(code).toContain('export { definePages, validatePages } from "@fulgurjs/federation/pages"')
-    expect(code).toContain('export { default as remoteSchema } from "virtual:fulgurjs-remote-schema"')
-    // 引用面全部是虚拟入口/包名，不复制 runtime 实现（单一实例由 globalThis 单例保证）
-    expect(code).toContain('from "virtual:fulgurjs-runtime"')
+    expect(code).toContain("from \"virtual:fulgurjs-runtime\";")
+    expect(code).toContain("@fulgurjs/federation/internal/context.js")
+    expect(code).toContain("@fulgurjs/federation/internal/pages.js")
+    expect(code).toContain("@fulgurjs/federation/internal/vue.js")
+    expect(code).toContain("remoteSchema } from 'virtual:fulgurjs-remote-schema'")
     expect(code).not.toContain('__FULGURJS_RUNTIME__ ??')
+  })
+  it('serve 形态：runtime 部分转发 proxy（远程页面零副本链）+ remoteComponent 惰性化', async () => {
+    const { genApiFacade } = await import('../src/virtual')
+    const code = genApiFacade('serve')
+    expect(code).toContain('from "virtual:fulgurjs-runtime-proxy"')
+    expect(code).not.toContain('from "virtual:fulgurjs-runtime";')
+    expect(code).toContain("import('@fulgurjs/federation/internal/vue.js')")
+    expect(code).toContain('provideAppContext')
+    expect(code).toContain('remoteSchema')
   })
 })

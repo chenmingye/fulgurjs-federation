@@ -24,17 +24,19 @@ const RUNTIME_EXPORTS = [
   'version',
 ]
 
-describe('client.d.ts：virtual:fulgurjs-runtime 类型声明（随包发布）', () => {
+describe('client.d.ts：virtual:fulgurjs-api 类型声明（3.0.0 唯一公开入口，随包发布）', () => {
   it('client.d.ts 存在且声明了虚拟模块', () => {
     const file = join(PKG, 'client.d.ts')
     expect(existsSync(file)).toBe(true)
     const text = readFileSync(file, 'utf8')
-    expect(text).toContain("declare module 'virtual:fulgurjs-runtime'")
+    expect(text).toContain("declare module 'virtual:fulgurjs-api'")
+    // 3.0.0 破坏性：旧 runtime 入口的公开类型声明删除
+    expect(text).not.toContain("declare module 'virtual:fulgurjs-runtime'")
   })
 
   it('声明面覆盖 dist/runtime.js 的全部具名导出（守漂移）', () => {
     const text = readFileSync(join(PKG, 'client.d.ts'), 'utf8')
-    const declareBlock = text.split("declare module 'virtual:fulgurjs-runtime'")[1] ?? ''
+    const declareBlock = text.split("declare module 'virtual:fulgurjs-api'")[1] ?? ''
     for (const name of RUNTIME_EXPORTS) {
       // default 以 "export default" 形式声明，其余 export const/function
       const declared = name === 'default' ? /export default/.test(declareBlock) : declareBlock.includes(`export ${name}`) || new RegExp(`export (const|function) ${name}\\b`).test(declareBlock)
@@ -103,8 +105,14 @@ describe('WP7: virtual:fulgurjs-api 类型声明', () => {
     const text = readFileSync(join(__dirname, '../client.d.ts'), 'utf8')
     expect(text).toContain("declare module 'virtual:fulgurjs-api'")
     const block = text.split("declare module 'virtual:fulgurjs-api'")[1] ?? ''
-    expect(block).toContain("export * from 'virtual:fulgurjs-runtime'")
-    expect(block).toContain("export { definePages, validatePages } from '@fulgurjs/federation/pages'")
+    // 3.0.0 聚合面：runtime 函数 + context 三函数 + pages + vue + remoteSchema 全在一个声明里
+    expect(block).toContain('export function loadRemote')
+    expect(block).toContain('export function provideAppContext')
+    expect(block).toContain('export function getAppContext')
+    expect(block).toContain('export function requireAppContext')
+    expect(block).toContain('export function definePages')
+    expect(block).toContain('export function validatePages')
+    expect(block).toContain('export function remoteComponent')
     expect(block).toContain('export const remoteSchema')
   })
 })

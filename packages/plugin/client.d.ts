@@ -1,8 +1,11 @@
 /**
- * virtual:fulgurjs-runtime / virtual:fulgurjs-api 客户端类型声明。
+ * virtual:fulgurjs-api 客户端类型声明（3.0.0 起唯一公开运行时入口）。
  *
- * `virtual:fulgurjs-api` 是单一 API 门面（推荐入口）：一个虚拟模块拿全联邦 API——
- * runtime 全部函数 + definePages/validatePages + remoteSchema；类型由本声明聚合。
+ * 应用代码的一切联邦导入——runtime 函数、context 三函数（provideAppContext/
+ * getAppContext/requireAppContext）、definePages/validatePages、remoteSchema、
+ * remoteComponent——全部来自 'virtual:fulgurjs-api'。旧入口
+ * （virtual:fulgurjs-runtime、@fulgurjs/federation/{context,pages,vue}）已删除。
+ * 类型由本声明聚合（script 文件：顶层无 import/export，环境模块声明才生效）。
  *
  * 用法（二选一）：
  * 1. dev 启动后插件自动在类型目录（默认 src/fulgurjs/types/，无 src 布局回退 .fulgurjs/types/）
@@ -16,7 +19,7 @@
  * 对外类型（LoadRemoteOptions 等）经 'virtual:fulgurjs-runtime' 模块本身导出，
  * 用法：import type { LoadRemoteOptions } from 'virtual:fulgurjs-runtime'。
  */
-declare module 'virtual:fulgurjs-runtime' {
+declare module 'virtual:fulgurjs-api' {
   /** shared 协商条目（window.__FULGURJS_SCOPE__ 内的形态） */
   export interface ShareEntry {
     version: string
@@ -133,17 +136,45 @@ declare module 'virtual:fulgurjs-runtime' {
   /** 与 globalThis.__FULGURJS_RUNTIME__ 同一实例（方法面冻结） */
   const runtimeDefault: FgRuntime
   export default runtimeDefault
-}
 
-/**
- * WP7：单一 API 门面。
- * 与 runtime 旧入口共享同一单例（globalThis.__FULGURJS_RUNTIME__）；definePages/validatePages
- * 来自 '@fulgurjs/federation/pages'，remoteSchema 为远程 exposes 清单（dev 探针结果；
- * build 为空 schema）。
- */
-declare module 'virtual:fulgurjs-api' {
-  export * from 'virtual:fulgurjs-runtime'
-  export { definePages, validatePages } from '@fulgurjs/federation/pages'
-  /** 远程 exposes 清单（dev：异步 probe 结果；build：空对象，路由存在性校验按 R3 降级） */
+  // ── 跨应用上下文（原 @fulgurjs/federation/context，3.0.0 并入）──
+  export function provideAppContext(config: Partial<AppContext> & Record<string, unknown>): void
+  export function getAppContext(): AppContext
+  export function requireAppContext(...keys: string[]): AppContext
+
+  // ── 页面路由表（原 @fulgurjs/federation/pages，3.0.0 并入）──
+  export interface PageRouteLike {
+    route: string
+    name?: string
+    spec?: string
+    title?: string
+    keepAlive?: boolean
+  }
+  export interface PagesOptions {
+    pages: PageRouteLike[]
+    remoteSchema?: { [remoteKey: string]: { exposes: string[]; exists: boolean } }
+    remoteNameOf?: (route: string) => string
+    exposeOf?: (route: string, remoteName: string) => string
+  }
+  export interface PageViolation {
+    level: 'ERROR' | 'WARN'
+    route: string
+    reason: string
+  }
+  export function validatePages(pages: PageRouteLike[], opts?: PagesOptions): PageViolation[]
+  export function definePages<P extends PageRouteLike[]>(pages: P, opts?: PagesOptions): P
+
+  // ── Vue 远程组件直渲染（原 @fulgurjs/federation/vue，3.0.0 并入）──
+  export interface RemoteComponentOptions {
+    loadingComponent?: unknown
+    errorComponent?: unknown
+    retries?: number
+    delay?: number
+    timeout?: number
+  }
+  export function remoteComponent(spec: string, opts?: RemoteComponentOptions): unknown
+
+  // ── 远程 exposes 清单（dev 异步 probe；build 为空表，路由校验按 R3 降级）──
   export const remoteSchema: { [remoteKey: string]: { exposes: string[]; exists: boolean } }
 }
+

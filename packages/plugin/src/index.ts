@@ -493,7 +493,7 @@ export function federation(options: FederationOptions): Plugin[] {
         return genDevProvides(state.normalized)
       }
       if (clean === 'virtual:fulgurjs-api') {
-        return genApiFacade()
+        return genApiFacade(state.command)
       }
       if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）

@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.0.0（2026-09-24）
+
+### 破坏性变更：应用代码唯一 API 入口 `virtual:fulgurjs-api`
+
+应用代码的一切联邦导入收敛为一个虚拟模块；旧入口从包 exports 白名单删除（import 即解析失败）。
+
+**迁移映射**：
+
+| 3.x 之前 | 3.0.0 起 |
+|---|---|
+| `import { loadRemote, … } from 'virtual:fulgurjs-runtime'` | `import { loadRemote, … } from 'virtual:fulgurjs-api'` |
+| `import { provideAppContext, getAppContext, requireAppContext } from '@fulgurjs/federation/context'` | 同一来源改为 `'virtual:fulgurjs-api'` |
+| `import { definePages, validatePages } from '@fulgurjs/federation/pages'` | 同一来源改为 `'virtual:fulgurjs-api'` |
+| `import { remoteComponent } from '@fulgurjs/federation/vue'` | 同一来源改为 `'virtual:fulgurjs-api'` |
+| `import remoteSchema from 'virtual:fulgurjs-remote-schema'`（default） | `import { remoteSchema } from 'virtual:fulgurjs-api'`（具名） |
+
+不变（构建期/配置面，非应用代码导入）：`vite.config.ts` 的 `import { federation } from '@fulgurjs/federation'`、`fulgurjs.config.ts` 的 `import { defineRepoConfig } from '@fulgurjs/federation/config'`、tsconfig 类型入口 `@fulgurjs/federation/client`。`virtual:fulgurjs-runtime` 保留为插件内部实现细节（门面/容器入口/改写管线引用），不再是公开 API。
+
+技术说明：serve 形态的门面对 runtime 部分转发惰性单例委托（远程页面导入不拉起副本链），prod 形态为静态 re-export（各副本经 `globalThis.__FULGURJS_RUNTIME__` 收敛）；`remoteComponent` 在 dev 下调用期惰性加载。类型声明整体聚合到 `virtual:fulgurjs-api`（`@fulgurjs/federation/client`）。
+
+### 破坏性变更：2.x 全部旧入口不再可用
+
+`@fulgurjs/federation/pages`、`./context`、`./vue` 子路径的 d.ts/typesVersions 映射同步删除。升级方式：全局搜索上述五个旧来源，按映射表替换为 `virtual:fulgurjs-api`（`fulgurjs init` 生成的模板与核对清单已全部是新写法）。
+
+
 ## 2.1.0（2026-09-23）
 
 ### 兼容性与健壮性强化（WP1~WP8，方案见 docs/兼容性与健壮性强化实施方案.md）
