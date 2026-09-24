@@ -45,6 +45,22 @@ export interface RemoteConfig {
   manifestUrl?: string
 }
 
+/** @deprecated 兼容旧版公开类型；新代码使用 RemoteConfig。 */
+export interface RemoteInput extends RemoteConfig {
+  container?: unknown
+  containerPromise?: Promise<unknown>
+}
+
+export interface LoadRemoteOptions {
+  shareScope?: string
+  retries?: number
+  fallbackModule?: () => any
+}
+
+export interface PreloadRemoteOptions {
+  mode?: 'preload' | 'prefetch'
+}
+
 export interface LoadShareOptions {
   requiredVersion?: string | false
   singleton?: boolean
@@ -508,19 +524,10 @@ function createRuntime() {
     return m.startsWith('.') ? m : `./${m}`
   }
 
-  async function loadRemote(
+  async function loadRemote<T = Record<string, any>>(
     spec: string,
-    opts?: {
-      shareScope?: string
-      /** 单次调用覆盖 remote.retries（社区高频诉求：按调用控制重试次数） */
-      retries?: number
-      /**
-       * 对齐 webpack MF 2.0 errorLoadRemote 语义：加载失败时返回 fallback 模块
-       * （错误事件/console 仍显式发出，绝不静默——调用方不传则照旧抛错）
-       */
-      fallbackModule?: () => any
-    },
-  ): Promise<any> {
+    opts?: LoadRemoteOptions,
+  ): Promise<T> {
     const { remote: name, module } = parseSpec(spec)
     // WP6：观测 hook 自身抛错不把成功的模块加载改成失败（仅告警）
     try {
@@ -604,7 +611,7 @@ function createRuntime() {
 
   async function preloadRemote(
     spec: string,
-    opts: { mode?: 'preload' | 'prefetch' } = {},
+    opts: PreloadRemoteOptions = {},
   ): Promise<void> {
     const { remote: name, module } = parseSpec(spec)
     const remote = remotes.get(name)

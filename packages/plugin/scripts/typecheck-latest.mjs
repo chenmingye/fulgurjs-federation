@@ -2,7 +2,7 @@
  * 最新 TypeScript 口径的类型回归：根治"工程内旧 vue-tsc 绿、用户 IDE（新 TS）红"的盲区。
  *
  * 机制：固定目录 .typecheck-latest/ 维护一个临时工程（typescript + vue-tsc +
- * vue@latest + element-plus@latest），把本包产物（dist + client.d.ts）与 tests/types-repro
+ * vue@latest + element-plus@latest），把本包产物（dist）与 tests/types-repro
  * 典型消费形态样例放入其中，跑 vue-tsc --noEmit —— 任一样例报错即 exit 1。
  *
  * 用法：npm run typecheck:latest（先 build，本脚本不重复 build）
@@ -38,17 +38,13 @@ if (!fs.existsSync(path.join(DIR, 'node_modules', 'typescript'))) {
 const pkgNameDir = path.join(DIR, 'node_modules', '@fulgurjs', 'federation')
 fs.rmSync(pkgNameDir, { recursive: true, force: true })
 fs.mkdirSync(pkgNameDir, { recursive: true })
-for (const entry of ['dist', 'client.d.ts', 'package.json']) {
+for (const entry of ['dist', 'package.json']) {
   fs.cpSync(path.join(PKG, entry), path.join(pkgNameDir, entry), { recursive: true })
 }
 
-// 3) 样例与类型垫片、tsconfig
+// 3) 样例与 tsconfig
 fs.rmSync(path.join(DIR, 'src'), { recursive: true, force: true })
 fs.cpSync(REPRO, path.join(DIR, 'src'), { recursive: true })
-const typesDir = path.join(DIR, 'types')
-fs.rmSync(typesDir, { recursive: true, force: true })
-fs.mkdirSync(typesDir, { recursive: true })
-fs.cpSync(path.join(PKG, 'client.d.ts'), path.join(typesDir, 'fulgurjs-runtime.d.ts'))
 fs.writeFileSync(
   path.join(DIR, 'tsconfig.json'),
   JSON.stringify(
@@ -63,7 +59,7 @@ fs.writeFileSync(
         jsx: 'preserve',
         types: [],
       },
-      include: ['src/**/*.ts', 'types/**/*.d.ts'],
+      include: ['src/**/*.ts'],
     },
     null,
     2,
@@ -78,3 +74,39 @@ if (result.status !== 0) {
   process.exit(1)
 }
 console.log('[typecheck-latest] 最新 TS 口径 0 错误 ✓（tests/types-repro 典型消费形态全过）')
+
+// node10 模块解析不读取 exports，必须验证 typesVersions 能解析 /runtime。
+fs.writeFileSync(
+  path.join(DIR, 'tsconfig.node10.json'),
+  JSON.stringify({
+    compilerOptions: {
+      target: 'esnext', module: 'commonjs', moduleResolution: 'node10',
+      strict: true, noEmit: true, skipLibCheck: true, esModuleInterop: true, types: [],
+    },
+    include: ['src/**/*.ts'],
+  }, null, 2),
+)
+const tsc = path.join(DIR, 'node_modules', '.bin', 'tsc')
+const legacy = run(tsc, ['--noEmit', '-p', path.join(DIR, 'tsconfig.node10.json')])
+if (legacy.status !== 0) {
+  console.error('[typecheck-latest] node10/typesVersions 类型解析失败')
+  process.exit(1)
+}
+console.log('[typecheck-latest] node10/typesVersions 0 错误 ✓')
+
+fs.writeFileSync(
+  path.join(DIR, 'tsconfig.removed-client.json'),
+  JSON.stringify({
+    compilerOptions: {
+      target: 'esnext', module: 'esnext', moduleResolution: 'bundler',
+      noEmit: true, skipLibCheck: true, types: ['@fulgurjs/federation/client'],
+    },
+    files: ['src/03-pages.ts'],
+  }, null, 2),
+)
+const removedClient = run(tsc, ['--noEmit', '-p', path.join(DIR, 'tsconfig.removed-client.json')], { capture: true })
+if (removedClient.status === 0 || !removedClient.stdout.includes("Cannot find type definition file for '@fulgurjs/federation/client'")) {
+  console.error('[typecheck-latest] 已删除 client 子路径的负向类型断言未生效：\n' + removedClient.stdout + removedClient.stderr)
+  process.exit(1)
+}
+console.log('[typecheck-latest] 旧 client types 配置按预期报可读错误 ✓')

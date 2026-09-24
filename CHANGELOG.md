@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.0.0（2026-09-24）
+
+### 应用代码改用物理入口
+
+- 唯一公开应用入口改为 `@fulgurjs/federation/runtime`，提供实际的 ESM 文件与类型声明；配置入口仍为包根和 `/config`。
+- `virtual:fulgurjs-api` 与 `@fulgurjs/federation/client` 删除。3.x 用户将应用导入改为 `/runtime`，并清除 tsconfig 中的 `client` 类型项及旧生成的 `fulgurjs-runtime.d.ts`。
+- 开发态 exposes 使用内部页面级代理；`remoteComponent()` 保持同步返回 Vue 组件。`remoteSchema` 静态具名导入由插件拆出，非开发环境为空清单。
+- Vue 适配层与运行时内核分离，公开 ESM 图只引用一份 `runtime.js`。
+- `/runtime` 只提供 ESM `import` 条件，使用时需安装 Vue；包根和 `/config` 的 CJS 条件不变。新入口沿用 3.0.x 实际 JS 门面的值导出，不提供 `runtime` 对象或 default（旧 `client.d.ts` 曾多声明这两项）。
+
+| 旧应用写法 | 4.0.0 写法 |
+|---|---|
+| `virtual:fulgurjs-api`（3.0.x） | `@fulgurjs/federation/runtime` |
+| `virtual:fulgurjs-runtime`（≤2.x） | `@fulgurjs/federation/runtime` |
+| `@fulgurjs/federation/context`、`/pages`、`/vue`（≤2.x） | `@fulgurjs/federation/runtime` |
+| `import remoteSchema from 'virtual:fulgurjs-remote-schema'` | `import { remoteSchema } from '@fulgurjs/federation/runtime'` |
+| tsconfig `types` 中的 `@fulgurjs/federation/client` | 删除该项；类型由 `/runtime` 的包导出解析 |
+
 ## 3.0.1（2026-09-24）
 
 ### 修复

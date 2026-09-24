@@ -1,59 +1,36 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { genRuntimeTypesShim } from '../src/dts'
 
 const PKG = join(__dirname, '..')
 
-/** dist/runtime.js 的具名导出（构建产物真实面，守 client.d.ts 漂移） */
-const RUNTIME_EXPORTS = [
-  'default',
-  'getContainer',
-  'getRuntime',
-  'initSharing',
-  'loadRemote',
-  'loadShare',
-  'preloadRemote',
-  'registerPlugins',
-  'registerRemote',
-  'registerRemotes',
-  'registerShare',
-  'runtime',
-  'shareScopeMap',
-  'unwrapDefault',
-  'version',
-]
-
-describe('client.d.ts：virtual:fulgurjs-api 类型声明（3.0.0 唯一公开入口，随包发布）', () => {
-  it('client.d.ts 存在且声明了虚拟模块', () => {
-    const file = join(PKG, 'client.d.ts')
+describe('runtime 物理入口类型', () => {
+  it('声明文件与公开类型真实存在', () => {
+    const file = join(PKG, 'dist/runtime-entry.d.ts')
     expect(existsSync(file)).toBe(true)
     const text = readFileSync(file, 'utf8')
-    expect(text).toContain("declare module 'virtual:fulgurjs-api'")
-    // 3.0.0 破坏性：旧 runtime 入口的公开类型声明删除
-    expect(text).not.toContain("declare module 'virtual:fulgurjs-runtime'")
-  })
-
-  it('声明面覆盖 dist/runtime.js 的全部具名导出（守漂移）', () => {
-    const text = readFileSync(join(PKG, 'client.d.ts'), 'utf8')
-    const declareBlock = text.split("declare module 'virtual:fulgurjs-api'")[1] ?? ''
-    for (const name of RUNTIME_EXPORTS) {
-      // default 以 "export default" 形式声明，其余 export const/function
-      const declared = name === 'default' ? /export default/.test(declareBlock) : declareBlock.includes(`export ${name}`) || new RegExp(`export (const|function) ${name}\\b`).test(declareBlock)
-      expect({ name, declared: declared, snippet: declareBlock.slice(0, 200) }).toEqual({ name, declared: true, snippet: declareBlock.slice(0, 200) })
+    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteComponent', 'remoteSchema', 'RemoteInput', 'LoadRemoteOptions']) {
+      expect(text).toContain(name)
     }
   })
 
-  it('package.json exports 暴露 ./client 子路径且 files 含 client.d.ts', () => {
+  it('package.json 不再导出 client 虚拟类型垫片', () => {
     const pkg = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'))
-    expect(pkg.exports['./client']?.types).toBe('./client.d.ts')
-    expect(pkg.files).toContain('client.d.ts')
+    expect(pkg.exports['./client']).toBeUndefined()
+    expect(pkg.files).not.toContain('client.d.ts')
   })
 
-  it('类型垫片用 import 式加载 client 声明（dev 自动生成进 .fulgurjs/types）', () => {
-    const shim = genRuntimeTypesShim()
-    expect(shim).toContain("import '@fulgurjs/federation/client'")
-    expect(shim).not.toContain('reference types=')
+  it('type-only 导出面与批准清单相同', () => {
+    const text = readFileSync(join(PKG, 'dist/runtime-entry.d.ts'), 'utf8')
+    const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
+    const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
+    expect(names).toEqual([
+      'AppContext', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
+      'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
+      'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
+      'RemoteSchema', 'RemoteSchemaEntry', 'RuntimeHooks', 'RuntimePlugin',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap',
+    ].sort())
   })
 })
 
@@ -96,23 +73,5 @@ describe('dts 默认目录收敛到根目录点文件夹（src 零污染）', ()
     expect(resolveDtsDir(true, false)).toBe('.fulgurjs/types')
     expect(resolveDtsDir({ dir: 'types/federation' })).toBe('types/federation')
     expect(resolveDtsDir(false)).toBe('')
-  })
-})
-
-/** WP7：virtual:fulgurjs-api 门面类型声明（聚合 runtime 面 + pages + remoteSchema） */
-describe('WP7: virtual:fulgurjs-api 类型声明', () => {
-  it('声明存在且聚合旧入口全量导出面（export *）+ pages + remoteSchema', () => {
-    const text = readFileSync(join(__dirname, '../client.d.ts'), 'utf8')
-    expect(text).toContain("declare module 'virtual:fulgurjs-api'")
-    const block = text.split("declare module 'virtual:fulgurjs-api'")[1] ?? ''
-    // 3.0.0 聚合面：runtime 函数 + context 三函数 + pages + vue + remoteSchema 全在一个声明里
-    expect(block).toContain('export function loadRemote')
-    expect(block).toContain('export function provideAppContext')
-    expect(block).toContain('export function getAppContext')
-    expect(block).toContain('export function requireAppContext')
-    expect(block).toContain('export function definePages')
-    expect(block).toContain('export function validatePages')
-    expect(block).toContain('export function remoteComponent')
-    expect(block).toContain('export const remoteSchema')
   })
 })

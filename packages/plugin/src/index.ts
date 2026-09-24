@@ -26,6 +26,7 @@ import {
   transformModule,
   serializeShareCallForFacade,
   isExposeTargetFile,
+  rewriteRuntimeEntryImports,
 } from './transform'
 import {
   genApiFacade,
@@ -43,7 +44,7 @@ import {
   type ManifestExposeEntry,
 } from './virtual'
 import { generateDevTypes } from './dts'
-import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, type RemoteSchema } from './remote-schema'
+import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, genRemoteSchemaModule } from './remote-schema'
 import { formatFulgurjsDiagnostic, debugLog, redactModulePath } from './diagnostics'
 import { corsHeadersFor, isNonLoopbackHost } from './dev-cors'
 import { syncViteCacheMarker } from './vite-cache'
@@ -446,6 +447,7 @@ export function federation(options: FederationOptions): Plugin[] {
         if (slash > 0) {
           const prefix = bareClean.slice(0, slash)
           const known =
+            bareClean === '@fulgurjs/federation/runtime' ||
             n.remotes.some((r) => r.key === prefix) ||
             n.shared.some((sh) => sh.aliases.includes(prefix) || sh.aliases.some((a) => a.endsWith('/') && prefix.startsWith(a)))
           if (!known && !warnedUnknownPrefixes.has(prefix)) {
@@ -463,7 +465,7 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean === RUNTIME_PROXY_VIRTUAL_ID) return RESOLVED.runtimeProxy
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
       if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
-      if (bareClean === 'virtual:fulgurjs-api') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api-facade') return bareClean
       if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
@@ -492,14 +494,14 @@ export function federation(options: FederationOptions): Plugin[] {
       if (clean === 'virtual:fulgurjs-provides' && state.normalized) {
         return genDevProvides(state.normalized)
       }
-      if (clean === 'virtual:fulgurjs-api') {
-        return genApiFacade(state.command)
+      if (clean === 'virtual:fulgurjs-api-facade' && state.command === 'serve') {
+        return genApiFacade()
       }
       if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）
         if (state.command === 'build') return genEmptyRemoteSchemaModule()
         remoteSchemaPromise ??= probeRemotesAndBuildSchema(state.normalized).then(
-          (schema: RemoteSchema) => `export default ${JSON.stringify(schema)}`,
+          genRemoteSchemaModule,
         )
         return remoteSchemaPromise
       }
@@ -560,7 +562,6 @@ export function federation(options: FederationOptions): Plugin[] {
     async transform(code, id) {
       if (!state.normalized) return null
       const clean = id.split('?')[0]
-
       // build：宿主入口模块顶部内联 init（先于一切应用代码注册 remotes/provides）。
       // 不能用独立虚拟模块：rollup 会摇树剥离其顶层调用；入口自身的顶层调用永不被剥离
       if (state.command === 'build' && state.entryAbsPaths.has(clean) && !state.entryInitInjected.has(clean)) {
@@ -855,7 +856,7 @@ export function federation(options: FederationOptions): Plugin[] {
           // 宽限 5s：宿主常先于 remote 启动，降低假阳性
           setTimeout(() => {
             remoteSchemaPromise ??= probeRemotesAndBuildSchema(n).then(
-              (schema: RemoteSchema) => `export default ${JSON.stringify(schema)}`,
+              genRemoteSchemaModule,
             )
           }, 5000)
         })
@@ -891,6 +892,13 @@ export function federation(options: FederationOptions): Plugin[] {
     async transform(code, id) {
       if (!state.normalized) return null
       const clean = id.split('?')[0]
+      const isAppSource = clean.startsWith(state.normalized.root + path.sep) &&
+        !clean.includes(`${path.sep}node_modules${path.sep}`) &&
+        !clean.includes(`${path.sep}.vite${path.sep}`)
+      const entryRewrite = state.command === 'serve' && isAppSource
+        ? await rewriteRuntimeEntryImports(code, isExposeTargetFile(clean, state.normalized.root, state.normalized.exposes))
+        : null
+      if (entryRewrite !== null) code = entryRewrite
       // 原为 D.1 硬报错（DEV-008），0.4.1 起自动化：exposes 目标文件（远程页面）静态导入
       // 虚拟运行时会被远程 dev server 求值，模块求值期拉起第二份副本链、破坏渲染上下文——
       // 改写为惰性单例委托模块（求值期零副作用、调用期转发页面级单例），用户无需再感知
@@ -913,11 +921,11 @@ export function federation(options: FederationOptions): Plugin[] {
       // shared 导入，全量跳过会让这些注入绕过门面化（双响应性系统，lowcode 实测：
       // 产物 201 个 chunk 直接引用本地 vue 碎片）。transformModule 幂等（已门面化的导入
       // 不再匹配、helper 不重复 prepend），build 下重复跑安全；serve 语义不同保持原守卫。
-      if (state.command === 'serve' && isPluginProcessedModule(code)) return null
+      if (state.command === 'serve' && isPluginProcessedModule(code)) return entryRewrite === null ? null : { code, map: null }
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：.vue 主请求 + D6 兜底（见下）
-      if (/type=(style|template)/.test(id)) return null // 样式与模板子请求不走这里
+      if (/type=(style|template)/.test(id)) return entryRewrite === null ? null : { code, map: null } // 样式与模板子请求不走这里
       const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
-      if (!isJsLike) return null
+      if (!isJsLike) return entryRewrite === null ? null : { code, map: null }
       // dev 宿主（无 exposes 或 host+remote 双角色）：自身源码不做 shared 改写（自身 import 即
       // 自身 provide，被消费方协商到的就是这份实例；避免 TLA 改变大型工程循环依赖求值顺序）；
       // 纯 remote（有 exposes、无 remotes）全量改写，含 node_modules——依赖包对 shared 的导入
@@ -926,7 +934,7 @@ export function federation(options: FederationOptions): Plugin[] {
       const isPureRemoteBuild =
         state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
       if (state.command === 'serve' && clean.includes('node_modules') && !id.includes('.vite/deps') && !devRewriteAll) {
-        return null
+        return entryRewrite === null ? null : { code, map: null }
       }
       // D6（2026-09-23）：build 下的 post 兜底见 buildFallbackTransform（与 fulgurjs:post-last
       // 共用的共享函数）——auto-import 类后置插件在 pre 之后注入的 shared 导入在此兜底门面化。
@@ -952,13 +960,14 @@ export function federation(options: FederationOptions): Plugin[] {
         if (!cleanPath.startsWith('/')) return null
         return state.resolvedSharedPaths.get(cleanPath) ?? null
       }
-      return transformModule(code, id, {
+      const transformed = await transformModule(code, id, {
         onRewrite: () => recordRewritten(id),
         options: state.normalized!,
         remapSpecifier,
         rewriteShared,
         sharedClosureRoots: state.sharedClosureRoots,
       })
+      return transformed ?? (entryRewrite === null ? null : { code, map: null })
     },
   }
 

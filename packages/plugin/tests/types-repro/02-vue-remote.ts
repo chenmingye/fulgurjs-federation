@@ -1,7 +1,7 @@
 /**
  * Vue 直渲染 + 虚拟运行时的典型消费形态（最新 TS 口径守卫）。
  */
-import { remoteComponent, loadRemote, preloadRemote } from 'virtual:fulgurjs-api'
+import { remoteComponent, loadRemote, preloadRemote } from '@fulgurjs/federation/runtime'
 
 const FederatedForm = remoteComponent('demo-host/FormRouterPage')
 const FederatedAmis = remoteComponent('demo-host/AmisFormRouterPage', {

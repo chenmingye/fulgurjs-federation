@@ -108,21 +108,6 @@ export function extractTsExportNames(text: string): string[] {
 }
 
 /**
- * 运行时虚拟模块类型垫片：写入宿主类型目录（默认 .fulgurjs/types），被 tsconfig include 后
- * 'virtual:fulgurjs-api' 的导入自动获得类型（无需手工往 types 数组加 client 子路径）。
- * 用副作用 import 加载包内 client.d.ts 的 declare module 声明——不用 /// <reference types>：
- * 该指令解析不了 npm 包子路径（实验坐实，import 式全部场景可用）。
- */
-export function genRuntimeTypesShim(): string {
-  return [
-    '// 自动生成：fulgurjs-federation 运行时类型（virtual:fulgurjs-api）',
-    "import '@fulgurjs/federation/client'",
-    'export {}',
-    '',
-  ].join('\n')
-}
-
-/**
  * 解析 dts 输出目录：默认统一进 `src/fulgurjs/types`（联邦所有产物集中一个文件夹，
  * src 布局项目 tsconfig include "src/**" 天然覆盖=零配置）；无 src 布局回退根目录
  * `.fulgurjs/types`。`dts: { dir }` 显式覆盖；`dts: false` 返回空串（不生成）。
@@ -176,7 +161,6 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
   const outDir = path.join(options.root, dir)
   fs.mkdirSync(outDir, { recursive: true })
 
-  fs.writeFileSync(path.join(outDir, 'fulgurjs-runtime.d.ts'), genRuntimeTypesShim())
   for (const remote of options.remotes) {
     if (!remote.devEntry || remote.promise) continue
     const manifest = await fetchManifest(remote.devEntry)

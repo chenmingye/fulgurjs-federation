@@ -129,5 +129,10 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
 /** build 期：远程 manifest 不在本地，诚实降级为空 schema（校验器跳过 R3） */
 export function genEmptyRemoteSchemaModule(): string {
   console.info('[fulgurjs] build 期跳过路由 spec 存在性校验（远程 manifest 不在构建机本地；dev 下自动启用）')
-  return 'export default {}'
+  return genRemoteSchemaModule({})
+}
+
+/** dev 的按需请求与启动预热共用同一导出形态。 */
+export function genRemoteSchemaModule(schema: RemoteSchema): string {
+  return `export const remoteSchema = ${JSON.stringify(schema)}; export default remoteSchema`
 }

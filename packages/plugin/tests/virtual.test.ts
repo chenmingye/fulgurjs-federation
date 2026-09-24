@@ -195,38 +195,26 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
   })
 })
 
-/** WP7：单一 API 门面（virtual:fulgurjs-api） */
-describe('WP7/3.0: genApiFacade 唯一公开门面（双形态）', () => {
-  it('build 形态：静态 re-export runtime + internal context/pages/vue + remoteSchema', async () => {
-    const { genApiFacade } = await import('../src/virtual')
-    const code = genApiFacade('build')
-    for (const api of [
-      'initSharing', 'registerShare', 'registerRemotes', 'registerRemote', 'registerPlugins',
-      'loadShare', 'loadRemote', 'getContainer', 'preloadRemote', 'parseSpec',
-      'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
-    ]) {
-      expect(code).toContain(api)
-    }
-    expect(code).toContain("from \"virtual:fulgurjs-runtime\";")
-    expect(code).toContain("@fulgurjs/federation/internal/context.js")
-    expect(code).toContain("@fulgurjs/federation/internal/pages.js")
-    expect(code).toContain("@fulgurjs/federation/internal/vue.js")
-    expect(code).toContain("remoteSchema } from 'virtual:fulgurjs-remote-schema'")
-    expect(code).not.toContain('__FULGURJS_RUNTIME__ ??')
+describe('开发态内部 API 门面', () => {
+  it('旧 virtual:fulgurjs-api 不再由插件解析', async () => {
+    const { federation } = await import('../src/index')
+    const [pre] = federation({ name: 'negative-entry' })
+    const resolve = pre.resolveId as (source: string) => unknown
+    expect(resolve.call(pre, 'virtual:fulgurjs-api')).toBeNull()
   })
-  it('serve 形态：runtime 部分转发 proxy（远程页面零副本链）+ remoteComponent 惰性化', async () => {
+  it('运行时代理与同步 Vue 适配层组合', async () => {
     const { genApiFacade } = await import('../src/virtual')
-    const code = genApiFacade('serve')
+    const code = genApiFacade()
     expect(code).toContain('from "virtual:fulgurjs-runtime-proxy"')
     expect(code).not.toContain('from "virtual:fulgurjs-runtime";')
-    expect(code).toContain("import('@fulgurjs/federation/internal/vue.js')")
+    expect(code).toContain('createRemoteComponent(__fulgurjs_loadRemote)')
+    expect(code).toContain('@fulgurjs/federation/internal/vue-adapter.js')
     expect(code).toContain('provideAppContext')
-    expect(code).toContain('remoteSchema')
   })
-  it('serve 形态：parseSpec 同步直读单例（promise 转发会把返回对象变成 Promise，实测回归）', async () => {
+  it('parseSpec 同步直读单例', async () => {
     const { genApiFacade } = await import('../src/virtual')
     const { genRuntimeProxyModule } = await import('../src/virtual')
-    const serve = genApiFacade('serve')
+    const serve = genApiFacade()
     const proxy = genRuntimeProxyModule()
     // proxy 内 parseSpec 不在 promise 转发列表（同步语义）
     expect(proxy).toContain('export const parseSpec = (...a) => (globalThis).__FULGURJS_RUNTIME__.parseSpec(...a);')

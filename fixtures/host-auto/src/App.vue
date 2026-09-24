@@ -23,7 +23,7 @@
 <script setup lang="ts">
 // WP7：单一 API 门面（推荐入口）+ 旧入口同文件共存（c8c0ac1 回归类：门面/运行时显式
 // 导入与远程动态导入混用，防重复改写守卫不得漏掉远程导入；两入口必须收敛同一单例）
-import { loadRemote, getRuntime as grApi, parseSpec } from 'virtual:fulgurjs-api'
+import { loadRemote, getRuntime as grApi, parseSpec } from '@fulgurjs/federation/runtime'
 import { getRuntime as grLegacy } from 'virtual:fulgurjs-runtime'
 
 // ref/computed/shallowRef/isRef 均不显式导入：auto-import 注入（宿主侧插件链回归）

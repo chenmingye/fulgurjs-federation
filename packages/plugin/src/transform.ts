@@ -21,6 +21,64 @@ function ensureLexer() {
   return lexerReady
 }
 
+function splitNamedImportBindings(inner: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  for (let i = 0; i < inner.length; i++) {
+    if (inner.startsWith('/*', i)) {
+      const end = inner.indexOf('*/', i + 2)
+      i = end < 0 ? inner.length : end + 1
+    } else if (inner.startsWith('//', i)) {
+      const end = inner.indexOf('\n', i + 2)
+      i = end < 0 ? inner.length : end
+    } else if (inner[i] === ',') {
+      parts.push(inner.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  parts.push(inner.slice(start).trim())
+  return parts.filter(Boolean)
+}
+
+/** 开发态将公开入口的静态 schema 绑定拆出，并让 expose 使用页面级代理。 */
+export async function rewriteRuntimeEntryImports(code: string, exposeTarget: boolean): Promise<string | null> {
+  if (!code.includes('@fulgurjs/federation/runtime')) return null
+  await ensureLexer()
+  const [imports] = parse(code)
+  const out = new MagicString(code)
+  let changed = false
+  for (const imp of imports) {
+    if (imp.n !== '@fulgurjs/federation/runtime' || imp.d !== -1) continue
+    const statement = code.slice(imp.ss, imp.se)
+    if (/^\s*import\s+type\b/.test(statement)) continue
+    const destination = exposeTarget ? 'virtual:fulgurjs-api-facade' : '@fulgurjs/federation/runtime'
+    const braces = statement.match(/\{([\s\S]*?)\}/)
+    if (braces && /^\s*import\b/.test(statement)) {
+      const parts = splitNamedImportBindings(braces[1])
+      const normalized = parts.map((x) => x.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '').trim())
+      const schema = normalized.filter((x) => /^remoteSchema(?:\s+as\s+[A-Za-z_$][\w$]*)?$/.test(x))
+      if (schema.length) {
+        const rest = parts.filter((_, i) => !schema.includes(normalized[i]))
+        const before = statement.slice(0, statement.indexOf('{')).trim()
+        const defaultBinding = before.replace(/^import\s*/, '').replace(/,\s*$/, '').trim()
+        const replacement = [
+          ...(rest.length || defaultBinding ? [`import ${defaultBinding ? defaultBinding + (rest.length ? ', ' : '') : ''}${rest.length ? `{ ${rest.join(', ')} }` : ''} from ${JSON.stringify(destination)};`] : []),
+          `import { ${schema.join(', ')} } from "virtual:fulgurjs-remote-schema";`,
+        ].join('\n')
+        const end = code[imp.se] === ';' ? imp.se + 1 : imp.se
+        out.overwrite(imp.ss, end, replacement)
+        changed = true
+        continue
+      }
+    }
+    if (exposeTarget) {
+      out.overwrite(imp.s, imp.e, destination)
+      changed = true
+    }
+  }
+  return changed ? out.toString() : null
+}
+
 /**
  * 判断被 transform 的文件是否为 exposes 目标源文件（联邦远程页面的入口）。
  * exposes 声明可省略扩展名（'./src/x' → x.ts/.vue/...），故逐个候选扩展名比对；

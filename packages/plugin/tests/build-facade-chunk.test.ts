@@ -213,7 +213,7 @@ describe('D6: post 阶段 auto-import 兜底（源码契约）', () => {
   it('build 下 isPluginProcessedModule 守卫不拦截兜底（transformModule 幂等，依赖 collect 完成）', () => {
     // D6 补丁：守卫在 build 下会拦掉「pre 已处理 + auto-import 后置注入」的文件
     //（.vue script 子请求必被 pre 标记），故 build 分支的守卫判定必须限定 serve
-    const guardLine = src.match(/if \((state\.command === 'serve' && )?isPluginProcessedModule\(code\)\) return null/)
+    const guardLine = src.match(/if \((state\.command === 'serve' && )?isPluginProcessedModule\(code\)\) return/)
     expect(guardLine).toBeTruthy()
     expect(guardLine![1]).toContain("state.command === 'serve'")
   })

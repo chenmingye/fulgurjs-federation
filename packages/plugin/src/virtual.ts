@@ -452,35 +452,10 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
 }
 
 /**
- * 3.0.0：唯一公开 API 门面（virtual:fulgurjs-api）——破坏性收敛。
- * 应用代码的一切联邦导入（runtime 函数 / context 三函数 / definePages / remoteSchema /
- * remoteComponent）只允许来自本入口；virtual:fulgurjs-runtime 与
- * '@fulgurjs/federation/{context,pages,vue}' 子路径不再是公开 API（runtime 虚拟 id
- * 保留为内部实现细节，供门面/容器入口/改写管线引用）。
- *
- * 双形态：
- * - build（prod）：全静态 re-export——各打包副本经 globalThis.__FULGURJS_RUNTIME__
- *   单例天然收敛，静态图零额外开销；
- * - serve（dev）：runtime 部分转发 virtual:fulgurjs-runtime-proxy（求值期零副作用、
- *   调用期走页面级单例——远程页面 import 本门面不会拉起远程副本链）；remoteComponent
- *   因物理包内部静态依赖 runtime chunk，做调用期惰性 import（同理零求值副作用）；
- *   context/pages 零状态/纯函数，静态 re-export 安全。
+ * 开发态 expose 的内部代理门面。应用代码仍写物理 /runtime，transform 后指向此模块。
+ * Vue 适配器接收代理 loadRemote，remoteComponent 同步返回组件且不导入第二份内核。
  */
-export function genApiFacade(mode: 'serve' | 'build'): string {
-  if (mode === 'build') {
-    return [
-      'export {',
-      '  initSharing, registerShare, registerRemotes, registerRemote, registerPlugins,',
-      '  loadShare, loadRemote, getContainer, preloadRemote, parseSpec,',
-      '  getRuntime, shareScopeMap, unwrapDefault, version,',
-      '} from "virtual:fulgurjs-runtime";',
-      "export { provideAppContext, getAppContext, requireAppContext } from '@fulgurjs/federation/internal/context.js';",
-      "export { definePages, validatePages } from '@fulgurjs/federation/internal/pages.js';",
-      "export { remoteComponent } from '@fulgurjs/federation/internal/vue.js';",
-      "export { default as remoteSchema } from 'virtual:fulgurjs-remote-schema';",
-      '',
-    ].join('\n')
-  }
+export function genApiFacade(): string {
   return [
     'export {',
     '  loadRemote, loadShare, preloadRemote, getContainer,',
@@ -489,9 +464,9 @@ export function genApiFacade(mode: 'serve' | 'build'): string {
     '} from "virtual:fulgurjs-runtime-proxy";',
     "export { provideAppContext, getAppContext, requireAppContext } from '@fulgurjs/federation/internal/context.js';",
     "export { definePages, validatePages } from '@fulgurjs/federation/internal/pages.js';",
-    `let __fulgurjs_vue_p;`,
-    `export const remoteComponent = (...a) => (__fulgurjs_vue_p ??= import('@fulgurjs/federation/internal/vue.js')).then((m) => m.remoteComponent(...a));`,
-    "export { default as remoteSchema } from 'virtual:fulgurjs-remote-schema';",
+    "import { createRemoteComponent } from '@fulgurjs/federation/internal/vue-adapter.js';",
+    "import { loadRemote as __fulgurjs_loadRemote } from 'virtual:fulgurjs-runtime-proxy';",
+    'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     '',
   ].join('\n')
 }

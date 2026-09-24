@@ -32,8 +32,8 @@
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
 - **CLI（主包内置 bin）**：`fulgurjs init`——`fulgurjs.config.ts` 单配置驱动的迁移生成器（模板 = 真实工程验证形态：vite 配置/路由表/桥/联邦启动器/NGINX conf 全量编码，锚点补丁幂等可续跑）；`fulgurjs doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
-- **跨应用传值与方法引用**：`virtual:fulgurjs-api` 导出 `provideAppContext` / `getAppContext` / `requireAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）`provideAppContext` / `getAppContext` / `requireAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）
-- **Vue 直渲染**：`remoteComponent('remote/X')`（`virtual:fulgurjs-api` 导出）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法），runtime.js 零框架依赖零体积增量
+- **跨应用传值与方法引用**：`@fulgurjs/federation/runtime` 导出 `provideAppContext` / `getAppContext` / `requireAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）`provideAppContext` / `getAppContext` / `requireAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥一次写入页面级单例（user/token/getToken/store/hostApp/locale/events 标准字段 + 项目扩展位），远程 boot 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享 / 登录刷新三通道）
+- **Vue 直渲染**：`remoteComponent('remote/X')`（`@fulgurjs/federation/runtime` 导出）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法），runtime.js 零框架依赖零体积增量
 - **CSP 友好**：原生 ESM 加载路径全程无 `eval` / `new Function`，可在严格 CSP（无 `unsafe-eval`）下运行
 - **全链路错误码体系（30 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §8 码表防漂移校验
 
@@ -99,13 +99,13 @@ export default defineConfig({
 import Button from 'remote-a/Button'
 
 // 动态导入 / 运行时 API
-import { loadRemote, registerRemote, preloadRemote } from 'virtual:fulgurjs-api'
+import { loadRemote, registerRemote, preloadRemote } from '@fulgurjs/federation/runtime'
 
 const Chart = defineAsyncComponent(() => loadRemote('remote-a/Chart').then(m => m.default))
 
 // Vue 组件直渲染：remoteComponent = 上行的标准封装
 // 加载失败显式错误占位（错误码+根因+修法），loading/错误组件可自定义
-import { remoteComponent } from 'virtual:fulgurjs-api'
+import { remoteComponent } from '@fulgurjs/federation/runtime'
 const ChartCard = remoteComponent('remote-a/Chart', { retries: 2 })
 
 // 构建时地址未知的远程？运行时注册（对齐 webpack promise remote 语义）
@@ -129,15 +129,17 @@ const Panel = await loadRemote('shop/Panel', {
 
 > 以上只是最小面。**全部选项（remotes 四形态/shared 九个开关/dts/runtimePlugins…）、运行时 API、CLI、错误码见下方 [API 参考](#api-参考)。**
 
-**唯一 API 入口（3.0.0 破坏性收敛）**：应用代码的一切联邦导入——运行时函数、context 三函数、`definePages`、`remoteSchema`、`remoteComponent`——**只来自一个虚拟模块**：
+**唯一 API 入口（4.0.0）**：应用代码的一切联邦导入——运行时函数、context 三函数、`definePages`、`remoteSchema`、`remoteComponent`——**只来自物理子路径**：
 
 ```ts
-import { loadRemote, loadShare, preloadRemote, provideAppContext, getAppContext, definePages, remoteSchema, remoteComponent } from 'virtual:fulgurjs-api'
+import { loadRemote, loadShare, preloadRemote, provideAppContext, getAppContext, definePages, remoteSchema, remoteComponent } from '@fulgurjs/federation/runtime'
 ```
 
-旧入口（`virtual:fulgurjs-runtime`、`@fulgurjs/federation/{context,pages,vue}` 子路径）**已删除**——包 exports 白名单不再暴露（迁移映射见 CHANGELOG 3.0.0）。`virtual:fulgurjs-runtime` 仅作为插件内部实现细节保留（门面/容器入口/改写管线引用），不进入文档与类型声明。
+旧应用入口 `virtual:fulgurjs-api` 已删除；`virtual:fulgurjs-runtime` 仅供插件内部使用。旧 context/pages/vue 子路径也不再公开（迁移映射见 CHANGELOG 4.0.0）。
 
-**没有别的步骤了。** dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgurjs-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
+`/runtime` 是 ESM 应用入口，包含 `remoteComponent`，所以使用此入口的应用需安装 Vue。`remoteSchema` 必须以具名静态导入取得 dev 探针结果；命名空间导入、动态导入和 re-export 不触发探针拆写。未经过插件转换时该值是空表。包根与 `/config` 仍可在 Node 配置中使用。
+
+dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgurjs-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
 ## CLI：init 起步模板 + doctor 部署体检
 
@@ -259,22 +261,22 @@ shared: {
 
 版本裁决语义对齐 webpack：满足 requiredVersion 的最高版本胜出；已加载版本永不替换；singleton 收敛到唯一实例（skew 告警 MFU-010）；strictVersion 不满足抛 MFU-003。
 
-### 2. 运行时 API — `virtual:fulgurjs-api`
+### 2. 运行时 API — `@fulgurjs/federation/runtime`
 
 **任何文件都直接静态导入**——宿主页面、exposes 目标文件（远程页面）都一样，插件自动保证同一页面只有一个运行时实例（远程页面里的导入会被自动改写为惰性单例委托）：
 
 ```ts
 // 宿主页面、远程页面，写法完全一致
-import { loadRemote } from 'virtual:fulgurjs-api'
+import { loadRemote } from '@fulgurjs/federation/runtime'
 ```
 
 > 仍可绕过代理直取全局单例（等价，调试用）：`(globalThis as any).__FULGURJS_RUNTIME__`。
 
 #### 函数总表
 
-> 下表全部函数与 `definePages` / `remoteSchema` / `provideAppContext` 等 context 函数 / `remoteComponent` 都从**唯一入口** `virtual:fulgurjs-api` 导入（见 §2）；旧入口已删除。
+> 下表全部函数与 `definePages` / `remoteSchema` / `provideAppContext` 等 context 函数 / `remoteComponent` 都从**唯一入口** `@fulgurjs/federation/runtime` 导入（见 §2）；旧入口已删除。
 
-> **TS 提示**：`virtual:fulgurjs-api` 的类型随包发布。dev 启动时插件自动在类型目录（默认 `src/fulgurjs/types/`，联邦产物集中一个文件夹）生成远程模块声明与运行时类型垫片——src 布局项目零配置即全量生效；手工方式则在 tsconfig `compilerOptions.types` 加 `"@fulgurjs/federation/client"`。
+> **TS 提示**：`@fulgurjs/federation/runtime` 的类型随包发布，由包的 `exports` 和 `typesVersions` 直接解析；不需要 `client` 类型垫片。dev 启动时插件仅在类型目录（默认 `src/fulgurjs/types/`）生成远程 exposes 的类型声明。
 
 | 函数 | 签名 | 说明 |
 |---|---|---|
@@ -308,7 +310,7 @@ const Panel = await loadRemote('shop/Panel', {
 > hook 错误契约：`beforeLoadRemote` / `afterLoadRemote` 是**观测 hook**——自身抛错只告警、不改写加载结果；`resolveShare` 是**决策 hook**——显式抛错向调用方传播（绝不静默回退到另一份共享依赖）。
 
 ```ts
-import type { RuntimePlugin } from 'virtual:fulgurjs-api'
+import type { RuntimePlugin } from '@fulgurjs/federation/runtime'
 
 export default {
   name: 'my-plugin',
@@ -332,13 +334,13 @@ export default {
 | `window.__FULGURJS_APP_CONFIG__` | W4 全局配置镜像 |
 | `window` 事件 `fulgurjs:error` | `CustomEvent<{ remote, error }>`，所有远程加载/共享错误都会发出 |
 
-### 3. `definePages` — 宿主页面路由表（`virtual:fulgurjs-api`）
+### 3. `definePages` — 宿主页面路由表（`@fulgurjs/federation/runtime`）
 
 宿主把「URL 路径 → 远程 exposes 键」的映射表交给它校验，带参路由的静默冲突在启动期报错而不是运行时加载错组件：
 
 ```ts
-import { definePages } from 'virtual:fulgurjs-api'
-import { remoteSchema } from 'virtual:fulgurjs-api' // dev 自动生成；build 恒为空（诚实降级）
+import { definePages } from '@fulgurjs/federation/runtime'
+import { remoteSchema } from '@fulgurjs/federation/runtime' // dev 自动生成；build 恒为空（诚实降级）
 
 export const PAGES = definePages(
   [
@@ -466,10 +468,10 @@ export default defineRepoConfig({
 
 NGINX 部署模板（no-cache 规则 + 深链回退）用 `fulgurjs init --config` 自动生成。
 
-### 8. `remoteComponent` — Vue 远程组件直渲染（`virtual:fulgurjs-api`）
+### 8. `remoteComponent` — Vue 远程组件直渲染（`@fulgurjs/federation/runtime`）
 
 ```ts
-import { remoteComponent } from 'virtual:fulgurjs-api'
+import { remoteComponent } from '@fulgurjs/federation/runtime'
 
 const FederatedBusinessForm = remoteComponent('demo-host/FormRouterPage')
 const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
@@ -492,16 +494,16 @@ const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
 - 内部 = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件，`props`（如 `form-params`）在使用处直接透传；
 - **无任何兜底/降级**（H3 零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法三段式文案），`window` 的 `fulgurjs:error` 事件由 runtime 层照常发出；
 - 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
-- `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：仅使用 `./vue` 子路径时才需要安装 Vue；runtime.js 保持框架无关（不 import vue），体积零增量；
-- 运行时实例经 `globalThis.__FULGURJS_RUNTIME__` 页面级单例复用，与 `virtual:fulgurjs-api` 的导入殊途同归，无需额外接线。
+- `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：只使用包根或 `/config` 时无需安装；应用使用 `/runtime` 时需要安装 Vue，因为该入口导出 `remoteComponent`。内部 `runtime.js` 仍不导入 Vue，体积零增量；
+- 运行时实例经 `globalThis.__FULGURJS_RUNTIME__` 页面级单例复用，与 `@fulgurjs/federation/runtime` 的导入殊途同归，无需额外接线。
 
-### 9. `AppContext` — 跨应用传值与方法引用（`virtual:fulgurjs-api`）
+### 9. `AppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/runtime`）
 
 宿主向子应用传值、子应用向宿主反向注册方法，一律走这条一等公民通道（对标乾坤 `props`，但带类型与错误契约）——不再各自挂 `window.*` 裸口子。
 
 ```ts
 // —— 宿主桥（host/src/fulgurjs/host/bridge.ts）：登录完成后一次性提供 ——
-import { provideAppContext } from 'virtual:fulgurjs-api'
+import { provideAppContext } from '@fulgurjs/federation/runtime'
 
 provideAppContext({
   user,                                  // 宿主登录用户原始形态
@@ -514,14 +516,14 @@ provideAppContext({
 })
 
 // —— 远程 boot（exposes/federatedBoot.ts）：显式校验消费 ——
-import { requireAppContext } from 'virtual:fulgurjs-api'
+import { requireAppContext } from '@fulgurjs/federation/runtime'
 
 const { store, user, hostApp } = requireAppContext('store', 'user', 'hostApp')
 // 缺任一键 → [fulgurjs:CC-001] 三段式抛错（got / expected / example 指向宿主桥）；
 // 页面无运行时单例（独立直开远程页）→ [fulgurjs:CC-002] 显式，修法 = 经宿主联邦加载。
 
 // —— 远程页面读点 ——
-import { getAppContext } from 'virtual:fulgurjs-api'
+import { getAppContext } from '@fulgurjs/federation/runtime'
 const dict = getAppContext().events?.main?.getDictItems?.('sex')
 
 // —— 子应用反向注册方法给宿主（页面 onUnmounted 时记得摘除，见迁移指南「页面卸载清理清单」）——
@@ -669,7 +671,7 @@ const PREFETCH_REMOTES: string[] = []
 #### 9.1.5 IDE 说明（`src/fulgurjs/` 目录的红波浪线）
 
 - `types/` 下的 `*.d.ts` 是**插件每次 dev 自动生成**的类型直连声明（勿手改）：内部 `export * from '../../../demo-app-xxx/src/***.vue'` 指向**兄弟工程的源码**。命令行 `vue-tsc --noEmit`（走本应用 tsconfig，skipLibCheck 生效）为 **0 错误**；但 **VSCode/Volar 在打开这些 d.ts 时**可能把工程外 .vue 用推断项目（inferred project，无 tsconfig 上下文）展开检查，显示大片"找不到模块 '@/...'"——**仅编辑器显示问题，不影响命令行检查与构建**，不打开 `types/` 生成物即无感。
-- 升级插件版本后若 `import ... from 'virtual:fulgurjs-api'` 报 ts(2307)：是 IDE 的 TS 服务缓存了旧包——`Restart TS Server`（⌘⇧P）或重开窗口即可。3.0.0 起旧子路径（`@fulgurjs/federation/{context,pages,vue}`）已从包 exports 删除，按迁移映射改为 `virtual:fulgurjs-api`。
+- 升级插件版本后若 `import ... from '@fulgurjs/federation/runtime'` 报 ts(2307)：是 IDE 的 TS 服务缓存了旧包——`Restart TS Server`（⌘⇧P）或重开窗口即可。3.0.0 起旧子路径（`@fulgurjs/federation/{context,pages,vue}`）已从包 exports 删除，按迁移映射改为 `@fulgurjs/federation/runtime`。
 - **根治红波浪线**：`federation({ dts: { mode: 'shim' } })` —— 生成物不再引用跨工程源文件（宽松占位形态），IDE 全程干净；取舍是失去"跳转直达远程源码"的补全能力（默认 `source` 不变，按项目偏好选择）。
 
 ## ⚠️ 首次使用避坑指南（真实迁移项目踩坑实录）

@@ -4,7 +4,7 @@
  * 验证发布产物（而非 link: 工作区）可被真实消费：
  * 1. packages/plugin 下 npm pack 出 tarball；
  * 2. 临时 consumer 以普通依赖安装 tarball（外加 vue / vite / @vitejs/plugin-vue）；
- * 3. exports 解析面：根入口、/pages、/vue、/context 与对应 .d.ts 全部可解析；
+ * 3. exports 解析面：根入口与 /config 保持 CJS，/runtime 可由 ESM 导入且类型可解析，旧入口不可解析；
  * 4. 一次真实 vite build（宿主 + exposes + remotes 最小组合）；
  * 5. 最小 dev 页面加载（dev server 起服 + 页面 200 + 容器入口端点 200）。
  *
@@ -60,7 +60,7 @@ execSync(`npm install "${tarballPath}" vue@^3.5.22 vite@^6.3.5 @vitejs/plugin-vu
 
 // 3. exports 解析面（根入口 + 子路径 + 类型文件）
 const consumerRequire = createRequire(path.join(consumer, 'package.json'))
-// 3.0.0：唯一运行时入口 virtual:fulgurjs-api（旧子路径已删除，见 exports 负向断言）
+// 4.0.0：物理 /runtime 是唯一应用入口，且只提供 ESM import 条件。
 const entryPoints = ['@fulgurjs/federation', '@fulgurjs/federation/config']
 for (const ep of entryPoints) {
   try {
@@ -71,19 +71,43 @@ for (const ep of entryPoints) {
   }
 }
 const pkgJson = JSON.parse(fs.readFileSync(path.join(consumer, 'node_modules/@fulgurjs/federation/package.json'), 'utf8'))
-for (const sub of ['.', './config']) {
+for (const sub of ['.', './config', './runtime']) {
   const typesFile = pkgJson.exports[sub]?.types
   if (!typesFile || !fs.existsSync(path.join(consumer, 'node_modules/@fulgurjs/federation', typesFile))) {
     fail(`类型文件缺失：exports["${sub}"].types = ${typesFile}`)
   }
 }
-// 3.0.0 破坏性断言：旧公开子路径必须已从 exports 删除
-for (const removed of ['./pages', './context', './vue']) {
+// 4.0.0 破坏性断言：旧公开子路径必须已从 exports 删除
+for (const removed of ['./pages', './context', './vue', './client']) {
   if (pkgJson.exports[removed] !== undefined) {
-    fail(`3.0.0 破坏性收敛未落实：exports 仍暴露 ${removed}`)
+    fail(`4.0.0 破坏性收敛未落实：exports 仍暴露 ${removed}`)
   }
 }
-log('types OK: ./ ./config；旧子路径已删除 ✓')
+if (pkgJson.exports['./runtime']?.require) fail('/runtime 必须只有 ESM import 条件')
+fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), `import * as runtimeEntry from '@fulgurjs/federation/runtime'\nimport * as pluginEntry from '@fulgurjs/federation'\nif (!('loadRemote' in runtimeEntry && 'remoteComponent' in runtimeEntry && 'remoteSchema' in runtimeEntry)) process.exit(2)\nif ('loadRemote' in pluginEntry) process.exit(3)\n`)
+const esmCheck = spawnSync(process.execPath, ['check-runtime.mjs'], { cwd: consumer, encoding: 'utf8' })
+if (esmCheck.status !== 0) fail(`ESM 包路径导入失败：${esmCheck.stderr}`)
+let requireRejected = false
+try { consumerRequire('@fulgurjs/federation/runtime') } catch { requireRejected = true }
+if (!requireRejected) fail('/runtime 不应能由 CommonJS require 加载')
+let clientRejected = false
+try { consumerRequire.resolve('@fulgurjs/federation/client') } catch { clientRejected = true }
+if (!clientRejected) fail('已删除的 /client 子路径仍可解析')
+const runtimeEntry = await import(pathToFileURL(path.join(consumer, 'node_modules/@fulgurjs/federation/dist/runtime-entry.js')).href)
+for (const name of ['loadRemote', 'remoteComponent', 'remoteSchema']) {
+  if (!(name in runtimeEntry)) fail(`/runtime 缺少 ${name}`)
+}
+log('types OK: ./ ./config ./runtime；旧子路径已删除 ✓')
+
+const tsc = path.join(PLUGIN_DIR, 'node_modules/.bin/tsc')
+fs.writeFileSync(path.join(consumer, 'check-types.ts'), `import { loadRemote, definePages, remoteSchema } from '@fulgurjs/federation/runtime'\nimport type { RemoteInput } from '@fulgurjs/federation/runtime'\nconst remote: RemoteInput = { name: 'demo', entry: '/remoteEntry.js' }\ndefinePages([{ route: '/demo/list' }], { schema: remoteSchema })\nvoid loadRemote; void remote\n`)
+for (const [name, module, moduleResolution] of [['bundler', 'esnext', 'bundler'], ['node10', 'commonjs', 'node10']]) {
+  const config = `tsconfig.${name}.json`
+  fs.writeFileSync(path.join(consumer, config), JSON.stringify({ compilerOptions: { target: 'es2022', module, moduleResolution, strict: true, noEmit: true, skipLibCheck: true, types: [] }, files: ['check-types.ts'] }))
+  const checked = spawnSync(tsc, ['-p', config], { cwd: consumer, encoding: 'utf8' })
+  if (checked.status !== 0) fail(`${name} tarball 类型解析失败：${checked.stdout}${checked.stderr}`)
+}
+log('ESM import + bundler/node10 类型解析 OK')
 
 // 4. 最小联邦工程（宿主 + exposes + remotes）
 fs.writeFileSync(
@@ -93,11 +117,11 @@ fs.writeFileSync(
 fs.mkdirSync(path.join(consumer, 'src'), { recursive: true })
 fs.writeFileSync(
   path.join(consumer, 'src/main.ts'),
-  `import { loadRemote, version } from 'virtual:fulgurjs-runtime'\nexport const v = version\nexport const load = () => loadRemote('smoke-r/Widget')\n`,
+  `import { loadRemote, version, remoteSchema } from '@fulgurjs/federation/runtime'\nexport const v = version\nexport const schema = remoteSchema\nexport const load = () => loadRemote('smoke-r/Widget')\n`,
 )
 fs.writeFileSync(
   path.join(consumer, 'src/exposed.ts'),
-  `import { version } from 'virtual:fulgurjs-runtime'\nexport const exposedRuntimeVersion = version\n`,
+  `import { version, remoteComponent } from '@fulgurjs/federation/runtime'\nexport const exposedRuntimeVersion = version\nexport const Widget = remoteComponent('smoke-r/Widget')\n`,
 )
 fs.writeFileSync(
   path.join(consumer, 'vite.config.ts'),
@@ -141,13 +165,17 @@ try {
   const get = async (u) => await fetch(u, { signal: AbortSignal.timeout(3000) })
   while (Date.now() < deadline) {
     try {
-      const [page, entry, apiMod] = await Promise.all([
+      const [page, entry, mainMod, exposedMod] = await Promise.all([
         get(`http://localhost:${PORT}/`),
         get(`http://localhost:${PORT}/@fulgurjs-entry.js`),
-        get(`http://localhost:${PORT}/@id/virtual:fulgurjs-api`),
+        get(`http://localhost:${PORT}/src/main.ts`),
+        get(`http://localhost:${PORT}/src/exposed.ts`),
       ])
-      const apiText = await apiMod.text().catch(() => '')
-      if (page.ok && entry.ok && apiMod.ok && apiText.includes('virtual:fulgurjs-runtime-proxy')) {
+      const mainText = await mainMod.text().catch(() => '')
+      const exposedText = await exposedMod.text().catch(() => '')
+      if (page.ok && entry.ok && mainMod.ok && exposedMod.ok &&
+          mainText.includes('virtual:fulgurjs-remote-schema') &&
+          exposedText.includes('virtual:fulgurjs-api-facade')) {
         devOk = true
         break
       }
@@ -157,7 +185,7 @@ try {
     await new Promise((r) => setTimeout(r, 500))
   }
   if (!devOk) fail(`dev server 探测失败（/ 或 /@fulgurjs-entry.js 未就绪，vite ${vitePkg.version}）`)
-  log('dev page load OK（/ 200 + /@fulgurjs-entry.js 200 + api 门面 serve 形态 200）')
+  log('dev page load OK（宿主 schema 导入拆分 + expose 内部门面）')
 } finally {
   dev.kill('SIGTERM')
 }

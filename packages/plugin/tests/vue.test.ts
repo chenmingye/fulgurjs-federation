@@ -34,6 +34,16 @@ describe('remoteComponent（@fulgurjs/federation/vue）', () => {
     await fresh()
   })
 
+  it('注入式开发态工厂同步返回可挂载组件', async () => {
+    const { createRemoteComponent } = await import('../src/vue-adapter')
+    const load = vi.fn(async () => ({ default: { template: '<span>dev-adapter</span>' } }))
+    const Comp = createRemoteComponent(load)('r-dev/Card')
+    expect(Comp).not.toBeInstanceOf(Promise)
+    const el = await mount(Comp)
+    expect(el.innerHTML).toContain('dev-adapter')
+    expect(load).toHaveBeenCalledWith('r-dev/Card', { retries: undefined })
+  })
+
   it('V-1 loader 解包 default 导出', async () => {
     const rt = await import('../src/runtime/index')
     const Marker = { template: '<span>remote-default</span>' }
