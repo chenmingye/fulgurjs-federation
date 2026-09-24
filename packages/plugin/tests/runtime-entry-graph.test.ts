@@ -16,8 +16,9 @@ describe('/runtime 发布物', () => {
       'initSharing', 'registerShare', 'registerRemotes', 'registerRemote', 'registerPlugins',
       'loadShare', 'loadRemote', 'getContainer', 'preloadRemote', 'parseSpec',
       'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
-      'provideAppContext', 'getAppContext', 'requireAppContext',
-      'definePages', 'validatePages', 'remoteComponent', 'remoteSchema',
+      'provideAppContext', 'getAppContext', 'requireAppContext', 'clearAppContext',
+      'clearSessionState',
+      'definePages', 'validatePages', 'remoteComponent', 'createHostPages', 'remoteSchema',
     ].sort())
     expect(mod.remoteSchema).toEqual({})
   })
