@@ -120,10 +120,8 @@ describe('options: exposes / 其余选项', () => {
     expect(n.exposes[0].chunkName).toBe('button-chunk')
   })
 
-  it('remoteType 非 module → 告警并回退（P3）', () => {
-    const n = norm({ name: 'h', remoteType: 'script' })
-    expect(n.remoteType).toBe('module')
-    expect(n.warnings.some((w) => w.includes('P3'))).toBe(true)
+  it('remoteType 非 module → CFG-011 硬报错（4.1.0 起不再静默回落）', () => {
+    expect(() => norm({ name: 'h', remoteType: 'script' } as never)).toThrow('CFG-011')
   })
 
   it('filename 默认值', () => {

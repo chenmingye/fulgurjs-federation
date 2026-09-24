@@ -93,6 +93,10 @@ async function buildAutoImportApp(
       exposes: { './Counter': './src/exposes/Counter.vue' },
       remotes: { 'wp1-other': { dev: 'http://localhost:5999', prod: '/wp1-other' } },
       shared: { vue: { singleton: true, requiredVersion: '^3.4.0' } },
+      // 本测试守护 WP1 静态形态（auto-import 注入 → 协商门面 + 页面 chunk 零 vue 本体静态边）。
+      // 4.1.0 起双角色默认 devSharedSelf: true（门面动态化，产物形态不同，由
+      // build-facade-chunk/build-chunk-graph 套件守护）——此处显式关回静态形态
+      devSharedSelf: false,
     })
     const autoPlugin = autoImport({ imports: ['vue'], dts: false })
     const plugins: Plugin[] =

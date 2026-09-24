@@ -33,6 +33,8 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'CFG-008', stage: 'CFG', title: 'shared 非法组合（eager+import:false / shareKey 重复声明）' },
   { code: 'CFG-009', stage: 'CFG', title: 'remotes 运行参数非法（timeout/retries/breaker 非有限正数等）' },
   { code: 'CFG-010', stage: 'CFG', title: 'devCorsOrigins 形态非法（须为 "*" 或 http(s) 来源数组）' },
+  { code: 'CFG-011', stage: 'CFG', title: '不支持的互操作选项（remoteType/library.type/automaticAsyncBoundary=false，此前静默规范化现已硬报错）' },
+  { code: 'CFG-012', stage: 'CFG', title: 'setup 配置非法（路径为空/非字符串，或 exposes 占用内部保留键）' },
   // ── DEV 开发启动/转换期 ──
   { code: 'DEV-001', stage: 'DEV', title: 'remote dev server 不可达（manifest 拉取失败）' },
   { code: 'DEV-002', stage: 'DEV', title: 'remote dev manifest 为空或格式不识别' },
@@ -59,6 +61,10 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-008', stage: 'MFU', title: '未知远程' },
   { code: 'MFU-009', stage: 'MFU', title: '加载到的模块没有任何导出' },
   { code: 'MFU-010', stage: 'MFU', title: 'singleton 共享版本漂移（使用作用域版本）' },
+  { code: 'MFU-011', stage: 'MFU', title: 'setup 生命周期入口导出形态非法（默认导出/具名 onSession 不是函数）' },
+  { code: 'MFU-012', stage: 'MFU', title: 'setup/onSession 执行抛错（仅清失败阶段缓存，可重试）' },
+  { code: 'MFU-013', stage: 'MFU', title: '远程声明 onSession 但宿主 AppContext 缺 sessionKey（登录代次）' },
+  { code: 'MFU-014', stage: 'MFU', title: 'setup/onSession 同步段内递归 loadRemote 同一远程（自等待死锁防线）' },
   // ── CC 跨应用上下文（定义于 context.ts，此处登记供手册一致性校验） ──
   { code: 'CC-001', stage: 'CC', title: 'AppContext 必需字段缺失（修法指向宿主桥 provideAppContext）' },
   { code: 'CC-002', stage: 'CC', title: '运行时单例不可用（独立直开远程页，须经宿主联邦加载）' },

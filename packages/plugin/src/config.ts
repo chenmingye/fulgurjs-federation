@@ -12,6 +12,8 @@ export interface PageEntry {
   spec?: string
   /** 页签标题 */
   title?: string
+  /** 页面保活开关（按页显式开启；默认关闭） */
+  keepAlive?: boolean
 }
 
 export interface RemoteAddress {
@@ -20,8 +22,14 @@ export interface RemoteAddress {
 }
 
 export interface HostConfig {
-  /** 页面路由表 */
-  pages: PageEntry[]
+  /**
+   * 页面路由表（可选）：应用代码的页面表是运行时页面真源（供宿主路由与
+   * createHostPages 共用），仓库配置中的副本仅供 init/explain 摘要与核对。
+   * 不再强制——缺省时 CLI 摘要按实际提供数量报告。
+   */
+  pages?: PageEntry[]
+  /** 页面 spec 推导规则（与宿主 createHostPages 的 deriveSpec 保持一致；缺省 = 去首段 + 剥 :参 段） */
+  deriveSpec?: (route: string) => string
   /** 路由前缀 → 远程名 */
   remotePrefixes: Record<string, string>
   /** 消费的远程地址（键 = import 前缀；裸 URL，对象形式不支持 name@ 前缀） */
@@ -31,7 +39,9 @@ export interface HostConfig {
 export interface RemoteConfig {
   /** exposes：./键 → 源文件（独立页） */
   exposes: Record<string, string>
-  /** 反向消费的远程（双向联邦时；dev 下自身源码参与协商需 devSharedSelf: true） */
+  /** 远程初始化入口（默认导出 setup(context)，可选具名导出 onSession(context)） */
+  setup?: string
+  /** 反向消费的远程（双向联邦时） */
   remotes?: Record<string, RemoteAddress>
 }
 
@@ -52,6 +62,8 @@ export interface AppConfig {
   remote?: RemoteConfig
   /** 该应用的 shared 表（缺省建议 vue/vue-router/pinia singleton，见 init 输出的样板） */
   shared?: Record<string, { singleton?: boolean; requiredVersion?: string }>
+  /** 显式覆盖 dev 下自身源码参与 shared 协商改写；缺省按角色推断（见 federationOptionsForApp） */
+  devSharedSelf?: boolean
 }
 
 export interface DeployConfig {
@@ -89,10 +101,25 @@ export async function loadRepoConfig(configPath: string): Promise<RepoConfig> {
   const os = await import('node:os')
   const path = await import('node:path')
 
-  // 本包 dist/config.js 的绝对路径（bundle 场景下 import.meta.url = dist/cli.js，取同目录）
-  const selfDir = path.dirname(fileURLToPath(import.meta.url))
-  const selfConfigJs = path.join(selfDir, 'config.js')
-  const SELF_SPEC = fs.existsSync(selfConfigJs) ? pathToFileURL(selfConfigJs).href : '@fulgurjs-federation-config-unavailable'
+  // 本包 dist/config.js 的绝对路径（bundle 场景下 import.meta.url = dist/cli.js，取同目录）。
+  // 两种模块形态都要支持：ESM（CLI/init 直用）下 import.meta.url 可用；CJS 形态（vite 配置
+  // 加载器把本模块 require 进 CJS 配置包，esbuild 会把 import.meta.url 编译为空）回落
+  // __dirname——两侧都以「自身所在目录 + config.js」定位。
+  const selfDir = await (async (): Promise<string> => {
+    try {
+      return path.dirname(fileURLToPath(import.meta.url))
+    } catch {
+      /* import.meta 不可用（CJS 形态） */
+    }
+    try {
+      return __dirname
+    } catch {
+      /* __dirname 不可用（严格 ESM 形态） */
+    }
+    return ''
+  })()
+  const selfConfigJs = selfDir ? path.join(selfDir, 'config.js') : ''
+  const SELF_SPEC = selfConfigJs && fs.existsSync(selfConfigJs) ? pathToFileURL(selfConfigJs).href : '@fulgurjs-federation-config-unavailable'
 
   const rewriteSelfImports = (source: string): string =>
     source.replace(/(['"])@fulgurjs\/federation\/config\1/g, (_m, q) => `${q}${SELF_SPEC}${q}`)
@@ -149,9 +176,76 @@ export async function loadRepoConfig(configPath: string): Promise<RepoConfig> {
   for (const app of cfg.apps) {
     if (!app.host && !app.remote) {
       throw new Error(
-        `[fulgurjs:init] 应用 "${app.path}" 既无 host 也无 remote 角色\n根因：应用必须至少声明一个角色\n修法：宿主补 host: { pages, remotePrefixes, remotes }，远程补 remote: { exposes }`,
+        `[fulgurjs:init] 应用 "${app.path}" 既无 host 也无 remote 角色\n根因：应用必须至少声明一个角色\n修法：宿主补 host: { remotePrefixes, remotes }（pages 可选），远程补 remote: { exposes }`,
       )
     }
   }
   return cfg as RepoConfig
+}
+
+/**
+ * 仓库配置 → 某应用的 federation() Vite 插件选项（§3.4 单配置驱动）。
+ *
+ * 转换范围：name、宿主/反向 remotes（两处同键冲突即报错，带两边值）、exposes、
+ * 可选 setup、shared、devSharedSelf。build.target/base/端口/代理/插件顺序等仍归各应用
+ * vite.config.ts 管理——本函数只生成 federation({...}) 的入参。
+ *
+ * devSharedSelf 来源（优先级）：app.devSharedSelf 显式值 > 角色推断。
+ * 推断规则：提供 exposes（含仅 setup）的应用为 true（其源码被宿主消费，需协商到宿主
+ * 实例）；纯宿主（只消费）为 false。双向联邦漏配该项曾是已知错误配置（§12.4），
+ * 推断后不再依赖背诵。
+ */
+export function federationOptionsForApp(
+  config: RepoConfig,
+  appPathOrName: string,
+): import('./options').FederationOptions {
+  const app = config.apps.find(
+    (a) => a.path === appPathOrName || a.name === appPathOrName,
+  )
+  if (!app) {
+    throw new Error(
+      `[fulgurjs] 应用 "${appPathOrName}" 不在仓库配置中\n` +
+        `  可用应用: ${config.apps.map((a) => `${a.path}(${a.name})`).join('、')}\n` +
+        `  修法: 修正应用目录名或容器名（fulgurjs.config.ts apps 数组内二选一匹配）`,
+    )
+  }
+  if (!app.host && !app.remote) {
+    throw new Error(
+      `[fulgurjs] 应用 "${app.path}" 既无 host 也无 remote 角色\n` +
+        `  修法: 宿主补 host: { remotePrefixes, remotes }，远程补 remote: { exposes }`,
+    )
+  }
+
+  // remotes：宿主消费 + 远程反向消费合并；同键不同地址 = 配置漂移，显式报错不静默覆盖
+  const remotes: Record<string, RemoteAddress> = {}
+  const remoteSource = new Map<string, string>()
+  const mergeRemotes = (from: Record<string, RemoteAddress> | undefined, role: string) => {
+    for (const [key, addr] of Object.entries(from ?? {})) {
+      const prev = remotes[key]
+      if (prev && (prev.dev !== addr.dev || prev.prod !== addr.prod)) {
+        throw new Error(
+          `[fulgurjs] 应用 "${app.path}" 的远程 "${key}" 在 ${role} 与 ${remoteSource.get(key)} 两处地址不一致\n` +
+            `  ${remoteSource.get(key)}: dev=${prev.dev} prod=${prev.prod}\n` +
+            `  ${role}: dev=${addr.dev} prod=${addr.prod}\n` +
+            `  修法: 修正 fulgurjs.config.ts 使两处一致（同一远程在一个应用内只能有一个地址）`,
+        )
+      }
+      remotes[key] = addr
+      remoteSource.set(key, role)
+    }
+  }
+  mergeRemotes(app.host?.remotes, 'host.remotes')
+  mergeRemotes(app.remote?.remotes, 'remote.remotes')
+
+  const hasExposes = !!app.remote && Object.keys(app.remote.exposes).length > 0
+  const hasRemotes = Object.keys(remotes).length > 0
+
+  return {
+    name: app.name,
+    ...(hasRemotes ? { remotes } : {}),
+    ...(hasExposes ? { exposes: app.remote!.exposes } : {}),
+    ...(app.remote?.setup ? { setup: app.remote.setup } : {}),
+    ...(app.shared ? { shared: app.shared } : {}),
+    devSharedSelf: app.devSharedSelf ?? (hasExposes || !!app.remote?.setup),
+  }
 }

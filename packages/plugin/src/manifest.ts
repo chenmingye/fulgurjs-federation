@@ -50,6 +50,8 @@ export interface DevFederationManifest {
   fsRoot?: string
   exposes: DevManifestExpose[]
   shared: ManifestSharedEntry[]
+  /** setup 生命周期入口的内部 expose 键（配置 federation({ setup }) 时存在；v1 向后兼容字段） */
+  setup?: string
 }
 
 /** prod manifest 的 expose 条目（对象形态，URL 相对基准 = entry 所在目录） */
@@ -65,6 +67,8 @@ export interface ProdFederationManifest {
   entry: string
   exposes: Record<string, ProdManifestExposeEntry>
   shared: ManifestSharedEntry[]
+  /** setup 生命周期入口的内部 expose 键（配置 federation({ setup }) 时存在；v1 向后兼容字段） */
+  setup?: string
   buildInfo?: { builtBy?: string; timestamp?: number }
 }
 

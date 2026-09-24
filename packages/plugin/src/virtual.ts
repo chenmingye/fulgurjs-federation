@@ -6,7 +6,13 @@
  * - prod 容器入口（rollup 额外输入，输出稳定文件名 remoteEntry）
  */
 import type { NormalizedOptions, NormalizedRemote, NormalizedShared } from './options'
+import { SETUP_CONTAINER_KEY } from './options'
 import { MANIFEST_SCHEMA_VERSION, type DevFederationManifest, type ProdFederationManifest } from './manifest'
+
+/** setup 生命周期入口的容器元数据声明行（配置了 setup 时 dev/prod 容器一致携带） */
+function setupMetaLine(options: NormalizedOptions): string {
+  return options.setup ? `export const ${SETUP_CONTAINER_KEY} = ${JSON.stringify(options.setup.name)};` : ''
+}
 
 function jsonReplacer(_k: string, v: unknown) {
   return v
@@ -348,6 +354,7 @@ import { name as _fulgurjs_name, exposes, provides } from ${JSON.stringify(`${b}
 ${remoteLines.length > 0 ? `import { registerRemotes } from ${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)};\n${remoteLines.join('\n')}` : ''}
 
 export const name = _fulgurjs_name;
+${setupMetaLine(options)}
 
 export async function init(shareScopeMap) {
   for (const p of provides) {
@@ -428,6 +435,7 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
     ...provides,
     `];`,
     `export const name = ${JSON.stringify(options.name)};`,
+    setupMetaLine(options),
     ``,
     `export async function init(shareScopeMap) {`,
     `  for (const p of provides) {`,
@@ -462,11 +470,12 @@ export function genApiFacade(): string {
     '  registerRemote, registerRemotes, registerShare, initSharing, registerPlugins,',
     '  parseSpec, getRuntime, shareScopeMap, unwrapDefault, version,',
     '} from "virtual:fulgurjs-runtime-proxy";',
-    "export { provideAppContext, getAppContext, requireAppContext } from '@fulgurjs/federation/internal/context.js';",
+    "export { provideAppContext, getAppContext, requireAppContext, clearAppContext } from '@fulgurjs/federation/internal/context.js';",
     "export { definePages, validatePages } from '@fulgurjs/federation/internal/pages.js';",
-    "import { createRemoteComponent } from '@fulgurjs/federation/internal/vue-adapter.js';",
+    "import { createRemoteComponent, createHostPages as __fulgurjs_chp } from '@fulgurjs/federation/internal/vue-adapter.js';",
     "import { loadRemote as __fulgurjs_loadRemote } from 'virtual:fulgurjs-runtime-proxy';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
+    'export const createHostPages = (options) => __fulgurjs_chp(options, __fulgurjs_loadRemote);',
     '',
   ].join('\n')
 }
@@ -496,6 +505,9 @@ export function genDevManifest(options: NormalizedOptions, base: string): DevFed
       // dev 下 preload 全部 404。
       file: `${b}${e.import.replace(/^\.?\//, '')}`,
     })),
+    // setup 生命周期入口（内部 expose 键；未配置 setup 时省略）。preloadRemote 据此把
+    // setup 资源纳入预载，doctor/explain 据此区分内部资源与公开 exposes。
+    ...(options.setup ? { setup: options.setup.name } : {}),
     shared: options.shared.map((s) => ({
       name: s.shareKey,
       version: s.version,
@@ -524,6 +536,7 @@ export function genProdManifest(
     name: options.name,
     entry: entryFile,
     exposes: exposeFiles,
+    ...(options.setup && exposeFiles[options.setup.name] ? { setup: options.setup.name } : {}),
     shared: options.shared.map((s) => ({
       name: s.shareKey,
       version: s.version,

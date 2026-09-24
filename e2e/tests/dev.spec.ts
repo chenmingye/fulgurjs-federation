@@ -149,6 +149,8 @@ test.describe('dev: auto-import 插件链（WP1）', () => {
       if (m.type() === 'error') consoleErrors.push(m.text())
     })
     await page.goto('http://localhost:5110/')
+    // remote-auto 声明了 onSession（§3.3.1 fixture）：加载前宿主必须提供 sessionKey（T4 语义）
+    await page.getByTestId('session-a').click()
     // 宿主侧：auto-import 注入的 ref 是响应性的（isRef 判定 + 点击更新）
     await expect(page.getByTestId('host-count')).toContainText('ref-ok')
     await page.getByTestId('host-inc').click()
@@ -170,9 +172,73 @@ test.describe('dev: auto-import 插件链（WP1）', () => {
 
   test('loadRemote API 通道同样成立（注入 ref 与协商实例一致）', async ({ page }) => {
     await page.goto('http://localhost:5110/')
+    await page.getByTestId('session-a').click() // onSession 远程加载前提供会话（T4 语义）
     await page.getByTestId('load-remote-api').click()
     await expect(page.getByTestId('remote-count')).toContainText('ref-ok')
     await expect(page.getByTestId('vue-identity')).toHaveText('vue identity: same / same-runtime / spec:remote-auto')
     await shot(page, 'dev-auto-import-api-channel')
+  })
+})
+
+test.describe('dev: setup/onSession 生命周期（§3.3.1）', () => {
+  test('T3 时序：登录代次 A → 首次加载执行 setup+onSession 各一次 → 同代次重载不重复', async ({ page }) => {
+    const consoleErrors: string[] = []
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text())
+    })
+    await page.goto('http://localhost:5110/')
+    await page.getByTestId('session-a').click()
+    await expect(page.getByTestId('session-state')).toContainText('s-A')
+    // 加载前无任何生命周期调用
+    await expect(page.getByTestId('setup-calls')).toHaveText('setup calls: []')
+    await page.getByTestId('load-probe').click()
+    await expect(page.getByTestId('setup-calls')).toHaveText('setup calls: ["setup:s-A","onSession:s-A"]')
+    // 同代次再次加载（模块缓存命中）：setup/onSession 都不重复
+    await page.getByTestId('load-probe').click()
+    await expect(page.getByTestId('setup-calls')).toHaveText('setup calls: ["setup:s-A","onSession:s-A"]')
+    expect(consoleErrors).toEqual([])
+    await shot(page, 'dev-setup-lifecycle-first-load')
+  })
+
+  test('T5 会话切换：换代 onSession 重跑、setup 不重复；退出清理后同代次必须重跑', async ({ page }) => {
+    await page.goto('http://localhost:5110/')
+    await page.getByTestId('session-a').click()
+    await page.getByTestId('load-probe').click()
+    await expect(page.getByTestId('setup-calls')).toContainText('"setup:s-A"')
+    // 换登录代次 B → 再加载：setup 不重复、onSession 以新代次重跑
+    await page.getByTestId('session-b').click()
+    await page.getByTestId('load-probe').click()
+    await expect(page.getByTestId('setup-calls')).toHaveText(
+      'setup calls: ["setup:s-A","onSession:s-A","onSession:s-B"]',
+    )
+    // 退出（clearAppContext）→ 重新以 B 登录 → 加载：onSession 必须重跑（去重状态已失效）
+    await page.getByTestId('logout').click()
+    await page.getByTestId('session-b').click()
+    await page.getByTestId('load-probe').click()
+    await expect(page.getByTestId('setup-calls')).toHaveText(
+      'setup calls: ["setup:s-A","onSession:s-A","onSession:s-B","onSession:s-B"]',
+    )
+    await shot(page, 'dev-setup-session-switch')
+  })
+
+  test('T7 预载无副作用：preloadRemote 不执行 setup/onSession', async ({ page }) => {
+    await page.goto('http://localhost:5110/')
+    await page.getByTestId('session-a').click()
+    await page.getByTestId('preload-probe').click()
+    await page.waitForTimeout(300)
+    await expect(page.getByTestId('setup-calls')).toHaveText('setup calls: []')
+    // 首次实际加载才执行（且只执行一次）
+    await page.getByTestId('load-probe').click()
+    await expect(page.getByTestId('setup-calls')).toHaveText('setup calls: ["setup:s-A","onSession:s-A"]')
+    await shot(page, 'dev-setup-preload-no-side-effect')
+  })
+
+  test('T2 普通 TS expose：加载返回模块命名空间，显式调用才执行', async ({ page }) => {
+    await page.goto('http://localhost:5110/')
+    await page.getByTestId('session-a').click()
+    await page.getByTestId('load-api').click()
+    // load 完成后调用前计数为 0（加载 ≠ 执行）；显式调用后为 1 且返回值正确
+    await expect(page.getByTestId('api-calls')).toHaveText('api calls: load后=0/load前=0/调用后=1 / value: api-ok')
+    await shot(page, 'dev-plain-ts-expose-not-auto-run')
   })
 })

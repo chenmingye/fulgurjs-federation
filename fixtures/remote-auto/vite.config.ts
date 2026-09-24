@@ -14,7 +14,10 @@ export default defineConfig({
       filename: 'fulgurjs-remoteEntry.js',
       exposes: {
         './Counter': './src/exposes/Counter.vue',
+        './api': './src/exposes/api.ts',
       },
+      // setup 生命周期 fixture：setup 应用级一次 + onSession 按 sessionKey 去重（§3.3.1）
+      setup: './src/fulgurjs/setup.ts',
       shared: {
         vue: { singleton: true, requiredVersion: '^3.4.0' },
       },

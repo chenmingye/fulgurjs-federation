@@ -25,10 +25,11 @@ describe('runtime 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
+      'AppContext', 'FgRuntime', 'HostPages', 'HostPagesOptions', 'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
       'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
-      'RemoteSchema', 'RemoteSchemaEntry', 'RuntimeHooks', 'RuntimePlugin',
+      'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
+      'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
       'ShareEntry', 'ShareScope', 'ShareScopeMap',
     ].sort())
   })

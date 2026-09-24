@@ -318,11 +318,23 @@ describe('build 改写门禁：node_modules 依赖进管线（回归：双向联
     expect(r?.code).not.toContain(`from 'vue'`)
   })
 
-  it('双向联邦默认 devSharedSelf: false：保持宿主行为，node_modules 不进管线', async () => {
+  it('双向联邦默认 devSharedSelf: true（4.1.0 角色推断）：node_modules 依赖被门面化（双 vue 免疫成默认）', async () => {
     const r = await buildPreTransform(
       {
         name: 'remote-a',
         exposes: { './TaskCard': './src/TaskCard.vue' },
+        remotes: { 'host-remote': { dev: 'http://localhost:5100/main', prod: '/main' } },
+        shared: { vue: '^3.4.0' },
+      },
+      DEP_ID,
+    )
+    expect(r?.code).toMatch(/virtual:fulgurjs-shared:vue/)
+  })
+
+  it('纯宿主（只 remotes）默认 devSharedSelf: false：node_modules 不进管线（宿主自身 provide 语义）', async () => {
+    const r = await buildPreTransform(
+      {
+        name: 'host-app',
         remotes: { 'host-remote': { dev: 'http://localhost:5100/main', prod: '/main' } },
         shared: { vue: '^3.4.0' },
       },

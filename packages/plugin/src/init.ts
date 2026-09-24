@@ -57,6 +57,10 @@ export default defineRepoConfig({
           './pages/remote-a/home': './src/views/Home.vue',
           './pages/remote-a/detail': './src/views/Detail.vue',
         },
+        // 可选：远程需要启动期初始化（全局组件/样式/locale）时声明入口文件——
+        // 默认导出 setup(context) 应用级执行一次；可选具名导出 onSession(context)
+        // 按宿主 sessionKey 去重执行。缺省 = 无初始化行为（普通 expose 语义不变）
+        // setup: './src/fulgurjs/setup.ts',
       },
     },
   ],
@@ -105,6 +109,7 @@ function viteSnippetFor(app: AppConfig): string {
   const exposesBlock = app.remote?.exposes
     ? `  exposes: {\n${exposesLiteral(app.remote.exposes)}\n  },\n`
     : ''
+  const setupBlock = app.remote?.setup ? `  setup: '${app.remote.setup}',\n` : ''
   const sharedBlock = app.shared
     ? `  shared: {\n${Object.entries(app.shared)
         .map(([k, v]) => {
@@ -115,7 +120,7 @@ function viteSnippetFor(app: AppConfig): string {
     : `  ${DEFAULT_SHARED_BLOCK},\n`
   return `federation({
   name: '${app.name}',
-${remotesBlock}${exposesBlock}${sharedBlock}})`
+${remotesBlock}${exposesBlock}${setupBlock}${sharedBlock}})`
 }
 
 /** 生成 NGINX no-cache 站点模板（联邦部署通用知识，无任何项目特定垫片） */
@@ -165,14 +170,18 @@ function appSummary(app: AppConfig): string {
     for (const [k, v] of Object.entries(app.host.remotes)) {
       lines.push(`    消费远程 ${k} → dev ${v.dev} / prod ${v.prod}`)
     }
-    lines.push(`    页面路由表：${app.host.pages.length} 条`)
+    // pages 可选：应用代码的页面表是运行时真源，这里只报告实际提供的数量
+    lines.push(`    页面路由表：${app.host.pages?.length ?? 0} 条${app.host.pages ? '' : '（未在仓库配置中提供——以应用代码页面表为准）'}`)
   }
   if (app.remote?.exposes) {
     lines.push(`    exposes：${Object.keys(app.remote.exposes).join('、')}`)
   }
+  if (app.remote?.setup) {
+    lines.push(`    setup（可选远程初始化）：${app.remote.setup}`)
+  }
   if (app.remote?.remotes) {
     for (const [k, v] of Object.entries(app.remote.remotes)) {
-      lines.push(`    反向消费 ${k} → dev ${v.dev} / prod ${v.prod}（双向联邦，dev 下需 devSharedSelf: true）`)
+      lines.push(`    反向消费 ${k} → dev ${v.dev} / prod ${v.prod}（双向联邦）`)
     }
   }
   return lines.join('\n')
@@ -199,11 +208,15 @@ export async function inspectConfig(configPath: string): Promise<string> {
   out.push('1. 宿主与远程都安装依赖：pnpm add @fulgurjs/federation')
   out.push('2. expose 一律指向独立页（页面从路由取参）；组件需要必填 props 时给默认值（BLD-003）')
   out.push('3. shared 里 vue / vue-router / pinia 建议 singleton: true——跨应用必须同实例（全局响应性、getActivePinia、路由注入）')
-  out.push('4. 远程的全局副作用（全局组件/指令/启动期初始化）封装为启动器模块并 expose，宿主在 loadRemote 页面前调用；')
-  out.push('   跨应用传值（locale/store/事件等）统一走 @fulgurjs/federation/runtime 的 context 函数：宿主 provideAppContext 一次写入，远程 boot 用 getAppContext / requireAppContext 消费')
-  out.push('5. 应用代码唯一 API 入口：import { loadRemote, provideAppContext, getAppContext, definePages, remoteSchema, remoteComponent } from \'@fulgurjs/federation/runtime\'——4.0.0 起 virtual:fulgurjs-api 已删除，类型由物理子路径直接解析')
+  out.push('4. 远程需要启动期初始化（全局组件/样式/locale 等）时，在 federation({ setup }) 声明入口文件：')
+  out.push('   默认导出 setup(context) 应用级执行一次（容器首次被加载业务模块前）；可选具名导出 onSession(context)')
+  out.push('   按宿主 sessionKey 去重执行（换账号/重登自动重跑）。宿主无需再手写「loadRemote 启动器并调用」；')
+  out.push('   跨应用传值统一走 @fulgurjs/federation/runtime 的 context 函数：宿主 provideAppContext 写入')
+  out.push('   （退出时 clearAppContext 清理），远程 setup/onSession 用 getAppContext / requireAppContext 消费')
+  out.push('5. 应用代码唯一 API 入口：import { loadRemote, provideAppContext, getAppContext, clearAppContext, definePages, createHostPages, remoteSchema, remoteComponent } from \'@fulgurjs/federation/runtime\'')
   out.push('6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言')
-  out.push('7. 部署后体检：fulgurjs doctor --base <URL> --apps <应用...>（缓存头/资源形态/CORS/chunk 可达/版本 skew）')
+  out.push('7. 部署后体检：fulgurjs doctor --base <URL> --apps <应用...>（缓存头/资源形态/CORS/chunk 可达/版本 skew）；')
+  out.push('   配置解释：fulgurjs explain --config fulgurjs.config.ts --app <应用>；页面契约核对：fulgurjs check-pages --config <...> --app <宿主>')
   out.push('8. 部署语义：remoteEntry/manifest/index.html 必须 no-cache（严禁 immutable）；带 hash 的 assets 长缓存')
   return out.join('\n')
 }

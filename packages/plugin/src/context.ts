@@ -2,11 +2,12 @@
  * 跨应用传值契约：AppContext。
  *
  * 定位（用法见 README §9）：
- * - 独立子路径（'@fulgurjs/federation/context'），与 runtime bundle 解耦：状态存在
- *   globalThis 的页面级镜像对象（__FULGURJS_APP_CONFIG__）里，本模块自身零状态，
- *   多副本天然一致。
+ * - 物理子路径（'@fulgurjs/federation/runtime' 应用入口与 ./internal/context.js），
+ *   与 runtime bundle 解耦：状态存在 globalThis 的页面级镜像对象（__FULGURJS_APP_CONFIG__）
+ *   里，本模块自身零状态，多副本天然一致。
  * - 数据语义：传输层快照 + 函数引用，非响应式（与乾坤 props 同语义）；
- *   "实时"由函数引用拉取 / 宿主 pinia 共享响应式 / 登录刷新三条正规通道承担。
+ *   "实时"由函数引用拉取 / 宿主 pinia 共享响应式承担；同页换账号的会话同步由
+ *   远程 setup 模块的 onSession（按 sessionKey 去重）承担，不依赖页面刷新。
  * - H3 零兜底：require 缺键 → CC-001 三段式；页面无运行时单例（独立直开远程页）
  *   → CC-002，绝不静默。
  */
@@ -45,6 +46,12 @@ export interface AppContext {
   locale?: unknown
   /** 事件/方法池：events.main.* 宿主提供、events.bpm.* / events.lowcode.* 子应用反向注册 */
   events?: Record<string, any>
+  /**
+   * 非敏感登录代次 ID：宿主每次成功登录/重新登录生成新值，token 刷新但会话未变时沿用。
+   * 远程 onSession 按它去重（同一代次只执行一次）。不是用户 ID、不是 token、不作为授权凭证。
+   * 远程声明了 onSession 时必填（缺省即 MFU-013）。
+   */
+  sessionKey?: string
   /** 项目扩展位（formUrl/baseUrl 等自定义键，按需自行提供） */
   [key: string]: unknown
 }
@@ -64,8 +71,8 @@ function requireRuntime(): { loadRemote: (...args: any[]) => any } {
       ContextErrorCodes.CONTEXT_NO_RUNTIME,
       'fulgurjs runtime singleton not found on this page (globalThis.__FULGURJS_RUNTIME__ is undefined).\n' +
         '  根因: 当前页面没有经宿主的联邦运行时加载（独立直开远程页，或宿主桥晚于本调用执行）。\n' +
-        '  修法: ① 从宿主应用的联邦路由打开本页面（宿主 bridge 会先加载运行时并提供 context）；\n' +
-        '        ② 若你是宿主桥作者：把 provideAppContext 放在 bridge 初始化尾部（时序契约 bridge → federatedBoot → loadRemote）。',
+        '  修法: ① 从宿主应用的联邦路由打开本页面（宿主桥会先加载运行时并提供 context）；\n' +
+        '        ② 若你是宿主桥作者：把 provideAppContext 放在桥初始化尾部（时序契约 bridge → 远程 setup → 页面模块）。',
       { runtime: false },
     )
   }
@@ -75,13 +82,32 @@ function requireRuntime(): { loadRemote: (...args: any[]) => any } {
 /**
  * 宿主写入跨应用上下文（merge 语义，幂等可多次调用，后写覆盖同键）。
  *
- * 宿主桥（host/src/fulgurjs/host/bridge.ts）在登录完成后调用一次：
- * provideAppContext({ user, token, getToken, store, hostApp, locale, events: { main: mainEvents }, ... })
+ * 宿主桥（host/src/fulgurjs/host/bridge.ts）在登录完成后调用：
+ * provideAppContext({ user, getToken, store, hostApp, locale, sessionKey, events: { main: mainEvents }, ... })
+ * 登录态变化（换账号/token 刷新）时再次调用即以最新值覆盖同键——不要用布尔闩锁把桥封成只跑一次。
  */
 export function provideAppContext(config: Partial<AppContext> & Record<string, unknown>): void {
   requireRuntime()
   const g = globalThis as any
   g[APP_CONTEXT_STORAGE_KEY] = { ...(g[APP_CONTEXT_STORAGE_KEY] ?? {}), ...config }
+}
+
+/**
+ * 宿主退出登录时清理：删除整个 context 对象（旧 user/getToken 引用一并失效），并通知
+ * 运行时单例作废全部远程的会话信号与 onSession 去重状态（下次登录必须重新执行 onSession）。
+ *
+ * 边界（契约）：只清 AppContext 与会话初始化状态；不重置远程模块缓存、共享模块图与
+ * 应用级 setup 注册（同一页面内组件与共享实例继续复用）。页面无运行时单例时静默幂等
+ * （退出动作不依赖联邦形态，不得因缺运行时而打断登出流程）。
+ */
+export function clearAppContext(): void {
+  const g = globalThis as any
+  delete g[APP_CONTEXT_STORAGE_KEY]
+  try {
+    g.__FULGURJS_RUNTIME__?.clearSessionState?.()
+  } catch {
+    /* 清理会话状态失败不阻断登出 */
+  }
 }
 
 /**
@@ -94,10 +120,10 @@ export function getAppContext(): AppContext {
 }
 
 /**
- * 显式校验读取（远程 boot 消费入口）：任一键缺失 → CC-001 三段式。
+ * 显式校验读取（远程 setup/boot 消费入口）：任一键缺失 → CC-001 三段式。
  *
  * 用法：const { store, user, hostApp } = requireAppContext('store', 'user', 'hostApp')
- * 时序契约：宿主 bridge 先 provide，远程 federatedBoot 后 require——违反即在 boot 处显式失败。
+ * 时序契约：宿主桥先 provide，远程 setup/onSession 后 require——违反即在初始化处显式失败。
  */
 export function requireAppContext(...keys: string[]): AppContext {
   const ctx = getAppContext()
@@ -111,7 +137,7 @@ export function requireAppContext(...keys: string[]): AppContext {
       `  got: ${got.length ? got.map((k) => `"${k}"`).join(', ') : '(empty — 宿主桥从未调用 provideAppContext?)'}\n` +
       `  expected: 宿主桥必须在任何远程页面加载前提供 ${missing.map((k) => `"${k}"`).join(' / ')}\n` +
       `  example: host/src/fulgurjs/host/bridge.ts → provideAppContext({ ${keys.join(', ')}, ... })\n` +
-      `  修法: 检查宿主应用 fulgurjs bridge 是否升级到 0.8.0 context 形态（时序契约 bridge → federatedBoot → loadRemote）`,
+      `  修法: 检查宿主应用的 fulgurjs 桥是否在 loadRemote 页面前完成 context provide（时序契约 bridge → 远程 setup → 页面模块）`,
     { missing, got },
   )
   throw err

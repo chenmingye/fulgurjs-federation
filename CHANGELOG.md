@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.1.0（2026-09-24）
+
+### 新能力：远程初始化生命周期 + 宿主页面适配器 + 单配置驱动
+
+- **`federation({ setup })` 远程初始化（可选）**：声明初始化入口文件（默认导出 `setup(context)` 应用级执行一次，可选具名导出 `onSession(context)` 按宿主 `sessionKey` 去重执行；换账号/重登自动重跑，退出 `clearAppContext()` 清理会话状态）。`loadRemote('remote/模块')` 是统一触发入口（容器 init 后、返回模块前）；`loadRemote('remote')`、`getContainer()`、`preloadRemote()` 不执行初始化。失败显式报错可重试：`MFU-011`（导出非法）/ `MFU-012`（执行失败）/ `MFU-013`（有 onSession 缺 sessionKey）/ `MFU-014`（自递归）。内部 expose 键 `./__fulgurjs_setup__`（CFG-012 拦截占用），不进 dts/公开 exposes 清单。旧的「expose 启动器 + 宿主手动 loadRemote 调用」写法继续可用（兼容形态）。
+- **`createHostPages({ pages, remotePrefixes, ... })` 宿主页面适配器**：一份页面表供宿主路由与布局共用；URL 解析（base 剥离/深链/参数解码失败不崩）、最长前缀远程归属、`definePages` R1–R5 校验、异步组件缓存（会话切换自动重建）、骨架屏/错误占位、保活名称内置。包装组件不修改远程模块导出对象。
+- **`federationOptionsForApp(config, app)`**（`@fulgurjs/federation/config`）：仓库配置直转 Vite 插件选项（name/remotes/exposes/setup/shared/devSharedSelf）；同键不同地址报错带两边值。`HostConfig.pages` 转为可选（应用代码页面表为运行时真源），新增 `deriveSpec`/`devSharedSelf` 字段。
+- **`clearAppContext()`**：退出清理——删 context + 作废全部远程会话信号与 onSession 去重状态；不重置模块缓存/共享模块图/应用级 setup。无运行时单例时静默幂等（不阻断登出）。
+- **CLI**：`fulgurjs explain`（配置解释器：角色/remotes/exposes/setup/shared/页面映射/devSharedSelf 来源/加载链，纯本地）；`fulgurjs check-pages`（页面表 ↔ 远程 manifest exposes 契约核对，确定性错误非零退出，远程不可达报「无法验证」）。
+
+### 行为变更
+
+- **`devSharedSelf` 角色推断（§12.4）**：提供 `exposes`（或 `setup`）的应用默认 `true`（此前双向联邦默认 `false`、README 要求显式 `true`——漏配曾是已知错误配置来源）；纯宿主默认 `false`；显式配置永远优先。
+- **不支持选项硬报错（§12.6）**：`remoteType` 非 `module`、`library.type` 非 `module/esm`、`automaticAsyncBoundary: false` 从「warning + 静默回落」改为配置期 `CFG-011` 报错；`remoteType` 类型收窄为字面量 `'module'`。
+- **runtime gzip 门禁 6144B → 8192B**：setup/onSession 生命周期固有增量（4.1.0 实测 7585B）。
+- `@fulgurjs/federation/runtime` 新增导出：`clearAppContext`、`createHostPages`；类型新增 `RemoteSetupContext`、`RemoteSetupModule`、`HostPages`、`HostPagesOptions`、`ResolvedHostPage`；`AppContext` 新增 `sessionKey` 字段。
+
 ## 4.0.0（2026-09-24）
 
 ### 应用代码改用物理入口

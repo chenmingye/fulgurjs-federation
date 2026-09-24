@@ -94,7 +94,7 @@ let clientRejected = false
 try { consumerRequire.resolve('@fulgurjs/federation/client') } catch { clientRejected = true }
 if (!clientRejected) fail('已删除的 /client 子路径仍可解析')
 const runtimeEntry = await import(pathToFileURL(path.join(consumer, 'node_modules/@fulgurjs/federation/dist/runtime-entry.js')).href)
-for (const name of ['loadRemote', 'remoteComponent', 'remoteSchema']) {
+for (const name of ['loadRemote', 'remoteComponent', 'remoteSchema', 'clearAppContext', 'createHostPages']) {
   if (!(name in runtimeEntry)) fail(`/runtime 缺少 ${name}`)
 }
 log('types OK: ./ ./config ./runtime；旧子路径已删除 ✓')

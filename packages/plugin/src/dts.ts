@@ -193,6 +193,9 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
     ]
     let accepted = 0
     for (const expose of manifest.exposes ?? []) {
+      // 内部 setup 生命周期入口不生成用户可导入的类型声明（manifest.setup 标识；
+      // 用户不直接 loadRemote 该键，其文件也不属于公开 API 面）
+      if (manifest.setup && expose.name === manifest.setup) continue
       const skipped = (reason: string) =>
         console.warn(`[fulgurjs] dts: remote "${remote.key}" expose ${JSON.stringify(expose.name)} 跳过：${reason}`)
       // WP5：expose src 只接受相对路径——绝对路径 / 含 .. / 空路径一律拒绝（不可信 manifest 防线）

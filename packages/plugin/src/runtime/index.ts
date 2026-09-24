@@ -95,7 +95,44 @@ export interface RemoteDebugInfo {
   status: 'idle' | 'loading' | 'loaded' | 'failed'
   lastLoadMs?: number
   error?: string
+  /** setup 生命周期状态（§3.3.1）：none=未配置 / pending=执行中 / ready=应用级已完成 / failed=失败可重试 */
+  setup?: 'none' | 'pending' | 'ready' | 'failed'
 }
+
+/**
+ * 远程初始化上下文（federation({ setup }) 模块的默认导出与具名 onSession 收到的参数）。
+ * appContext 是调用时从页面级 AppContext 取得的当前快照（不缓存旧引用）；
+ * signal 在登录代次变化或退出清理时失效，业务异步写回前必须检查 aborted。
+ */
+export interface RemoteSetupContext {
+  appContext: Readonly<Record<string, any>>
+  sessionKey?: string
+  signal: AbortSignal
+}
+
+/** setup 模块的固定导出契约：默认导出必为函数；onSession 可选且必须是函数 */
+export interface RemoteSetupModule {
+  default: (ctx: RemoteSetupContext) => void | Promise<void>
+  onSession?: (ctx: RemoteSetupContext) => void | Promise<void>
+}
+
+/** 每个远程的初始化状态（应用级 setup 一次；会话级 onSession 按 sessionKey 去重） */
+interface LifecycleState {
+  setupPromise?: Promise<void>
+  setupExports?: Record<string, any>
+  sessionKey?: string
+  sessionPromise?: Promise<void>
+  controller?: AbortController
+}
+
+/**
+ * 容器上的 setup 元数据字段名（dev/prod 容器入口一致导出；与 src/options.ts 的
+ * SETUP_CONTAINER_KEY 同值——运行时 bundle 自包含，不能反向 import node 侧模块，
+ * 一致性由 tests/virtual.test.ts 守护）。
+ */
+const SETUP_META_KEY = '__fulgurjsSetup'
+/** AppContext 页面级镜像对象键（跨版本互操作契约，见 context.ts） */
+const APP_CONTEXT_GLOBAL_KEY = '__FULGURJS_APP_CONFIG__'
 
 interface RemoteInternal extends Omit<RemoteConfig, 'breaker'> {
   state: 'idle' | 'loading' | 'loaded' | 'failed'
@@ -139,6 +176,168 @@ function createRuntime() {
       } catch (err) {
         console.warn('[fulgurjs] runtimePlugin init failed:', p.name, err)
       }
+    }
+  }
+
+  // ── setup/onSession 生命周期（§3.3.1）───────────────────────────────────────
+  const lifecycleStates = new Map<string, LifecycleState>()
+  /** setup/onSession 同步执行段标记：该段内对同一远程的 loadRemote 即自递归（MFU-014） */
+  let lifecycleSyncRemote: string | undefined
+  const lifecycleOf = (name: string): LifecycleState => {
+    let st = lifecycleStates.get(name)
+    if (!st) lifecycleStates.set(name, (st = {}))
+    return st
+  }
+  const currentAppContext = (): Record<string, any> =>
+    ((globalThis as any)[APP_CONTEXT_GLOBAL_KEY] ?? {}) as Record<string, any>
+
+  /** 执行 setup/onSession：同步段守递归；执行失败包装为 MFU-012（带 remote/阶段/修法） */
+  async function invokeLifecycleFn(
+    remoteName: string,
+    fn: (ctx: RemoteSetupContext) => void | Promise<void>,
+    ctx: RemoteSetupContext,
+    phase: 'setup' | 'onSession',
+  ): Promise<void> {
+    const wrap = (err: unknown): FgError => {
+      if (err instanceof FgError) return err
+      return new FgError(
+        ErrorCodes.SETUP_RUN_FAILED,
+        `${phase} of "${remoteName}" threw: ${String((err as Error)?.message ?? err)}\n` +
+          `  修法: 修复该 ${phase} 的初始化逻辑后重新加载（失败的初始化缓存已清除，可直接重试）`,
+        { remote: remoteName, phase },
+      )
+    }
+    lifecycleSyncRemote = remoteName
+    let result: void | Promise<void>
+    try {
+      result = fn(ctx)
+    } catch (err) {
+      // 同步抛出与异步拒绝统一包装（业务侧 sync throw 不经 await 路径）
+      throw wrap(err)
+    } finally {
+      // 同步段结束：fn 返回（或同步抛出）后，后续异步续体不再归属本调用——
+      // 同窗口内的并发 loadRemote 是合法并发（T3），不能误报递归
+      lifecycleSyncRemote = undefined
+    }
+    try {
+      await result
+    } catch (err) {
+      throw wrap(err)
+    }
+  }
+
+  /** 应用级 setup：容器 init 后执行一次；并发共享同一 Promise，失败清缓存可重试 */
+  async function runSetupPhase(remote: RemoteInternal, container: any, setupKey: string, st: LifecycleState): Promise<void> {
+    remote.debug.setup = 'pending'
+    try {
+      // 预载 setup 资源（其 CSS 在 manifest exposes 中，随 preload 注入；失败不阻断）
+      if (remote.manifestUrl) {
+        try {
+          await preloadRemote(`${remote.name}/${setupKey}`)
+        } catch {
+          /* 预载失败由 MFU-007 通道上报，不阻断 setup 模块导入 */
+        }
+      }
+      const mod = await container.get(setupKey)
+      const setupFn = mod?.default
+      if (typeof setupFn !== 'function') {
+        throw new FgError(
+          ErrorCodes.SETUP_INVALID_EXPORT,
+          `setup module "${setupKey}" of "${remote.name}": default export is ${mod == null ? String(mod) : typeof setupFn}, expected a function\n` +
+            `  expected: export default async function setup(context: RemoteSetupContext) { ... }\n` +
+            `  修法: 在 federation({ setup }) 指向的文件补默认导出函数（具名 onSession 可选；其他导出不作为生命周期入口）`,
+          { remote: remote.name, module: setupKey },
+        )
+      }
+      if (mod.onSession !== undefined && typeof mod.onSession !== 'function') {
+        throw new FgError(
+          ErrorCodes.SETUP_INVALID_EXPORT,
+          `setup module "${setupKey}" of "${remote.name}": export "onSession" is ${typeof mod.onSession}, expected a function\n` +
+            `  修法: 将 onSession 修正为函数导出，或删除该具名导出（其他导出名不作为生命周期入口）`,
+          { remote: remote.name, module: setupKey },
+        )
+      }
+      st.setupExports = mod
+      await invokeLifecycleFn(
+        remote.name,
+        setupFn,
+        { appContext: currentAppContext(), signal: (st.controller ??= new AbortController()).signal },
+        'setup',
+      )
+      remote.debug.setup = 'ready'
+    } catch (err) {
+      remote.debug.setup = 'failed'
+      // 只清应用级缓存：onSession 语义不存在，重试从 setup 重新开始
+      st.setupExports = undefined
+      throw err
+    }
+  }
+
+  /** 会话级 onSession：按非敏感 sessionKey 去重；换代先作废旧信号再串行衔接 */
+  async function ensureSessionPhase(remote: RemoteInternal, st: LifecycleState, onSession: (ctx: RemoteSetupContext) => void | Promise<void>): Promise<void> {
+    const appContext = currentAppContext()
+    const sessionKey = appContext?.sessionKey
+    if (typeof sessionKey !== 'string' || sessionKey === '') {
+      throw new FgError(
+        ErrorCodes.SETUP_SESSION_KEY_MISSING,
+        `remote "${remote.name}" declares onSession but AppContext.sessionKey is ${sessionKey === undefined ? 'missing' : JSON.stringify(sessionKey)}\n` +
+          `  expected: 宿主登录后 provideAppContext({ ..., sessionKey: '<非敏感登录代次 ID>' })\n` +
+          `  修法: 宿主登录流程每次成功登录/重登生成新代次 ID（禁止用 token 充当），并在 loadRemote 前提供`,
+        { remote: remote.name },
+      )
+    }
+    if (st.sessionPromise && st.sessionKey === sessionKey) return st.sessionPromise
+    // 新登录代次：先作废旧信号（业务代码在 await 后写状态前检查 aborted），再串行衔接旧调用
+    st.controller?.abort()
+    const controller = new AbortController()
+    st.controller = controller
+    st.sessionKey = sessionKey
+    const prev = st.sessionPromise ? st.sessionPromise.catch(() => {}) : Promise.resolve()
+    const run = (async () => {
+      await prev
+      if (controller.signal.aborted) return
+      await invokeLifecycleFn(remote.name, onSession, { appContext, sessionKey, signal: controller.signal }, 'onSession')
+    })()
+    st.sessionPromise = run
+    run.catch(() => {
+      // 失败只清当前代次的缓存（支持重试）；更高代次已接管时不动其状态
+      if (st.sessionKey === sessionKey) {
+        st.sessionKey = undefined
+        st.sessionPromise = undefined
+      }
+    })
+    return run
+  }
+
+  /** 取得容器（init 完成）之后、返回业务模块之前执行：无 setup 元数据时零开销直返 */
+  async function ensureLifecycle(remote: RemoteInternal, container: any): Promise<void> {
+    const setupKey = container?.[SETUP_META_KEY]
+    if (typeof setupKey !== 'string' || setupKey === '') return
+    const st = lifecycleOf(remote.name)
+    if (!st.setupPromise) {
+      st.setupPromise = runSetupPhase(remote, container, setupKey, st).catch((err) => {
+        st.setupPromise = undefined
+        throw err
+      })
+    }
+    await st.setupPromise
+    const onSession = st.setupExports?.onSession
+    if (typeof onSession === 'function') {
+      await ensureSessionPhase(remote, st, onSession)
+    }
+  }
+
+  /** 退出清理（clearAppContext 调用）：作废全部会话信号、失效 onSession 去重状态。
+   *  应用级 setup 与容器/共享模块保留——重新登录只重跑会话级初始化。 */
+  function clearSessionState(): void {
+    for (const st of lifecycleStates.values()) {
+      try {
+        st.controller?.abort()
+      } catch {
+        /* 极端环境 AbortController 异常不阻断清理 */
+      }
+      st.sessionKey = undefined
+      st.sessionPromise = undefined
     }
   }
 
@@ -214,7 +413,7 @@ function createRuntime() {
         state: prev?.state ?? 'idle',
         breakerState: prev?.breakerState ?? { fails: 0, openUntil: 0 },
         entryInflight: prev?.entryInflight ?? new Map(),
-        debug: prev?.debug ?? { entry: r.entry, status: 'idle' },
+        debug: prev?.debug ?? { entry: r.entry, status: 'idle', setup: 'none' },
       })
     }
   }
@@ -529,6 +728,15 @@ function createRuntime() {
     opts?: LoadRemoteOptions,
   ): Promise<T> {
     const { remote: name, module } = parseSpec(spec)
+    // MFU-014：setup/onSession 同步执行段内递归 loadRemote 同一远程（自等待死锁的显式报错）
+    if (module && lifecycleSyncRemote === name) {
+      throw new FgError(
+        ErrorCodes.SETUP_RECURSION,
+        `loadRemote("${spec}") re-entered from setup/onSession of "${name}" — the initialization promise would await itself (deadlock)\n` +
+          `  修法: setup/onSession 内不 loadRemote 同一远程的模块；需要的业务模块改为在页面组件内加载，或经 context 通道解耦`,
+        { remote: name },
+      )
+    }
     // WP6：观测 hook 自身抛错不把成功的模块加载改成失败（仅告警）
     try {
       hooks.beforeLoadRemote?.({ remote: name, module })
@@ -556,6 +764,9 @@ function createRuntime() {
       throw err
     }
     if (!module) return container
+    // setup/onSession 生命周期：容器 init（shared 作用域收养）完成后、返回业务模块前执行；
+    // 已缓存的业务模块同样经过此处——换账号后打开已加载过的页面仍会触发新代次的 onSession
+    await ensureLifecycle(remote, container)
     const cacheKey = `${name}@${remote.shareScope || 'default'}#${module}`
     if (!loadedModules.has(cacheKey)) {
       loadedModules.set(
@@ -767,6 +978,7 @@ function createRuntime() {
     }
   }
   attachDebug()
+  // setup 状态变化不重挂 debug 对象：remotes getter 每次展开最新 debug（含 setup 字段）
 
   return {
     shareScopeMap,
@@ -780,6 +992,7 @@ function createRuntime() {
     getContainer,
     preloadRemote,
     parseSpec,
+    clearSessionState,
   }
 }
 
@@ -823,6 +1036,8 @@ export const loadRemote = runtime.loadRemote
 export const getContainer = runtime.getContainer
 export const preloadRemote = runtime.preloadRemote
 export const parseSpec = runtime.parseSpec
+/** 退出清理的运行时侧：作废全部远程的会话信号与 onSession 去重状态（clearAppContext 调用） */
+export const clearSessionState = runtime.clearSessionState
 export const shareScopeMap = runtime.shareScopeMap
 
 /** default 导出 interop：ESM 取 .default；CJS 命名空间回退整体 */

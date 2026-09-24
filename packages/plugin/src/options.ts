@@ -94,6 +94,8 @@ export interface NormalizedExpose {
   import: string
   /** 稳定 chunk 名（可选） */
   chunkName?: string
+  /** 内部保留 expose（setup 生命周期入口）：进容器/manifest 供运行时与预载消费，不进 dts/doctor 公开清单 */
+  internal?: boolean
 }
 
 export interface NormalizedOptions {
@@ -101,6 +103,8 @@ export interface NormalizedOptions {
   uniqueName: string
   filename: string
   exposes: NormalizedExpose[]
+  /** setup 生命周期入口（内部保留 expose；未配置时 undefined）。同一对象也在 exposes 数组内。 */
+  setup?: NormalizedExpose
   remotes: NormalizedRemote[]
   shared: NormalizedShared[]
   shareScope: string
@@ -128,10 +132,18 @@ export interface FederationOptions {
   name: string
   filename?: string
   exposes?: Record<string, string | ExposeHint>
+  /**
+   * 可选远程初始化入口：相对本应用根目录的 TS/JS 模块路径。
+   * 模块须默认导出 `setup(context)`（应用级，容器首次加载业务模块前执行一次），
+   * 可选具名导出 `onSession(context)`（会话级，按宿主 AppContext.sessionKey 去重执行）。
+   * 缺省时无初始化行为（普通 exposes 语义完全不变）。
+   */
+  setup?: string
   remotes?: Record<string, string | RemoteEntryConfig | (() => Promise<any>)>
   shared?: SharedConfig
   shareScope?: string
-  remoteType?: string
+  /** 仅支持 'module'（ESM）；其他值在配置期报 CFG-011（webpack script/var 互操作未实现） */
+  remoteType?: 'module'
   library?: { type?: string; name?: string }
   runtime?: string | false
   runtimeChunk?: boolean | 'single'
@@ -168,6 +180,10 @@ export interface FederationOptions {
 }
 
 export const DEFAULT_FILENAME = 'fulgurjs-remoteEntry.js'
+/** setup 生命周期入口的内部保留 expose 键：配置为 expose 同名键即 CFG-012 报错 */
+export const SETUP_EXPOSE_KEY = './__fulgurjs_setup__'
+/** 容器元数据字段名：dev/prod 容器入口在该字段上声明 setup 模块的内部 expose 键 */
+export const SETUP_CONTAINER_KEY = '__fulgurjsSetup'
 export const RUNTIME_VIRTUAL_ID = 'virtual:fulgurjs-runtime'
 export const RUNTIME_PROXY_VIRTUAL_ID = 'virtual:fulgurjs-runtime-proxy'
 export const INIT_VIRTUAL_ID = 'virtual:fulgurjs-init'
@@ -433,6 +449,57 @@ function validateOptions(options: FederationOptions): void {
     )
   }
 
+  // CFG-011（不支持且无法履行的互操作选项，§12.6）：此前仅 warning 并静默规范化为 module，
+  // 会造成"配置写的是 script/var、实际构建的是 module"的错觉——升级为配置期硬错误
+  if (options.remoteType !== undefined && options.remoteType !== 'module') {
+    configError(
+      'CFG-011: remoteType other than "module" is not supported',
+      options.remoteType,
+      '"module"（缺省即可）——webpack script/var remote 互操作未实现',
+      `// 删除 remoteType 配置（fulgurjs 只产出 ESM module remote）`,
+    )
+  }
+  if (options.library?.type !== undefined && options.library.type !== 'module' && options.library.type !== 'esm') {
+    configError(
+      'CFG-011: library.type other than "module"/"esm" is not supported',
+      options.library.type,
+      '"module" 或 "esm"（缺省即可）——webpack UMD/var 输出互操作未实现',
+      `// 删除 library 配置（fulgurjs remoteEntry 恒为 ESM）`,
+    )
+  }
+  if (options.automaticAsyncBoundary === false) {
+    configError(
+      'CFG-011: automaticAsyncBoundary=false cannot be honored',
+      options.automaticAsyncBoundary,
+      '缺省或 true——fulgurjs 使用 TLA 自动异步边界，不存在手工 bootstrap 模式',
+      `// 删除 automaticAsyncBoundary 配置（容器协议天然异步）`,
+    )
+  }
+
+  // CFG-012（setup 配置非法）：路径必须是本应用内可解析的非空字符串，且不得占用内部保留键。
+  // 保留键冲突即使用户未配置 setup 也拦截（squatting 内部键会与未来配置冲突）
+  for (const key of Object.keys(options.exposes ?? {})) {
+    const norm = key.startsWith('./') ? key : `./${key}`
+    if (norm === SETUP_EXPOSE_KEY) {
+      configError(
+        `CFG-012: exposes key "${norm}" is reserved for the federation setup entry`,
+        key,
+        `a public expose name（内部保留键 "${SETUP_EXPOSE_KEY}" 由 setup 选项自动生成）`,
+        `// 把该 expose 改名，或删除它并把原文件路径配置到 federation({ setup })`,
+      )
+    }
+  }
+  if (options.setup !== undefined) {
+    if (typeof options.setup !== 'string' || options.setup.trim() === '') {
+      configError(
+        'CFG-012: setup must be a non-empty module path relative to the app root',
+        options.setup,
+        'e.g. "./src/fulgurjs/setup.ts"（默认导出 setup(context)，可选具名导出 onSession(context)）',
+        `federation({ name: 'my-app', setup: './src/fulgurjs/setup.ts', ... })`,
+      )
+    }
+  }
+
   if (options.exposes !== undefined && typeof options.exposes !== 'object') {
     configError('`exposes` must be an object', options.exposes, 'an object of { "./Module": "./src/path" }', `exposes: { './Button': './src/Button.vue' }`)
   }
@@ -562,28 +629,19 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
   validateOptions(options)
   if (!options.name) throw new Error('[fulgurjs] option `name` is required.')
 
-  if (options.remoteType && options.remoteType !== 'module') {
-    warnings.push(
-      `remoteType "${options.remoteType}" requires webpack-host interop (P3 milestone); falling back to "module".`,
-    )
-  }
-  if (options.library?.type && options.library.type !== 'module' && options.library.type !== 'esm') {
-    warnings.push(
-      `library.type "${options.library.type}" requires webpack-host interop (P3 milestone); falling back to "module".`,
-    )
-  }
-  if (options.automaticAsyncBoundary === false) {
-    warnings.push(
-      'automaticAsyncBoundary=false has no effect: fulgurjs uses TLA-based automatic async boundaries (better than webpack manual bootstrap).',
-    )
-  }
-
   const exposes: NormalizedExpose[] = []
   for (const [rawName, val] of Object.entries(options.exposes ?? {})) {
     const name = rawName.startsWith('./') ? rawName : `./${rawName}`
     if (rawName !== name) warnings.push(`exposes key "${rawName}" normalized to "${name}".`)
     const hint: ExposeHint = typeof val === 'string' ? { import: val } : val
     exposes.push({ name, import: hint.import, chunkName: hint.name })
+  }
+  // setup 生命周期入口：内部保留 expose 追加进 exposes（进容器与 manifest，供运行时
+  // 在 init 后获取并执行、preload 注入其 CSS；dts/doctor 对 internal 条目按内部资源处理）
+  let setup: NormalizedExpose | undefined
+  if (options.setup) {
+    setup = { name: SETUP_EXPOSE_KEY, import: options.setup, internal: true }
+    exposes.push(setup)
   }
 
   const shareScopeDefault = options.shareScope || 'default'
@@ -625,6 +683,7 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     uniqueName: options.name,
     filename,
     exposes,
+    setup,
     remotes,
     shared,
     shareScope: shareScopeDefault,
@@ -638,8 +697,10 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     pluginVersion: RUNTIME_VERSION,
     pkgDependencies,
     warnings,
-    // dev 改写开关：默认纯 remote 参与 shared 协商，宿主（有 remotes）不参与；可显式覆盖
-    devSharedSelf: options.devSharedSelf ?? remotes.length === 0,
+    // dev 改写开关：纯 remote 与双角色（既 expose 又消费 remote）为 true——被宿主消费的
+    // 组件需协商到宿主实例，双向联邦漏配该项曾是已知错误配置（README 要求显式 true，
+    // §12.4 后默认推断：仅纯宿主为 false）；显式配置永远优先
+    devSharedSelf: options.devSharedSelf ?? (remotes.length === 0 || exposes.length > 0),
     devCorsOrigins: options.devCorsOrigins,
     devFsRoot: options.devFsRoot ?? true,
   }

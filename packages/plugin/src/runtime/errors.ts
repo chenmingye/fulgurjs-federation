@@ -33,4 +33,12 @@ export const ErrorCodes = {
   EMPTY_EXPORTS: 'MFU-009',
   /** singleton 共享协商版本与消费方 requiredVersion 不一致（使用作用域版本，仅告警） */
   SINGLETON_SKEW: 'MFU-010',
+  /** setup 生命周期入口导出形态非法（默认导出不是函数，或具名 onSession 不是函数） */
+  SETUP_INVALID_EXPORT: 'MFU-011',
+  /** setup/onSession 执行抛错（该次 loadRemote 拒绝；仅清失败阶段缓存，允许重试） */
+  SETUP_RUN_FAILED: 'MFU-012',
+  /** 远程声明了 onSession 但宿主 AppContext 未提供 sessionKey（登录代次） */
+  SETUP_SESSION_KEY_MISSING: 'MFU-013',
+  /** setup/onSession 执行的同步段内递归 loadRemote 同一远程 */
+  SETUP_RECURSION: 'MFU-014',
 } as const
