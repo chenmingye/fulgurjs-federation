@@ -1,6 +1,6 @@
 # 唯一入口改造任务书（方案 B：`@fulgurjs/federation/runtime`）
 
-> **状态：4.0.0 代码已推送并通过 GitHub Release 发布到 npm；MES-ZC 验收待从 SVN 全量重新检出后执行。收到测试指令后，按《4.0.0-MES-ZC-全新SVN测试计划.md》安装正式包、直接修复遇到的问题、重新采集证据，并在同一轮更新测试文档与报告。**
+> **状态：4.0.0 已发布并通过 MES-ZC 全新 SVN 工程双环境验收（2026-09-24，r158467）。结果与证据见《MES-ZC-SVN验收报告-4.0.0.md》：dev/prod 27 页矩阵（2 页占位参数数据依赖经真实参数补验）、交互 14/14、审批闭环 5/5、故障恢复三态全过；无插件缺陷、无补丁版本，npm latest = 4.0.0。**
 > 测试开始前核对当前现场：
 >
 > ```bash
@@ -274,4 +274,4 @@ import { defineRepoConfig } from '@fulgurjs/federation/config'
 - 4.0.0 代码与测试计划已推送到 `master`；`v4.0.0` tag 对应提交 `d23566d`，GitHub Release 已发布。
 - GitHub CI 与 Publish 流程均成功。npm `latest` 为 4.0.0，registry 带 provenance；PNPM 在独立临时工程从 registry 安装到 4.0.0，并核对锁文件 integrity。
 - npm 中 4.0.0 之前的版本已标注升级提示，指向新的 `/runtime` 入口；4.0.0 本身未标注弃用。
-- MES-ZC 全新 SVN 工程尚未检出和测试。后续页面、交互与审批结果及截图仅从新 SVN 工程重新生成。
+- **MES-ZC 全新 SVN 验收已完成（2026-09-24）**：从 SVN 全新检出 r158467（URL `https://192.168.2.4/svn/Project/MES_ZC/trunk/mes_zc/cku-mes-serverless`），三应用经 PNPM 从 registry 安装 4.0.0 正式包并完成集成迁移（旧 API 零残留、Vite 转换实证 schema 拆写与 expose 惰性门面）；插件包级 287 单测/双口径 typecheck/pack-smoke/四项负向契约全过；dev（8773/4529/4669）与 prod（本轮独立 NGINX 8663，五端点全 200）双环境 27 路由矩阵 25 页直接通过、2 页占位参数数据依赖以真实数据双环境补验通过，交互 14/14、自建实例审批闭环 5/5、MFU-001 故障恢复三态齐备；**未发现插件缺陷，未发布补丁版本，最终验收版本即 4.0.0**。证据：`docs/screenshots/tb-svn-4.0.0-r158467-20260924-{dev,prod}/` 与[验收报告](MES-ZC-SVN验收报告-4.0.0.md)。
