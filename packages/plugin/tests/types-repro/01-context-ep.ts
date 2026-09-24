@@ -4,7 +4,7 @@
  * 报 ts2345（EP ConfigProviderProps.locale: Language vs context.locale: unknown），
  * 工程内旧版 vue-tsc 未报——本样例集由最新 TS 口径守卫，防 CLI 绿 IDE 红再发。
  */
-import { provideAppContext, getAppContext, requireAppContext } from '@fulgurjs/federation/context'
+import { provideAppContext, getAppContext, requireAppContext } from 'virtual:fulgurjs-api'
 import { provideGlobalConfig } from 'element-plus'
 import type { App } from 'vue'
 
