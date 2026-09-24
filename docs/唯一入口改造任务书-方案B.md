@@ -240,7 +240,7 @@ import { defineRepoConfig } from '@fulgurjs/federation/config'
 
 - [x] 版本三处同步（package.json / version.ts / CHANGELOG）；测试守漂移
 - [x] 代码与测试计划已 push；`v4.0.0` tag、GitHub Release、OIDC npm 发布完成；`npm view dist-tags`、provenance、正式包 PNPM 安装已核对
-- [ ] 旧大版本 deprecate 文案指向新版本（含 3.0.x）
+- [x] 4.0.0 之前版本的 deprecate 文案指向 4.0.0（含 3.0.x）
 
 ---
 
@@ -273,4 +273,5 @@ import { defineRepoConfig } from '@fulgurjs/federation/config'
 
 - 4.0.0 代码与测试计划已推送到 `master`；`v4.0.0` tag 对应提交 `d23566d`，GitHub Release 已发布。
 - GitHub CI 与 Publish 流程均成功。npm `latest` 为 4.0.0，registry 带 provenance；PNPM 在独立临时工程从 registry 安装到 4.0.0，并核对锁文件 integrity。
+- npm 中 4.0.0 之前的版本已标注升级提示，指向新的 `/runtime` 入口；4.0.0 本身未标注弃用。
 - MES-ZC 全新 SVN 工程尚未检出和测试。后续页面、交互与审批结果及截图仅从新 SVN 工程重新生成。
