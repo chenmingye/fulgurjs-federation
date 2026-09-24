@@ -1,7 +1,7 @@
 # 唯一入口改造任务书（方案 B：`@fulgurjs/federation/runtime`）
 
-> **状态：4.0.0 代码已推送并通过 GitHub Release 发布到 npm；MES-ZC 验收待从 SVN 全量重新检出后执行，按《4.0.0-MES-ZC-全新SVN测试计划.md》使用 PNPM 安装正式包并重新采集证据。**
-> 编写基线：2026-09-24，HEAD `57a25a9`（v3.0.1，npm latest）。开工前必须重新核对现场：
+> **状态：4.0.0 代码已推送并通过 GitHub Release 发布到 npm；MES-ZC 验收待从 SVN 全量重新检出后执行。收到测试指令后，按《4.0.0-MES-ZC-全新SVN测试计划.md》安装正式包、直接修复遇到的问题、重新采集证据，并在同一轮更新测试文档与报告。**
+> 测试开始前核对当前现场：
 >
 > ```bash
 > git status --short && git log -3 --oneline
