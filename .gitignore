@@ -6,7 +6,7 @@ packages/plugin/dist/
 fixtures/*/dist/
 fixtures/*/dist-*/
 # fixtures 无 tsconfig，插件 dev 启动生成的类型目录（每次运行重生成）不入库
-fixtures/*/src/fulgurjs/
+fixtures/*/src/fulgurjs/types/
 
 # testbed（真实项目私有副本，7.6G，不入库——发 GitHub 时同样排除）
 testbed/
