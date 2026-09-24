@@ -223,4 +223,13 @@ describe('WP7/3.0: genApiFacade 唯一公开门面（双形态）', () => {
     expect(code).toContain('provideAppContext')
     expect(code).toContain('remoteSchema')
   })
+  it('serve 形态：parseSpec 同步直读单例（promise 转发会把返回对象变成 Promise，实测回归）', async () => {
+    const { genApiFacade } = await import('../src/virtual')
+    const { genRuntimeProxyModule } = await import('../src/virtual')
+    const serve = genApiFacade('serve')
+    const proxy = genRuntimeProxyModule()
+    // proxy 内 parseSpec 不在 promise 转发列表（同步语义）
+    expect(proxy).toContain('export const parseSpec = (...a) => (globalThis).__FULGURJS_RUNTIME__.parseSpec(...a);')
+    expect(proxy).not.toContain(`'parseSpec',`)
+  })
 })

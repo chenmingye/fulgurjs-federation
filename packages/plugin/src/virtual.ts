@@ -309,7 +309,6 @@ export function genRuntimeProxyModule(): string {
     'registerShare',
     'initSharing',
     'registerPlugins',
-    'parseSpec',
   ]
   const lines: string[] = [
     `let __fulgurjs_mod_p;`,
@@ -318,6 +317,10 @@ export function genRuntimeProxyModule(): string {
     `  return await __fulgurjs_mod_p;`,
     `};`,
     ...promiseApis.map((m) => `export const ${m} = (...a) => __fulgurjs_rt().then((m2) => m2.${m}(...a));`),
+    // parseSpec 是同步纯函数：promise 转发会把返回值变成 Promise（返回对象上的属性
+    // 全部 undefined，3.0.0 门面切换时实测）——同步直读页面级单例（调用期单例必已由
+    // init 建立，时序契约同 shareScopeMap）
+    `export const parseSpec = (...a) => (globalThis).__FULGURJS_RUNTIME__.parseSpec(...a);`,
     // shareScopeMap：本模块只会在应用代码 import 链里被求值——页面运行期单例必已由 init 建立
     // （时序契约：宿主/远程 init 先于一切联邦模块），故求值期直读 globalThis 安全
     `export const shareScopeMap = (globalThis).__FULGURJS_RUNTIME__?.shareScopeMap;`,

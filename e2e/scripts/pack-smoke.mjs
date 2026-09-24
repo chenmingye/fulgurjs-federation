@@ -60,7 +60,8 @@ execSync(`npm install "${tarballPath}" vue@^3.5.22 vite@^6.3.5 @vitejs/plugin-vu
 
 // 3. exports 解析面（根入口 + 子路径 + 类型文件）
 const consumerRequire = createRequire(path.join(consumer, 'package.json'))
-const entryPoints = ['@fulgurjs/federation', '@fulgurjs/federation/pages', '@fulgurjs/federation/vue', '@fulgurjs/federation/context']
+// 3.0.0：唯一运行时入口 virtual:fulgurjs-api（旧子路径已删除，见 exports 负向断言）
+const entryPoints = ['@fulgurjs/federation', '@fulgurjs/federation/config']
 for (const ep of entryPoints) {
   try {
     consumerRequire.resolve(ep)
@@ -70,13 +71,19 @@ for (const ep of entryPoints) {
   }
 }
 const pkgJson = JSON.parse(fs.readFileSync(path.join(consumer, 'node_modules/@fulgurjs/federation/package.json'), 'utf8'))
-for (const sub of ['.', './pages', './vue', './context']) {
+for (const sub of ['.', './config']) {
   const typesFile = pkgJson.exports[sub]?.types
   if (!typesFile || !fs.existsSync(path.join(consumer, 'node_modules/@fulgurjs/federation', typesFile))) {
     fail(`类型文件缺失：exports["${sub}"].types = ${typesFile}`)
   }
 }
-log('types OK: ./ ./pages ./vue ./context')
+// 3.0.0 破坏性断言：旧公开子路径必须已从 exports 删除
+for (const removed of ['./pages', './context', './vue']) {
+  if (pkgJson.exports[removed] !== undefined) {
+    fail(`3.0.0 破坏性收敛未落实：exports 仍暴露 ${removed}`)
+  }
+}
+log('types OK: ./ ./config；旧子路径已删除 ✓')
 
 // 4. 最小联邦工程（宿主 + exposes + remotes）
 fs.writeFileSync(
@@ -134,11 +141,13 @@ try {
   const get = async (u) => await fetch(u, { signal: AbortSignal.timeout(3000) })
   while (Date.now() < deadline) {
     try {
-      const [page, entry] = await Promise.all([
+      const [page, entry, apiMod] = await Promise.all([
         get(`http://localhost:${PORT}/`),
         get(`http://localhost:${PORT}/@fulgurjs-entry.js`),
+        get(`http://localhost:${PORT}/@id/virtual:fulgurjs-api`),
       ])
-      if (page.ok && entry.ok && (await entry.text()).includes('export')) {
+      const apiText = await apiMod.text().catch(() => '')
+      if (page.ok && entry.ok && apiMod.ok && apiText.includes('virtual:fulgurjs-runtime-proxy')) {
         devOk = true
         break
       }
@@ -148,7 +157,7 @@ try {
     await new Promise((r) => setTimeout(r, 500))
   }
   if (!devOk) fail(`dev server 探测失败（/ 或 /@fulgurjs-entry.js 未就绪，vite ${vitePkg.version}）`)
-  log('dev page load OK（/ 200 + /@fulgurjs-entry.js 200）')
+  log('dev page load OK（/ 200 + /@fulgurjs-entry.js 200 + api 门面 serve 形态 200）')
 } finally {
   dev.kill('SIGTERM')
 }
