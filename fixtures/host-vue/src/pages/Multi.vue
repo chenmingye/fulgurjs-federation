@@ -17,8 +17,11 @@ const slotCard = ref<HTMLElement>()
 const state = reactive({ a: 1 })
 
 onMounted(async () => {
-  const [modA, modB, modCard] = await Promise.all([
-    import('remote-a/VueCheck'),
+  // 确定性顺序：先取 remote-a 的模块——其容器 init 把 vue@3.5 注册进共享域且 slot-a
+  // 首个协商即命中 3.5（singleton「已加载优先」：若 remote-b 的 3.4.38 先被加载，
+  // slot-a 会被锁死在 3.4.38，B-2/B-8 的双版本断言变成容器 init 竞速的随机结果）
+  const modA = await import('remote-a/VueCheck')
+  const [modB, modCard] = await Promise.all([
     import('remote-b/VueCheck'),
     import('remote-a/StyledCard'),
   ])

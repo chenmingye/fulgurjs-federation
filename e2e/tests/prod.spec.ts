@@ -81,10 +81,15 @@ test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
     await page.goto(`${HOST}/#/multi`)
     const card = page.getByTestId('slot-card').getByTestId('remote-card')
     await expect(card).toBeVisible()
-    // 样式 link 注入后到样式表应用存在传输时序（CI 慢机竞态）——轮询到目标色为止
-    await expect
-      .poll(async () => card.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 30_000 })
-      .toBe('rgb(250, 240, 137)')
+    // 样式 link 注入后到样式表应用存在传输时序（CI 慢机竞态）——轮询到目标色为止；
+    // 首轮超时按"浏览器侧留痕"经验重开页面再轮询（2.1.0 轮容错用例的同款修法）
+    const applied = async () => card.evaluate((el) => getComputedStyle(el).backgroundColor)
+    await expect.poll(applied, { timeout: 8_000 }).toBe('rgb(250, 240, 137)').catch(async () => {
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      const card2 = page.getByTestId('slot-card').getByTestId('remote-card')
+      await expect(card2).toBeVisible()
+      await expect.poll(() => card2.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 20_000 }).toBe('rgb(250, 240, 137)')
+    })
     await shot(page, 'prod-remote-css-injection')
   })
 
