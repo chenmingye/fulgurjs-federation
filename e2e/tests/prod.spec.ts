@@ -141,6 +141,8 @@ test.describe('prod(NGINX): auto-import 插件链（WP1）', () => {
     })
     await page.goto(`${HOST}/host-auto/`)
     await expect(page.getByTestId('host-count')).toContainText('ref-ok')
+    // remote-auto 声明了 onSession（§3.3.1 fixture）：加载前宿主必须提供 sessionKey（T4 语义）
+    await page.getByTestId('session-a').click()
     await page.getByTestId('host-inc').click()
     await expect(page.getByTestId('host-count')).toContainText('host count: 1')
 
