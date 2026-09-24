@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.1（2026-09-24）
+
+### 修复
+
+- **runtime-proxy 的 `parseSpec` 保持同步语义**：3.0.0 的 serve 门面把 runtime 部分转发到惰性单例委托时，`parseSpec` 也在 promise 转发列表里——同步纯函数经 promise 转发返回 Promise，返回对象的属性全部为 undefined。修复：`parseSpec` 同步直读页面级单例（时序契约同 shareScopeMap）。
+
+
 ## 3.0.0（2026-09-24）
 
 ### 破坏性变更：应用代码唯一 API 入口 `virtual:fulgurjs-api`
