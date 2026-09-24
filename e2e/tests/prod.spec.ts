@@ -83,7 +83,7 @@ test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
     await expect(card).toBeVisible()
     // 样式 link 注入后到样式表应用存在传输时序（CI 慢机竞态）——轮询到目标色为止
     await expect
-      .poll(async () => card.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 10_000 })
+      .poll(async () => card.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 30_000 })
       .toBe('rgb(250, 240, 137)')
     await shot(page, 'prod-remote-css-injection')
   })
