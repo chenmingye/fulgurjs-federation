@@ -207,6 +207,9 @@ describe('explain/check-pages：单项目模式', () => {
     expect(unv.unverifiedFailed).toBe(false)
     const strict = await checkPages(p, undefined, { manifests: { 'remote-a': path.join(dir, 'missing.json') }, requireVerified: true })
     expect(strict.unverifiedFailed).toBe(true)
+    // 有验证来源且全部命中时 --require-verified 不得误判失败（4.2.1 回归：开关位误当结果位）
+    const strictOk = await checkPages(p, undefined, { manifests: { 'remote-a': manifestPath }, requireVerified: true })
+    expect(strictOk.unverifiedFailed).toBe(false)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 

@@ -383,7 +383,7 @@ async function checkPagesApp(
         'fulgurjs.config.ts 未提供 hostPages 具名导出——无从核对页面契约（纯远程应用属正常，无需页面表）。\n' +
         '  修法: 宿主应用在 fulgurjs.config.ts 加具名导出 hostPages = { pages, remotePrefixes, deriveSpec? }（与运行时 createHostPages 消费同一份数据模块）',
     })
-    return { app: options.name, checked: 0, issues, failed: false, unverifiedFailed: !!opts.requireVerified, manifestSources: [] }
+    return { app: options.name, checked: 0, issues, failed: false, unverifiedFailed: !!opts.requireVerified && issues.some((i) => i.level === 'unverified'), manifestSources: [] }
   }
 
   // 路由表内在校验（R1–R5：剥参收敛/遮蔽/重复）
@@ -445,7 +445,8 @@ async function checkPagesApp(
   }
 
   const failed = issues.some((i) => i.level === 'error')
-  return { app: options.name, checked, issues, failed, unverifiedFailed: !!opts.requireVerified, manifestSources: sources }
+  const unverified = issues.filter((i) => i.level === 'unverified').length
+  return { app: options.name, checked, issues, failed, unverifiedFailed: !!opts.requireVerified && unverified > 0, manifestSources: sources }
 }
 
 async function checkPagesRepo(
@@ -468,7 +469,7 @@ async function checkPagesRepo(
         '仓库配置未提供页面表（pages 可选，应用代码页面表为运行时真源）——本命令无从核对。\n' +
         '  修法: 在 fulgurjs.config.ts 宿主 host.pages 提供页面表副本，或依赖 dev 期 remoteSchema 探针校验',
     })
-    return { app: app.name, checked: 0, issues, failed: false, unverifiedFailed: !!opts.requireVerified, manifestSources: [] }
+    return { app: app.name, checked: 0, issues, failed: false, unverifiedFailed: !!opts.requireVerified && issues.some((i) => i.level === 'unverified'), manifestSources: [] }
   }
 
   const violations: PageViolation[] = validatePages(pages, { remotes: prefixes })
@@ -526,7 +527,8 @@ async function checkPagesRepo(
   }
 
   const failed = issues.some((i) => i.level === 'error')
-  return { app: app.name, checked, issues, failed, unverifiedFailed: !!opts.requireVerified, manifestSources: sources }
+  const unverifiedCount = issues.filter((i) => i.level === 'unverified').length
+  return { app: app.name, checked, issues, failed, unverifiedFailed: !!opts.requireVerified && unverifiedCount > 0, manifestSources: sources }
 }
 
 export async function checkPages(
