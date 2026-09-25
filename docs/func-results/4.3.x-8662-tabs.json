@@ -1,0 +1,34 @@
+{
+  "phase": "tabs",
+  "env": "8662-prod",
+  "base": "http://localhost:8662/main",
+  "ts": "2026-09-25T15:35:44.405Z",
+  "plugin": null,
+  "login": {
+    "ok": true,
+    "user": "admin"
+  },
+  "menuSource": null,
+  "menuEntries": [],
+  "routeMapping": [],
+  "pages": [],
+  "failed": false,
+  "tabs": {
+    "instanceId": "1bdca498-b8a7-11f1-a9ac-96d848c31a95",
+    "domOrder": [
+      "el-tabs__content",
+      "el-tabs__header.is-top"
+    ],
+    "flexDir": "column-reverse",
+    "headerOrder": "0",
+    "headerTop": 151,
+    "contentTop": 205,
+    "headerAboveContent": true,
+    "tabNames": [
+      "审批详情",
+      "流程图",
+      "流转记录"
+    ],
+    "visualOk": true
+  }
+}

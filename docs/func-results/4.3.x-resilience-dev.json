@@ -1,0 +1,42 @@
+{
+  "env": "dev",
+  "base": "http://localhost:8773/main",
+  "ts": "2026-09-25T16:20:02.801Z",
+  "results": [
+    {
+      "n": "401 前置：登录",
+      "ok": true,
+      "d": ""
+    },
+    {
+      "n": "401 前置：BPM 待办渲染",
+      "ok": true,
+      "d": ""
+    },
+    {
+      "n": "401：无 refresh-token 请求（不伪造刷新）",
+      "ok": true,
+      "d": ""
+    },
+    {
+      "n": "401：重新登录框弹出（handleAuthorized）",
+      "ok": true,
+      "d": ""
+    },
+    {
+      "n": "故障：remoteEntry 被注入失败（拦截生效）",
+      "ok": true,
+      "d": "blocked=1"
+    },
+    {
+      "n": "故障：联邦错误占位显式三段式（MFU-001 + 根因 + 修法）",
+      "ok": true,
+      "d": "远程组件加载失败（错误码 MFU-001）[fulgurjs:MFU-001] failed to load remote \"mes-bpm\" from http://localhost:4529/f"
+    },
+    {
+      "n": "恢复：模型列表数据回来",
+      "ok": true,
+      "d": "rows=26"
+    }
+  ]
+}

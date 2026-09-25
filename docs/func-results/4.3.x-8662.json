@@ -1,0 +1,2040 @@
+{
+  "phase": "menus",
+  "env": "8662-prod",
+  "base": "http://localhost:8662/main",
+  "ts": "2026-09-25T15:13:45.422Z",
+  "plugin": null,
+  "login": {
+    "ok": true,
+    "user": "admin"
+  },
+  "menuSource": {
+    "fetched": true,
+    "leafCount": 27
+  },
+  "menuEntries": [
+    {
+      "name": "待办任务",
+      "chain": "审批中心 > 待办任务",
+      "url": "/flowable/bpm/task/todo"
+    },
+    {
+      "name": "已办任务",
+      "chain": "审批中心 > 已办任务",
+      "url": "/flowable/bpm/task/done"
+    },
+    {
+      "name": "我的流程",
+      "chain": "审批中心 > 我的流程",
+      "url": "/flowable/bpm/task/my"
+    },
+    {
+      "name": "抄送我的",
+      "chain": "审批中心 > 抄送我的",
+      "url": "/flowable/bpm/task/copy"
+    },
+    {
+      "name": "发起流程",
+      "chain": "审批中心 > 发起流程",
+      "url": "/flowable/bpm/task/create"
+    },
+    {
+      "name": "我的流程-详情",
+      "chain": "审批中心 > 我的流程-详情",
+      "url": "/flowable/bpm/process-instance/detail"
+    },
+    {
+      "name": "发起流程-弹窗",
+      "chain": "审批中心 > 发起流程-弹窗",
+      "url": "/flowable/bpm/manager/action"
+    },
+    {
+      "name": "流程模型",
+      "chain": "配置中心 > 流程管理 > 流程模型",
+      "url": "/flowable/bpm/manager/model"
+    },
+    {
+      "name": "流程表单",
+      "chain": "配置中心 > 流程管理 > 流程表单",
+      "url": "/flowable/bpm/manager/form"
+    },
+    {
+      "name": "流程分类",
+      "chain": "配置中心 > 流程管理 > 流程分类",
+      "url": "/flowable/bpm/manager/category"
+    },
+    {
+      "name": "用户分组",
+      "chain": "配置中心 > 流程管理 > 用户分组",
+      "url": "/flowable/bpm/manager/user-group"
+    },
+    {
+      "name": "流程监听器",
+      "chain": "配置中心 > 流程管理 > 流程监听器",
+      "url": "/flowable/bpm/manager/process-listener"
+    },
+    {
+      "name": "流程表达式",
+      "chain": "配置中心 > 流程管理 > 流程表达式",
+      "url": "/flowable/bpm/manager/process-expression"
+    },
+    {
+      "name": "流程实例",
+      "chain": "配置中心 > 流程管理 > 流程实例",
+      "url": "/flowable/bpm/manager/process-instance/manager"
+    },
+    {
+      "name": "流程任务",
+      "chain": "配置中心 > 流程管理 > 流程任务",
+      "url": "/flowable/bpm/manager/process-tasnk"
+    },
+    {
+      "name": "创建流程",
+      "chain": "配置中心 > 流程管理 > 创建流程",
+      "url": "/flowable/bpm/manager/model/create"
+    },
+    {
+      "name": "设计流程表单",
+      "chain": "配置中心 > 流程管理 > 设计流程表单",
+      "url": "/flowable/bpm/manager/form/edit"
+    },
+    {
+      "name": "修改流程",
+      "chain": "配置中心 > 流程管理 > 修改流程",
+      "url": "/flowable/bpm/manager/model/update/:id"
+    },
+    {
+      "name": "复制流程",
+      "chain": "配置中心 > 流程管理 > 复制流程",
+      "url": "/flowable/bpm/manager/model/copy/:id"
+    },
+    {
+      "name": "流程定义",
+      "chain": "配置中心 > 流程管理 > 流程定义",
+      "url": "/flowable/bpm/manager/definition"
+    },
+    {
+      "name": "数据报表",
+      "chain": "配置中心 > 流程管理 > 数据报表",
+      "url": "/flowable/bpm/process-instance/report"
+    },
+    {
+      "name": "表单设计",
+      "chain": "二次开发 > 表单设计",
+      "url": "/lowcode/lowdev/formDesign"
+    },
+    {
+      "name": "报表设计",
+      "chain": "二次开发 > 报表设计",
+      "url": "/lowcode/lowdev/reportDesign"
+    },
+    {
+      "name": "图表设计",
+      "chain": "二次开发 > 图表设计",
+      "url": "/lowcode/lowdev/graphReportDesign"
+    },
+    {
+      "name": "多模块组合",
+      "chain": "二次开发 > 多模块组合",
+      "url": "/lowcode/lowdev/moduleDesign"
+    },
+    {
+      "name": "报表功能测试",
+      "chain": "二次开发 > 报表功能测试",
+      "url": "/lowcode/lowdev/reportTest/:code"
+    },
+    {
+      "name": "自定义表单-动态地址",
+      "chain": "二次开发 > 自定义表单-动态地址",
+      "url": "/lowcode/form/external/:type/:id"
+    }
+  ],
+  "routeMapping": [
+    {
+      "menu": "待办任务",
+      "chain": "审批中心 > 待办任务",
+      "url": "/flowable/bpm/task/todo",
+      "record": "/flowable/bpm/task/todo",
+      "matched": true
+    },
+    {
+      "menu": "已办任务",
+      "chain": "审批中心 > 已办任务",
+      "url": "/flowable/bpm/task/done",
+      "record": "/flowable/bpm/task/done",
+      "matched": true
+    },
+    {
+      "menu": "我的流程",
+      "chain": "审批中心 > 我的流程",
+      "url": "/flowable/bpm/task/my",
+      "record": "/flowable/bpm/task/my",
+      "matched": true
+    },
+    {
+      "menu": "抄送我的",
+      "chain": "审批中心 > 抄送我的",
+      "url": "/flowable/bpm/task/copy",
+      "record": "/flowable/bpm/task/copy",
+      "matched": true
+    },
+    {
+      "menu": "发起流程",
+      "chain": "审批中心 > 发起流程",
+      "url": "/flowable/bpm/task/create",
+      "record": "/flowable/bpm/task/create",
+      "matched": true
+    },
+    {
+      "menu": "我的流程-详情",
+      "chain": "审批中心 > 我的流程-详情",
+      "url": "/flowable/bpm/process-instance/detail",
+      "record": "/flowable/bpm/process-instance/detail",
+      "matched": true
+    },
+    {
+      "menu": "发起流程-弹窗",
+      "chain": "审批中心 > 发起流程-弹窗",
+      "url": "/flowable/bpm/manager/action",
+      "record": "/flowable/bpm/manager/action",
+      "matched": true
+    },
+    {
+      "menu": "流程模型",
+      "chain": "配置中心 > 流程管理 > 流程模型",
+      "url": "/flowable/bpm/manager/model",
+      "record": "/flowable/bpm/manager/model",
+      "matched": true
+    },
+    {
+      "menu": "流程表单",
+      "chain": "配置中心 > 流程管理 > 流程表单",
+      "url": "/flowable/bpm/manager/form",
+      "record": "/flowable/bpm/manager/form",
+      "matched": true
+    },
+    {
+      "menu": "流程分类",
+      "chain": "配置中心 > 流程管理 > 流程分类",
+      "url": "/flowable/bpm/manager/category",
+      "record": "/flowable/bpm/manager/category",
+      "matched": true
+    },
+    {
+      "menu": "用户分组",
+      "chain": "配置中心 > 流程管理 > 用户分组",
+      "url": "/flowable/bpm/manager/user-group",
+      "record": "/flowable/bpm/manager/user-group",
+      "matched": true
+    },
+    {
+      "menu": "流程监听器",
+      "chain": "配置中心 > 流程管理 > 流程监听器",
+      "url": "/flowable/bpm/manager/process-listener",
+      "record": "/flowable/bpm/manager/process-listener",
+      "matched": true
+    },
+    {
+      "menu": "流程表达式",
+      "chain": "配置中心 > 流程管理 > 流程表达式",
+      "url": "/flowable/bpm/manager/process-expression",
+      "record": "/flowable/bpm/manager/process-expression",
+      "matched": true
+    },
+    {
+      "menu": "流程实例",
+      "chain": "配置中心 > 流程管理 > 流程实例",
+      "url": "/flowable/bpm/manager/process-instance/manager",
+      "record": "/flowable/bpm/manager/process-instance/manager",
+      "matched": true
+    },
+    {
+      "menu": "流程任务",
+      "chain": "配置中心 > 流程管理 > 流程任务",
+      "url": "/flowable/bpm/manager/process-tasnk",
+      "record": "/flowable/bpm/manager/process-tasnk",
+      "matched": true
+    },
+    {
+      "menu": "创建流程",
+      "chain": "配置中心 > 流程管理 > 创建流程",
+      "url": "/flowable/bpm/manager/model/create",
+      "record": "/flowable/bpm/manager/model/create",
+      "matched": true
+    },
+    {
+      "menu": "设计流程表单",
+      "chain": "配置中心 > 流程管理 > 设计流程表单",
+      "url": "/flowable/bpm/manager/form/edit",
+      "record": "/flowable/bpm/manager/form/edit",
+      "matched": true
+    },
+    {
+      "menu": "修改流程",
+      "chain": "配置中心 > 流程管理 > 修改流程",
+      "url": "/flowable/bpm/manager/model/update/:id",
+      "record": "/flowable/bpm/manager/model/:type/:id",
+      "matched": true
+    },
+    {
+      "menu": "复制流程",
+      "chain": "配置中心 > 流程管理 > 复制流程",
+      "url": "/flowable/bpm/manager/model/copy/:id",
+      "record": "/flowable/bpm/manager/model/:type/:id",
+      "matched": true
+    },
+    {
+      "menu": "流程定义",
+      "chain": "配置中心 > 流程管理 > 流程定义",
+      "url": "/flowable/bpm/manager/definition",
+      "record": "/flowable/bpm/manager/definition",
+      "matched": true
+    },
+    {
+      "menu": "数据报表",
+      "chain": "配置中心 > 流程管理 > 数据报表",
+      "url": "/flowable/bpm/process-instance/report",
+      "record": "/flowable/bpm/process-instance/report",
+      "matched": true
+    },
+    {
+      "menu": "表单设计",
+      "chain": "二次开发 > 表单设计",
+      "url": "/lowcode/lowdev/formDesign",
+      "record": "/lowcode/lowdev/formDesign",
+      "matched": true
+    },
+    {
+      "menu": "报表设计",
+      "chain": "二次开发 > 报表设计",
+      "url": "/lowcode/lowdev/reportDesign",
+      "record": "/lowcode/lowdev/reportDesign",
+      "matched": true
+    },
+    {
+      "menu": "图表设计",
+      "chain": "二次开发 > 图表设计",
+      "url": "/lowcode/lowdev/graphReportDesign",
+      "record": "/lowcode/lowdev/graphReportDesign",
+      "matched": true
+    },
+    {
+      "menu": "多模块组合",
+      "chain": "二次开发 > 多模块组合",
+      "url": "/lowcode/lowdev/moduleDesign",
+      "record": "/lowcode/lowdev/moduleDesign",
+      "matched": true
+    },
+    {
+      "menu": "报表功能测试",
+      "chain": "二次开发 > 报表功能测试",
+      "url": "/lowcode/lowdev/reportTest/:code",
+      "record": "/lowcode/lowdev/reportTest/:code",
+      "matched": true
+    },
+    {
+      "menu": "自定义表单-动态地址",
+      "chain": "二次开发 > 自定义表单-动态地址",
+      "url": "/lowcode/form/external/:type/:id",
+      "record": "/lowcode/form/external/:type/:id",
+      "matched": true
+    }
+  ],
+  "pages": [
+    {
+      "route": "/flowable/bpm/task/todo",
+      "menu": "待办任务",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 4,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 9,
+        "textLen": 881,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 待办任务 已办任务 我的流程 抄送我的 发起流程 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349351013",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349353220",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349353219",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/task/todo-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/task/todo-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349351013",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349353219",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349353220",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/bpm/task/todo-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+          "/meszc/bpm/task/todo-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+          "FINISHED &pageSize=10&name=&processDefinitionKey=",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/bpm/process-definition/simple-list",
+          "FINISHED &pageSize=10&name=&processDefinitionKey="
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/task/todo-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/task/todo-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "01-8662-prod-flowable_bpm_task_todo.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/task/done",
+      "menu": "已办任务",
+      "ok": false,
+      "evidence": {
+        "ready": true,
+        "rows": 10,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 10,
+        "textLen": 2374,
+        "textHead": "系统产品生产管理子系统 管理员 已办任务 搜索 请选择流程分类 请选择流程状态 高级筛选 流程 摘要 发起人 发起时间 当前任务 任务开始时间 任务结束时间 审批状态 审批建议 耗",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349378655",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349378838",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349378838",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/task/done-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349378655",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349378838",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349378838",
+          "/meszc/bpm/task/done-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/bpm/process-definition/simple-list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/task/done-page?pageNo=1&pageSize=10&name=&processDefinitionKey=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [
+          "TypeError: Cannot read properties of undefined (reading 'codeList')\n    at Proxy.changePermissionCode (http://localhost:8662/main/js/permission-BitZ9uAF.js:558:41)\n    at async Proxy.buildRoutesAction"
+        ],
+        "routeState": {
+          "name": "BpmDoneTask",
+          "path": "/flowable/bpm/task/done",
+          "params": {},
+          "matched": [
+            "",
+            "/flowable/bpm/task/done"
+          ],
+          "href": "http://localhost:8662/main/flowable/bpm/task/done"
+        },
+        "screenshot": "02-8662-prod-flowable_bpm_task_done.png"
+      },
+      "failures": [
+        "控制台错误 1 条: TypeError: Cannot read properties of undefined (reading 'codeList')\n    at Proxy.changePermissionCod"
+      ]
+    },
+    {
+      "route": "/flowable/bpm/task/my",
+      "menu": "我的流程",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 10,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 10,
+        "textLen": 1174,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 待办任务 已办任务 我的流程 抄送我的 发起流程 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349406322",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349408349",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349408349",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/my-page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349406322",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349408349",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349408349",
+          "/meszc/bpm/process-instance/my-page?pageNo=1&pageSize=10&name=",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/bpm/process-definition/simple-list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/process-instance/my-page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "03-8662-prod-flowable_bpm_task_my.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/task/copy",
+      "menu": "抄送我的",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 7,
+        "textLen": 229,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 待办任务 已办任务 我的流程 抄送我的 发起流程 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349434034",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349435871",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349435870",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/copy/page?pageNo=1&pageSize=10&processInstanceId=&processInstanceName=",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349434034",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349435870",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349435871",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/bpm/process-instance/copy/page?pageNo=1&pageSize=10&processInstanceId=&processInstanceName="
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/process-instance/copy/page?pageNo=1&pageSize=10&processInstanceId=&processInstanceName=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "04-8662-prod-flowable_bpm_task_copy.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/task/create",
+      "menu": "发起流程",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 0,
+        "inputs": 2,
+        "textLen": 399,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 待办任务 已办任务 我的流程 抄送我的 发起流程 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管",
+        "selectorHit": 18,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349461612",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349463594",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349463594",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/list?suspensionState=1",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349461612",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349463594",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349463594",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/bpm/process-definition/list?suspensionState=1"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "05-8662-prod-flowable_bpm_task_create.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/model",
+      "menu": "流程模型",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 26,
+        "tables": 9,
+        "forms": 1,
+        "inputs": 31,
+        "textLen": 2609,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349489322",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349491136",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349491136",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/model/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349489322",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349491136",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349491136",
+          "/meszc/bpm/model/list",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/model/list",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "06-8662-prod-flowable_bpm_manager_model.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/form",
+      "menu": "流程表单",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 4,
+        "tables": 3,
+        "forms": 1,
+        "inputs": 5,
+        "textLen": 533,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349516965",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349518824",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349518824",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349516965",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349518824",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349518824",
+          "/meszc/bpm/form/page?pageNo=1&pageSize=10&name=",
+          "/meszc/bpm/form/page?pageNo=1&pageSize=10&name="
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/form/page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "07-8662-prod-flowable_bpm_manager_form.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/category",
+      "menu": "流程分类",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 3,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 10,
+        "textLen": 538,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349544600",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349546327",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349546327",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349544600",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349546327",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349546327",
+          "/meszc/bpm/category/page?pageNo=1&pageSize=10"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/category/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "08-8662-prod-flowable_bpm_manager_category.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/user-group",
+      "menu": "用户分组",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 1,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 8,
+        "textLen": 379,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349572304",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349574044",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349574043",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/user-group/page?pageNo=1&pageSize=10&name=&status=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349572304",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349574043",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349574044",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/bpm/user-group/page?pageNo=1&pageSize=10&name=&status=",
+          "/meszc/system/user/simple-list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/user-group/page?pageNo=1&pageSize=10&name=&status=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "09-8662-prod-flowable_bpm_manager_user-group.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/process-listener",
+      "menu": "流程监听器",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 1,
+        "tables": 3,
+        "forms": 1,
+        "inputs": 6,
+        "textLen": 433,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349599950",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349601806",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349601805",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-listener/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349599950",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349601805",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349601806",
+          "/meszc/bpm/process-listener/page?pageNo=1&pageSize=10"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/process-listener/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "10-8662-prod-flowable_bpm_manager_process-listener.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/process-expression",
+      "menu": "流程表达式",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 7,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 8,
+        "textLen": 1042,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349627568",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349629284",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-expression/page?pageNo=1&pageSize=10",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349629283",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349627568",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349629283",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349629284",
+          "/meszc/bpm/process-expression/page?pageNo=1&pageSize=10"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/process-expression/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "11-8662-prod-flowable_bpm_manager_process-expression.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/process-instance/manager",
+      "menu": "流程实例管理",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 10,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 12,
+        "textLen": 1670,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349655222",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349657009",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349657009",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/manager-page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349655222",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349657009",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349657009",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/bpm/process-instance/manager-page?pageNo=1&pageSize=10&name=",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/system/user/simple-list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/process-instance/manager-page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "12-8662-prod-flowable_bpm_manager_process-instance_manager.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/process-tasnk",
+      "menu": "任务管理",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 10,
+        "tables": 5,
+        "forms": 1,
+        "inputs": 7,
+        "textLen": 2126,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349682893",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349684724",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349684724",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/task/manager-page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349682893",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349684724",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349684724",
+          "/meszc/bpm/task/manager-page?pageNo=1&pageSize=10&name="
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/task/manager-page?pageNo=1&pageSize=10&name=",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "13-8662-prod-flowable_bpm_manager_process-tasnk.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/definition",
+      "menu": "流程定义",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 10,
+        "tables": 3,
+        "forms": 0,
+        "inputs": 3,
+        "textLen": 1880,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349710547",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349712437",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349712435",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/page?pageNo=1&pageSize=10",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349710547",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349712435",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349712437",
+          "/meszc/bpm/process-definition/page?pageNo=1&pageSize=10",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/bpm/process-definition/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "14-8662-prod-flowable_bpm_manager_definition.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/form/edit",
+      "menu": "表单设计",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 5,
+        "inputs": 53,
+        "textLen": 611,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 111,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349738279",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349740176",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349740176",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-type/list-all-simple",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349738279",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349740176",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349740176",
+          "/meszc/system/dict-type/list-all-simple"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "15-8662-prod-flowable_bpm_manager_form_edit.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/model/create",
+      "menu": "创建流程",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 26,
+        "textLen": 340,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 2,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349765924",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349767572",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349767571",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dept/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349765924",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349767571",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349767572",
+          "/meszc/bpm/form/simple-list",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/system/user/simple-list",
+          "/meszc/system/dept/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/system/dict-data/simple-list"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "16-8662-prod-flowable_bpm_manager_model_create.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/model/:type/:id",
+      "menu": "修改流程",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 30,
+        "textLen": 371,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 2,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349793527",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349795356",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349795355",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/model/get?id=5c0fd82d-4849-11f0-8041-f8e43be98cda",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/get?id=10",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dept/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349793527",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349795355",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349795356",
+          "/meszc/bpm/model/get?id=5c0fd82d-4849-11f0-8041-f8e43be98cda",
+          "/meszc/bpm/form/simple-list",
+          "/meszc/bpm/form/get?id=10",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/system/user/simple-list",
+          "/meszc/system/dept/simple-list"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "17-8662-prod-flowable_bpm_manager_model__type__id.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/model/:type/:id",
+      "menu": "复制流程",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 30,
+        "textLen": 369,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 2,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349821224",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349823029",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349823028",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/model/get?id=5c0fd82d-4849-11f0-8041-f8e43be98cda",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/get?id=10",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dept/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349821224",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349823028",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349823029",
+          "/meszc/bpm/model/get?id=5c0fd82d-4849-11f0-8041-f8e43be98cda",
+          "/meszc/bpm/form/simple-list",
+          "/meszc/bpm/form/get?id=10",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/system/user/simple-list",
+          "/meszc/system/dept/simple-list"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "18-8662-prod-flowable_bpm_manager_model__type__id.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/model/:type/:id",
+      "menu": "定义流程",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 2,
+        "inputs": 28,
+        "textLen": 249,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 2,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349848860",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349851155",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349851154",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/get?id=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/form/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/category/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dept/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349848860",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349851154",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349851155",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/bpm/process-definition/get?id=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95",
+          "/meszc/bpm/form/simple-list",
+          "/meszc/bpm/category/simple-list",
+          "/meszc/system/user/simple-list",
+          "/meszc/system/dept/simple-list"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "19-8662-prod-flowable_bpm_manager_model__type__id.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/process-instance/detail",
+      "menu": "流程详情",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 1,
+        "tables": 5,
+        "forms": 10,
+        "inputs": 17,
+        "textLen": 364,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 待办任务 已办任务 我的流程 抄送我的 发起流程 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管",
+        "selectorHit": 2,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349876585",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349878235",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349878234",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/task/list-by-process-instance-id?processInstanceId=1bdca498-b8a7-11f1-a9ac-96d848c31a95",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/get-bpmn-model-view?id=1bdca498-b8a7-11f1-a9ac-96d848c31a95",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/get-approval-detail?processInstanceId=1bdca498-b8a7-11f1-a9ac-96d848c31a95",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349876585",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349878234",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349878235",
+          "/meszc/bpm/process-instance/get-approval-detail?processInstanceId=1bdca498-b8a7-11f1-a9ac-96d848c31a95",
+          "/meszc/bpm/process-instance/get-bpmn-model-view?id=1bdca498-b8a7-11f1-a9ac-96d848c31a95",
+          "/meszc/system/user/simple-list",
+          "/meszc/bpm/task/list-by-process-instance-id?processInstanceId=1bdca498-b8a7-11f1-a9ac-96d848c31a95"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "20-8662-prod-flowable_bpm_process-instance_detail.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/manager/action",
+      "menu": "审批操作",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 1,
+        "inputs": 12,
+        "textLen": 202,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 待办任务 已办任务 我的流程 抄送我的 发起流程 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管",
+        "selectorHit": 1,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349904244",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349906470",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349906469",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/getByKey?key=lxll",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/get-approval-detail?processDefinitionId=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95&activityId=StartUserNode",
+            "status": 200
+          },
+          {
+            "url": "/meszc/approver/ckuOftenApprover/list?processsKey=lxll",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/get?id=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349904244",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349906469",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349906470",
+          "/meszc/bpm/process-definition/getByKey?key=lxll",
+          "/meszc/bpm/process-instance/get-approval-detail?processDefinitionId=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95&activityId=StartUserNode",
+          "/meszc/bpm/process-definition/get?id=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95",
+          "/meszc/approver/ckuOftenApprover/list?processsKey=lxll"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "21-8662-prod-flowable_bpm_manager_action.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/flowable/bpm/process-instance/report",
+      "menu": "流程报表",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 1,
+        "tables": 7,
+        "forms": 1,
+        "inputs": 11,
+        "textLen": 414,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 1,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349931958",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349933796",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/dict-data/simple-list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349933796",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-definition/get?id=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95",
+            "status": 200
+          },
+          {
+            "url": "/meszc/bpm/process-instance/manager-page?pageNo=1&pageSize=10&name=&processDefinitionKey=lxll&formFieldsParams=%7B%7D",
+            "status": 200
+          },
+          {
+            "url": "/meszc/system/user/simple-list",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349931958",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349933796",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349933796",
+          "/meszc/system/dict-data/simple-list",
+          "/meszc/bpm/process-definition/get?id=lxll%3A40%3A439bfb15-b521-11f1-a9ac-96d848c31a95",
+          "/meszc/bpm/process-instance/manager-page?pageNo=1&pageSize=10&name=&processDefinitionKey=lxll&formFieldsParams=%7B%7D",
+          "/meszc/system/user/simple-list"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "22-8662-prod-flowable_bpm_process-instance_report.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/lowcode/lowdev/formDesign",
+      "menu": "表单设计",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 10,
+        "tables": 3,
+        "forms": 2,
+        "inputs": 21,
+        "textLen": 1110,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349959665",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349961408",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349961408",
+            "status": 200
+          },
+          {
+            "url": "/meszc/group/desform/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/lowdesform/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349959665",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349961408",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349961408",
+          "/meszc/lowdesform/page?pageNo=1&pageSize=10",
+          "/meszc/group/desform/list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/lowdesform/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "23-8662-prod-lowcode_lowdev_formDesign.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/lowcode/lowdev/reportDesign",
+      "menu": "报表设计",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 4,
+        "tables": 3,
+        "forms": 2,
+        "inputs": 11,
+        "textLen": 626,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790349987368",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349989281",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349989281",
+            "status": 200
+          },
+          {
+            "url": "/meszc/group/report/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/report/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790349987368",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790349989281",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790349989281",
+          "/meszc/report/page?pageNo=1&pageSize=10",
+          "/meszc/group/report/list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/group/report/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/report/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "24-8662-prod-lowcode_lowdev_reportDesign.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/lowcode/lowdev/graphReportDesign",
+      "menu": "图形报表",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 7,
+        "tables": 3,
+        "forms": 2,
+        "inputs": 11,
+        "textLen": 776,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790350015018",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350017119",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350017119",
+            "status": 200
+          },
+          {
+            "url": "/meszc/group/graphreport/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/graphreport/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790350015018",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350017119",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350017119",
+          "/meszc/graphreport/page?pageNo=1&pageSize=10",
+          "/meszc/group/graphreport/list"
+        ],
+        "api": [
+          {
+            "url": "/meszc/group/graphreport/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/graphreport/page?pageNo=1&pageSize=10",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "25-8662-prod-lowcode_lowdev_graphReportDesign.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/lowcode/lowdev/moduleDesign",
+      "menu": "模块设计",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 3,
+        "forms": 2,
+        "inputs": 7,
+        "textLen": 248,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790350042690",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350044387",
+            "status": 200
+          },
+          {
+            "url": "/meszc/tab/page?pageNo=1&pageSize=10",
+            "status": 200
+          },
+          {
+            "url": "/meszc/dbform/get/all-table?onlyTableName=Y",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350044384",
+            "status": 200
+          },
+          {
+            "url": "/meszc/group/tab/list",
+            "status": 200
+          },
+          {
+            "url": "/meszc/report/page",
+            "status": 200
+          },
+          {
+            "url": "/meszc/lowdesform/page",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790350042690",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350044384",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350044387",
+          "/meszc/tab/page?pageNo=1&pageSize=10",
+          "/meszc/group/tab/list",
+          "/meszc/dbform/get/all-table?onlyTableName=Y",
+          "/meszc/lowdesform/page",
+          "/meszc/report/page"
+        ],
+        "api": [
+          {
+            "url": "/meszc/group/tab/list",
+            "status": 200
+          }
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "26-8662-prod-lowcode_lowdev_moduleDesign.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/lowcode/lowdev/reportTest/:code",
+      "menu": "报表功能测试",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 2,
+        "tables": 3,
+        "forms": 1,
+        "inputs": 6,
+        "textLen": 416,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 2,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790350070330",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350072746",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350072745",
+            "status": 200
+          },
+          {
+            "url": "/meszc/report/get/web-config?reportCode=problemReport",
+            "status": 200
+          },
+          {
+            "url": "/meszc/report-data/list/problemReport",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790350070330",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350072745",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350072746",
+          "/meszc/report/get/web-config?reportCode=problemReport",
+          "/meszc/report-data/list/problemReport"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "27-8662-prod-lowcode_lowdev_reportTest__code.png"
+      },
+      "failures": []
+    },
+    {
+      "route": "/lowcode/form/external/:type/:id",
+      "menu": "外部表单",
+      "ok": true,
+      "evidence": {
+        "ready": true,
+        "rows": 0,
+        "tables": 0,
+        "forms": 1,
+        "inputs": 28,
+        "textLen": 257,
+        "textHead": "系统产品生产管理子系统 管理员 首页 审批中心 消息中心 基础数据管理 产品结构与工艺管理 生产计划管理 生产准备管理 作业计划管理 质量管理 设备管理 工装管理 产线建模 统计查",
+        "selectorHit": 68,
+        "apiAll": [
+          {
+            "url": "/meszc/sys/permission/getUserPermissionByToken?_t=1790350097998",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350100248",
+            "status": 200
+          },
+          {
+            "url": "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350100248",
+            "status": 200
+          },
+          {
+            "url": "/meszc/open/lowdesform/get/detail?desFormId=2069295925677170689",
+            "status": 200
+          },
+          {
+            "url": "/meszc/work/login/user/getUserInfo",
+            "status": 200
+          }
+        ],
+        "reqAll": [
+          "/meszc/sys/permission/getUserPermissionByToken?_t=1790350097998",
+          "/meszc/sys/annountCement/listByUser?pageSize=5&_t=1790350100248",
+          "/meszc/sys/user/verifyIzDefaultPwd?_t=1790350100248",
+          "/meszc/work/login/user/getUserInfo",
+          "/meszc/open/lowdesform/get/detail?desFormId=2069295925677170689"
+        ],
+        "pageErrors": [],
+        "consoleErrors": [],
+        "screenshot": "28-8662-prod-lowcode_form_external__type__id.png"
+      },
+      "failures": []
+    }
+  ],
+  "failed": true,
+  "testData": {
+    "model": {
+      "id": "5c0fd82d-4849-11f0-8041-f8e43be98cda",
+      "key": "qdlc",
+      "name": "请个假审批流程",
+      "defKey": "lxll",
+      "defId": "lxll:40:439bfb15-b521-11f1-a9ac-96d848c31a95",
+      "deployedModelId": "e8e2d53f-a57d-11f0-a56a-f8e43be98cda",
+      "deployedModelKey": "lxll"
+    },
+    "procInst": {
+      "id": "1bdca498-b8a7-11f1-a9ac-96d848c31a95"
+    },
+    "report": {
+      "code": "problemReport"
+    },
+    "desform": {
+      "id": "2069295925677170689"
+    },
+    "raw": {
+      "modelN": 26,
+      "defN": 10,
+      "taskN": 4,
+      "reportN": 4,
+      "desformN": 88
+    }
+  },
+  "coverage": {
+    "routeRecords": 26,
+    "uniqueRoutes": 26,
+    "menusCoveredRecords": 26,
+    "orphanRecords": []
+  }
+}

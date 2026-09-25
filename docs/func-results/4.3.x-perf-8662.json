@@ -1,0 +1,335 @@
+{
+  "ts": "2026-09-25T15:39:49.913Z",
+  "base": "http://localhost:8662/main",
+  "manifests": {
+    "mes-bpm": {
+      "exposeKeys": 24,
+      "distinctFiles": 20,
+      "entry": "fulgurjs-remoteEntry.js"
+    },
+    "mes-lowcode": {
+      "exposeKeys": 8,
+      "distinctFiles": 7,
+      "entry": "fulgurjs-remoteEntry.js"
+    }
+  },
+  "phases": [
+    {
+      "phase": "P0-dashboard-idle(登录+停留15s)",
+      "ms": 32832,
+      "addedCount": 353,
+      "bytes": 44947227,
+      "errors": [],
+      "detail": {
+        "remoteEntry": [],
+        "manifest": [],
+        "expose": {
+          "mes-bpm": [],
+          "mes-lowcode": []
+        },
+        "setup": [],
+        "css": [
+          "/main/LuckySheet/plugins/css/pluginsCss.css",
+          "/main/LuckySheet/plugins/plugins.css",
+          "/main/LuckySheet/css/luckysheet.css",
+          "/main/LuckySheet/assets/iconfont/iconfont.css",
+          "/main/assets/index-3Ka_8f2v.css",
+          "/main/assets/index-BaYtJ0aD.css",
+          "/main/assets/usePopBiz-BT_gyNoQ.css",
+          "/main/assets/Loading-BwHgMpAB.css",
+          "/main/assets/index-Dz5vBEvA.css",
+          "/main/assets/DndStencilTree-Dth9dINc.css",
+          "/main/assets/main-gI0Sgrde.css",
+          "/main/assets/index-7MqlkSb9.css",
+          "/main/print-lock.css",
+          "/main/assets/index-C6mETZpu.css",
+          "/main/assets/ModalHeader-BCKO9I4i.css",
+          "/main/assets/index-DYW1Y9_c.css",
+          "/main/assets/BasicModal-BdpiaVo2.css",
+          "/main/assets/index-SZmYuct-.css",
+          "/main/assets/JPopup-FXiAHJnY.css",
+          "/main/assets/index-BipoDIEM.css",
+          "/main/assets/index-BoW754fs.css",
+          "/main/assets/JSelectBiz-CwJso0GX.css",
+          "/main/assets/JSelectUser-5CvXk6Rg.css",
+          "/main/assets/useContextMenu-cKV-3Ndy.css",
+          "/main/assets/index-ndqTft7k.css",
+          "/main/assets/JSelectDept-BKNheWbS.css",
+          "/main/assets/JAddInput-DvhZdUMD.css",
+          "/main/assets/JDictSelectTag-Ct5BHRF-.css",
+          "/main/assets/JUpload-DvuPzEiu.css",
+          "/main/assets/index-CcuD2MIW.css",
+          "/main/assets/componentMap-JH_Cyqni.css",
+          "/main/assets/BasicForm-CxPshq4y.css",
+          "/main/assets/vue-BMfYwziT.css",
+          "/main/assets/JCodeEditor-Bu5yjYSm.css",
+          "/main/assets/idea-ByP2lpNZ.css",
+          "/main/assets/EasyCronInput-BIbIy8_m.css",
+          "/main/assets/CaptchaModal-NMCOt1C4.css",
+          "/main/assets/MiniForgotpad-C3m7gyQx.css",
+          "/main/assets/MiniRegister-BFuWnYwd.css",
+          "/main/assets/MiniCodelogin-BxDZ9uay.css",
+          "/main/assets/MiniLogin-BIw4TVXJ.css",
+          "/main/assets/JVxeImageCell-CUC-nbJL.css",
+          "/main/assets/JVxeUserSelectCell-ByuRctPm.css",
+          "/main/assets/JVxeDepartSelectCell-Dolsf8VA.css",
+          "/main/assets/app-theme-style.e3b0c442.css",
+          "/main/assets/LoginSelect-Hrq46gsY.css",
+          "/main/assets/index-d72fK_C5.css",
+          "/main/assets/index-DOKnEGQY.css",
+          "/main/assets/index-_eQmrhCo.css",
+          "/main/assets/index-eeLqTtE9.css",
+          "/main/assets/index-BOodrXDJ.css",
+          "/main/assets/Trend-EVrjOLom.css",
+          "/main/assets/ChartGroupCard-BehKPzZt.css",
+          "/main/assets/RankList-CTk_51ge.css",
+          "/main/assets/SaleTabCard-G3QMfaHi.css",
+          "/main/assets/api-TyST7v7A.css",
+          "/main/assets/IndexChart-4Ig6S96b.css",
+          "/main/assets/BasicTable-UAz8s4tq.css",
+          "/main/assets/index-CpKrGM3U.css",
+          "/main/assets/BdcTabCard-B34q-YCU.css",
+          "/main/assets/IndexBdc-DjS3F-yZ.css",
+          "/main/assets/IndexTask-dtF6bjYu.css",
+          "/main/assets/appEnterCompCard-D7RsRS2a.css",
+          "/main/assets/ProcessCenterCard-CGYOSv_k.css",
+          "/main/assets/TextCard-CABqLU7n.css",
+          "/main/assets/ReportFormsCard-tXm1g-nc.css",
+          "/main/assets/OnlineChartsListCard-DGUdaVnA.css",
+          "/main/assets/ChartFormsCard-Bkr1DjTH.css",
+          "/main/assets/carouselCard-YX4KVctw.css",
+          "/main/assets/systemNoticeCard-CxNByYWV.css",
+          "/main/assets/newsCord-CC6Z_Uew.css",
+          "/main/assets/ItemBody-CPrtY0Bp.css",
+          "/main/assets/CustomWrapper-C5qZo8bD.css",
+          "/main/assets/gridstack-BSHJEv6S.css",
+          "/main/assets/GridStackPreview-DparnBHU.css",
+          "/main/assets/CustomizeHomepage-BTmrRgbN.css",
+          "/main/assets/Login-CHHo6b1b.css",
+          "/main/assets/SessionTimeoutLogin-h_uXJefq.css",
+          "/main/assets/index-0fW1tuQ9.css",
+          "/main/assets/DetailModal-CronkgKV.css",
+          "/main/assets/SysMessageModal-BqmwDvuW.css",
+          "/main/assets/index-CceUww6U.css",
+          "/main/assets/index-DuZNUjre.css",
+          "/main/assets/index-C2uOnY9_.css",
+          "/main/assets/index-WK4VdyvL.css",
+          "/main/assets/LockPage-Blx1tczW.css",
+          "/main/assets/DepartSelect-ctVk19zJ.css"
+        ],
+        "other": []
+      }
+    },
+    {
+      "phase": "P1-bpm-todo-first",
+      "ms": 18686,
+      "addedCount": 190,
+      "bytes": 4933386,
+      "errors": [],
+      "detail": {
+        "remoteEntry": [
+          "/flowable/fulgurjs-remoteEntry.js"
+        ],
+        "manifest": [
+          "/flowable/fulgurjs-manifest.json"
+        ],
+        "expose": {
+          "mes-bpm": [
+            "/flowable/static/index-ASiHYp3l.js"
+          ],
+          "mes-lowcode": []
+        },
+        "setup": [],
+        "css": [
+          "/main/flowable/bpm/task/LuckySheet/plugins/css/pluginsCss.css",
+          "/main/flowable/bpm/task/LuckySheet/plugins/plugins.css",
+          "/main/flowable/bpm/task/LuckySheet/css/luckysheet.css",
+          "/main/flowable/bpm/task/LuckySheet/assets/iconfont/iconfont.css",
+          "/flowable/static/index-BEj6YONn.css",
+          "/flowable/static/el-tag-5TqU4q48.css",
+          "/flowable/static/el-form-_bbdpU7M.css",
+          "/flowable/static/el-popover-BXo9j6C6.css",
+          "/flowable/static/el-select-o7qVR7LJ.css",
+          "/flowable/static/el-pagination-C49Sr6Bb.css",
+          "/flowable/static/el-alert-CGNjtr_4.css",
+          "/flowable/static/index-DvwL_aLf.css",
+          "/flowable/static/el-loading-D96exAbU.css",
+          "/flowable/static/index-DlYaTtBh.css",
+          "/flowable/static/el-card-DpdEc5_P.css",
+          "/flowable/static/el-table-column-BEx-BniK.css",
+          "/flowable/static/el-checkbox-Dl0v3EkH.css",
+          "/flowable/static/el-text-CjuDOozN.css",
+          "/flowable/static/ContentWrap-CQewizlh.css",
+          "/flowable/static/el-date-picker-c5Zdh4ck.css",
+          "/flowable/static/index-CA-x_C8d.css",
+          "/flowable/static/setup-DXn0V6O7.css",
+          "/flowable/static/index-D0tUuR53.css",
+          "/flowable/static/el-transfer-BRxtfCZI.css",
+          "/flowable/static/el-dropdown-item-iYP3xj9o.css",
+          "/flowable/static/el-collapse-item-Cmht9rPX.css",
+          "/flowable/static/el-row-kmzYOPyF.css",
+          "/flowable/static/el-col-EDDeApav.css",
+          "/flowable/static/el-input-number-DEGxifGw.css",
+          "/flowable/static/el-cascader-panel-CsBRlx40.css",
+          "/flowable/static/el-checkbox-button-BpLH7LiX.css",
+          "/flowable/static/el-tree-LD6oLcSu.css",
+          "/flowable/static/el-progress-CqTFmmvK.css",
+          "/flowable/static/el-upload-DyUeYwFS.css",
+          "/flowable/static/el-rate-ColE-7oh.css",
+          "/flowable/static/el-switch-D3RMHuBU.css",
+          "/flowable/static/el-slider-ClsEm30j.css",
+          "/flowable/static/el-dialog-D0X3kUkk.css",
+          "/flowable/static/el-color-picker-BGQdEtnH.css",
+          "/flowable/static/el-time-picker-CwsW3l-l.css",
+          "/flowable/static/el-tree-select-BC9u6a6J.css",
+          "/flowable/static/el-mention-YVYklDiu.css",
+          "/flowable/static/el-image-viewer-CTJ44wXd.css",
+          "/flowable/static/index-DMuaPit2.css",
+          "/flowable/static/UploadImg-Cy6noibH.css",
+          "/flowable/static/UploadImgs-GEUB4xfP.css",
+          "/flowable/static/el-link-Dc88KzPr.css",
+          "/flowable/static/UploadFile-DsZjYE6T.css",
+          "/flowable/static/Editor-RD415vep.css",
+          "/flowable/static/index-CokxO11z.css",
+          "/flowable/static/el-checkbox-group-B3ldtHxN.css",
+          "/flowable/static/el-aside-dP5lN8Fl.css",
+          "/flowable/static/el-main-9imNN_cT.css",
+          "/flowable/static/el-header-DNasdfTH.css",
+          "/flowable/static/el-divider-Ca8J-BER.css",
+          "/flowable/static/el-tabs-0SYywTm4.css",
+          "/flowable/static/el-button-group-CPcEuZEB.css",
+          "/flowable/static/el-radio-IPP-cfSY.css",
+          "/flowable/static/el-radio-group-_9fPZ82w.css",
+          "/flowable/static/el-radio-button-Yw4rwOEi.css"
+        ],
+        "other": []
+      }
+    },
+    {
+      "phase": "P2-bpm-model",
+      "ms": 15697,
+      "addedCount": 41,
+      "bytes": 385023,
+      "errors": [],
+      "detail": {
+        "remoteEntry": [],
+        "manifest": [],
+        "expose": {
+          "mes-bpm": [
+            "/flowable/static/index-CsbMEOry.js"
+          ],
+          "mes-lowcode": []
+        },
+        "setup": [],
+        "css": [
+          "/main/flowable/bpm/manager/LuckySheet/plugins/css/pluginsCss.css",
+          "/main/flowable/bpm/manager/LuckySheet/plugins/plugins.css",
+          "/main/flowable/bpm/manager/LuckySheet/css/luckysheet.css",
+          "/main/flowable/bpm/manager/LuckySheet/assets/iconfont/iconfont.css",
+          "/flowable/static/index-ByekVINW.css",
+          "/flowable/static/Dialog-CuZVLcro.css",
+          "/flowable/static/CategoryForm-DHoL5Br7.css",
+          "/flowable/static/ImportModelDialog-BSuDgzZ_.css",
+          "/flowable/static/el-descriptions-item-D_IHWRLM.css",
+          "/flowable/static/CategoryDraggableModel-D-0hXkY9.css",
+          "/flowable/static/DictTag-DsR-HcSo.css",
+          "/flowable/static/el-image-BrUZgf8Q.css"
+        ],
+        "other": []
+      }
+    },
+    {
+      "phase": "P3-lowcode-formDesign-first",
+      "ms": 18736,
+      "addedCount": 86,
+      "bytes": 14043623,
+      "errors": [],
+      "detail": {
+        "remoteEntry": [
+          "/lowcode/fulgurjs-remoteEntry.js"
+        ],
+        "manifest": [
+          "/lowcode/fulgurjs-manifest.json"
+        ],
+        "expose": {
+          "mes-bpm": [],
+          "mes-lowcode": [
+            "/lowcode/assets/index-aXjvtybo.js"
+          ]
+        },
+        "setup": [],
+        "css": [
+          "/main/lowcode/lowdev/LuckySheet/plugins/css/pluginsCss.css",
+          "/main/lowcode/lowdev/LuckySheet/plugins/plugins.css",
+          "/main/lowcode/lowdev/LuckySheet/css/luckysheet.css",
+          "/main/lowcode/lowdev/LuckySheet/assets/iconfont/iconfont.css",
+          "/lowcode/assets/index-BpJT2x_5.css",
+          "/lowcode/assets/el-form-item-Bn5pBGmB.css",
+          "/lowcode/assets/el-button-Chx1kkUU.css",
+          "/lowcode/assets/el-popover-ubTWHY6R.css",
+          "/lowcode/assets/el-checkbox-CUhMvy7B.css",
+          "/lowcode/assets/el-virtual-list-rfJ2-s6H.css",
+          "/lowcode/assets/el-tree-DcYhmRBX.css",
+          "/lowcode/assets/el-input-Dpjg1Avj.css",
+          "/lowcode/assets/el-form-BxZ3oJ-D.css",
+          "/lowcode/assets/el-empty-C8b_KmVD.css",
+          "/lowcode/assets/el-input-number-DFXo3naY.css",
+          "/lowcode/assets/el-select-DyV8Zs5p.css",
+          "/lowcode/assets/el-popconfirm-CJ6Giz2w.css",
+          "/lowcode/assets/el-collapse-transition-MG2SupWs.css",
+          "/lowcode/assets/el-link-DnCwRpJZ.css",
+          "/lowcode/assets/el-switch-qIuyB4pC.css",
+          "/lowcode/assets/DeffEditor-DrdtpNeD.css",
+          "/lowcode/assets/index-wPc0gFMH.css",
+          "/lowcode/assets/user-BAOp2P06.css",
+          "/lowcode/assets/editor-CdJfOLYd.css",
+          "/lowcode/assets/virtual_fulgurjs-shared_vue_f_cn51yt7-Dp-rv5-U.css",
+          "/lowcode/assets/I18nInput-vgZAeuNI.css",
+          "/lowcode/assets/TipView-D9QyDGx1.css",
+          "/lowcode/assets/VerifyOption-CGHJ7RNA.css",
+          "/lowcode/assets/el-pagination-sVwSJbzY.css",
+          "/lowcode/assets/el-divider-Cb3UFln2.css",
+          "/lowcode/assets/virtual_fulgurjs-shared_vue_f_csh5g91-CUiVEjS0.css",
+          "/lowcode/assets/IconSelect-Bhs5CVEF.css"
+        ],
+        "other": []
+      }
+    },
+    {
+      "phase": "P4-bpm-todo-revisit",
+      "ms": 12732,
+      "addedCount": 3,
+      "bytes": 98753,
+      "errors": [],
+      "detail": {
+        "remoteEntry": [],
+        "manifest": [],
+        "expose": {
+          "mes-bpm": [],
+          "mes-lowcode": []
+        },
+        "setup": [],
+        "css": [],
+        "other": []
+      }
+    },
+    {
+      "phase": "P5-preloadRemote(mes-bpm)显式整远程",
+      "ms": 30034,
+      "addedCount": 70,
+      "bpmExposeFilesDownloaded": 18,
+      "bpmExposeDistinctTotal": 20,
+      "bytes": 618219
+    }
+  ],
+  "errors": [],
+  "verdict": {
+    "dashboard 不下载两个远程页面文件": true,
+    "首次 BPM 页不批量下载 BPM 全部页面文件": true,
+    "首次 BPM 页不下载 lowcode 页面文件": true,
+    "第二 BPM 页不批量下载其余页面文件": true,
+    "首次 lowcode 只下载所需子集": true,
+    "重复打开不重复下载": true,
+    "显式整远程预载可下载完整清单": true
+  }
+}
