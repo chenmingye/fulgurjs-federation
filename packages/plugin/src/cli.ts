@@ -2,13 +2,13 @@
 /**
  * fulgurjs CLI（主包内置 bin）。
  *
- * 子命令：
- * - fulgurjs init [--template <path>] [--config <path>] [--force]  起步模板 / 配置校验 + 样板输出
- * - fulgurjs explain --config <path> --app <name> [--json]         配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
- * - fulgurjs check-pages --config <path> --app <name> [--site <URL>] [--json]  页面表 ↔ 远程 exposes 契约核对
+ * 子命令（单项目 fulgurjs.config.ts 为默认形态；旧聚合配置兼容，需 --app）：
+ * - fulgurjs init [--template <path>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出
+ * - fulgurjs explain [--config <path>] [--app <name>] [--json]     配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
+ * - fulgurjs check-pages [--config <path>] [--app <name>] [--site <URL>] [--manifest <r>=<p|URL>]... [--require-verified] [--json]
  * - fulgurjs doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
  *
- * 插件保持项目无关：init 不改写任何项目文件，只输出模板与可粘贴样板；
+ * 插件保持项目无关：init 不改写任何项目文件，只输出模板与可粘贴接入块；
  * 项目各自的集成细节由各项目按通用核对清单自行落地。
  */
 import { resolve } from 'node:path'
@@ -16,24 +16,31 @@ import { runDoctor, formatDoctorReport } from './doctor'
 
 const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
 
-用法：
-  fulgurjs init [--template <path>] [--force]      生成带注释的 fulgurjs.config.ts 起步模板
-  fulgurjs init --config <path>                    校验配置；输出各应用 federation() 粘贴块、
-                                                 NGINX no-cache 站点模板与接入核对清单
-  fulgurjs explain --config <path> --app <name> [--json]
-                                                 解释某应用的有效联邦形态与加载链（纯本地，无网络）
-  fulgurjs check-pages --config <path> --app <name> [--site <URL>] [--json]
-                                                 核对宿主页面表与远程 exposes（本地 dist 优先；确定性错误非零退出）
+用法（单项目 fulgurjs.config.ts 在应用根目录；命令默认读 ./fulgurjs.config.ts）：
+  fulgurjs init [--template <path>] [--force]      生成单项目 fulgurjs.config.ts 起步模板
+                                                   （默认导出直接是 federation() 选项）
+  fulgurjs init --config <path>                    校验配置；输出 federation(fulgurjsConfig) 接入块
+                                                 与接入核对清单（NGINX 样板仅随旧聚合配置打印）
+  fulgurjs explain [--config <path>] [--app <name>] [--json]
+                                                 解释本应用有效联邦形态与加载链（纯本地，无网络；
+                                                 单项目形态免 --app，旧聚合配置必填）
+  fulgurjs check-pages [--config <path>] [--app <name>] [--site <URL>]
+                        [--manifest <remote>=<路径|URL>]... [--require-verified] [--json]
+                                                 核对宿主页面表与远程 exposes（宿主项目运行；
+                                                 manifest 来源优先级 --manifest > --site/prod 推导；
+                                                 确定性错误非零退出；--require-verified 时无法验证也非零）
   fulgurjs doctor --base <URL> --apps <a,b,c> [--dev] [--json] [--chunk-sample N]
   fulgurjs --help
 
-示例：
+示例（单项目形态，应用根目录内运行）：
   fulgurjs init                                    # 当前目录写 fulgurjs.config.ts（已存在则拒绝，--force 覆盖）
-  fulgurjs init --config fulgurjs.config.ts          # 校验 + 输出样板
-  fulgurjs explain --config fulgurjs.config.ts --app apps/remote-a
-  fulgurjs check-pages --config fulgurjs.config.ts --app apps/host --site http://your-site
-  fulgurjs doctor --base http://your-site --apps app-a,app-b
-  fulgurjs doctor --base http://localhost:5173 --apps app-a --dev
+  fulgurjs explain                                 # 解释本应用（--config 指向其他路径时显式传）
+  fulgurjs check-pages --site http://your-site     # 按 remotes prod 地址推导远程 manifest 核对
+  fulgurjs check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
+  fulgurjs doctor --base http://your-site --apps my-app,remote-a
+
+旧聚合配置（root + apps[]，兼容期）：所有子命令加 --config 指向聚合文件，
+explain/check-pages 需 --app <应用目录名或容器名>。
 `
 
 async function main(): Promise<number> {
@@ -50,6 +57,18 @@ async function main(): Promise<number> {
     return i > -1 ? argv[i + 1] : undefined
   }
   const has = (k: string): boolean => argv.includes(k)
+  /** 可重复键值对：--manifest remote-a=/path 或 URL */
+  const kvAllOf = (k: string): Record<string, string> => {
+    const out: Record<string, string> = {}
+    argv.forEach((a, i) => {
+      if (a !== k) return
+      const v = argv[i + 1]
+      const eq = v?.indexOf('=')
+      if (!v || !eq || eq < 1) return
+      out[v.slice(0, eq)] = v.slice(eq + 1)
+    })
+    return out
+  }
 
   if (cmd === 'init') {
     const { writeConfigTemplate, inspectConfig } = await import('./init')
@@ -69,35 +88,38 @@ async function main(): Promise<number> {
       console.error(`[fulgurjs:init] ${target} 已存在，拒绝覆盖（--force 强制覆盖）`)
       return 2
     }
-    console.log(`[fulgurjs:init] 已生成起步模板 ${target}
+    console.log(`[fulgurjs:init] 已生成单项目起步模板 ${target}
 后续步骤：
-  1. 编辑 fulgurjs.config.ts：填入你的应用目录/容器名/端口/base/页面路由表/exposes
-  2. npx fulgurjs init --config fulgurjs.config.ts   # 校验并输出可粘贴样板与核对清单
-  3. 按清单把 federation(federationOptionsForApp(...)) 接入各应用 vite.config.ts（单配置驱动，见 README），安装依赖
-  4. npx fulgurjs explain --config fulgurjs.config.ts --app <应用>   # 核对有效形态与加载链
-  5. 部署后：npx fulgurjs doctor --base <URL> --apps <应用...>`)
+  1. 编辑 fulgurjs.config.ts：填入容器名/exposes/remotes/shared（默认导出直接是 federation() 选项）
+  2. vite.config.ts 接入（仅两行联邦相关代码）：
+       import federation from '@fulgurjs/federation'
+       import fulgurjsConfig from './fulgurjs.config'
+       // plugins: [ ...原有插件, federation(fulgurjsConfig) ]
+  3. npx fulgurjs explain   # 核对有效形态与加载链
+  4. 宿主应用另在 fulgurjs.config.ts 具名导出 hostPages（与运行时页面数据模块同源），
+     运行 npx fulgurjs check-pages --site <站点> 核对页面契约
+  5. 部署后：npx fulgurjs doctor --base <URL> --apps <容器名>`)
     return 0
   }
 
   if (cmd === 'explain' || cmd === 'check-pages') {
-    const configPath = argOf('--config')
     const app = argOf('--app')
-    if (!configPath || !app) {
-      console.error(`[fulgurjs:${cmd}] 缺少参数：--config <fulgurjs.config.ts 路径> 与 --app <应用目录名或容器名>`)
-      return 2
-    }
     try {
       if (cmd === 'explain') {
         const { explainApp, formatExplain } = await import('./commands')
-        const r = await explainApp(resolve(configPath), app)
+        const r = await explainApp(resolve(argOf('--config') ?? 'fulgurjs.config.ts'), app)
         console.log(has('--json') ? JSON.stringify(r, null, 2) : formatExplain(r))
         return 0
       }
       const { checkPages, formatCheckPages } = await import('./commands')
-      const site = argOf('--site')
-      const r = await checkPages(resolve(configPath), app, site ? { site } : {})
+      const opts = {
+        ...(argOf('--site') ? { site: argOf('--site') } : {}),
+        ...(Object.keys(kvAllOf('--manifest')).length ? { manifests: kvAllOf('--manifest') } : {}),
+        ...(has('--require-verified') ? { requireVerified: true } : {}),
+      }
+      const r = await checkPages(resolve(argOf('--config') ?? 'fulgurjs.config.ts'), app, opts)
       console.log(has('--json') ? JSON.stringify(r, null, 2) : formatCheckPages(r))
-      return r.failed ? 1 : 0
+      return r.failed || r.unverifiedFailed ? 1 : 0
     } catch (e) {
       console.error(String((e as Error).message ?? e))
       return 2

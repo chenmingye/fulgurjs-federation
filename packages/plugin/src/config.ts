@@ -124,8 +124,11 @@ export async function loadRepoConfig(configPath: string): Promise<RepoConfig> {
   const rewriteSelfImports = (source: string): string =>
     source.replace(/(['"])@fulgurjs\/federation\/config\1/g, (_m, q) => `${q}${SELF_SPEC}${q}`)
 
+  // cache-bust 用单调计数器而非 Date.now()：同毫秒两次加载会命中模块缓存拿到前一份配置
+  //（2026-09-25 实测：两个测试毫秒内先后 loadRepoConfig，第二份读到第一份内容）
+  let cacheBust = 0
   const importConfigs = async (cacheKey: string) => {
-    return (await import(`${cacheKey}?t=${Date.now()}`)) as { default: UserConfig }
+    return (await import(`${cacheKey}?t=${Date.now()}-${++cacheBust}`)) as { default: UserConfig }
   }
 
   let mod: { default: UserConfig }
@@ -133,7 +136,7 @@ export async function loadRepoConfig(configPath: string): Promise<RepoConfig> {
     mod = { default: JSON.parse(fs.readFileSync(configPath, 'utf8')) }
   } else {
     const source = rewriteSelfImports(fs.readFileSync(configPath, 'utf8'))
-    const tmpBase = path.join(os.tmpdir(), `fulgurjs-config-${Date.now()}`)
+    const tmpBase = path.join(os.tmpdir(), `fulgurjs-config-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     if (/\.(ts|mts|cts)$/.test(configPath)) {
       // Node ≥23.6：原生类型剥离（写回 .ts 后 import）
       try {

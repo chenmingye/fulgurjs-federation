@@ -1,5 +1,37 @@
 # Changelog
 
+## 4.2.0（2026-09-25）
+
+### 新能力：每项目一份 `fulgurjs.config.ts`（单项目契约，默认主路径）
+
+- **默认导出直接是 `federation()` 选项**：`fulgurjs.config.ts`（应用根目录）默认导出
+  `satisfies FederationOptions` 的选项对象，`vite.config.ts` 只需
+  `import fulgurjsConfig from './fulgurjs.config'` + `federation(fulgurjsConfig)` 一次注册——
+  无 `loadRepoConfig`/`federationOptionsForApp`/父目录配置/应用名字符串查找。宿主与远程分属
+  互不相邻的仓库时各自独立构建/部署/诊断（只声明对方 URL 与容器名）。
+- **宿主页面核对数据具名导出 `hostPages`**（`{ pages, remotePrefixes, deriveSpec? }`）：仅供
+  CLI `explain`/`check-pages` 读取，与运行时 `createHostPages` 消费同一份数据模块——页面表
+  唯一手工维护位置，`check-pages` 核对的就是浏览器实际使用的页面数据。
+- **CLI 配置加载器**（内部，不入项目 Vite 代码）：以原配置文件为解析基准 esbuild-bundle
+  （支持项目内相对导入的纯数据模块、extensionless、Node ≥ 18、pnpm 严格布局经 vite 依赖树
+  解析 esbuild）；缺失文件/无 name/字段形状错/expose 指向项目外或不存在文件三段式报错。
+- **CLI 单项目化**：`init` 默认生成单项目起步模板（不再生成聚合配置样板）；`explain`
+  按**实际 federation 选项**判角色（配 remotes=消费、配 exposes/setup=提供，两者均有=双角色），
+  单项目形态免 `--app`；`check-pages` 支持 `--manifest <remote>=<路径|URL>`（可多次）、
+  `--site` 按消费方 prod 地址推导、输出每个 remote 的 manifest 实际来源、
+  `--require-verified` 严格模式（无法验证也非零退出）。
+- **`FederationOptions` 类型公开导出**（4.1.0 已导出，4.2.0 起为单项目契约的正式依赖）。
+
+### 行为变更
+
+- **`fulgurjs init` 只生成配置起步模板**：不生成桥/路由/启动器/NGINX 文件（NGINX 内容仅作
+  打印样板随旧聚合配置输出）。README/迁移指南同步订正：删除不存在的 `host.prefetch` 配置面
+  说法（预载名单 = 宿主桥 `PREFETCH_REMOTES` 常量）。
+- **旧聚合配置（`root + apps[]`）自动识别、兼容期保留**：`defineRepoConfig`/`loadRepoConfig`/
+  `federationOptionsForApp` 行为不变（`explain`/`check-pages` 需 `--app`）；但文档主路径、
+  `init` 模板与示例一律为单项目形态。`explain` 对聚合配置同样按实际选项判角色（双向联邦
+  应用显示「双角色」）。
+
 ## 4.1.0（2026-09-24）
 
 ### 新能力：远程初始化生命周期 + 宿主页面适配器 + 单配置驱动
