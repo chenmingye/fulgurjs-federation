@@ -27,8 +27,10 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs check-pages [--config <path>] [--app <name>] [--site <URL>]
                         [--manifest <remote>=<路径|URL>]... [--require-verified] [--json]
                                                  核对宿主页面表与远程 exposes（宿主项目运行；
-                                                 manifest 来源优先级 --manifest > --site/prod 推导；
-                                                 确定性错误非零退出；--require-verified 时无法验证也非零）
+                                                 manifest 来源优先级 --manifest > --site/prod 推导，
+                                                 显式指定来源失败不回退本地 dist；本地 dist 仅在
+                                                 未指定任何线上来源时兜底；确定性错误非零退出；
+                                                 --require-verified 时无法验证也非零）
   fulgurjs doctor --base <URL> --apps <a,b,c> [--dev] [--json] [--chunk-sample N]
   fulgurjs --help
 

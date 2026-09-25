@@ -151,8 +151,14 @@ describe('createHostPages：组件加载与会话感知缓存', () => {
     expect(a).not.toBe(b)
     // 同代次内再次获取：复用
     expect(hp.component('remote-a/home')).toBe(b)
-    // 退出（context 清空）：sessionKey 回到 undefined ≠ 's-2' → 再次失效
+    // 退出（context 清空）：sessionKey 回到 undefined → 缓存保留（登出过渡期宿主布局
+    // 仍会重渲染当前联邦页，此刻重建组件会让 KeepAlive 在激活路径上换子组件——
+    // 实测触发 Vue core `parentComponent.ctx.deactivate is not a function`）。
+    // 会话语义不受影响：onSession 去重由 runtime 在 loadRemote 时按当前 sessionKey 判定。
     delete g.__FULGURJS_APP_CONFIG__
+    expect(hp.component('remote-a/home')).toBe(b)
+    // 下一次登录（新非空代次）→ 缓存重置
+    g.__FULGURJS_APP_CONFIG__ = { sessionKey: 's-3' }
     expect(hp.component('remote-a/home')).not.toBe(b)
   })
 

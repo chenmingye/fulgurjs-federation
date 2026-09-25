@@ -1,5 +1,36 @@
 # Changelog
 
+## 4.3.0（2026-09-25）
+
+### 修复（4.2.1 复核问题）
+
+- **`check-pages` 远程地址全形态推导**：新增 `manifestUrlForRemoteAddress` 共享解析（与运行时同语义）——绝对 prod 地址支持目录 URL / 完整 `fulgurjs-remoteEntry.js` URL / `name@url` 前缀 / `fulgurjs-manifest.json` 直链；`name@url` 形态此前被 `^https?://` 门禁误判为相对地址而报「无法验证」。相对 prod + `--site` 组合同样经统一推导。
+- **`check-pages` manifest 来源优先级**：显式 `--manifest` > 显式 `--site`（只用指定来源，失败=「无法验证」）> 本地 dist（仅在未指定任何线上来源时兜底）。修复旧聚合配置在 `--site` 指定死地址时仍回退本地旧 dist 并退出 0 的问题——指定线上站点验证时不再可能被本地产物冒充。来源报告带实际命中 URL（含 localhost 回退）。
+- **CLI 独立目录 TS 配置加载**（`app-config.ts`）：esbuild 定位改为「受控编译器」——候选（配置工程直连 → 经 vite 传递依赖 → CLI 自身依赖树）必须先通过 `satisfies` 语法能力探针（esbuild ≥0.14.49），不再按「找到就用」收编偶然悬挂的旧版（曾实测 esbuild 0.11.23 使合法配置报 `Expected ";" but found "satisfies"`）；`esbuild` 成为包直接依赖（^0.27.0），无本地 Vite 的独立目录 `init`/`explain` 开箱可用（Node 18/24 实测）。
+- **CLI localhost 回环回退**：Node 18 的 fetch 将 `localhost` 只解析到 `::1`（本机服务通常只监听 IPv4），CLI 抓取 manifest 失败时自动改试 `127.0.0.1` 并以实际命中的 URL 作为来源报告（Node 18 下 `--site http://localhost:8662` 不再误报「无法验证」）。
+
+### 文档订正
+
+- **remoteEntry 缓存语义统一**：修正「固定文件名利于 CDN 长缓存」与部署章节「必须 no-cache」的自相矛盾——统一为「文件名稳定便于引用，入口内容每次构建变必须 no-cache；只有带内容哈希的 chunk 才可长缓存」。
+- **README「真实工程验证」表述**：移除「27 页零报错、逐页写操作闭环」等以 23/23 页有字为证据的过度结论，改为「以 26 条页面记录 + 27 个菜单入口的逐项业务断言为准，结论见对应版本验收报告」。
+- **示例重构**：`examples/fulgurjs.config.example.ts`（无默认导出、不可运行）拆为 `examples/remote-a/` 与 `examples/host/` 两个真实可复制、可 CLI 校验的单项目配置（含最小源文件），附 README 复制方法。
+
+### 修复（续）
+
+- **`createHostPages` 异步组件包装结构回归 4.2.1 已验证形态**：直接命名 `defineAsyncComponent`
+  包装器（按 spec 独立创建，不触碰远程模块导出对象），移除外层 stateless `defineComponent`
+  包装——外层包装会在「保活页 → 登出/切换布局」的卸载路径上触发 Vue core
+  `parentComponent.ctx.deactivate is not a function`（KeepAlive + async component 竞态，
+  vue 3.5.43 实测复现）。
+- **会话组件缓存只在新的非空 `sessionKey` 出现时重置**：登出（sessionKey 变 undefined）不清缓存——
+  `clearAppContext` 后路由过渡期宿主布局仍会重渲染当前联邦页，此刻重建组件会让 KeepAlive
+  在激活路径上换子组件。会话语义不受影响：onSession 去重由 runtime 在 `loadRemote` 时按当前
+  sessionKey 判定；下一次登录出现新代次 ID 时缓存照常重置。
+
+### 性能
+
+- **整远程预载默认关闭**（宿主桥模板契约）：`PREFETCH_REMOTES` 默认 `[]`——首次进入联邦页只下载该页所需资源（dashboard 不再因登录而预载全部 expose 清单）。`preloadRemote('remote')` 显式整远程预载能力保留；README §9.1.3 新增四层区分（路由表声明 / 页面真实加载 / 单页预取 / 整远程预取）与「预取是下载不等于执行」语义。
+
 ## 4.2.1（2026-09-25）
 
 ### 修复

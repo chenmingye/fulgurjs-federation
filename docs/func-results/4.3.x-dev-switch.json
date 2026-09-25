@@ -1,0 +1,326 @@
+{
+  "phase": "switch",
+  "env": "dev",
+  "base": "http://localhost:8773/main",
+  "ts": "2026-09-25T13:45:11.024Z",
+  "plugin": null,
+  "login": {
+    "ok": true,
+    "user": "admin"
+  },
+  "menuSource": null,
+  "menuEntries": [],
+  "routeMapping": [],
+  "pages": [],
+  "failed": false,
+  "loginB": {
+    "ok": true,
+    "user": "e2elowb"
+  },
+  "switch": {
+    "timeline": [
+      {
+        "t": 1790343911040,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/login"
+      },
+      {
+        "t": 1790343911774,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/login"
+      },
+      {
+        "t": 1790343912011,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/login"
+      },
+      {
+        "t": 1790343922520,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/dashboard/analysis"
+      },
+      {
+        "t": 1790343930668,
+        "ev": "login-A",
+        "detail": true
+      },
+      {
+        "t": 1790343930766,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790343931141,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790343934384,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790343934426,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790343934679,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790343958055,
+        "ev": "bpm-todo-rendered-A",
+        "detail": true
+      },
+      {
+        "t": 1790343958183,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790343958469,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790343960420,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790343960461,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790343961284,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790343978370,
+        "ev": "lowcode-rendered-A",
+        "detail": true
+      },
+      {
+        "t": 1790343978378,
+        "ev": "lowcode-identity-A",
+        "detail": "{\"c\":1790343961323,\"e\":253402300799000,\"v\":\"{\\\"user\\\":{\\\"id\\\":101,\\\"nickname\\\":\\"
+      },
+      {
+        "t": 1790343978378,
+        "ev": "logout-click",
+        "detail": null
+      },
+      {
+        "t": 1790343979704,
+        "ev": "logout-menu-clicked",
+        "detail": null
+      },
+      {
+        "t": 1790343981209,
+        "ev": "logout-confirm",
+        "detail": null
+      },
+      {
+        "t": 1790343981226,
+        "ev": "logout-done",
+        "detail": false
+      },
+      {
+        "t": 1790343981469,
+        "ev": "console-error",
+        "detail": "[app:errorHandler] async component loader [fulgurjs:MFU-013] remote \"mes-lowcode\" declares onSession but AppContext.sessionKey is missing\n  expected: 宿主登录后 provideAppContext({ ..., sessionKey: '<非敏感登录"
+      },
+      {
+        "t": 1790343981469,
+        "ev": "app-errorHandler-handled",
+        "detail": "[app:errorHandler] async component loader [fulgurjs:MFU-013] remote \"mes-lowcode\" declares onSession but AppContext.sessionKey is missing\n  expected: 宿主登录后 provideAppContext({ ..., sessionKey: '<非敏感登录"
+      },
+      {
+        "t": 1790343981526,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790343981526,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/login"
+      },
+      {
+        "t": 1790343985230,
+        "ev": "lowcode-identity-after-logout",
+        "detail": "{\"c\":1790343961323,\"e\":253402300799000,\"v\":\"{\\\"user\\\":{\\\"id\\"
+      },
+      {
+        "t": 1790343985341,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/login"
+      },
+      {
+        "t": 1790343985781,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/login"
+      },
+      {
+        "t": 1790343991044,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/dashboard/analysis"
+      },
+      {
+        "t": 1790343991592,
+        "ev": "console-error",
+        "detail": "Warning: [ant-design-vue: Table] `column.slots` is deprecated. Please use `v-slot:headerCell` `v-slot:bodyCell` instead."
+      },
+      {
+        "t": 1790343994863,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994863,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994864,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994864,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994867,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994868,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994868,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994868,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994871,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994871,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994872,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790343994872,
+        "ev": "console-error",
+        "detail": "Warning: `columns.customRender` return cell props is deprecated with perf issue, please use `customCell` instead."
+      },
+      {
+        "t": 1790344000016,
+        "ev": "login-B",
+        "detail": true
+      },
+      {
+        "t": 1790344003177,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790344003478,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790344004730,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790344004772,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790344004924,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/flowable/bpm/task/todo"
+      },
+      {
+        "t": 1790344028390,
+        "ev": "bpm-todo-rendered-B",
+        "detail": true
+      },
+      {
+        "t": 1790344028535,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790344028820,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790344030030,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790344030074,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790344030588,
+        "ev": "nav",
+        "detail": "http://localhost:8773/main/lowcode/lowdev/moduleDesign"
+      },
+      {
+        "t": 1790344048719,
+        "ev": "lowcode-rendered-B",
+        "detail": true
+      },
+      {
+        "t": 1790344048726,
+        "ev": "lowcode-identity-B",
+        "detail": "{\"c\":1790344030626,\"e\":253402300799000,\"v\":\"{\\\"user\\\":{\\\"id\\\":216615790592,\\\"nic"
+      }
+    ],
+    "identityA": 101,
+    "identityB": 216615790592,
+    "identityChanged": true,
+    "noAResidueInB": true,
+    "mfu013Events": [
+      {
+        "t": 1790343981469,
+        "ev": "console-error",
+        "detail": "[app:errorHandler] async component loader [fulgurjs:MFU-013] remote \"mes-lowcode\" declares onSession but AppContext.sessionKey is missing\n  expected: 宿主登录后 provideAppContext({ ..., sessionKey: '<非敏感登录"
+      },
+      {
+        "t": 1790343981469,
+        "ev": "app-errorHandler-handled",
+        "detail": "[app:errorHandler] async component loader [fulgurjs:MFU-013] remote \"mes-lowcode\" declares onSession but AppContext.sessionKey is missing\n  expected: 宿主登录后 provideAppContext({ ..., sessionKey: '<非敏感登录"
+      }
+    ],
+    "uncaughtPageErrors": []
+  }
+}

@@ -287,12 +287,12 @@ function manifestFromFile(p: string): FederationManifest | undefined {
   return undefined
 }
 
-async function manifestFromUrl(url: string): Promise<FederationManifest | undefined> {
+async function manifestFromUrlOnce(url: string): Promise<{ manifest: FederationManifest; url: string } | undefined> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
     if (res.ok) {
       const parsed = parseManifest(await res.json())
-      if (parsed.manifest && !parsed.unsupportedVersion) return parsed.manifest
+      if (parsed.manifest && !parsed.unsupportedVersion) return { manifest: parsed.manifest, url }
     }
   } catch {
     /* unverified */
@@ -301,8 +301,41 @@ async function manifestFromUrl(url: string): Promise<FederationManifest | undefi
 }
 
 /**
- * 旧聚合形态：取某远程的 manifest（本地 dist 优先，其次站点 URL；都不可得返回 undefined）
- * 行为保持 4.1.0 语义（兼容期），来源随结果返回。
+ * 抓取 manifest；http://localhost 失败时自动改试 127.0.0.1——
+ * Node 18 的 fetch 把 localhost 只解析到 ::1，本机服务通常只监听 IPv4（实测 ECONNREFUSED），
+ * 不做该回退会让 CLI 在 Node 18 下对可用站点误报"无法验证"。返回值带实际命中的 URL 供来源报告。
+ */
+async function manifestFromUrl(url: string): Promise<{ manifest: FederationManifest; url: string } | undefined> {
+  const got = await manifestFromUrlOnce(url)
+  if (got) return got
+  if (/^http:\/\/localhost(?=[:/])/.test(url)) {
+    return manifestFromUrlOnce(url.replace(/^http:\/\/localhost(?=[:/])/, 'http://127.0.0.1'))
+  }
+  return undefined
+}
+
+/** name@url 形态剥容器名前缀（运行时支持该写法，CLI 推导 manifest 前先归一化） */
+export function stripRemoteNamePrefix(addr: string): string {
+  return addr.replace(/^[A-Za-z0-9_.-]+@/, '')
+}
+
+/**
+ * 由 remote 地址推导 manifest URL（与运行时同语义的宽容解析，CLI 不自维护第二套拼接规则）：
+ * `name@url` 剥容器名前缀；`…/fulgurjs-remoteEntry.js` 与 `…/fulgurjs-manifest.json`
+ * 取同目录 manifest；其余（目录形态）追加 `/fulgurjs-manifest.json`。
+ */
+export function manifestUrlForRemoteAddress(addr: string): string {
+  const stripped = stripRemoteNamePrefix(addr)
+  const clean = stripped.replace(/\/+$/, '')
+  if (/fulgurjs-manifest\.json$/.test(clean)) return clean
+  if (/fulgurjs-remoteEntry\.js$/.test(clean)) return clean.replace(/fulgurjs-remoteEntry\.js$/, 'fulgurjs-manifest.json')
+  return `${clean}/fulgurjs-manifest.json`
+}
+
+/**
+ * 旧聚合形态：取某远程的 manifest。
+ * 来源优先级：显式 --manifest > 显式 --site（只用指定站点，不可达 = 无法验证，不回退本地旧 dist）
+ * > 本地 dist（仅未指定任何线上来源时的 4.1.0 兼容兜底）。
  */
 async function fetchRemoteManifestRepo(
   cfg: RepoConfig,
@@ -311,24 +344,27 @@ async function fetchRemoteManifestRepo(
 ): Promise<{ manifest: FederationManifest; from: string } | undefined> {
   const explicit = opts.manifests?.[app.name] ?? opts.manifests?.[app.path]
   if (explicit) {
-    const fromUrl = /^https?:\/\//.test(explicit)
-    const got = fromUrl ? await manifestFromUrl(explicit) : manifestFromFile(explicit)
-    if (got) return { manifest: got, from: explicit }
+    if (/^https?:\/\//.test(explicit)) {
+      const got = await manifestFromUrl(explicit)
+      return got ? { manifest: got.manifest, from: explicit } : undefined
+    }
+    const got = manifestFromFile(explicit)
+    return got ? { manifest: got, from: explicit } : undefined
+  }
+  // 站点：<site>/<base>/fulgurjs-manifest.json（显式指定即只用该来源——失败不得静默换本地产物）
+  if (opts.site) {
+    const base = app.base === '/' ? '' : app.base.replace(/\/$/, '')
+    const url = `${opts.site.replace(/\/$/, '')}${base}/fulgurjs-manifest.json`
+    const got = await manifestFromUrl(url)
+    if (got) return { manifest: got.manifest, from: got.url }
     return undefined
   }
-  // 本地构建产物：<root>/<appPath>/<deployDir||base 去斜杠>/fulgurjs-manifest.json 或 <appPath>/dist/
+  // 无显式线上来源：本地构建产物兜底 <root>/<appPath>/<deployDir||base>/fulgurjs-manifest.json 或 <appPath>/dist/
   const candidates = [app.deployDir || app.base.replace(/^\/|\/$/g, ''), 'dist']
   for (const dir of candidates) {
     const p = path.join(cfg.root, app.path, dir, 'fulgurjs-manifest.json')
     const got = manifestFromFile(p)
     if (got) return { manifest: got, from: p }
-  }
-  // 站点：<site>/<base>/fulgurjs-manifest.json
-  if (opts.site) {
-    const base = app.base === '/' ? '' : app.base.replace(/\/$/, '')
-    const url = `${opts.site.replace(/\/$/, '')}${base}/fulgurjs-manifest.json`
-    const got = await manifestFromUrl(url)
-    if (got) return { manifest: got, from: url }
   }
   return undefined
 }
@@ -342,26 +378,31 @@ async function fetchRemoteManifestApp(
 ): Promise<{ manifest: FederationManifest; from: string } | undefined> {
   const explicit = opts.manifests?.[remoteName]
   if (explicit) {
-    const fromUrl = /^https?:\/\//.test(explicit)
-    const got = fromUrl ? await manifestFromUrl(explicit) : manifestFromFile(explicit)
-    if (got) return { manifest: got, from: explicit }
-    return undefined
+    if (/^https?:\/\//.test(explicit)) {
+      const got = await manifestFromUrl(explicit)
+      return got ? { manifest: got.manifest, from: explicit } : undefined
+    }
+    const got = manifestFromFile(explicit)
+    return got ? { manifest: got, from: explicit } : undefined
   }
   const remoteCfg = (options.remotes ?? {})[remoteName]
   if (!remoteCfg) return undefined
   const cfg = typeof remoteCfg === 'string' ? { external: remoteCfg } : (remoteCfg as { prod?: string; external?: string; dev?: string })
-  const prodBase = cfg.prod ?? cfg.external ?? ''
-  if (!prodBase) return undefined
+  const prodRaw = cfg.prod ?? cfg.external ?? ''
+  if (!prodRaw) return undefined
+  const prodBase = stripRemoteNamePrefix(prodRaw)
   if (/^https?:\/\//.test(prodBase)) {
-    const url = `${prodBase.replace(/\/$/, '')}/fulgurjs-manifest.json`
+    // 绝对地址兼容全部运行时写法：目录 URL / 完整 remoteEntry URL / name@url——失败即无法验证，不回退
+    const url = manifestUrlForRemoteAddress(prodBase)
     const got = await manifestFromUrl(url)
-    if (got) return { manifest: got, from: url }
+    if (got) return { manifest: got.manifest, from: got.url }
     return undefined
   }
   if (opts.site) {
-    const url = `${opts.site.replace(/\/$/, '')}${prodBase.startsWith('/') ? prodBase : `/${prodBase}`}/fulgurjs-manifest.json`
+    const url = manifestUrlForRemoteAddress(`${opts.site.replace(/\/$/, '')}${prodBase.startsWith('/') ? prodBase : `/${prodBase}`}`)
     const got = await manifestFromUrl(url)
-    if (got) return { manifest: got, from: url }
+    if (got) return { manifest: got.manifest, from: got.url }
+    return undefined
   }
   return undefined
 }
@@ -488,11 +529,16 @@ async function checkPagesRepo(
     }
     const got = await fetchRemoteManifestRepo(cfg, remoteApp, opts)
     if (!got) {
+      const how = opts.manifests?.[name] ?? opts.manifests?.[remoteApp.path]
+        ? `--manifest 指定来源不可达或非有效 manifest`
+        : opts.site
+          ? `--site ${opts.site} 按 base 推导的 manifest URL 不可达（显式指定来源失败时不回退本地 dist）`
+          : '本地 dist 未命中且未指定 --site/--manifest'
       issues.push({
         level: 'unverified',
         message:
-          `远程 "${name}" 的 manifest 不可得（本地 dist 与${opts.site ? `站点 ${opts.site}` : '默认 dist 路径'}均未命中）——该远程的 spec 存在性无法核对。\n` +
-          `  修法: 先构建该远程（产物含 fulgurjs-manifest.json），或用 --site <URL> 指向已部署站点`,
+          `远程 "${name}" 的 manifest 不可得（${how}）——该远程的 spec 存在性无法核对。\n` +
+          `  修法: 先构建该远程（产物含 fulgurjs-manifest.json），或用 --site <URL> 指向已部署站点，或 --manifest ${name}=<路径|URL>`,
       })
       continue
     }
@@ -553,7 +599,7 @@ export function formatCheckPages(r: CheckPagesResult): string {
   const warns = r.issues.filter((i) => i.level === 'warn')
   L.push(`[fulgurjs:check-pages] 应用 ${r.app}：核对 ${r.checked} 条页面，error ${errors.length} / warn ${warns.length} / 无法验证 ${unverified.length}`)
   if (r.manifestSources?.length) {
-    L.push('manifest 来源（优先级：--manifest > --site/prod 推导 > 本地 dist；以实际命中的来源为准）：')
+    L.push('manifest 来源（优先级：--manifest > --site/prod 推导；本地 dist 仅在未指定任何线上来源时兜底；以实际命中的来源为准）：')
     for (const s of r.manifestSources) L.push(`  ${s.remote} ← ${s.from}`)
   }
   for (const i of [...errors, ...warns, ...unverified]) L.push(`\n[${i.level.toUpperCase()}] ${i.message}`)

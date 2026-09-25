@@ -184,16 +184,38 @@ function resolveSpec(spec: string, from: string): string | undefined {
   }
 }
 
-/** esbuild 定位——pnpm 严格布局下 esbuild 是 vite 的传递依赖，直连失败时经 vite 间接解析 */
+/** 旧 esbuild（<0.14.49）解析不了配置模板要求的 TS satisfies 语法——候选编译器必须先过能力探针 */
+const TS_SYNTAX_PROBE = 'export default {} satisfies Record<string, unknown>'
+
+function esbuildSupportsConfigSyntax(esb: typeof import('esbuild')): boolean {
+  try {
+    esb.transformSync(TS_SYNTAX_PROBE, { loader: 'ts' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * esbuild 定位（受控编译器，不按"找到就用"收编偶然悬挂的旧版）：
+ * 顺序 = 配置工程（直连，pnpm 严格布局下经 vite 传递依赖间接解析）→ CLI 自身依赖树
+ * （esbuild 是本包直接依赖，独立目录/无本地 Vite 时保证可用）；候选须能解析 satisfies，
+ * 否则跳过（曾实测悬挂的 esbuild 0.11.23 让合法配置报 `Expected ";" but found "satisfies"`）。
+ */
 function resolveEsbuild(configPath: string): typeof import('esbuild') {
   const esbuildOf = (base: string): typeof import('esbuild') | undefined => {
+    const candidates: string[] = []
     const direct = resolveSpec('esbuild', base)
-    if (direct) return createRequire(direct)('esbuild') as typeof import('esbuild')
+    if (direct) candidates.push(direct)
     // 经 vite（其 dependencies 必含 esbuild，pnpm 下从 vite 自身文件起解析可见）
     const viteEntry = resolveSpec('vite', base)
     if (viteEntry) {
       const viaVite = resolveSpec('esbuild', viteEntry)
-      if (viaVite) return createRequire(viaVite)('esbuild') as typeof import('esbuild')
+      if (viaVite) candidates.push(viaVite)
+    }
+    for (const c of candidates) {
+      const esb = createRequire(c)('esbuild') as typeof import('esbuild')
+      if (esbuildSupportsConfigSyntax(esb)) return esb
     }
     return undefined
   }
@@ -202,9 +224,9 @@ function resolveEsbuild(configPath: string): typeof import('esbuild') {
     if (got) return got
   }
   appConfigError(
-    '无法加载 esbuild（单项目配置加载需要它转译 TS 与相对导入）',
-    '配置工程（含其 vite 依赖树）与 CLI 依赖树中都解析不到 esbuild',
-    '项目内有 vite 依赖即可（经其依赖树解析）；确实缺失时 npm i -D esbuild 后重试',
+    '无法加载能解析配置模板语法的 esbuild（单项目配置加载需要它转译 TS 与相对导入）',
+    '配置工程（含其 vite 依赖树）与 CLI 依赖树中都解析不到满足要求的 esbuild（需 ≥0.14.49，支持 satisfies）',
+    '本包已自带 esbuild 依赖——出现此错误通常是安装不完整，重装 @fulgurjs/federation；或项目内 npm i -D esbuild 后重试',
   )
 }
 

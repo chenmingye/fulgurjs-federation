@@ -182,8 +182,13 @@ export function createHostPages(
 
   const component = (spec: string): Component => {
     const sk = ((globalThis as any).__FULGURJS_APP_CONFIG__ ?? {}).sessionKey
-    const sessionKey = typeof sk === 'string' ? sk : undefined
-    if (sessionKey !== cacheSession) {
+    const sessionKey = typeof sk === 'string' && sk !== '' ? sk : undefined
+    // 缓存代次重置只在「新的非空 sessionKey 出现」时执行（换账号/重登）。
+    // 登出（sessionKey 变 undefined）不清缓存：clearAppContext 后路由过渡期 LayoutContent
+    // 仍会重渲染当前联邦页，此刻重建组件会让 KeepAlive 在激活路径上换子组件——
+    // 实测触发 Vue core `parentComponent.ctx.deactivate is not a function`（MES-ZC 4.3.0）。
+    // 会话语义不受影响：onSession 的去重由 runtime 在 loadRemote 时按当前 sessionKey 判定。
+    if (sessionKey !== undefined && sessionKey !== cacheSession) {
       compCache.clear()
       cacheSession = sessionKey
     }
@@ -207,13 +212,14 @@ export function createHostPages(
         errorComponent: errorComponent ?? RemoteErrorPlaceholder,
         delay,
       })
-      // 本地包装组件（不修改远程模块导出的组件对象——它可能是跨页面共享的模块实例）：
-      // 稳定 name 供 KeepAlive include 匹配（缓存键即该 name），attrs/slots 全量透传
-      comp = defineComponent({
-        name,
-        inheritAttrs: false,
-        setup: (_props, ctx) => () => h(asyncComp, ctx.attrs, ctx.slots),
-      })
+      // 直接命名异步包装器（4.2.1 已验证形态，勿改回外层 defineComponent 包装）：
+      // 包装对象按 spec 独立创建，改它的 name 不触碰远程模块导出对象（它可能被多页共享）；
+      // KeepAlive include 按 wrapper name 匹配。实测教训：外层再包一层 stateless 组件时，
+      // 「保活页 → 切到非联邦路由/登出」的卸载路径会触发 Vue core
+      // `parentComponent.ctx.deactivate is not a function`（vnode 的 parentComponent
+      // 与持有 deactivate 的 KeepAlive 上下文错位）——MES-ZC 4.3.0 验收实测复现。
+      ;(asyncComp as { name?: string }).name = name
+      comp = asyncComp
       compCache.set(spec, comp)
     }
     return comp

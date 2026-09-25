@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "4.2.1",
+  "version": "4.3.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "es-module-lexer": "^1.6.0",
+    "esbuild": "^0.27.0",
     "magic-string": "^0.30.17"
   },
   "devDependencies": {

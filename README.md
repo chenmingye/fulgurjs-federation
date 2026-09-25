@@ -19,14 +19,14 @@
 | 运行时体积 | ~40KB+ | 不等 | **gzip < 5KB** |
 | 配置出错时 | 难排查 | 报错晦涩 | 三段式报错：`got / expected / example` |
 
-**真实工程验证**：某企业级 mes 系统（admin 宿主 + bpm/lowcode 两个子应用，21+6 页）已全量迁移，三个应用各自维护项目根目录的 `fulgurjs.config.ts`、Vite 一处 `federation(fulgurjsConfig)` 接入——27 页双环境（dev 双 server / prod NGINX）控制台零报错，逐页写操作闭环（新增/编辑/删除/发布/导入导出/审批流）与原 qiankun 版本逐项一致，首用者从零接线全程有文档可依（见[迁移指南](#文档)）。
+**真实工程验证**：某企业级 mes 系统（admin 宿主 + bpm/lowcode 两个子应用，21+6 页）已全量迁移，三个应用各自维护项目根目录的 `fulgurjs.config.ts`、Vite 一处 `federation(fulgurjsConfig)` 接入。历史版本验收曾出现"23/23 页面有字即全过"的口径偏差（4.2.1 复核订正：参数页需用有效业务数据进入、错误页不得算通过）；最新一轮以 26 条页面记录 + 27 个菜单入口的逐项业务断言为准，结论见对应版本验收报告与 `docs/` 下证据文件（见[迁移指南](#文档)）。
 
 ## 特性
 
 - **exposes / remotes / shared 全语义**：`name@url` 语法、键重命名、promise-based remote、semver 全语法 requiredVersion、版本协商（最高版本胜出）、singleton / strictVersion、已加载版本永不替换、多版本共存、shareKey 重定向、多 shareScope
 - **UMD / CJS-only 依赖开箱即用**：element-plus、avue 等只有 UMD/CJS 产物的依赖直接进 `optimizeDeps.include` 即可——dev 期插件自动把预构建产物内的 shared 键改道协商门面；build 期自动把 CJS `require(<shared>)` 重定向到垫片，双运行时免疫
 - **自动异步边界**：top-level await 自动注入（es2022+），无需 webpack 式手工 `import('./bootstrap')`
-- **稳定产物**：remoteEntry 固定文件名利于 CDN 长缓存；`fulgurjs-manifest.json` 资源清单；expose 独立 chunk
+- **稳定产物**：remoteEntry 固定文件名便于稳定引用（入口内容每次构建变，**必须 no-cache**——只有带内容哈希的 chunk 才可长缓存）；`fulgurjs-manifest.json` 资源清单；expose 独立 chunk
 - **容错（对齐 webpack MF 2.0 errorLoadRemote）**：加载重试 / 熔断 / 超时内置；`loadRemote(spec, { retries, fallbackModule })` 单次调用级覆盖——失败时返回 fallback 模块，错误事件仍显式发出（**绝不静默兜底**，不传则照旧抛错）
 - **增强能力**：dts 类型直连（dev 补全直达 remote 源码）、`preloadRemote()` manifest 驱动精确预载、runtimePlugins 钩子
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
@@ -234,7 +234,7 @@ import { loadRemote, provideAppContext, getAppContext, requireAppContext, clearA
 ```bash
 # 1) 生成单项目 fulgurjs.config.ts 起步模板（默认导出直接是 federation() 选项；已存在则拒绝，--force 覆盖）
 npx fulgurjs init
-# 样例：examples/fulgurjs.config.example.ts（通用字段示例）
+# 样例：examples/remote-a/fulgurjs.config.ts 与 examples/host/fulgurjs.config.ts（可整份复制的单项目配置）
 
 # 2) 校验配置并输出接入块：federation(fulgurjsConfig) 两行接法 + 通用核对清单（纯打印，不写文件）
 npx fulgurjs init --config fulgurjs.config.ts
@@ -316,7 +316,7 @@ import { federation, type FederationOptions } from '@fulgurjs/federation'
 | 选项 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `name` | `string` **必填** | — | 容器名。同页面宿主/远程必须唯一（也是 uniqueName）；须匹配 `/^[a-zA-Z][\w.-]*$/` |
-| `filename` | `string` | `'fulgurjs-remoteEntry.js'` | prod 容器入口文件名（固定文件名，CDN 可长缓存） |
+| `filename` | `string` | `'fulgurjs-remoteEntry.js'` | prod 容器入口文件名（固定文件名便于引用与部署规则落位；入口内容每次构建变，**必须 no-cache**，长缓存只给带内容哈希的 chunk） |
 | `exposes` | `Record<string, string \| { import: string; name?: string }>` | — | 对外暴露模块：键 `'./X'`，值源文件路径；`name` 为稳定 chunk 文件名。键不得占用内部保留键 `./__fulgurjs_setup__`（CFG-012） |
 | `setup` | `string` | —（无初始化行为） | **可选远程初始化入口**：相对应用根的 TS/JS 模块路径。默认导出 `setup(context)` 应用级执行一次（容器首次被加载业务模块前）；可选具名导出 `onSession(context)` 按宿主 `sessionKey` 去重执行。其余导出不作为生命周期入口。执行时序/去重/失败重试/错误码见 §10 |
 | `remotes` | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | — | 消费的远程，三种形态见下表 |
@@ -740,7 +740,7 @@ const res = await getDictItems('sex')
 |---|---|---|---|---|
 | 页面保活 | `keepAlive` | `boolean` | `false` | 页面路由表条目（`src/fulgurjs/host/pages.ts`） |
 | 页面加载骨架屏 | —（内置，无配置项） | — | 见下方内置参数 | `src/fulgurjs/host/pages.ts` 页面工厂 |
-| 空闲预载 | `PREFETCH_REMOTES` | `string[]` | 全部 remotes 键 | `src/fulgurjs/host/bridge.ts` 顶部常量 |
+| 空闲预载 | `PREFETCH_REMOTES` | `string[]` | `[]`（关闭整远程预载，按需加载；详见 §9.1.3） | `src/fulgurjs/host/bridge.ts` 顶部常量 |
 | 联邦诊断面板 | —（内置页面） | — | 常驻 | 路由 `/fulgurjs-demo` |
 
 #### 9.1.1 页面保活 — `keepAlive`
@@ -780,25 +780,32 @@ const res = await getDictItems('sex')
 
 如需自定义加载占位（如品牌 logo 动画），不经页面工厂，改用 `remoteComponent(spec, { loadingComponent })`（见 §8）。
 
-#### 9.1.3 空闲预载 — `PREFETCH_REMOTES`
+#### 9.1.3 空闲预载 — `PREFETCH_REMOTES`（默认关闭）
 
-宿主桥（登录完成后）经 `requestIdleCallback` 在浏览器空闲期逐个调用 `preloadRemote(name, { mode: 'prefetch' })`，把各远程的 remoteEntry / expose chunk / CSS 以**低优先级**（`fetchPriority="low"` 的 modulepreload）预取到本地——用户首次点开子应用菜单时无需等待网络。
+**先分清四层（重要，勿把「路由声明多」当成「首屏会执行所有页面代码」）**：
 
-| 属性 | 类型 | 默认值 | 说明 |
+| 层 | 机制 | 时机 | 网络成本 |
 |---|---|---|---|
-| `PREFETCH_REMOTES`（宿主项目，`src/fulgurjs/host/bridge.ts` 顶部常量） | `string[]` | 全部 remotes 键 | 与 `federation({ remotes })` 键一致；置空数组即关闭 |
+| ① 路由表声明 | `pages.data.ts` 26 条记录只是**数据映射**，不导入任何远程代码 | 构建期 | 零 |
+| ② 页面真实加载 | `createHostPages` 对每页 `defineAsyncComponent` 包装，**渲染时**才 `loadRemote(spec)` | 用户打开该页 | 该页 chunk + CSS（首次该远程还有入口/共享依赖/setup） |
+| ③ 单页预取 | `preloadRemote('remote-a/pages/remote-a/home', { mode: 'prefetch' })` | 项目主动调用 | 该 expose 的 chunk + CSS（**只下载不执行**） |
+| ④ 整远程预取 | `preloadRemote('remote-a', { mode: 'prefetch' })` | 项目显式开启 | manifest 全部 expose 的 chunk + CSS（**只下载不执行**） |
+
+预取是**下载**（`modulepreload`/`stylesheet` 链接，`fetchPriority=low` 只是降低优先级、不等于不下载），**不等于执行页面代码**——`container.get()`、组件实例化、`setup/onSession` 都只由真实页面的 `loadRemote` 触发。已加载模块有 Promise 缓存：重复打开同页复用模块，换账号重做会话初始化但不重新下载 JS。多个 expose 共享同一 chunk 是正常打包结果。
+
+宿主桥默认**关闭整远程预载**（`PREFETCH_REMOTES = []`）：首次进入联邦页只下载该页所需资源，dashboard 不因登录而提前下载两个远程的全部页面文件。某项目的用户路径确有明确的「下一步页面」时，可低优先级预取一两个明确指定的 spec；把 `PREFETCH_REMOTES` 写成远程名列表则是**显式选择**整远程预热（下载完整 expose 清单）。
 
 > 插件配置面（`FederationOptions`）**没有** `host.prefetch` 字段——4.1.0 前文档曾声称该配置存在，属错误描述，已订正。预载名单就是宿主桥里的常量，改名单只改这一个地方。
 
 ```ts
 // src/fulgurjs/host/bridge.ts 顶部常量
-const PREFETCH_REMOTES: string[] = ['mes-bpm', 'mes-lowcode'] // 默认：全部 remote
+const PREFETCH_REMOTES: string[] = [] // 默认：关闭整远程预载（按需加载）
 
-// 只预载部分 remote
-const PREFETCH_REMOTES: string[] = ['mes-bpm']
+// 只预取下一步很可能打开的明确页面（低优先级，只下载不执行）
+// idle(() => preloadRemote('mes-bpm/pages/bpm/task/todo', { mode: 'prefetch' }))
 
-// 关闭空闲预载：置空数组
-const PREFETCH_REMOTES: string[] = []
+// 显式预热整个远程（下载完整 expose 清单；确有真实使用路径再开启）
+// const PREFETCH_REMOTES: string[] = ['mes-bpm', 'mes-lowcode']
 ```
 
 行为与边界：
