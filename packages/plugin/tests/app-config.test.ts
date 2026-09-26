@@ -77,18 +77,36 @@ describe('loadAppConfig：单项目默认形态', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('旧聚合配置自动识别为 repo 形态（兼容）', async () => {
+  it('旧聚合配置（root + apps[]）→ 中文迁移错误（5.0.0 已删除，不再兼容加载）', async () => {
     const dir = tmpDir()
     const p = path.join(dir, 'fulgurjs.config.ts')
     fs.writeFileSync(
       p,
-      `import { defineRepoConfig } from ${JSON.stringify(path.resolve('dist/config.js'))}\n` +
-        `export default defineRepoConfig({\n  root: ${JSON.stringify(dir)},\n  apps: [{ path: 'a', name: 'a', port: 1, base: '/a', remote: { exposes: { './X': './x.ts' } } }],\n})\n`,
+      `export default {\n  root: ${JSON.stringify(dir)},\n` +
+        `  apps: [{ path: 'a', name: 'a', port: 1, base: '/a', remote: { exposes: { './X': './x.ts' } } }],\n}\n`,
     )
     fs.writeFileSync(path.join(dir, 'x.ts'), 'export default 1\n')
-    const r = await loadAppConfig(p)
-    expect(r.kind).toBe('repo')
-    expect(r.repo!.apps).toHaveLength(1)
+    await expect(loadAppConfig(p)).rejects.toThrow(/旧聚合形态.*已删除/s)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('导入已删除的 @fulgurjs/federation/config 子路径 → 中文迁移错误', async () => {
+    const dir = tmpDir()
+    const p = path.join(dir, 'fulgurjs.config.ts')
+    fs.writeFileSync(
+      p,
+      `import { defineRepoConfig } from '@fulgurjs/federation/config'\n` +
+        `export default defineRepoConfig({ root: '.', apps: [] })\n`,
+    )
+    await expect(loadAppConfig(p)).rejects.toThrow(/已删除的子路径 "@fulgurjs\/federation\/config"/s)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('JSON 聚合形态 → 同样报迁移错误', async () => {
+    const dir = tmpDir()
+    const p = path.join(dir, 'fulgurjs.config.json')
+    fs.writeFileSync(p, JSON.stringify({ root: dir, apps: [] }))
+    await expect(loadAppConfig(p)).rejects.toThrow(/旧聚合形态.*已删除/s)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -108,11 +126,11 @@ describe('loadAppConfig：校验（三段式报错）', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('聚合字段 root/apps 混入单项目文件 → 指向历史兼容章节', async () => {
+  it('聚合字段 root/apps 混入单项目文件 → 指向单项目迁移写法', async () => {
     const dir = tmpDir()
     const p = writeAppFixture(dir)
     fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(`  name: 'my-app',\n`, `  name: 'my-app',\n  root: '.',\n`))
-    await expect(loadAppConfig(p)).rejects.toThrow(/旧聚合配置（root \+ apps\[\]/)
+    await expect(loadAppConfig(p)).rejects.toThrow(/已删除的旧聚合配置（root \+ apps\[\]）/)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -155,7 +173,6 @@ describe('explain/check-pages：单项目模式', () => {
     const dir = tmpDir()
     const p = writeAppFixture(dir)
     const r = await explainApp(p)
-    expect(r.mode).toBe('app')
     expect(r.role).toBe('dual')
     expect(r.app).toBe('my-app')
     expect(r.remotes[0]!.key).toBe('remote-a')
@@ -166,8 +183,6 @@ describe('explain/check-pages：单项目模式', () => {
     const text = formatExplain(r)
     expect(text).toContain('双角色')
     expect(text).toContain('由 vite.config.ts 管理')
-    // --app 与配置 name 不一致 → 显式报错
-    await expect(explainApp(p, 'other')).rejects.toThrow(/不一致/)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -187,7 +202,7 @@ describe('explain/check-pages：单项目模式', () => {
         shared: [],
       }),
     )
-    const r = await checkPages(p, undefined, { manifests: { 'remote-a': manifestPath } })
+    const r = await checkPages(p, { manifests: { 'remote-a': manifestPath } })
     expect(r.failed).toBe(false)
     expect(r.checked).toBe(2)
     expect(r.manifestSources![0]).toEqual({ remote: 'remote-a', from: manifestPath })
@@ -196,19 +211,19 @@ describe('explain/check-pages：单项目模式', () => {
     // spec 改错 → 确定性 error
     const dataPath = path.join(dir, 'src/fulgurjs/host/pages.data.ts')
     fs.writeFileSync(dataPath, fs.readFileSync(dataPath, 'utf8').replace("'pages/detail'", "'pages/WRONG'"))
-    const bad = await checkPages(p, undefined, { manifests: { 'remote-a': manifestPath } })
+    const bad = await checkPages(p, { manifests: { 'remote-a': manifestPath } })
     expect(bad.failed).toBe(true)
     expect(bad.issues.some((i) => i.level === 'error' && i.message.includes('pages/WRONG'))).toBe(true)
 
     // manifest 来源不可达 → unverified；--require-verified 置失败位
-    const unv = await checkPages(p, undefined, { manifests: { 'remote-a': path.join(dir, 'missing.json') } })
+    const unv = await checkPages(p, { manifests: { 'remote-a': path.join(dir, 'missing.json') } })
     expect(unv.failed).toBe(false)
     expect(unv.issues[0]!.level).toBe('unverified')
     expect(unv.unverifiedFailed).toBe(false)
-    const strict = await checkPages(p, undefined, { manifests: { 'remote-a': path.join(dir, 'missing.json') }, requireVerified: true })
+    const strict = await checkPages(p, { manifests: { 'remote-a': path.join(dir, 'missing.json') }, requireVerified: true })
     expect(strict.unverifiedFailed).toBe(true)
     // 有验证来源且全部命中时 --require-verified 不得误判失败（4.2.1 回归：开关位误当结果位）
-    const strictOk = await checkPages(p, undefined, { manifests: { 'remote-a': manifestPath }, requireVerified: true })
+    const strictOk = await checkPages(p, { manifests: { 'remote-a': manifestPath }, requireVerified: true })
     expect(strictOk.unverifiedFailed).toBe(false)
     fs.rmSync(dir, { recursive: true, force: true })
   })

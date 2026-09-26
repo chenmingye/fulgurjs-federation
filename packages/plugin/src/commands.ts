@@ -1,22 +1,19 @@
 /**
  * `fulgurjs explain` / `fulgurjs check-pages`（§12.2 / §12.3）。
  *
- * 两种配置形态（自动识别，见 app-config.ts）：
- * - 单项目 fulgurjs.config.ts（4.2.0 默认）：默认导出 = federation() 选项；可选具名导出
- *   hostPages 供页面契约核对。角色按实际 federation 选项判定（remotes=消费、
- *   exposes/setup=提供，两者均有=双角色）；base/端口由 vite.config.ts 管理，不在本命令输出里臆造。
- * - 旧聚合配置（root + apps[]，兼容）：行为保持 4.1.0 语义。
+ * 配置形态（唯一）：单项目 fulgurjs.config.ts——默认导出 = federation() 选项；可选具名导出
+ * hostPages 供页面契约核对。角色按实际 federation 选项判定（remotes=消费、
+ * exposes/setup=提供，两者均有=双角色）；base/端口由 vite.config.ts 管理，不在本命令输出里臆造。
  *
  * check-pages 的 manifest 来源优先级（每个 remote 独立显示实际来源）：
  * 1. --manifest <remote>=<路径|URL>（显式指定，最高优先级，可重复）
- * 2. --site <URL>：按消费方 remotes 的 prod 地址推导 <prod>/fulgurjs-manifest.json
- * 3. 旧聚合形态的本地 dist 回退（单项目形态无本地回退——远程可位于任意仓库）
+ * 2. --site <URL> / 消费方 remotes 的 prod 地址：推导 <prod>/fulgurjs-manifest.json
+ * 无本地 dist 回退（远程可位于任意仓库；显式来源不可达 = 无法验证，不假装通过）。
  * 「无法验证」（不可达）与「确认缺失」严格区分；--require-verified 时无法验证也非零退出。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { loadAppConfig, roleOfOptions, type AppConfigLoadResult, type HostPagesData } from './app-config'
-import { loadRepoConfig, federationOptionsForApp, type AppConfig, type RepoConfig } from './config'
 import { validatePages, type PageViolation, type PageRouteLike } from './pages'
 import { parseManifest, normalizeExposes, type FederationManifest } from './manifest'
 import type { FederationOptions } from './options'
@@ -24,43 +21,16 @@ import type { FederationOptions } from './options'
 export interface ExplainResult {
   app: string
   role: 'host' | 'remote' | 'dual'
-  /** 配置形态（app=单项目默认；repo=旧聚合兼容） */
-  mode: 'app' | 'repo'
   path: string
-  /** repo 形态才有有效值；app 形态由 vite.config.ts 管理 */
-  base?: string
-  /** repo 形态才有有效值 */
-  port?: number
   remotes: Array<{ key: string; dev: string; prod: string }>
   exposes: string[]
   setup?: string
   shared: Array<{ name: string; singleton: boolean; requiredVersion: string | boolean }>
   devSharedSelf: { value: boolean; source: 'explicit' | 'inferred' }
   pages: Array<{ route: string; remote: string; spec: string; title?: string }>
-  /** 页面数据来源说明（app 形态报告 hostPages 导出是否找到） */
+  /** 页面数据来源说明（报告 hostPages 导出是否找到） */
   pagesSource?: string
   chain: string[]
-}
-
-function roleOf(app: AppConfig): ExplainResult['role'] {
-  if (app.host && app.remote) return 'dual'
-  return app.host ? 'host' : 'remote'
-}
-
-/** 页面 spec 映射（与 createHostPages 的推导规则一致：显式 spec 优先） */
-function pageMappings(app: AppConfig): ExplainResult['pages'] {
-  const pages = app.host?.pages ?? []
-  const prefixes = Object.entries(app.host?.remotePrefixes ?? {}).sort((a, b) => b[0].length - a[0].length)
-  const remoteOf = (route: string): string | null => {
-    for (const [prefix, name] of prefixes) {
-      const p = prefix.endsWith('/') ? prefix : `${prefix}/`
-      if (route.startsWith(p) || `${route}/` === p) return name
-    }
-    return null
-  }
-  const derive = app.host?.deriveSpec ?? ((route: string): string =>
-    route.split('/').filter(Boolean).slice(1).filter((s) => !s.startsWith(':')).join('/'))
-  return mappingsOf({ pages: pages as PageRouteLike[], remotePrefixes: app.host?.remotePrefixes ?? {}, deriveSpec: app.host?.deriveSpec }, derive)
 }
 
 function mappingsOf(
@@ -128,14 +98,8 @@ function chainLines(options: FederationOptions, role: ExplainResult['role']): st
   return chain
 }
 
-function explainAppMode(loaded: AppConfigLoadResult & { kind: 'app' }, appName?: string): ExplainResult {
+function explainAppMode(loaded: AppConfigLoadResult): ExplainResult {
   const options = loaded.options!
-  if (appName && appName !== options.name) {
-    throw new Error(
-      `[fulgurjs:explain] 单项目配置只描述本应用（name: "${options.name}"），与 --app "${appName}" 不一致\n` +
-        `  修法: 去掉 --app，或改为 --app ${options.name}`,
-    )
-  }
   const role = roleOfOptions(options)
   const devSharedSelfExplicit = options.devSharedSelf !== undefined
   const devSharedSelfValue = devSharedSelfExplicit ? options.devSharedSelf === true : role !== 'host'
@@ -143,7 +107,6 @@ function explainAppMode(loaded: AppConfigLoadResult & { kind: 'app' }, appName?:
   return {
     app: options.name,
     role,
-    mode: 'app',
     path: loaded.appRoot,
     remotes: remotesOfOptions(options),
     exposes: Object.keys(options.exposes ?? {}),
@@ -158,70 +121,14 @@ function explainAppMode(loaded: AppConfigLoadResult & { kind: 'app' }, appName?:
   }
 }
 
-function explainRepoMode(cfg: RepoConfig, appPathOrName: string): ExplainResult {
-  const app = cfg.apps.find((a) => a.path === appPathOrName || a.name === appPathOrName)
-  if (!app) {
-    throw new Error(
-      `[fulgurjs:explain] 应用 "${appPathOrName}" 不在配置中（可用：${cfg.apps.map((a) => a.path).join('、')}）`,
-    )
-  }
-  // federationOptionsForApp 同时完成 remotes 冲突/未知应用的校验（复用同一条校验面）
-  const opts = federationOptionsForApp(cfg, appPathOrName)
-  const remotes = Object.entries((opts.remotes ?? {}) as Record<string, { dev?: string; prod?: string; external?: string }>).map(
-    ([key, v]) => ({ key, dev: String(v.dev ?? v.external ?? ''), prod: String(v.prod ?? v.external ?? '') }),
-  )
-  const shared = Object.entries((opts.shared ?? {}) as Record<string, { singleton?: boolean; requiredVersion?: string }>).map(
-    ([name, v]) => ({ name, singleton: !!v.singleton, requiredVersion: v.requiredVersion ?? false }),
-  )
-  const chain: string[] = []
-  chain.push(app.host
-    ? '宿主提供 AppContext（provideAppContext，含 sessionKey）→ 加载 remoteEntry/共享依赖 → 首次 loadRemote 执行该远程可选 setup/onSession → 取得页面模块 → 宿主布局渲染'
-    : '被宿主消费：remoteEntry/共享依赖加载 → 宿主首次 loadRemote 本应用模块时执行可选 setup/onSession → 页面模块在宿主布局内渲染')
-  if (app.remote?.setup) {
-    chain.push(`setup 入口 ${app.remote.setup}：默认导出应用级执行一次；${'onSession'} 按宿主 sessionKey 去重（缺 sessionKey 时报 MFU-013）`)
-  } else {
-    chain.push('本应用未配置 setup：无初始化生命周期，loadRemote 直接返回模块（普通 expose 语义）')
-  }
-  return {
-    app: app.name,
-    role: roleOf(app),
-    mode: 'repo',
-    path: app.path,
-    base: app.base,
-    port: app.port,
-    remotes,
-    exposes: Object.keys(app.remote?.exposes ?? {}),
-    setup: app.remote?.setup,
-    shared,
-    devSharedSelf: {
-      value: opts.devSharedSelf === true,
-      source: app.devSharedSelf === undefined ? 'inferred' : 'explicit',
-    },
-    pages: pageMappings(app),
-    pagesSource: app.host?.pages ? '仓库配置 host.pages 副本（兼容形态；单项目形态请改用 hostPages 具名导出）' : '仓库配置未提供页面表——应用代码页面表为运行时真源',
-    chain,
-  }
-}
-
-export async function explainApp(configPath: string, appName?: string): Promise<ExplainResult> {
-  const loaded = await loadAppConfig(configPath)
-  if (loaded.kind === 'repo') {
-    if (!appName) {
-      throw new Error('[fulgurjs:explain] 聚合配置需 --app <应用目录名或容器名>（单项目配置可省略）')
-    }
-    return explainRepoMode(loaded.repo!, appName)
-  }
-  return explainAppMode(loaded, appName)
+export async function explainApp(configPath: string): Promise<ExplainResult> {
+  return explainAppMode(await loadAppConfig(configPath))
 }
 
 export function formatExplain(r: ExplainResult): string {
   const roleText = r.role === 'dual' ? '宿主+远程（双角色）' : r.role === 'host' ? '宿主' : '远程'
   const L: string[] = []
-  if (r.mode === 'app') {
-    L.push(`应用 ${r.app}（${roleText}，单项目配置，目录 ${r.path}；base/dev 端口由 vite.config.ts 管理）`)
-  } else {
-    L.push(`应用 ${r.app}（${roleText}，目录 ${r.path}，dev 端口 ${r.port}，base ${r.base}）【旧聚合配置形态，兼容期】`)
-  }
+  L.push(`应用 ${r.app}（${roleText}，单项目配置，目录 ${r.path}；base/dev 端口由 vite.config.ts 管理）`)
   if (r.remotes.length) {
     L.push('消费远程：')
     for (const x of r.remotes) L.push(`  ${x.key} → dev ${x.dev} / prod ${x.prod}`)
@@ -332,43 +239,6 @@ export function manifestUrlForRemoteAddress(addr: string): string {
   return `${clean}/fulgurjs-manifest.json`
 }
 
-/**
- * 旧聚合形态：取某远程的 manifest。
- * 来源优先级：显式 --manifest > 显式 --site（只用指定站点，不可达 = 无法验证，不回退本地旧 dist）
- * > 本地 dist（仅未指定任何线上来源时的 4.1.0 兼容兜底）。
- */
-async function fetchRemoteManifestRepo(
-  cfg: RepoConfig,
-  app: AppConfig,
-  opts: CheckPagesOptions,
-): Promise<{ manifest: FederationManifest; from: string } | undefined> {
-  const explicit = opts.manifests?.[app.name] ?? opts.manifests?.[app.path]
-  if (explicit) {
-    if (/^https?:\/\//.test(explicit)) {
-      const got = await manifestFromUrl(explicit)
-      return got ? { manifest: got.manifest, from: explicit } : undefined
-    }
-    const got = manifestFromFile(explicit)
-    return got ? { manifest: got, from: explicit } : undefined
-  }
-  // 站点：<site>/<base>/fulgurjs-manifest.json（显式指定即只用该来源——失败不得静默换本地产物）
-  if (opts.site) {
-    const base = app.base === '/' ? '' : app.base.replace(/\/$/, '')
-    const url = `${opts.site.replace(/\/$/, '')}${base}/fulgurjs-manifest.json`
-    const got = await manifestFromUrl(url)
-    if (got) return { manifest: got.manifest, from: got.url }
-    return undefined
-  }
-  // 无显式线上来源：本地构建产物兜底 <root>/<appPath>/<deployDir||base>/fulgurjs-manifest.json 或 <appPath>/dist/
-  const candidates = [app.deployDir || app.base.replace(/^\/|\/$/g, ''), 'dist']
-  for (const dir of candidates) {
-    const p = path.join(cfg.root, app.path, dir, 'fulgurjs-manifest.json')
-    const got = manifestFromFile(p)
-    if (got) return { manifest: got, from: p }
-  }
-  return undefined
-}
-
 /** 单项目形态：消费方 remotes 的 prod 地址 → manifest URL（--site 派生或显式 --manifest） */
 async function fetchRemoteManifestApp(
   loaded: AppConfigLoadResult & { kind: 'app' },
@@ -408,7 +278,7 @@ async function fetchRemoteManifestApp(
 }
 
 async function checkPagesApp(
-  loaded: AppConfigLoadResult & { kind: 'app' },
+  loaded: AppConfigLoadResult,
   opts: CheckPagesOptions,
 ): Promise<CheckPagesResult> {
   const options = loaded.options!
@@ -490,106 +360,11 @@ async function checkPagesApp(
   return { app: options.name, checked, issues, failed, unverifiedFailed: !!opts.requireVerified && unverified > 0, manifestSources: sources }
 }
 
-async function checkPagesRepo(
-  cfg: RepoConfig,
-  appPathOrName: string,
-  opts: CheckPagesOptions,
-): Promise<CheckPagesResult> {
-  const app = cfg.apps.find((a) => a.path === appPathOrName || a.name === appPathOrName)
-  if (!app) {
-    throw new Error(`[fulgurjs:check-pages] 应用 "${appPathOrName}" 不在配置中（可用：${cfg.apps.map((a) => a.path).join('、')}）`)
-  }
-  const issues: CheckPagesIssue[] = []
-  const pages = (app.host?.pages ?? []) as PageRouteLike[]
-  const prefixes = app.host?.remotePrefixes ?? {}
-
-  if (pages.length === 0) {
-    issues.push({
-      level: 'unverified',
-      message:
-        '仓库配置未提供页面表（pages 可选，应用代码页面表为运行时真源）——本命令无从核对。\n' +
-        '  修法: 在 fulgurjs.config.ts 宿主 host.pages 提供页面表副本，或依赖 dev 期 remoteSchema 探针校验',
-    })
-    return { app: app.name, checked: 0, issues, failed: false, unverifiedFailed: !!opts.requireVerified && issues.some((i) => i.level === 'unverified'), manifestSources: [] }
-  }
-
-  const violations: PageViolation[] = validatePages(pages, { remotes: prefixes })
-  for (const v of violations) {
-    issues.push({ level: v.level === 'error' ? 'error' : 'warn', message: v.message })
-  }
-
-  const remoteNames = [...new Set(Object.values(prefixes))]
-  const manifests = new Map<string, { exposes: Set<string>; from: string }>()
-  const sources: Array<{ remote: string; from: string }> = []
-  for (const name of remoteNames) {
-    const remoteApp = cfg.apps.find((a) => a.name === name)
-    if (!remoteApp) {
-      issues.push({ level: 'error', message: `路由前缀映射到未知远程 "${name}"——配置 apps 中不存在该容器名` })
-      continue
-    }
-    const got = await fetchRemoteManifestRepo(cfg, remoteApp, opts)
-    if (!got) {
-      const how = opts.manifests?.[name] ?? opts.manifests?.[remoteApp.path]
-        ? `--manifest 指定来源不可达或非有效 manifest`
-        : opts.site
-          ? `--site ${opts.site} 按 base 推导的 manifest URL 不可达（显式指定来源失败时不回退本地 dist）`
-          : '本地 dist 未命中且未指定 --site/--manifest'
-      issues.push({
-        level: 'unverified',
-        message:
-          `远程 "${name}" 的 manifest 不可得（${how}）——该远程的 spec 存在性无法核对。\n` +
-          `  修法: 先构建该远程（产物含 fulgurjs-manifest.json），或用 --site <URL> 指向已部署站点，或 --manifest ${name}=<路径|URL>`,
-      })
-      continue
-    }
-    manifests.set(name, { exposes: new Set([...normalizeExposes(got.manifest).keys()].map(normSpecKey)), from: got.from })
-    sources.push({ remote: name, from: got.from })
-  }
-
-  const derive = app.host?.deriveSpec ?? ((r: string): string =>
-    r.split('/').filter(Boolean).slice(1).filter((s) => !s.startsWith(':')).join('/'))
-  let checked = 0
-  for (const page of pages) {
-    const prefixHit = Object.entries(prefixes).sort((a, b) => b[0].length - a[0].length).find(
-      ([p]) => page.route.startsWith(p.endsWith('/') ? p : `${p}/`) || `${page.route}/` === (p.endsWith('/') ? p : `${p}/`),
-    )
-    if (!prefixHit) {
-      issues.push({ level: 'error', message: `路由 "${page.route}" 不在任何 remotePrefixes 前缀下` })
-      continue
-    }
-    checked++
-    const m = manifests.get(prefixHit[1])
-    if (!m) continue // unverified 已报告
-    const spec = normSpecKey(String(page.spec ?? derive(page.route)))
-    if (!m.exposes.has(spec)) {
-      issues.push({
-        level: 'error',
-        message:
-          `路由 "${page.route}" 的 spec "${spec}" 不在远程 "${prefixHit[1]}" 的 exposes 清单中（来源 ${m.from}）。\n` +
-          `  远程实际 exposes（前 10）：${[...m.exposes].slice(0, 10).join('、') || '（空）'}\n` +
-          `  修法: 核对远程 federation({ exposes }) 键名或修正页面表 spec`,
-      })
-    }
-  }
-
-  const failed = issues.some((i) => i.level === 'error')
-  const unverifiedCount = issues.filter((i) => i.level === 'unverified').length
-  return { app: app.name, checked, issues, failed, unverifiedFailed: !!opts.requireVerified && unverifiedCount > 0, manifestSources: sources }
-}
-
 export async function checkPages(
   configPath: string,
-  appPathOrName: string | undefined,
   opts: CheckPagesOptions = {},
 ): Promise<CheckPagesResult> {
-  const loaded = await loadAppConfig(configPath)
-  if (loaded.kind === 'repo') {
-    if (!appPathOrName) {
-      throw new Error('[fulgurjs:check-pages] 聚合配置需 --app <应用目录名或容器名>（单项目配置可省略）')
-    }
-    return checkPagesRepo(loaded.repo!, appPathOrName, opts)
-  }
-  return checkPagesApp(loaded, opts)
+  return checkPagesApp(await loadAppConfig(configPath), opts)
 }
 
 export function formatCheckPages(r: CheckPagesResult): string {
@@ -599,7 +374,7 @@ export function formatCheckPages(r: CheckPagesResult): string {
   const warns = r.issues.filter((i) => i.level === 'warn')
   L.push(`[fulgurjs:check-pages] 应用 ${r.app}：核对 ${r.checked} 条页面，error ${errors.length} / warn ${warns.length} / 无法验证 ${unverified.length}`)
   if (r.manifestSources?.length) {
-    L.push('manifest 来源（优先级：--manifest > --site/prod 推导；本地 dist 仅在未指定任何线上来源时兜底；以实际命中的来源为准）：')
+    L.push('manifest 来源（优先级：--manifest > --site/prod 推导；显式指定来源失败不回退、以实际命中的来源为准）：')
     for (const s of r.manifestSources) L.push(`  ${s.remote} ← ${s.from}`)
   }
   for (const i of [...errors, ...warns, ...unverified]) L.push(`\n[${i.level.toUpperCase()}] ${i.message}`)

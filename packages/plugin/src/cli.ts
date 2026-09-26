@@ -2,10 +2,10 @@
 /**
  * fulgurjs CLI（主包内置 bin）。
  *
- * 子命令（单项目 fulgurjs.config.ts 为默认形态；旧聚合配置兼容，需 --app）：
+ * 子命令（单项目 fulgurjs.config.ts 唯一形态；命令默认读 ./fulgurjs.config.ts）：
  * - fulgurjs init [--template <path>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出
- * - fulgurjs explain [--config <path>] [--app <name>] [--json]     配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
- * - fulgurjs check-pages [--config <path>] [--app <name>] [--site <URL>] [--manifest <r>=<p|URL>]... [--require-verified] [--json]
+ * - fulgurjs explain [--config <path>] [--json]                    配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
+ * - fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<p|URL>]... [--require-verified] [--json]
  * - fulgurjs doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
  *
  * 插件保持项目无关：init 不改写任何项目文件，只输出模板与可粘贴接入块；
@@ -20,29 +20,23 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs init [--template <path>] [--force]      生成单项目 fulgurjs.config.ts 起步模板
                                                    （默认导出直接是 federation() 选项）
   fulgurjs init --config <path>                    校验配置；输出 federation(fulgurjsConfig) 接入块
-                                                 与接入核对清单（NGINX 样板仅随旧聚合配置打印）
-  fulgurjs explain [--config <path>] [--app <name>] [--json]
-                                                 解释本应用有效联邦形态与加载链（纯本地，无网络；
-                                                 单项目形态免 --app，旧聚合配置必填）
-  fulgurjs check-pages [--config <path>] [--app <name>] [--site <URL>]
+                                                 与接入核对清单
+  fulgurjs explain [--config <path>] [--json]      解释本应用有效联邦形态与加载链（纯本地，无网络）
+  fulgurjs check-pages [--config <path>] [--site <URL>]
                         [--manifest <remote>=<路径|URL>]... [--require-verified] [--json]
                                                  核对宿主页面表与远程 exposes（宿主项目运行；
                                                  manifest 来源优先级 --manifest > --site/prod 推导，
-                                                 显式指定来源失败不回退本地 dist；本地 dist 仅在
-                                                 未指定任何线上来源时兜底；确定性错误非零退出；
+                                                 显式指定来源失败不回退；确定性错误非零退出；
                                                  --require-verified 时无法验证也非零）
   fulgurjs doctor --base <URL> --apps <a,b,c> [--dev] [--json] [--chunk-sample N]
   fulgurjs --help
 
-示例（单项目形态，应用根目录内运行）：
+示例（应用根目录内运行）：
   fulgurjs init                                    # 当前目录写 fulgurjs.config.ts（已存在则拒绝，--force 覆盖）
   fulgurjs explain                                 # 解释本应用（--config 指向其他路径时显式传）
   fulgurjs check-pages --site http://your-site     # 按 remotes prod 地址推导远程 manifest 核对
   fulgurjs check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
   fulgurjs doctor --base http://your-site --apps my-app,remote-a
-
-旧聚合配置（root + apps[]，兼容期）：所有子命令加 --config 指向聚合文件，
-explain/check-pages 需 --app <应用目录名或容器名>。
 `
 
 async function main(): Promise<number> {
@@ -66,7 +60,7 @@ async function main(): Promise<number> {
       if (a !== k) return
       const v = argv[i + 1]
       const eq = v?.indexOf('=')
-      if (!v || !eq || eq < 1) return
+      if (!v || eq === undefined || eq < 1) return
       out[v.slice(0, eq)] = v.slice(eq + 1)
     })
     return out
@@ -105,11 +99,19 @@ async function main(): Promise<number> {
   }
 
   if (cmd === 'explain' || cmd === 'check-pages') {
-    const app = argOf('--app')
+    // --app 是 4.1.0 聚合配置的应用选择器，随聚合链在 5.0.0 删除——显式拒绝而非忽略
+    if (has('--app')) {
+      console.error(
+        `[fulgurjs] 不再支持 --app 参数\n` +
+          `根因：--app 是 4.1.0 聚合配置（root + apps[]）的应用选择器，聚合链（@fulgurjs/federation/config、defineRepoConfig、loadRepoConfig、federationOptionsForApp）已在 5.0.0 删除\n` +
+          `修法：每个应用根目录一份 fulgurjs.config.ts，在应用目录内直接运行 fulgurjs ${cmd}（去掉 --app）`,
+      )
+      return 2
+    }
     try {
       if (cmd === 'explain') {
         const { explainApp, formatExplain } = await import('./commands')
-        const r = await explainApp(resolve(argOf('--config') ?? 'fulgurjs.config.ts'), app)
+        const r = await explainApp(resolve(argOf('--config') ?? 'fulgurjs.config.ts'))
         console.log(has('--json') ? JSON.stringify(r, null, 2) : formatExplain(r))
         return 0
       }
@@ -119,7 +121,7 @@ async function main(): Promise<number> {
         ...(Object.keys(kvAllOf('--manifest')).length ? { manifests: kvAllOf('--manifest') } : {}),
         ...(has('--require-verified') ? { requireVerified: true } : {}),
       }
-      const r = await checkPages(resolve(argOf('--config') ?? 'fulgurjs.config.ts'), app, opts)
+      const r = await checkPages(resolve(argOf('--config') ?? 'fulgurjs.config.ts'), opts)
       console.log(has('--json') ? JSON.stringify(r, null, 2) : formatCheckPages(r))
       return r.failed || r.unverifiedFailed ? 1 : 0
     } catch (e) {

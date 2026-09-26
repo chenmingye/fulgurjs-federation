@@ -3,22 +3,21 @@
  *
  * 原则（2026-09-19 定调）：插件为所有项目服务，不内置任何具体项目的模板、锚点或文件改写。
  * init 只做三件通用的事：
- * 1) 写出带注释的 fulgurjs.config.ts 起步模板——4.2.0 起默认为**单项目形态**
- *    （默认导出直接是 federation() 选项；宿主可选具名导出 hostPages）；
- * 2) 加载并校验 --config 指定的配置（CFG 三段式报错；单项目/旧聚合形态自动识别）；
- * 3) 打印可直接粘贴的样板：单项目形态输出 `federation(fulgurjsConfig)` 的一次性接入块
- *    与接入核对清单；旧聚合形态保持 4.1.0 输出。NGINX 内容是**打印的样板**，
- *    init 不改写任何项目文件。
+ * 1) 写出带注释的 fulgurjs.config.ts 起步模板——默认导出直接是 federation() 选项；
+ *    宿主可选具名导出 hostPages；
+ * 2) 加载并校验 --config 指定的配置（CFG 三段式报错；旧聚合形态报迁移错误）；
+ * 3) 打印可直接粘贴的 `federation(fulgurjsConfig)` 接入块与接入核对清单（纯打印，
+ *    不改写任何项目文件）。旧聚合配置（root + apps[]）的专属输出（各应用粘贴块、
+ *    NGINX 样板）已随 5.0.0 删除——NGINX 部署要点在核对清单第 8 条。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { loadAppConfig, type AppConfigLoadResult } from './app-config'
-import { loadRepoConfig, type AppConfig, type RepoConfig } from './config'
 
 const MARK = '[fulgurjs:init]'
 
 /**
- * 单项目 fulgurjs.config.ts 起步模板（4.2.0 默认形态）。
+ * 单项目 fulgurjs.config.ts 起步模板。
  * 默认导出直接可传给 federation()；宿主另以具名导出 hostPages 提供 CLI 核对数据。
  */
 export const STARTER_CONFIG = `// fulgurjs.config.ts —— @fulgurjs/federation 单项目接入配置（一项目一份，可入库、可复跑）
@@ -78,42 +77,6 @@ export async function writeConfigTemplate(target: string, force = false): Promis
   return 'written'
 }
 
-function remoteEntriesLiteral(remotes: Record<string, { dev: string; prod: string }>): string {
-  return Object.entries(remotes)
-    .map(([k, v]) => `    '${k}': { dev: '${v.dev}', prod: '${v.prod}' },`)
-    .join('\n')
-}
-
-function exposesLiteral(exposes: Record<string, string>): string {
-  return Object.entries(exposes)
-    .map(([k, v]) => `    '${k}': '${v}',`)
-    .join('\n')
-}
-
-/** 兼容形态：生成某应用的 federation() vite 配置块（聚合配置专用，提示标注） */
-function viteSnippetFor(app: AppConfig): string {
-  const hostRemotes = app.host ? remoteEntriesLiteral(app.host.remotes) : ''
-  const remoteRemotes = app.remote?.remotes ? remoteEntriesLiteral(app.remote.remotes) : ''
-  const remotesBlock = hostRemotes || remoteRemotes
-    ? `  remotes: {\n${hostRemotes || remoteRemotes}\n  },\n`
-    : ''
-  const exposesBlock = app.remote?.exposes
-    ? `  exposes: {\n${exposesLiteral(app.remote.exposes)}\n  },\n`
-    : ''
-  const setupBlock = app.remote?.setup ? `  setup: '${app.remote.setup}',\n` : ''
-  const sharedBlock = app.shared
-    ? `  shared: {\n${Object.entries(app.shared)
-        .map(([k, v]) => {
-          const opts = [v.singleton ? 'singleton: true' : '', v.requiredVersion ? `requiredVersion: '${v.requiredVersion}'` : ''].filter(Boolean)
-          return `    '${k}': { ${opts.join(', ')} },`
-        })
-        .join('\n')}\n  },\n`
-    : ''
-  return `federation({
-  name: '${app.name}',
-${remotesBlock}${exposesBlock}${setupBlock}${sharedBlock}})`
-}
-
 /** 单项目形态：vite.config.ts 接入块（真实形态就是两行导入 + 一次插件注册） */
 function viteSnippetForAppMode(appRoot: string): string {
   return `// ${appRoot}/vite.config.ts（联邦相关行；其余 Vite 配置原样保留）
@@ -128,45 +91,6 @@ export default defineConfig({
 })`
 }
 
-/** 兼容形态：生成 NGINX no-cache 站点样板（打印样板，不写文件；聚合配置专用） */
-function nginxSnippetFor(cfg: RepoConfig): string {
-  const listen = cfg.deploy?.listen ?? 8080
-  const webRoot = cfg.deploy?.webRoot ?? '/var/www/your-site'
-  const hostApp = cfg.apps.find((a) => a.host) ?? cfg.apps[0]
-  const hostIndex = `/${hostApp.base.replace(/^\/|\/$/g, '')}/index.html`.replace(/\/{2,}/g, '/')
-  const blocks = cfg.apps
-    .map(
-      (a) => {
-        const b = a.base === '/' || a.base === '' ? '/' : a.base.replace(/\/$/, '')
-        return `  location ${b} {
-    try_files $uri $uri/ ${hostIndex};
-
-    location = ${b}/fulgurjs-remoteEntry.js {
-      add_header Cache-Control "no-cache";
-      add_header Access-Control-Allow-Origin "*";
-    }
-    location = ${b}/fulgurjs-manifest.json {
-      add_header Cache-Control "no-cache";
-      add_header Access-Control-Allow-Origin "*";
-    }
-    location = ${b}/index.html {
-      add_header Cache-Control "no-cache";
-    }
-  }`
-      },
-    )
-    .join('\n\n')
-  return `# 联邦站点样板（打印样板，不写文件。要点：remoteEntry/manifest/index.html 必须 no-cache——
-# 文件名固定而内容每次构建变化，immutable 长缓存会让浏览器持旧入口、重部署后全 404；
-# 带 hash 的 assets 才配长缓存；跨源部署时保留 Access-Control-Allow-Origin）
-server {
-  listen ${listen};
-  root ${webRoot};
-
-${blocks}
-}`
-}
-
 const COMMON_CHECKLIST = [
   '1. 安装依赖：npm/pnpm add @fulgurjs/federation',
   '2. expose 一律指向独立页（页面从路由取参）；组件需要必填 props 时给默认值（BLD-003）',
@@ -178,36 +102,12 @@ const COMMON_CHECKLIST = [
   '   （退出时 clearAppContext 清理），远程 setup/onSession 用 getAppContext / requireAppContext 消费',
   '5. 应用代码唯一 API 入口：import { loadRemote, provideAppContext, getAppContext, clearAppContext, definePages, createHostPages, remoteSchema, remoteComponent } from \'@fulgurjs/federation/runtime\'',
   '6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言',
-  '7. 配置解释：fulgurjs explain（单项目形态免 --app）；页面契约核对：fulgurjs check-pages（宿主项目运行，--manifest/--site 指定远程 manifest 来源）；',
+  '7. 配置解释：fulgurjs explain；页面契约核对：fulgurjs check-pages（宿主项目运行，--manifest/--site 指定远程 manifest 来源）；',
   '   部署体检：fulgurjs doctor --base <URL> --apps <容器名...>',
   '8. 部署语义：remoteEntry/manifest/index.html 必须 no-cache（严禁 immutable）；带 hash 的 assets 长缓存',
 ]
 
-function appSummary(app: AppConfig): string {
-  const role = app.host ? (app.remote ? '宿主+远程' : '宿主') : '远程'
-  const lines: string[] = []
-  lines.push(`  ${app.name}（${role}，目录 ${app.path}，dev 端口 ${app.port}，base ${app.base}）`)
-  if (app.host) {
-    for (const [k, v] of Object.entries(app.host.remotes)) {
-      lines.push(`    消费远程 ${k} → dev ${v.dev} / prod ${v.prod}`)
-    }
-    lines.push(`    页面路由表：${app.host.pages?.length ?? 0} 条${app.host.pages ? '' : '（未在仓库配置中提供——以应用代码页面表为准）'}`)
-  }
-  if (app.remote?.exposes) {
-    lines.push(`    exposes：${Object.keys(app.remote.exposes).join('、')}`)
-  }
-  if (app.remote?.setup) {
-    lines.push(`    setup（可选远程初始化）：${app.remote.setup}`)
-  }
-  if (app.remote?.remotes) {
-    for (const [k, v] of Object.entries(app.remote.remotes)) {
-      lines.push(`    反向消费 ${k} → dev ${v.dev} / prod ${v.prod}（双向联邦）`)
-    }
-  }
-  return lines.join('\n')
-}
-
-function appModeSummary(loaded: AppConfigLoadResult & { kind: 'app' }): string[] {
+function appModeSummary(loaded: AppConfigLoadResult): string[] {
   const options = loaded.options!
   const roleText = { host: '宿主', remote: '远程', dual: '宿主+远程（双角色）' }[
     Object.keys(options.remotes ?? {}).length > 0 && (Object.keys(options.exposes ?? {}).length > 0 || !!options.setup) ? 'dual' : Object.keys(options.remotes ?? {}).length > 0 ? 'host' : 'remote'
@@ -236,33 +136,11 @@ function appModeSummary(loaded: AppConfigLoadResult & { kind: 'app' }): string[]
 export async function inspectConfig(configPath: string): Promise<string> {
   const loaded = await loadAppConfig(configPath)
   const out: string[] = []
-
-  if (loaded.kind === 'app') {
-    out.push(`${MARK} 配置校验通过：单项目形态（默认导出 = federation() 选项）`)
-    out.push('应用摘要：')
-    out.push(...appModeSummary(loaded))
-    out.push('\n── vite.config.ts plugins 接入块（这就是全部联邦接入代码） ──')
-    out.push(viteSnippetForAppMode(loaded.appRoot))
-    out.push('\n── 接入核对清单（联邦通用项，与具体项目无关） ──')
-    out.push(...COMMON_CHECKLIST)
-    return out.join('\n')
-  }
-
-  // 兼容形态（旧聚合配置）：保持 4.1.0 输出结构
-  const cfg: RepoConfig = loaded.repo ?? (await loadRepoConfig(loaded.configPath))
-  out.push(`${MARK} 配置校验通过：root=${cfg.root}，apps=${cfg.apps.length}【旧聚合配置形态（root+apps[]），兼容期保留；新项目推荐每项目一份单项目配置，见 README】`)
+  out.push(`${MARK} 配置校验通过：单项目形态（默认导出 = federation() 选项）`)
   out.push('应用摘要：')
-  for (const app of cfg.apps) out.push(appSummary(app))
-
-  out.push('\n── 各应用 vite.config.ts plugins 粘贴块（旧聚合形态需经 loadRepoConfig/federationOptionsForApp 转换） ──')
-  for (const app of cfg.apps) {
-    out.push(`\n# ${app.path}（${app.name}）`)
-    out.push(viteSnippetFor(app))
-  }
-
-  out.push('\n── NGINX 站点样板（打印样板，不写文件） ──')
-  out.push(nginxSnippetFor(cfg))
-
+  out.push(...appModeSummary(loaded))
+  out.push('\n── vite.config.ts plugins 接入块（这就是全部联邦接入代码） ──')
+  out.push(viteSnippetForAppMode(loaded.appRoot))
   out.push('\n── 接入核对清单（联邦通用项，与具体项目无关） ──')
   out.push(...COMMON_CHECKLIST)
   return out.join('\n')

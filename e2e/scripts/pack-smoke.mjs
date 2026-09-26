@@ -60,8 +60,8 @@ execSync(`npm install "${tarballPath}" vue@^3.5.22 vite@^6.3.5 @vitejs/plugin-vu
 
 // 3. exports 解析面（根入口 + 子路径 + 类型文件）
 const consumerRequire = createRequire(path.join(consumer, 'package.json'))
-// 4.0.0：物理 /runtime 是唯一应用入口，且只提供 ESM import 条件。
-const entryPoints = ['@fulgurjs/federation', '@fulgurjs/federation/config']
+// 5.0.0：根入口 + /runtime 是公开面；/config（聚合配置链）已删除。
+const entryPoints = ['@fulgurjs/federation']
 for (const ep of entryPoints) {
   try {
     consumerRequire.resolve(ep)
@@ -71,16 +71,22 @@ for (const ep of entryPoints) {
   }
 }
 const pkgJson = JSON.parse(fs.readFileSync(path.join(consumer, 'node_modules/@fulgurjs/federation/package.json'), 'utf8'))
-for (const sub of ['.', './config', './runtime']) {
+for (const sub of ['.', './runtime']) {
   const typesFile = pkgJson.exports[sub]?.types
   if (!typesFile || !fs.existsSync(path.join(consumer, 'node_modules/@fulgurjs/federation', typesFile))) {
     fail(`类型文件缺失：exports["${sub}"].types = ${typesFile}`)
   }
 }
-// 4.0.0 破坏性断言：旧公开子路径必须已从 exports 删除
-for (const removed of ['./pages', './context', './vue', './client']) {
+// 历史破坏性断言：旧公开子路径必须已从 exports 删除（3.0.0：./pages ./context ./vue ./client；
+// 5.0.0：./config 聚合入口、./internal/vue.js 无消费者导出键——dist/vue.js 文件本身保留（runtime-entry 内核唯一再导出实体，相对路径内部引用不经 exports））
+for (const removed of ['./pages', './context', './vue', './client', './config', './internal/vue.js']) {
   if (pkgJson.exports[removed] !== undefined) {
-    fail(`4.0.0 破坏性收敛未落实：exports 仍暴露 ${removed}`)
+    fail(`破坏性收敛未落实：exports 仍暴露 ${removed}`)
+  }
+}
+for (const removedDist of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.ts']) {
+  if (fs.existsSync(path.join(consumer, 'node_modules/@fulgurjs/federation', removedDist))) {
+    fail(`已删除入口的产物仍随包发布：${removedDist}`)
   }
 }
 if (pkgJson.exports['./runtime']?.require) fail('/runtime 必须只有 ESM import 条件')
@@ -93,11 +99,14 @@ if (!requireRejected) fail('/runtime 不应能由 CommonJS require 加载')
 let clientRejected = false
 try { consumerRequire.resolve('@fulgurjs/federation/client') } catch { clientRejected = true }
 if (!clientRejected) fail('已删除的 /client 子路径仍可解析')
+let configRejected = false
+try { consumerRequire.resolve('@fulgurjs/federation/config') } catch { configRejected = true }
+if (!configRejected) fail('已删除的 /config 子路径（5.0.0 聚合配置链）仍可解析')
 const runtimeEntry = await import(pathToFileURL(path.join(consumer, 'node_modules/@fulgurjs/federation/dist/runtime-entry.js')).href)
 for (const name of ['loadRemote', 'remoteComponent', 'remoteSchema', 'clearAppContext', 'createHostPages']) {
   if (!(name in runtimeEntry)) fail(`/runtime 缺少 ${name}`)
 }
-log('types OK: ./ ./config ./runtime；旧子路径已删除 ✓')
+log('types OK: . ./runtime；旧子路径（含 /config）已删除 ✓')
 
 const tsc = path.join(PLUGIN_DIR, 'node_modules/.bin/tsc')
 fs.writeFileSync(path.join(consumer, 'check-types.ts'), `import { loadRemote, definePages, remoteSchema } from '@fulgurjs/federation/runtime'\nimport type { RemoteInput } from '@fulgurjs/federation/runtime'\nconst remote: RemoteInput = { name: 'demo', entry: '/remoteEntry.js' }\ndefinePages([{ route: '/demo/list' }], { schema: remoteSchema })\nvoid loadRemote; void remote\n`)

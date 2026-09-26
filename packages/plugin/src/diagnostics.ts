@@ -33,7 +33,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'CFG-008', stage: 'CFG', title: 'shared 非法组合（eager+import:false / shareKey 重复声明）' },
   { code: 'CFG-009', stage: 'CFG', title: 'remotes 运行参数非法（timeout/retries/breaker 非有限正数等）' },
   { code: 'CFG-010', stage: 'CFG', title: 'devCorsOrigins 形态非法（须为 "*" 或 http(s) 来源数组）' },
-  { code: 'CFG-011', stage: 'CFG', title: '不支持的互操作选项（remoteType/library.type/automaticAsyncBoundary=false，此前静默规范化现已硬报错）' },
+  { code: 'CFG-011', stage: 'CFG', title: '已删除的 webpack 兼容/无效选项（remoteType/library/automaticAsyncBoundary/dataPrefetch/usedExports/ignoreUnusedSharedExports——传入即报错并给出迁移写法）' },
   { code: 'CFG-012', stage: 'CFG', title: 'setup 配置非法（路径为空/非字符串，或 exposes 占用内部保留键）' },
   // ── DEV 开发启动/转换期 ──
   { code: 'DEV-001', stage: 'DEV', title: 'remote dev server 不可达（manifest 拉取失败）' },

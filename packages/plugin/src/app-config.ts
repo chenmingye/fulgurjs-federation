@@ -1,5 +1,5 @@
 /**
- * 单项目配置契约（4.2.0 默认接入形态）。
+ * 单项目配置契约（4.2.0 起唯一接入形态；5.0.0 删除旧聚合配置兼容链）。
  *
  * 每个项目根目录一份 `fulgurjs.config.ts`，默认导出**直接可传给 federation() 的选项对象**
  * （`satisfies FederationOptions` 做编译期形状检查，无运行时包装函数）；可选具名导出
@@ -7,14 +7,14 @@
  * explain/check-pages 读取——浏览器与 Vite 都不加载本加载器，页面数据的运行时消费方
  * 是应用自身的 `createHostPages` 调用代码（同模块，唯一手工维护位置）。
  *
- * 旧聚合配置（root + apps[]）保留兼容：本加载器按默认导出形状自动识别并分流到
- * loadRepoConfig 的校验语义（见 isAggregateShape）。兼容不等于推荐——文档主路径一律是
- * `import fulgurjsConfig from './fulgurjs.config'` + `federation(fulgurjsConfig)`。
+ * 旧聚合配置（root + apps[]，`@fulgurjs/federation/config` 三层转换）已在 5.0.0 删除：
+ * 识别到旧形状（root/apps[]/host/remote 角色壳或对已删除子路径的导入）时给出
+ * 「当前形状 → 期望形状 → 迁移写法」的中文错误，不再静默兼容。
  *
- * 加载机制与约束（区别于 loadRepoConfig 的临时文件裸 import）：
+ * 加载机制与约束：
  * - 用 esbuild 把配置与**本项目内相对导入的纯数据模块**打成一个临时 bundle——相对导入
  *   以原配置文件为解析基准（extensionless/TS 均可），Node 18 可用，不依赖原生类型剥离；
- * - bundle 内对 `@fulgurjs/federation`（含 /config、/runtime 子路径）的运行时导入重定向到
+ * - bundle 内对 `@fulgurjs/federation`（含 /runtime 子路径）的运行时导入重定向到
  *   用户工程实际安装的本包入口（createRequire(configPath) 解析；自引用兜底），
  *   避免 bundle 把 CLI 自身代码重复打包进配置求值环境；
  * - 临时文件按任务独立目录写入 os.tmpdir()，import 完成即清理，不写业务源码；
@@ -23,8 +23,23 @@
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import type { FederationOptions } from './options'
-import type { PageEntry } from './config'
-import { loadRepoConfig, type RepoConfig } from './config'
+
+/**
+ * 宿主页面表的页面记录（fulgurjs.config.ts 的 hostPages.pages 数组元素；
+ * 运行时消费方是应用自身的 createHostPages 调用代码——本类型同时约束两侧）。
+ */
+export interface PageEntry {
+  /** 宿主路由路径（参数段用 :xx） */
+  route: string
+  /** 路由 name（命名跳转依赖） */
+  name?: string
+  /** 远程 exposes 键（显式覆盖默认推导 pages/<去前缀去参数段>） */
+  spec?: string
+  /** 页签标题 */
+  title?: string
+  /** 页面保活开关（按页显式开启；默认关闭） */
+  keepAlive?: boolean
+}
 
 /** 宿主页面数据（fulgurjs.config.ts 的可选具名导出 hostPages；仅 CLI 消费） */
 export interface HostPagesData {
@@ -38,7 +53,7 @@ export interface HostPagesData {
 export interface AppConfigLoadBase {
   /** 配置文件绝对路径 */
   configPath: string
-  /** 应用根目录 = 配置文件所在目录（单项目形态；exposes/setup 相对它解析） */
+  /** 应用根目录 = 配置文件所在目录（exposes/setup 相对它解析） */
   appRoot: string
 }
 
@@ -51,25 +66,31 @@ export interface AppKindLoadResult extends AppConfigLoadBase {
   hostPages?: HostPagesData
 }
 
-/** 旧聚合形态加载结果（兼容识别） */
-export interface RepoKindLoadResult extends AppConfigLoadBase {
-  kind: 'repo'
-  repo: RepoConfig
-}
-
-export type AppConfigLoadResult = AppKindLoadResult | RepoKindLoadResult
+export type AppConfigLoadResult = AppKindLoadResult
 
 /** 统一三段式错误（症状 → 根因 → 修法），带配置文件定位 */
 function appConfigError(what: string, cause: string, fix: string): never {
   throw new Error(`[fulgurjs:config] ${what}\n根因：${cause}\n修法：${fix}`)
 }
 
-/** 旧聚合配置形状识别：root+apps[]（允许 UserConfig 的 Partial 形态） */
+/** 旧聚合配置形状识别：root/apps[]（识别后报迁移错误，不再兼容加载） */
 function isAggregateShape(value: unknown): boolean {
   return (
     !!value &&
     typeof value === 'object' &&
     Array.isArray((value as { apps?: unknown }).apps)
+  )
+}
+
+/** 旧聚合配置的统一迁移报错（当前形状 → 期望形状 → 逐应用拆分写法） */
+function aggregateMigrationError(): never {
+  appConfigError(
+    '配置是旧聚合形态（root + apps[]，已删除）',
+    '4.1.0 的聚合配置链（defineRepoConfig / loadRepoConfig / federationOptionsForApp 与 @fulgurjs/federation/config 子路径）已在 5.0.0 删除；CLI 只接受单项目配置：每个应用根目录一份 fulgurjs.config.ts，默认导出直接是 federation() 选项',
+    '把聚合文件里每个应用拆成各自项目根目录的 fulgurjs.config.ts：\n' +
+      '  应用根/fulgurjs.config.ts：export default { name, remotes, exposes, setup, shared, devSharedSelf? } satisfies FederationOptions\n' +
+      '  （host.pages/remotePrefixes/deriveSpec → 具名导出 hostPages；host.remotes → 顶层 remotes；remote.exposes → 顶层 exposes；remote.setup → 顶层 setup）\n' +
+      '  各项目 vite.config.ts：import fulgurjsConfig from \'./fulgurjs.config\' 后 federation(fulgurjsConfig)；删除父目录聚合文件',
   )
 }
 
@@ -96,10 +117,10 @@ function validateAppOptions(options: Record<string, unknown>): void {
     if (options[legacyField] !== undefined) {
       appConfigError(
         `默认导出包含旧聚合/角色壳字段 "${legacyField}"`,
-        '单项目契约的默认导出直接是 federation() 选项（name/exposes/setup/remotes/shared/…），不包 host/remote 角色壳，也没有 root/apps[]',
+        '单项目契约的默认导出直接是 federation() 选项（name/exposes/setup/remotes/shared/…），不包 host/remote 角色壳，也没有 root/apps[]；旧聚合配置（root + apps[]）已在 5.0.0 删除',
         legacyField === 'host' || legacyField === 'remote'
           ? '把 host/remote 内的字段拍平到顶层：host.remotes → remotes；remote.exposes → exposes；remote.setup → setup；host.pages/remotePrefixes/deriveSpec → 具名导出 hostPages'
-          : `${legacyField} 属于旧聚合配置（root + apps[]，兼容期保留）。单项目形态请删除该字段；聚合用法见 README「历史兼容」章节`,
+          : `${legacyField} 属于已删除的旧聚合配置（root + apps[]）。单项目形态请删除该字段——每个应用一份 fulgurjs.config.ts（见 README）`,
       )
     }
   }
@@ -159,7 +180,7 @@ function validatePathsInsideApp(
 }
 
 /**
- * 解析配置内对本包的运行时导入（defineRepoConfig 等聚合兼容形态需要）。
+ * 解析配置内对本包的运行时导入（如 satisfies 检查所需的 FederationOptions 类型）。
  * 顺序：用户工程安装的本包（createRequire(configPath)，pnpm 严格布局正确）→
  * 本 CLI 自身（包自引用；dist 内运行时 = 已安装包形态）。
  */
@@ -231,8 +252,9 @@ function resolveEsbuild(configPath: string): typeof import('esbuild') {
 }
 
 /**
- * 加载 fulgurjs.config.ts/js/json（单项目契约默认形态 + 旧聚合配置自动识别）。
+ * 加载 fulgurjs.config.ts/js/json（单项目契约唯一形态）。
  * 相对导入以原配置文件为解析基准（esbuild bundle），Node 18 兼容。
+ * 旧聚合形状（root + apps[]）与已删除子路径导入在此报中文迁移错误。
  */
 export async function loadAppConfig(configPath: string): Promise<AppConfigLoadResult> {
   const fs = await import('node:fs')
@@ -249,15 +271,24 @@ export async function loadAppConfig(configPath: string): Promise<AppConfigLoadRe
 
   if (abs.endsWith('.json')) {
     const parsed = JSON.parse(fs.readFileSync(abs, 'utf8')) as Record<string, unknown>
-    if (isAggregateShape(parsed)) {
-      const repo = await loadRepoConfig(abs)
-      return { kind: 'repo', configPath: abs, appRoot: path.dirname(abs), repo }
-    }
+    if (isAggregateShape(parsed)) aggregateMigrationError()
     return finishAppShape(parsed, {}, abs, path.dirname(abs), fs, path)
   }
 
   // esbuild bundle：相对导入按原配置路径解析进 bundle；本包导入重定向到用户工程安装的入口
   // （插件仅异步 API 支持——buildSync 会直接拒绝 plugins）
+  // 先拦截已删除子路径的导入（@fulgurjs/federation/config）——esbuild 解析失败只会给
+  // 英文 ERR_PACKAGE_PATH_NOT_EXPORTED，这里给出可执行的中文迁移指引
+  const rawSource = fs.readFileSync(abs, 'utf8')
+  if (/@fulgurjs\/federation\/config/.test(rawSource)) {
+    appConfigError(
+      `配置导入了已删除的子路径 "@fulgurjs/federation/config"`,
+      'defineRepoConfig / loadRepoConfig / federationOptionsForApp 与聚合类型（RepoConfig 等）所在的 /config 子路径已在 5.0.0 删除；单项目配置不需要任何运行时包装函数',
+      '删除该导入，默认导出直接写 federation() 选项对象：\n' +
+        '  import type { FederationOptions } from \'@fulgurjs/federation\'\n' +
+        '  export default { name: \'my-app\', exposes: { /* … */ } } satisfies FederationOptions',
+    )
+  }
   const esbuild = resolveEsbuild(abs)
   const selfRedirect = {
     name: 'fulgurjs-self-redirect',
@@ -289,11 +320,7 @@ export async function loadAppConfig(configPath: string): Promise<AppConfigLoadRe
       default?: unknown
       hostPages?: unknown
     }
-    if (isAggregateShape(mod.default)) {
-      // 兼容形态：统一走既有聚合校验语义（root/apps/角色必填）
-      const repo = await loadRepoConfig(abs)
-      return { kind: 'repo', configPath: abs, appRoot: path.dirname(abs), repo }
-    }
+    if (isAggregateShape(mod.default)) aggregateMigrationError()
     return finishAppShape(mod.default, { hostPages: mod.hostPages }, abs, path.dirname(abs), fs, path)
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true })

@@ -31,7 +31,7 @@
 - **增强能力**：dts 类型直连（dev 补全直达 remote 源码）、`preloadRemote()` manifest 驱动精确预载、runtimePlugins 钩子
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
-- **CLI（主包内置 bin）**：`fulgurjs init`——**单项目** `fulgurjs.config.ts` 起步模板与校验（默认导出直接是 `federation()` 选项；输出 `federation(fulgurjsConfig)` 接入块与核对清单，**不改写任何项目文件**）；`fulgurjs explain`——本应用有效联邦形态与加载链解释器（纯本地，按实际选项判角色，免 `--app`）；`fulgurjs check-pages`——宿主页面表 ↔ 远程 manifest exposes 契约核对（`--manifest`/`--site` 指定来源并如实报告；CI 可嵌，确定性错误与 `--require-verified` 均非零退出）；`fulgurjs doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
+- **CLI（主包内置 bin）**：`fulgurjs init`——**单项目** `fulgurjs.config.ts` 起步模板与校验（默认导出直接是 `federation()` 选项；输出 `federation(fulgurjsConfig)` 接入块与核对清单，**不改写任何项目文件**）；`fulgurjs explain`——本应用有效联邦形态与加载链解释器（纯本地，按实际选项判角色）；`fulgurjs check-pages`——宿主页面表 ↔ 远程 manifest exposes 契约核对（`--manifest`/`--site` 指定来源并如实报告；CI 可嵌，确定性错误与 `--require-verified` 均非零退出）；`fulgurjs doctor`——部署面体检（remoteEntry/manifest/HTML 缓存头与形态、CORS、chunk 抽样可达、版本 skew 预演、`--dev` 端口探测）
 - **远程初始化生命周期（可选）**：`federation({ setup })` 显式声明初始化入口——默认导出 `setup(context)` 应用级执行一次、可选具名导出 `onSession(context)` 按宿主 `sessionKey` 去重执行（换账号/重登自动重跑，退出 `clearAppContext` 清理会话状态）；失败显式报错可重试（`MFU-011~014`），`preloadRemote`/`getContainer` 无副作用。不配置 `setup` 时零行为零体积
 - **宿主页面适配器（可选）**：`createHostPages({ pages, remotePrefixes, ... })`——一份页面表供宿主路由与布局共用；URL 解析（含 base 剥离）、最长前缀远程归属、`definePages` R1–R5 校验、异步组件缓存（会话切换自动重建）、骨架屏/错误占位、保活名称内置
 - **跨应用传值与方法引用**：`@fulgurjs/federation/runtime` 导出 `provideAppContext` / `getAppContext` / `requireAppContext` / `clearAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥写入页面级单例（user/getToken/store/hostApp/locale/sessionKey/events 标准字段 + 项目扩展位），远程 setup/onSession 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享承担，同页换账号由 onSession 会话同步承担，不依赖页面刷新）
@@ -211,7 +211,7 @@ clearAppContext() // 清 context + 作废会话信号/onSession 去重（下次�
 
 **数据从哪里来**：`context.appContext` 就是宿主 `provideAppContext` 写入的同一页面级对象（同浏览器页面直接共享，无网络传输）；`user` 是提供时快照、`getToken()` 每次调用取最新值、`store` 是宿主 pinia 实例引用。dev/prod 行为一致。
 
-> 只有配置在 `setup` 的文件才是生命周期入口。插件**不扫描目录、不按文件名猜测、不执行其他 TS exposes**——普通 TS 模块仍按路径 ① 的语义「加载不等于调用」。旧的「expose 启动器 + 宿主手动 loadRemote 并调用」写法继续可用（便于分批迁移），但不再是推荐接法（见[迁移指南](#文档)）。
+> 只有配置在 `setup` 的文件才是生命周期入口。插件**不扫描目录、不按文件名猜测、不执行其他 TS exposes**——普通 TS 模块仍按路径 ① 的语义「加载不等于调用」。「expose 一个普通 TS 模块 + 宿主手动 `loadRemote` 并调用」本质是普通 expose 的通用语义，始终可以做；但它不是插件的生命周期机制，也没有应用级一次 / 会话级去重 / 失败重试——初始化请用 `setup`/`onSession`（见[迁移指南](#文档)）。
 
 ### 通用边界（三条路径都适用）
 
@@ -221,7 +221,7 @@ clearAppContext() // 清 context + 作废会话信号/onSession 去重（下次�
 import { loadRemote, provideAppContext, getAppContext, requireAppContext, clearAppContext, definePages, createHostPages, remoteSchema, remoteComponent } from '@fulgurjs/federation/runtime'
 ```
 
-`/runtime` 是 ESM 应用入口，导出 `remoteComponent`/`createHostPages`，所以**使用该入口的应用需要安装 Vue**（Vue 为可选 peer：只用包根或 `/config` 时无需安装；`runtime.js` 内核本身零 Vue 依赖零体积增量）。`remoteSchema` 必须以具名静态导入取得 dev 探针结果；命名空间导入、动态导入和 re-export 不触发探针拆写，未经过插件转换时该值是空表。dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgurjs-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
+`/runtime` 是 ESM 应用入口，导出 `remoteComponent`/`createHostPages`，所以**使用该入口的应用需要安装 Vue**（Vue 为可选 peer：只用包根（Vite 插件）时无需安装；`runtime.js` 内核本身零 Vue 依赖零体积增量）。`remoteSchema` 必须以具名静态导入取得 dev 探针结果；命名空间导入、动态导入和 re-export 不触发探针拆写，未经过插件转换时该值是空表。dev 下 remote 跑它自己的 `vite dev`（容器入口 `/@fulgurjs-entry.js` 由插件中间件直出）；build 下 expose 自动拆独立 chunk、shared 自动剥离——同一份配置两端通用。
 
 **导入改写边界**：宿主/远程的任何普通源码文件都可以直接静态导入 `/runtime`——包括 exposes 目标文件（远程页面），其导入会被插件自动改写为惰性单例委托（求值期零副作用）。**构建入口文件是边界**：Vite 的 HTML module entry 在 build 时由插件优先内联 init 并直接返回，入口文件自身的 remote import 不会进入改写管线；把 remote 动态导入放在入口导入的普通模块中，不要写在 `main.ts` / `main.js` 里。
 
@@ -240,8 +240,8 @@ npx fulgurjs init
 npx fulgurjs init --config fulgurjs.config.ts
 
 # 3) 配置解释器（纯本地无网络）：角色（按实际选项判定，双向联邦显示「双角色」）/remotes/exposes/
-#    setup/shared/页面映射/devSharedSelf 来源/加载链；单项目形态免 --app
-npx fulgurjs explain          # --json 供 CI；聚合配置需 --config <聚合文件> --app <应用名>
+#    setup/shared/页面映射/devSharedSelf 来源/加载链
+npx fulgurjs explain          # --json 供 CI（在应用根目录运行，默认读 ./fulgurjs.config.ts）
 
 # 4) 页面契约核对：宿主页面表 ↔ 远程 manifest exposes（宿主项目内运行；manifest 来源
 #    优先级 --manifest > --site/prod 推导，输出实际命中来源；确定性错误非零退出，
@@ -254,9 +254,8 @@ npx fulgurjs doctor --base http://your-site --apps app-a,app-b
 npx fulgurjs doctor --base http://localhost:5173 --apps app-a --dev
 ```
 
-**插件保持项目无关**：init 不改写任何项目文件、不生成项目源码（不生成桥/路由/启动器/NGINX 文件——
-NGINX 内容仅作为**打印样板**随旧聚合配置输出）；权限路由、项目侧桥与页面表等集成细节由各项目
-按 init 输出的通用核对清单自行落地。
+**插件保持项目无关**：init 不改写任何项目文件、不生成项目源码（不生成桥/路由/启动器/NGINX 文件）；
+权限路由、项目侧桥与页面表等集成细节由各项目按 init 输出的通用核对清单自行落地。
 
 ### 每项目一份配置：`fulgurjs.config.ts` + `federation(fulgurjsConfig)`（默认主路径）
 
@@ -284,8 +283,8 @@ import fulgurjsConfig from './fulgurjs.config'
 
 规则与边界：
 
-- 各项目 `vite.config.ts` 中**不得也不需要**出现 `loadRepoConfig` / `federationOptionsForApp` /
-  `fileURLToPath(new URL(...))` / 父目录配置路径 / 按字符串查应用名——CLI 内部有自己的加载器，
+- 各项目 `vite.config.ts` 中**不得也不需要**出现 `fileURLToPath(new URL(...))` / 父目录配置路径 /
+  按字符串查应用名（4.1.0 聚合链 `loadRepoConfig`/`federationOptionsForApp` 已在 5.0.0 删除）——CLI 内部有自己的加载器，
   项目侧永远只见「导入一个常量、调用一次插件」；
 - 宿主应用的页面核对数据以**具名导出 `hostPages`**（`{ pages, remotePrefixes, deriveSpec? }`）提供，
   与运行时 `createHostPages` 消费同一份数据模块（页面表唯一手工维护位置）；Vite 只消费默认导出，
@@ -293,11 +292,12 @@ import fulgurjsConfig from './fulgurjs.config'
 - base / dev 端口 / 代理 / 插件顺序等继续归各项目 `vite.config.ts`，不复制进第二套配置；
 - 同一 monorepo 中的应用也各自持有配置；宿主与远程分属不同仓库时各自独立构建、部署、诊断。
 
-> **历史兼容（不推荐）**：4.1.0 的聚合配置（`root + apps[]`，`defineRepoConfig` /
-> `loadRepoConfig` / `federationOptionsForApp` 三层转换）保留一段兼容期——CLI 自动识别旧形状
-> 并保持 4.1.0 行为（`explain`/`check-pages` 需 `--app`），已使用聚合配置的项目升级不会立即报错，
-> 但文档主路径、`init` 模板与本节示例一律是单项目形态。迁移 = 拆出各应用的 `name/remotes/
-> exposes/setup/shared` 到各自项目根，删除父目录聚合文件。
+> **5.0.0 已删除旧聚合配置**：4.1.0 的聚合配置（`root + apps[]`，`@fulgurjs/federation/config`
+> 子路径的 `defineRepoConfig` / `loadRepoConfig` / `federationOptionsForApp` 三层转换）与 CLI
+> `--app` 选择器已删除——传入旧形状会得到「当前形状 → 期望形状 → 迁移写法」的中文错误
+> （`explain`/`check-pages` 传 `--app` 也报同类错误）。迁移 = 拆出各应用的 `name/remotes/
+> exposes/setup/shared` 到各自项目根的 `fulgurjs.config.ts`，`host.pages`/`remotePrefixes`/
+> `deriveSpec` 改为具名导出 `hostPages`，然后删除父目录聚合文件。
 
 ## API 参考
 
@@ -322,8 +322,6 @@ import { federation, type FederationOptions } from '@fulgurjs/federation'
 | `remotes` | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | — | 消费的远程，三种形态见下表 |
 | `shared` | `string[] \| Record<string, string \| SharedHint>` | — | 共享依赖；字符串简写 = requiredVersion（缺省从本应用 package.json 推断） |
 | `shareScope` | `string` | `'default'` | 默认共享作用域名 |
-| `remoteType` | `'module'` | `'module'` | 仅支持 `'module'`（类型即字面量）；传其它值配置期报 CFG-011（webpack script/var 互操作未实现，不产出看似成功实为 module 的构建） |
-| `library` | `{ type?: 'module' \| 'esm' }` | — | 仅接受 esm/module；其它值配置期报 CFG-011（webpack UMD/var 输出互操作未实现） |
 | `runtime` | `string \| false` | 内置运行时 | 自定义运行时模块路径；`false` 禁用内置运行时 |
 | `runtimeChunk` | `boolean \| 'single'` | — | 运行时是否拆独立 chunk |
 | `manifest` | `boolean` | `true` | prod 构建生成 `fulgurjs-manifest.json`（preloadRemote 依赖它） |
@@ -332,9 +330,6 @@ import { federation, type FederationOptions } from '@fulgurjs/federation'
 | `devSharedSelf` | `boolean` | 提供 `exposes`（或 `setup`）的应用 `true`；纯宿主（只消费）`false`；显式配置永远优先 | dev 下自身源码（含依赖）是否参与 shared 协商改写。双向联邦（既 expose 又消费 remote）默认即 `true`——无需再背诵显式配置（4.1.0 起按角色推断，§12.4；此前默认 false 曾是已知错误配置的来源）。build 下该路径的协商门面自动隔离进插件专属 chunk（`fulgurjs-runtime` + `fulgurjs-shared-<key>`），与用户 `manualChunks` 强制分组正交、不产生 chunk 循环依赖（D6 修复） |
 | `devCorsOrigins` | `string[] \| '*'` | `'*'`（现状兼容） | dev 跨源访问策略：插件端点（`/@fulgurjs-entry.js`、`/@fulgurjs-manifest.json`）与 `server.cors` 使用同一来源。缺省或 `'*'` 全放开（非 loopback host 时提醒 DEV-011）；数组按 Origin 反射 allowlist（未命中省略头）。用户显式配置的 `server.cors` 永远优先。开/关/自定义三态示例见下方 |
 | `devFsRoot` | `boolean` | `true`（现状兼容） | dev manifest 是否携带 `fsRoot`（remote 根目录本机绝对路径，宿主 dts 类型直连用）。`false` 不写入（本机路径不外发），宿主 dts 降级 any 桩并提示；该字段永不进入 prod manifest。非 loopback host 下默认值会提醒 DEV-012 |
-| `automaticAsyncBoundary` | — | 恒为 `true` | 传 `false` 配置期报 CFG-011（TLA 自动异步边界无手工 bootstrap 模式可关闭）；缺省或 `true` 接受 |
-| `dataPrefetch` | — | 恒为 `true` | 接受任意值：`preloadRemote` 始终可用 |
-| `usedExports` / `ignoreUnusedSharedExports` | — | no-op | 接受并忽略（Rollup/Rolldown 原生 tree-shaking 已覆盖） |
 
 #### remotes 的三种形态
 
@@ -539,12 +534,10 @@ CLI 内部加载器（`loadAppConfig`）以**原配置文件为解析基准** es
 `name`、字段形状不对、expose/setup 指向项目外或不存在文件等均三段式报错。运行时（Vite）与
 CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ remotes })` 一致（§1）。
 
-**历史兼容（4.1.0 聚合配置，`@fulgurjs/federation/config` 子路径）**：`defineRepoConfig({ root,
-apps[] })` 形态自动识别并保持 4.1.0 行为；程序化加载 `loadRepoConfig(configPath): Promise<RepoConfig>`
-与转换 `federationOptionsForApp(config, appPathOrName): FederationOptions` 继续可用（应用不存在时
-报出可用清单；同键不同地址冲突报错）。同子路径类型：`RepoConfig`／`UserConfig`／`AppConfig`／
-`HostConfig`／`RemoteConfig`／`DeployConfig`／`PageEntry`／`RemoteAddress`。兼容不等于推荐——
-新项目一律用上方单项目形态。
+**已删除（5.0.0）**：4.1.0 聚合配置入口 `@fulgurjs/federation/config`（`defineRepoConfig` /
+`loadRepoConfig` / `federationOptionsForApp` 及 `RepoConfig` 等聚合类型）不再发布——导入该子路径
+会得到 exports 解析错误；CLI 读到旧形状（`root + apps[]`）会输出「拆分到各项目根」的中文迁移
+指引。`PageEntry` 仍是现行类型（宿主页面表记录，随单项目契约从主入口类型面使用）。
 
 
 ### 5. CLI 命令参考
@@ -552,9 +545,9 @@ apps[] })` 形态自动识别并保持 4.1.0 行为；程序化加载 `loadRepoC
 | 命令 | 说明 |
 |---|---|
 | `fulgurjs init` | 在当前目录生成**单项目** `fulgurjs.config.ts` 起步模板（默认导出 = `federation()` 选项 + 可选 `hostPages` 具名导出示例）；`--template <path>` 指定输出路径；已存在拒绝覆盖，`--force` 强制。init **只生成配置起步模板**，不生成桥/路由/启动器/NGINX 文件 |
-| `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出 `federation(fulgurjsConfig)` 接入块与通用核对清单（纯打印）。旧聚合配置自动识别，保持 4.1.0 输出（各应用粘贴块 + NGINX no-cache **打印样板**） |
-| `fulgurjs explain [--config <path>] [--app <名>]` | 配置解释器（纯本地、无网络、不读 token/环境秘密）：应用角色（**按实际 federation 选项判定**——配 `remotes` 即消费、配 `exposes`/`setup` 即提供，两者均有=双角色，如双向联邦的 BPM）、有效 remotes、公开 exposes、内部 setup、shared、页面 spec 映射与数据来源、`devSharedSelf` 最终值及来源、加载链。单项目形态免 `--app`；聚合配置需 `--app <应用目录名或容器名>`。`--json` 供 CI |
-| `fulgurjs check-pages [--config <path>] [--app <宿主名>] [--site <URL>] [--manifest <r>=<路径\|URL>]... [--require-verified]` | 页面契约核对：宿主页面表（单项目 = `hostPages` 具名导出；聚合 = `host.pages`）↔ 远程 manifest exposes。manifest 来源优先级 **`--manifest`（可多次、文件路径或 URL） > `--site`/消费方 prod 地址推导 > 本地 dist（仅聚合形态回退）**，输出每个 remote 的实际命中来源（防止旧本地 dist 冒充线上核对）。报告未知 remote、映射到未消费远程、缺失 expose、路由冲突（R1–R5）；**确定性错误退出码 1**，远程不可达报「无法验证」，`--require-verified` 时无法验证也非零（CI 严格模式，避免 0 条核对显示通过）。`--json` 供 CI |
+| `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出 `federation(fulgurjsConfig)` 接入块与通用核对清单（纯打印）。旧聚合形状报中文迁移错误 |
+| `fulgurjs explain [--config <path>] [--json]` | 配置解释器（纯本地、无网络、不读 token/环境秘密）：应用角色（**按实际 federation 选项判定**——配 `remotes` 即消费、配 `exposes`/`setup` 即提供，两者均有=双角色，如双向联邦的 BPM）、有效 remotes、公开 exposes、内部 setup、shared、页面 spec 映射与数据来源、`devSharedSelf` 最终值及来源、加载链。`--json` 供 CI。传 `--app`（5.0.0 已删除的聚合选择器）报中文迁移错误 |
+| `fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<路径\|URL>]... [--require-verified]` | 页面契约核对：宿主页面表（`hostPages` 具名导出）↔ 远程 manifest exposes。manifest 来源优先级 **`--manifest`（可多次、文件路径或 URL） > `--site`/消费方 prod 地址推导**（显式来源失败不回退、无本地 dist 兜底），输出每个 remote 的实际命中来源（防止旧本地 dist 冒充线上核对）。报告未知 remote、映射到未消费远程、缺失 expose、路由冲突（R1–R5）；**确定性错误退出码 1**，远程不可达报「无法验证」，`--require-verified` 时无法验证也非零（CI 严格模式，避免 0 条核对显示通过）。`--json` 供 CI |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
 ### 6. 错误码总表（41 个）
@@ -571,7 +564,7 @@ apps[] })` 形态自动识别并保持 4.1.0 行为；程序化加载 `loadRepoC
 | | `CFG-008` | shared 非法组合（eager+import:false / shareKey 重复声明） |
 | | `CFG-009` | remotes 运行参数非法（timeout/retries/breaker 非有限正数/超上限） |
 | | `CFG-010` | devCorsOrigins 形态非法（须为 "*" 或 http(s) 来源数组） |
-| | `CFG-011` | 不支持的互操作选项硬报错（remoteType/library.type 非 module 系、automaticAsyncBoundary=false——不再静默回落） |
+| | `CFG-011` | 已删除的 webpack 兼容/无效选项（remoteType/library/automaticAsyncBoundary/dataPrefetch/usedExports/ignoreUnusedSharedExports——传入任何值报错并给出迁移写法） |
 | | `CFG-012` | setup 配置非法（路径为空/非字符串，或 exposes 占用内部保留键 `./__fulgurjs_setup__`） |
 | DEV 开发期 | `DEV-001` | remote dev server 不可达（manifest 拉取失败） |
 | | `DEV-002` | remote dev manifest 为空或格式不识别 |
@@ -614,7 +607,7 @@ apps[] })` 形态自动识别并保持 4.1.0 行为；程序化加载 `loadRepoC
 | prod | `/<base>/fulgurjs-remoteEntry.js` | 固定文件名容器入口（内容每次构建变——**必须 no-cache**） |
 | prod | `/<base>/fulgurjs-manifest.json` | expose chunk/CSS 清单（preloadRemote 消费，**no-cache**） |
 
-NGINX no-cache 规则（remoteEntry/manifest/index.html）与深链回退是联邦部署通用知识：`fulgurjs init --config` 在**旧聚合配置形态**下把它作为打印样板输出（不写文件），单项目形态按下方规则自行落位。
+NGINX no-cache 规则（remoteEntry/manifest/index.html）与深链回退是联邦部署通用知识，按下方规则自行落位（`init` 核对清单第 8 条同步提示）。
 
 ### 8. `remoteComponent` — Vue 远程组件直渲染（`@fulgurjs/federation/runtime`）
 
@@ -642,7 +635,7 @@ const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
 - 内部 = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件，`props`（如 `form-params`）在使用处直接透传；
 - **无任何兜底/降级**（H3 零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法三段式文案），`window` 的 `fulgurjs:error` 事件由 runtime 层照常发出；
 - 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
-- `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：只使用包根或 `/config` 时无需安装；应用使用 `/runtime` 时需要安装 Vue，因为该入口导出 `remoteComponent`。内部 `runtime.js` 仍不导入 Vue，体积零增量；
+- `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：只使用包根（Vite 插件）时无需安装；应用使用 `/runtime` 时需要安装 Vue，因为该入口导出 `remoteComponent`。内部 `runtime.js` 仍不导入 Vue，体积零增量；
 - 运行时实例经 `globalThis.__FULGURJS_RUNTIME__` 页面级单例复用，与 `@fulgurjs/federation/runtime` 的导入殊途同归，无需额外接线。
 
 ### 9. `AppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/runtime`）
@@ -908,7 +901,7 @@ export async function onSession(context: RemoteSetupContext) {
 | dev/prod 一致 | dev 容器（中间件直出）与 prod 容器（构建产物）携带同一 setup 元数据（容器上的 `__fulgurjsSetup` 字段 + manifest 的 `setup` 字段）；内部 expose 键 `./__fulgurjs_setup__` 不出现在 dts 类型与公开文档 exposes 清单中 |
 | 错误码 | MFU-011 导出非法 / MFU-012 执行失败 / MFU-013 缺 sessionKey / MFU-014 自递归；全部带 remote 名、模块路径/阶段、实际结果、预期与修法，不记录 token |
 
-旧的「`exposes: { './federatedBoot': ... }` + 宿主手动 `loadRemote` 并调用」写法**继续可用**（旧项目分批迁移），但不再是推荐接法——见[迁移指南](#文档)的兼容说明。
+「`exposes` 一个普通 TS 启动模块 + 宿主手动 `loadRemote` 并调用」只是普通 expose + `loadRemote` 的通用用法，不是插件 API，也无 `setup`/`onSession` 的应用级一次、会话级去重、失败重试语义——初始化一律改用 `federation({ setup })`（见[迁移指南](#文档)）。
 
 
 

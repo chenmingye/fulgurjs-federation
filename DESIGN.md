@@ -4,6 +4,7 @@
 > 系列规划：`@fulgurjs/federation`（模块联邦）→ `@fulgurjs/micro`、`@fulgurjs/dts` …
 > 内外命名统一 `fulgurjs`（`virtual:fulgurjs-*` 虚拟模块、`window.__FULGURJS_*` 调试出口、`FgError` / MFU 错误码）。
 
+> **5.0.0 注意**：本文档是历史设计记录；§2 选项对齐表中的 `remoteType`/`library`/`automaticAsyncBoundary`/`dataPrefetch`/`usedExports`/`ignoreUnusedSharedExports` 与 4.1.0 聚合配置链已在 5.0.0 从公开面删除（传入报 CFG-011 迁移错误）。当前可用选项以 README 为准。
 > 状态：已实现并验证（2026-09-13）。测试结果：单测 76/76、fixtures dev e2e 10/10、容错/HMR-L3 2/2、fixtures prod e2e 8/8（隔离 NGINX 8999）、testbed dev 实测全通、testbed prod（本地 NGINX 测试站点）最小宿主消费真实远程产物实测通过；runtime gzip 4.4KB。已知问题见手册 §7。
 > 日期：2026-09-12
 

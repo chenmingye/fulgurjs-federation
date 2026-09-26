@@ -43,23 +43,46 @@ describe('options: setup 校验（CFG-012）', () => {
   })
 })
 
-describe('options: CFG-011 不支持选项硬报错（§12.6，此前静默回落）', () => {
-  it('remoteType 非 module → CFG-011', () => {
+describe('options: CFG-011 已删除的 webpack 兼容/无效选项（5.0.0——传入任何值都硬报错并给出迁移写法）', () => {
+  it('remoteType（含历史唯一合法值 "module"）→ CFG-011 迁移报错', () => {
     expect(() => normalizeOptions({ name: 'r', remoteType: 'script' } as unknown as FederationOptions, ROOT, 'build')).toThrow('CFG-011')
+    expect(() => normalizeOptions({ name: 'r', remoteType: 'module' } as unknown as FederationOptions, ROOT, 'build')).toThrow(/remoteType.*已在 5\.0\.0 删除/)
   })
 
-  it('library.type 非 module/esm → CFG-011', () => {
+  it('library（含历史合法 type）→ CFG-011 迁移报错', () => {
     expect(() =>
       normalizeOptions({ name: 'r', library: { type: 'var' } } as unknown as FederationOptions, ROOT, 'build'),
     ).toThrow('CFG-011')
+    expect(() =>
+      normalizeOptions({ name: 'r', library: { type: 'esm' } } as unknown as FederationOptions, ROOT, 'build'),
+    ).toThrow(/library.*已在 5\.0\.0 删除/)
   })
 
-  it('automaticAsyncBoundary=false → CFG-011', () => {
-    expect(() => normalizeOptions({ name: 'r', automaticAsyncBoundary: false } as FederationOptions, ROOT, 'build')).toThrow('CFG-011')
+  it('automaticAsyncBoundary / dataPrefetch / usedExports / ignoreUnusedSharedExports → CFG-011 迁移报错', () => {
+    for (const extra of [
+      { automaticAsyncBoundary: true },
+      { automaticAsyncBoundary: false },
+      { dataPrefetch: true },
+      { dataPrefetch: false },
+      { usedExports: false },
+      { ignoreUnusedSharedExports: true },
+    ]) {
+      expect(() => normalizeOptions({ name: 'r', ...extra } as unknown as FederationOptions, ROOT, 'build')).toThrow('CFG-011')
+    }
   })
 
-  it('合法值（module/esm/缺省）照常通过', () => {
-    expect(() => normalizeOptions({ name: 'r', remoteType: 'module', library: { type: 'esm' } } as unknown as FederationOptions, ROOT, 'build')).not.toThrow()
+  it('报错文案含修法（删除字段即可/替代 API）', () => {
+    try {
+      normalizeOptions({ name: 'r', dataPrefetch: false } as unknown as FederationOptions, ROOT, 'build')
+      expect.unreachable('应抛 CFG-011')
+    } catch (e) {
+      expect(String(e)).toContain('preloadRemote')
+      expect(String(e)).toContain('删除 dataPrefetch')
+    }
+  })
+
+  it('不传已删除字段照常通过（现行配置面不受影响）', () => {
+    expect(() => normalizeOptions({ name: 'r', exposes: { './A': './a.vue' } } as FederationOptions, ROOT, 'build')).not.toThrow()
   })
 })
 

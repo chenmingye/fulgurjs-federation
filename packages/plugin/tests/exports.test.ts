@@ -11,8 +11,8 @@ import { describe, expect, it } from 'vitest'
 const pkgRoot = path.resolve(__dirname, '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'))
 
-// 4.0.0：公开带类型子路径为 ./config 与 ./runtime；内部产物不进 typesVersions。
-const SUBPATHS = ['./config', './runtime'] as const
+// 5.0.0：公开带类型子路径仅 ./runtime；内部产物不进 typesVersions。
+const SUBPATHS = ['./runtime'] as const
 
 describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () => {
   it('每个带 types 的 exports 子路径都有 typesVersions 映射', () => {
@@ -49,28 +49,37 @@ describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () =
   })
 })
 
-describe('3.0.0 破坏性收敛：旧公开入口已删除', () => {
-  const REMOVED = ['./pages', './context', './vue'] as const
+describe('历史破坏性收敛：旧公开入口已删除', () => {
+  // 3.0.0 删除的公开子路径 + 5.0.0 删除的 /config 聚合入口与无消费者的 ./internal/vue.js
+  const REMOVED = ['./pages', './context', './vue', './config', './internal/vue.js'] as const
   it('exports 白名单不再包含旧子路径', () => {
     for (const sub of REMOVED) {
       expect(pkg.exports[sub], `${sub} 应已从 exports 删除`).toBeUndefined()
     }
   })
   it('typesVersions 不再映射旧子路径', () => {
-    for (const sub of REMOVED) {
+    for (const sub of ['./pages', './context', './vue', './config'] as const) {
       expect(pkg.typesVersions?.['*']?.[sub.slice(2)], `${sub} 的 typesVersions 映射应已删除`).toBeUndefined()
     }
   })
-  it('内部引用键存在（虚拟门面 build 形态的 re-export 目标）', () => {
+  it('内部引用键存在（虚拟门面 build 形态的 re-export 目标；5.0.0 起不再暴露 ./internal/vue.js——生成门面用 vue-adapter，remoteComponent/createHostPages 走 /runtime）', () => {
     expect(pkg.exports['./internal/context.js']).toBeTruthy()
     expect(pkg.exports['./internal/pages.js']).toBeTruthy()
-    expect(pkg.exports['./internal/vue.js']).toBeTruthy()
     expect(pkg.exports['./internal/vue-adapter.js']).toBeTruthy()
     expect(pkg.exports['./runtime'].require).toBeUndefined()
+  })
+  it('构建产物不再生成已删除入口的 dist/config.*（dist/vue.js 是 runtime-entry 的内核唯一再导出实体，保留）', () => {
+    for (const f of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.ts']) {
+      expect(fs.existsSync(path.join(pkgRoot, f)), `${f} 不应存在`).toBe(false)
+    }
   })
 
   it('/runtime 的 CommonJS require 被 exports 拒绝', () => {
     const req = createRequire(path.join(pkgRoot, 'package.json'))
     expect(() => req('@fulgurjs/federation/runtime')).toThrow()
+  })
+  it('已删除的 /config 子路径被 exports 拒绝（不可解析）', () => {
+    const req = createRequire(path.join(pkgRoot, 'package.json'))
+    expect(() => req.resolve('@fulgurjs/federation/config')).toThrow()
   })
 })

@@ -108,7 +108,6 @@ export interface NormalizedOptions {
   remotes: NormalizedRemote[]
   shared: NormalizedShared[]
   shareScope: string
-  remoteType: 'module'
   runtime?: string | false
   runtimeChunk?: boolean | 'single'
   manifest: boolean
@@ -142,21 +141,11 @@ export interface FederationOptions {
   remotes?: Record<string, string | RemoteEntryConfig | (() => Promise<any>)>
   shared?: SharedConfig
   shareScope?: string
-  /** 仅支持 'module'（ESM）；其他值在配置期报 CFG-011（webpack script/var 互操作未实现） */
-  remoteType?: 'module'
-  library?: { type?: string; name?: string }
   runtime?: string | false
   runtimeChunk?: boolean | 'single'
   manifest?: boolean | Record<string, unknown>
   runtimePlugins?: string[]
   dts?: boolean | { dir?: string; mode?: 'source' | 'shim' }
-  /** 接受并恒为 true：TLA 天然异步边界，无需手工 bootstrap（比 webpack 更进一步） */
-  automaticAsyncBoundary?: boolean
-  /** 接受并恒为 true：preloadRemote 能力始终可用 */
-  dataPrefetch?: boolean
-  /** 接受 no-op：Rollup/Rolldown 原生 tree-shaking 已覆盖 */
-  usedExports?: boolean
-  ignoreUnusedSharedExports?: boolean
   /**
    * dev 下自身源码（含依赖，需配合 optimizeDeps.exclude）是否参与 shared 协商改写。
    * 默认：纯 remote（无 remotes）为 true——被宿主消费的组件需协商到宿主实例；
@@ -426,6 +415,28 @@ function configError(what: string, got: unknown, expect: string, example: string
 }
 
 /**
+ * 5.0.0 删除的配置选项（原因 → 迁移写法）。此前它们"接受但忽略"或"仅接受唯一值"，
+ * 会误导使用者以为改动了行为；删除后传入任何值（含历史合法值）都在配置期报 CFG-011。
+ */
+const REMOVED_OPTIONS: Record<string, string> = {
+  remoteType: `// 删除 remoteType（fulgurjs 只产出 ESM module remote，无 script/var 互操作）`,
+  library: `// 删除 library（remoteEntry 恒为 ESM，无 UMD/var 输出形态）`,
+  automaticAsyncBoundary: `// 删除 automaticAsyncBoundary（TLA 自动异步边界始终开启，无手工 bootstrap 模式）`,
+  dataPrefetch: `// 删除 dataPrefetch（preloadRemote() 能力始终可用，无需开关）`,
+  usedExports: `// 删除 usedExports（Rollup/Rolldown 原生 tree-shaking 已覆盖）`,
+  ignoreUnusedSharedExports: `// 删除 ignoreUnusedSharedExports（Rollup/Rolldown 原生 tree-shaking 已覆盖）`,
+}
+
+const REMOVED_OPTION_CAUSES: Record<string, string> = {
+  remoteType: '该字段只接受唯一值 "module"，从未产生其他行为',
+  library: '该字段从未参与输出——remoteEntry 恒为 ESM',
+  automaticAsyncBoundary: '该字段接受任意值且恒为 true（TLA 天然异步边界）',
+  dataPrefetch: '该字段接受任意值且恒为 true（预载能力不由此开关控制）',
+  usedExports: '该字段是 no-op（打包器原生 tree-shaking 已覆盖）',
+  ignoreUnusedSharedExports: '该字段是 no-op（打包器原生 tree-shaking 已覆盖）',
+}
+
+/**
  * 配置前置校验：任何配置错误在 vite config 阶段立即以人话报出，
  * 不允许"带着错误配置静默运行、到运行时莫名其妙"。
  */
@@ -447,31 +458,19 @@ function validateOptions(options: FederationOptions): void {
     )
   }
 
-  // CFG-011（不支持且无法履行的互操作选项，§12.6）：此前仅 warning 并静默规范化为 module，
-  // 会造成"配置写的是 script/var、实际构建的是 module"的错觉——升级为配置期硬错误
-  if (options.remoteType !== undefined && options.remoteType !== 'module') {
-    configError(
-      'CFG-011：remoteType 目前仅支持 "module"',
-      options.remoteType,
-      '"module"（缺省即可）——webpack script/var remote 互操作未实现',
-      `// 删除 remoteType 配置（fulgurjs 只产出 ESM module remote）`,
-    )
-  }
-  if (options.library?.type !== undefined && options.library.type !== 'module' && options.library.type !== 'esm') {
-    configError(
-      'CFG-011：library.type 目前仅支持 "module" 或 "esm"',
-      options.library.type,
-      '"module" 或 "esm"（缺省即可）——webpack UMD/var 输出互操作未实现',
-      `// 删除 library 配置（fulgurjs remoteEntry 恒为 ESM）`,
-    )
-  }
-  if (options.automaticAsyncBoundary === false) {
-    configError(
-      'CFG-011：不能关闭自动异步边界（automaticAsyncBoundary=false）',
-      options.automaticAsyncBoundary,
-      '缺省或 true——fulgurjs 使用 TLA 自动异步边界，不存在手工 bootstrap 模式',
-      `// 删除 automaticAsyncBoundary 配置（容器协议天然异步）`,
-    )
+  // CFG-011（5.0.0 删除的 webpack 兼容/无效选项）：这些字段曾被"接受但忽略/仅接受唯一值"，
+  // 现已从类型与归一化中删除——传入即硬报错并给出迁移写法，不静默接受
+  // （JS 配置或 as any 绕过类型层时由这里的运行时校验兜底）
+  for (const [field, fix] of Object.entries(REMOVED_OPTIONS)) {
+    const value = (options as unknown as Record<string, unknown>)[field]
+    if (value !== undefined) {
+      configError(
+        `CFG-011：选项 "${field}" 已在 5.0.0 删除`,
+        value,
+        REMOVED_OPTION_CAUSES[field],
+        fix,
+      )
+    }
   }
 
   // CFG-012（setup 配置非法）：路径必须是本应用内可解析的非空字符串，且不得占用内部保留键。
@@ -683,7 +682,6 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     remotes,
     shared,
     shareScope: shareScopeDefault,
-    remoteType: 'module',
     runtime: options.runtime,
     runtimeChunk: options.runtimeChunk,
     manifest: options.manifest === undefined ? true : !!options.manifest,

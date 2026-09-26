@@ -1,9 +1,9 @@
 /**
- * check-pages manifest 来源与远程地址解析回归（4.2.1 复核 §2.2）：
+ * check-pages manifest 来源与远程地址解析回归（4.2.1 复核 §2.2；5.0.0 起仅单项目形态）：
  * - 运行时支持的全部 remote 地址写法（目录 URL / 完整 remoteEntry URL / name@url /
  *   对象 dev+prod+external / 相对+绝对）都必须能推导出 manifest；
  * - 显式 --manifest / --site 指定来源失败时不回退本地旧 dist（unverified；严格模式非零）；
- * - 无显式线上来源时旧聚合配置才允许本地 dist 兜底（4.1.0 兼容语义）。
+ * - 单项目形态无本地 dist 回退（远程可位于任意仓库）——本地 dist 不作为来源。
  *
  * fetch 用真实本地 HTTP 服务器模拟（不打全局桩——全局 fetch 桩会干扰 vitest
  * 对临时目录 bundle 的模块加载）；不可达来源用 127.0.0.1:1（连接拒绝）。
@@ -63,28 +63,6 @@ function writeHostConfig(dir: string, prod: string): string {
   return p
 }
 
-/** 旧聚合宿主 fixture（远程本地产物可选；站点可达性由真实服务器控制） */
-function writeRepoFixture(dir: string, opts: { withLocalDist?: boolean } = {}): { configPath: string } {
-  const remoteDist = path.join(dir, 'fixtures/remote-a/dist')
-  fs.mkdirSync(remoteDist, { recursive: true })
-  fs.writeFileSync(path.join(remoteDist, 'fulgurjs-manifest.json'), JSON.stringify(MANIFEST_BODY()))
-  if (!opts.withLocalDist) fs.rmSync(remoteDist, { recursive: true, force: true })
-  const configPath = path.join(dir, 'fulgurjs.config.ts')
-  fs.writeFileSync(
-    configPath,
-    `import { defineRepoConfig } from ${JSON.stringify(path.resolve('dist/config.js'))}\n` +
-      `export default defineRepoConfig({\n  root: ${JSON.stringify(dir)},\n  apps: [\n` +
-      `    { path: 'fixtures/host-vue', name: 'host-vue', port: 5110, base: '/host-vue',\n` +
-      `      host: { remotePrefixes: { '/remote-a/': 'remote-a' }, remotes: { 'remote-a': { dev: 'http://localhost:5101/remote-a', prod: '/remote-a' } },\n` +
-      `        deriveSpec: (route: string) => 'pages/' + route.split('/').filter(Boolean).slice(1).filter((s) => !s.startsWith(':')).join('/'),\n` +
-      `        pages: [{ route: '/remote-a/home', name: 'Home' }] } },\n` +
-      `    { path: 'fixtures/remote-a', name: 'remote-a', port: 5101, base: '/remote-a', remote: { exposes: { './pages/home': './x.ts' } } },\n` +
-      `  ],\n})\n`,
-  )
-  fs.writeFileSync(path.join(dir, 'x.ts'), 'export default 1\n')
-  return { configPath }
-}
-
 describe('manifestUrlForRemoteAddress：与运行时同语义的地址推导', () => {
   it('目录 URL → 追加 manifest 文件名', () => {
     expect(manifestUrlForRemoteAddress('http://localhost:8662/flowable')).toBe('http://localhost:8662/flowable/fulgurjs-manifest.json')
@@ -139,7 +117,7 @@ describe('check-pages 单项目形态：prod 地址全形态推导（本地 mani
       // 相对 prod + 显式 --site
       const dir2 = tmpDir()
       const p2 = writeHostConfig(dir2, '/remote-a')
-      const r2 = await checkPages(p2, undefined, { site: base })
+      const r2 = await checkPages(p2, { site: base })
       expect(r2.failed).toBe(false)
       expect(r2.manifestSources![0]!.from).toBe(`${base}/remote-a/fulgurjs-manifest.json`)
       fs.rmSync(dir2, { recursive: true, force: true })
@@ -151,7 +129,7 @@ describe('check-pages 单项目形态：prod 地址全形态推导（本地 mani
   it('绝对 prod 不可达 → unverified（不回退），--require-verified 判失败', async () => {
     const dir = tmpDir()
     const p = writeHostConfig(dir, `${DEAD_SITE}/remote-a`)
-    const r = await checkPages(p, undefined, { requireVerified: true })
+    const r = await checkPages(p, { requireVerified: true })
     expect(r.failed).toBe(false)
     expect(r.checked).toBe(2)
     expect(r.issues.some((i) => i.level === 'unverified')).toBe(true)
@@ -162,7 +140,7 @@ describe('check-pages 单项目形态：prod 地址全形态推导（本地 mani
   it('相对 prod + --site 不可达 → unverified；无 site → unverified 引导补来源', async () => {
     const dir = tmpDir()
     const p = writeHostConfig(dir, '/remote-a')
-    const siteGiven = await checkPages(p, undefined, { site: DEAD_SITE, requireVerified: true })
+    const siteGiven = await checkPages(p, { site: DEAD_SITE, requireVerified: true })
     expect(siteGiven.unverifiedFailed).toBe(true)
     expect(siteGiven.issues.some((i) => i.level === 'unverified' && i.message.includes('--site'))).toBe(true)
     const noSite = await checkPages(p)
@@ -175,7 +153,7 @@ describe('check-pages 单项目形态：prod 地址全形态推导（本地 mani
     const p = writeHostConfig(dir, `${DEAD_SITE}/remote-a`) // prod 指向死地址：若被使用则核对必然失败
     const manifestPath = path.join(dir, 'remote-manifest.json')
     fs.writeFileSync(manifestPath, JSON.stringify(MANIFEST_BODY()))
-    const r = await checkPages(p, undefined, { manifests: { 'remote-a': manifestPath } })
+    const r = await checkPages(p, { manifests: { 'remote-a': manifestPath } })
     expect(r.failed).toBe(false)
     expect(r.manifestSources![0]!.from).toBe(manifestPath)
     fs.rmSync(dir, { recursive: true, force: true })
@@ -192,7 +170,7 @@ describe('check-pages 单项目形态：prod 地址全形态推导（本地 mani
     try {
       const dir = tmpDir()
       const p = writeHostConfig(dir, '/remote-a')
-      const r = await checkPages(p, undefined, { site: `http://localhost:${port}` })
+      const r = await checkPages(p, { site: `http://localhost:${port}` })
       expect(r.failed).toBe(false)
       expect(r.manifestSources![0]!.from).toMatch(new RegExp(`^http://(localhost|127\\.0\\.0\\.1):${port}/remote-a/fulgurjs-manifest\\.json$`))
       fs.rmSync(dir, { recursive: true, force: true })
@@ -202,24 +180,33 @@ describe('check-pages 单项目形态：prod 地址全形态推导（本地 mani
   })
 })
 
-describe('check-pages 旧聚合形态：--site 指定后不得回退本地 dist（4.2.1 复核主回归）', () => {
-  it('本地 dist 存在 + --site 不可达 → unverified（不是 dist 通过），严格模式非零', async () => {
+describe('check-pages 单项目形态：无本地 dist 回退（4.2.1 复核主回归的 5.0.0 延续）', () => {
+  /** 宿主 fixture + 应用目录内摆一份"像旧 dist"的 manifest 文件——单项目形态不得把它当来源 */
+  function hostWithLocalDistLookalike(dir: string): string {
+    const p = writeHostConfig(dir, '/remote-a')
+    const fakeDist = path.join(dir, 'dist')
+    fs.mkdirSync(fakeDist, { recursive: true })
+    fs.writeFileSync(path.join(fakeDist, 'fulgurjs-manifest.json'), JSON.stringify(MANIFEST_BODY()))
+    return p
+  }
+
+  it('应用目录存在本地 dist 形态文件 + --site 不可达 → unverified（不是 dist 通过），严格模式非零', async () => {
     const dir = tmpDir()
-    const { configPath } = writeRepoFixture(dir, { withLocalDist: true })
-    const r = await checkPages(configPath, 'host-vue', { site: DEAD_SITE, requireVerified: true })
+    const p = hostWithLocalDistLookalike(dir)
+    const r = await checkPages(p, { site: DEAD_SITE, requireVerified: true })
     expect(r.failed).toBe(false)
-    expect(r.manifestSources ?? []).toHaveLength(0) // 未命中任何来源
-    expect(r.issues.some((i) => i.level === 'unverified' && i.message.includes('不回退本地 dist'))).toBe(true)
+    expect(r.manifestSources ?? []).toHaveLength(0) // 未命中任何来源——不读本地 dist 形态文件
+    expect(r.issues.some((i) => i.level === 'unverified' && i.message.includes('--site'))).toBe(true)
     expect(r.unverifiedFailed).toBe(true)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('--site 可达 → 使用站点来源而非本地 dist', async () => {
+  it('--site 可达 → 使用站点来源', async () => {
     const dir = tmpDir()
-    const { configPath } = writeRepoFixture(dir, { withLocalDist: true })
+    const p = hostWithLocalDistLookalike(dir)
     const { base, close } = await startManifestServer()
     try {
-      const r = await checkPages(configPath, 'host-vue', { site: base })
+      const r = await checkPages(p, { site: base })
       expect(r.failed).toBe(false)
       expect(r.manifestSources![0]!.from).toBe(`${base}/remote-a/fulgurjs-manifest.json`)
     } finally {
@@ -228,19 +215,20 @@ describe('check-pages 旧聚合形态：--site 指定后不得回退本地 dist�
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('未指定任何线上来源 → 本地 dist 兜底仍可用（4.1.0 兼容）', async () => {
+  it('未指定任何线上来源 → unverified 引导补来源（不再有本地 dist 兜底）', async () => {
     const dir = tmpDir()
-    const { configPath } = writeRepoFixture(dir, { withLocalDist: true })
-    const r = await checkPages(configPath, 'host-vue')
+    const p = hostWithLocalDistLookalike(dir)
+    const r = await checkPages(p)
     expect(r.failed).toBe(false)
-    expect(r.manifestSources![0]!.from).toContain(path.join('fixtures', 'remote-a', 'dist'))
+    expect(r.manifestSources ?? []).toHaveLength(0)
+    expect(r.issues.some((i) => i.level === 'unverified' && i.message.includes('未提供 manifest 来源'))).toBe(true)
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('--manifest 显式不可达 → unverified，不静默换来源', async () => {
     const dir = tmpDir()
-    const { configPath } = writeRepoFixture(dir, { withLocalDist: true })
-    const r = await checkPages(configPath, 'host-vue', { manifests: { 'remote-a': path.join(dir, 'missing.json') }, requireVerified: true })
+    const p = hostWithLocalDistLookalike(dir)
+    const r = await checkPages(p, { manifests: { 'remote-a': path.join(dir, 'missing.json') }, requireVerified: true })
     expect(r.manifestSources ?? []).toHaveLength(0)
     expect(r.unverifiedFailed).toBe(true)
     fs.rmSync(dir, { recursive: true, force: true })

@@ -1,5 +1,28 @@
 # Changelog
 
+## 5.0.0（2026-09-26）
+
+有意破坏公开 API 的清理版（插件尚无外部用户，公开使用面只描述真实可用能力）。旧 API 传入时给出「当前值 → 原因 → 迁移写法」的中文错误，不静默接受。
+
+### 删除：4.1.0 聚合配置整条兼容链
+
+- **`@fulgurjs/federation/config` 子路径**：`defineRepoConfig` / `loadRepoConfig` / `federationOptionsForApp` 与 `RepoConfig`/`UserConfig`/`AppConfig`/`HostConfig`/`RemoteConfig`/`DeployConfig`/`RemoteAddress` 聚合类型不再发布（exports/typesVersions/构建入口同步移除）。替代：每个应用根目录一份 `fulgurjs.config.ts`，默认导出直接 `satisfies FederationOptions`。配置内导入旧子路径或旧形状（`root + apps[]`）时，CLI 输出「拆分到各项目根」的中文迁移指引。
+- **CLI `--app` 选择器**：从 help 移除；传入报中文错误（说明其为聚合链选择器并给出单项目替代）。`explain`/`check-pages` 只接受单项目配置。
+- **check-pages 旧聚合形态的本地 dist 回退**：删除。显式 `--manifest`/`--site` 来源失败如实报「无法验证」，无本地 dist 兜底。
+- **`init --config` 聚合输出分支**（各应用 Vite 粘贴块、NGINX 样板）删除；单项目输出保留。`PageEntry` 类型迁至单项目契约模块（`app-config.ts`）继续服务 `hostPages`，页面表功能不受影响。
+
+### 删除：无实际效果的配置选项（传入报 `CFG-011`）
+
+- `remoteType`（只接受唯一值 `module`）、`library`（从未参与输出）、`automaticAsyncBoundary`（恒为 true）、`dataPrefetch`（恒为 true，预载用 `preloadRemote()`）、`usedExports` / `ignoreUnusedSharedExports`（no-op，打包器原生 tree-shaking 已覆盖）。`CFG-011` 重定义为「已删除选项的迁移报错」；类型层不再允许这些字段，JS/`as any` 传入由运行时校验兜底。
+
+### 删除：无消费者的导出键
+
+- `exports['./internal/vue.js']`：生成门面实际引用 `./internal/vue-adapter.js`（保留），`remoteComponent`/`createHostPages` 由 `/runtime` 提供（`src/vue.ts` 保留，供 runtime-entry 内联消费）；`dist/vue.*` 不再随包发布。
+
+### 不变（本轮明确保留）
+
+`/runtime` 全部导出（含 `getRuntime`/`shareScopeMap`/`getContainer`/`parseSpec`/`unwrapDefault` 低层 API）、`./internal/context.js`、`./internal/pages.js`、`./internal/vue-adapter.js`、`exposes`/`loadRemote`/`preloadRemote`、`setup`/`onSession` 生命周期、`createHostPages`/`remoteComponent`、虚拟模块机制、dev/prod 双引擎与懒加载。
+
 ## 4.3.1（2026-09-26）
 
 - 将插件自身的配置、共享依赖和远程加载诊断改为中文，保留错误码与原始底层异常；修复 `MFU-010` 将多个兼容候选版本误判为冲突的问题，真正不兼容时显示原因与修法，并对同一版本组合去重。
