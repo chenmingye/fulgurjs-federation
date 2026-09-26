@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.0.1（2026-09-26）
+
+- **修复 dev manifest 的 version 恒为 0.0.0**：`genDevManifest` 此前查 `pkgDependencies['fulgurjs']`（0.5.0 品牌更名前的旧包名键，更名后真实包名 `@fulgurjs/federation` 使该键永不命中），导致宿主 DEV-006 对每个远程都误报「版本不一致（远程为 0.0.0）」。现直接写远程自身插件版本（`pluginVersion`），DEV-006 恢复真实比对语义；附回归测试。prod manifest 不受影响。
+
 ## 5.0.0（2026-09-26）
 
 有意破坏公开 API 的清理版（插件尚无外部用户，公开使用面只描述真实可用能力）。旧 API 传入时给出「当前值 → 原因 → 迁移写法」的中文错误，不静默接受。

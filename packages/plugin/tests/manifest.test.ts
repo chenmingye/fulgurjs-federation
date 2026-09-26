@@ -41,6 +41,12 @@ describe('WP4: 生成器 round-trip', () => {
     expect(isDevManifest(parsed.manifest!)).toBe(true)
   })
 
+  it('genDevManifest.version = 远程自身插件版本（DEV-006 回归：0.5.0 前旧包名键恒 0.0.0 误报）', () => {
+    const m = genDevManifest(hostOptions(), '/')
+    expect(m.version).toBe(hostOptions().pluginVersion)
+    expect(m.version).not.toBe('0.0.0')
+  })
+
   it('genProdManifest 产物通过契约校验，含 schemaVersion=1', () => {
     const m = genProdManifest(hostOptions(), { './Boot': { file: 'assets/Boot-abc.js', css: ['assets/Boot-abc.css'] } }, 'fulgurjs-remoteEntry.js')
     expect(m.schemaVersion).toBe(MANIFEST_SCHEMA_VERSION)

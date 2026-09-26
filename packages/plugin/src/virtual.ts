@@ -487,7 +487,8 @@ export function genDevManifest(options: NormalizedOptions, base: string): DevFed
     schemaVersion: MANIFEST_SCHEMA_VERSION,
     id: options.name,
     name: options.name,
-    version: options.pkgDependencies?.['fulgurjs'] ?? '0.0.0',
+    // DEV-006 比对本插件版本（0.5.0 更名遗留：旧键 pkgDependencies['fulgurjs'] 永不命中，恒 0.0.0 误报版本不一致）
+    version: options.pluginVersion,
     devServer: true,
     base: b,
     entry: `${b}@fulgurjs-entry.js`,
