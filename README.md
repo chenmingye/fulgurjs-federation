@@ -1023,7 +1023,7 @@ const Panel = await loadRemote('shop/Panel', {
 pnpm --dir packages/plugin install && pnpm --dir packages/plugin build
 for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b e2e; do pnpm --dir "$app" install; done
 
-pnpm test:unit   # 单测（369）
+pnpm test:unit   # 单测（当前 385）
 pnpm test:dev    # dev e2e（10）
 pnpm test:prod   # prod e2e（8，需 NGINX，见 e2e/scripts/prod-setup.sh）
 pnpm test        # unit + dev + prod 全跑

@@ -4,4 +4,4 @@
  * 内联整份 JSON 会挤占预算。
  * 漂移由 tests/runtime.test.ts 的「version 同源」用例拦截。
  */
-export const RUNTIME_VERSION = '4.3.0'
+export const RUNTIME_VERSION = '4.3.1'
