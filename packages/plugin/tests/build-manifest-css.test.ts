@@ -7,7 +7,9 @@ import { federation } from '../src/index'
 
 describe('build manifest CSS for exposed modules', () => {
   it('publishes CSS from a shared static dependency in the expose manifest entry', { timeout: 60_000 }, async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-manifest-css-'))
+    // macOS 的 os.tmpdir() 返回 /var/...（符号链接），vite 会把 root realpath 成 /private/var/...，
+    // 两者不一致会让 vite:build-html 生成跨符号链接的相对 fileName，被 rollup 拒绝——这里先归一到真实路径
+    const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'fulgurjs-manifest-css-'))
     const outDir = path.join(root, 'dist')
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let cssRelocatedToSharedChunk = false
