@@ -69,7 +69,7 @@ function requireRuntime(): { loadRemote: (...args: any[]) => any } {
   if (!rt || typeof rt.loadRemote !== 'function') {
     throw new FgError(
       ContextErrorCodes.CONTEXT_NO_RUNTIME,
-      'fulgurjs runtime singleton not found on this page (globalThis.__FULGURJS_RUNTIME__ is undefined).\n' +
+      '现象：当前页面找不到 fulgurjs 运行时单例（globalThis.__FULGURJS_RUNTIME__ 未定义）。\n' +
         '  根因: 当前页面没有经宿主的联邦运行时加载（独立直开远程页，或宿主桥晚于本调用执行）。\n' +
         '  修法: ① 从宿主应用的联邦路由打开本页面（宿主桥会先加载运行时并提供 context）；\n' +
         '        ② 若你是宿主桥作者：把 provideAppContext 放在桥初始化尾部（时序契约 bridge → 远程 setup → 页面模块）。',
@@ -133,10 +133,10 @@ export function requireAppContext(...keys: string[]): AppContext {
   const got = Object.keys(ctx)
   const err = new FgError(
     ContextErrorCodes.CONTEXT_MISSING_KEY,
-    `AppContext missing required key(s): ${missing.map((k) => `"${k}"`).join(', ')}\n` +
-      `  got: ${got.length ? got.map((k) => `"${k}"`).join(', ') : '(empty — 宿主桥从未调用 provideAppContext?)'}\n` +
-      `  expected: 宿主桥必须在任何远程页面加载前提供 ${missing.map((k) => `"${k}"`).join(' / ')}\n` +
-      `  example: host/src/fulgurjs/host/bridge.ts → provideAppContext({ ${keys.join(', ')}, ... })\n` +
+    `现象：AppContext 缺少必需字段 ${missing.map((k) => `"${k}"`).join('、')}。\n` +
+      `当前字段：${got.length ? got.map((k) => `"${k}"`).join('、') : '空（宿主桥可能尚未调用 provideAppContext）'}。\n` +
+      `预期：宿主桥应在远程页面加载前提供 ${missing.map((k) => `"${k}"`).join('、')}。\n` +
+      `示例：host/src/fulgurjs/host/bridge.ts → provideAppContext({ ${keys.join(', ')}, ... })\n` +
       `  修法: 检查宿主应用的 fulgurjs 桥是否在 loadRemote 页面前完成 context provide（时序契约 bridge → 远程 setup → 页面模块）`,
     { missing, got },
   )

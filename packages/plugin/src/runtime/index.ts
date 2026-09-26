@@ -163,6 +163,8 @@ function createRuntime() {
   const shareScopeMap: ShareScopeMap = Object.create(null)
   const remotes = new Map<string, RemoteInternal>()
   const plugins: RuntimePlugin[] = []
+  /** 同一版本组合只告警一次，避免多个页面重复导入共享依赖时刷屏。 */
+  const reportedSingletonSkews = new Set<string>()
   const loadedModules = new Map<string, Promise<any>>()
   const remoteManifests = new Map<string, Promise<any | undefined>>()
   const stylesheetLoads = new WeakMap<HTMLLinkElement, Promise<void>>()
@@ -174,7 +176,7 @@ function createRuntime() {
       try {
         p.init?.(hooks)
       } catch (err) {
-        console.warn('[fulgurjs] runtimePlugin init failed:', p.name, err)
+        console.warn('[fulgurjs] 运行时扩展初始化失败，该扩展将不可用：', p.name, err)
       }
     }
   }
@@ -202,8 +204,9 @@ function createRuntime() {
       if (err instanceof FgError) return err
       return new FgError(
         ErrorCodes.SETUP_RUN_FAILED,
-        `${phase} of "${remoteName}" threw: ${String((err as Error)?.message ?? err)}\n` +
-          `  修法: 修复该 ${phase} 的初始化逻辑后重新加载（失败的初始化缓存已清除，可直接重试）`,
+        `现象：远程应用 "${remoteName}" 的 ${phase} 初始化失败。\n` +
+          `原因：${String((err as Error)?.message ?? err)}\n` +
+          `修法：检查并修复该 ${phase} 函数后重新加载；失败缓存已清除，可以直接重试。`,
         { remote: remoteName, phase },
       )
     }
@@ -243,17 +246,18 @@ function createRuntime() {
       if (typeof setupFn !== 'function') {
         throw new FgError(
           ErrorCodes.SETUP_INVALID_EXPORT,
-          `setup module "${setupKey}" of "${remote.name}": default export is ${mod == null ? String(mod) : typeof setupFn}, expected a function\n` +
-            `  expected: export default async function setup(context: RemoteSetupContext) { ... }\n` +
-            `  修法: 在 federation({ setup }) 指向的文件补默认导出函数（具名 onSession 可选；其他导出不作为生命周期入口）`,
+          `现象：远程应用 "${remote.name}" 的 setup 模块 "${setupKey}" 无法初始化。\n` +
+            `原因：默认导出类型为 ${mod == null ? String(mod) : typeof setupFn}，应为函数。\n` +
+            `修法：在 setup 指向的文件中默认导出函数，例如 export default async function setup(context) { ... }；具名 onSession 可选。`,
           { remote: remote.name, module: setupKey },
         )
       }
       if (mod.onSession !== undefined && typeof mod.onSession !== 'function') {
         throw new FgError(
           ErrorCodes.SETUP_INVALID_EXPORT,
-          `setup module "${setupKey}" of "${remote.name}": export "onSession" is ${typeof mod.onSession}, expected a function\n` +
-            `  修法: 将 onSession 修正为函数导出，或删除该具名导出（其他导出名不作为生命周期入口）`,
+          `现象：远程应用 "${remote.name}" 的 setup 模块 "${setupKey}" 无法初始化。\n` +
+            `原因：onSession 导出类型为 ${typeof mod.onSession}，应为函数。\n` +
+            `修法：将 onSession 改为具名导出的函数，或删除该导出。`,
           { remote: remote.name, module: setupKey },
         )
       }
@@ -280,9 +284,9 @@ function createRuntime() {
     if (typeof sessionKey !== 'string' || sessionKey === '') {
       throw new FgError(
         ErrorCodes.SETUP_SESSION_KEY_MISSING,
-        `remote "${remote.name}" declares onSession but AppContext.sessionKey is ${sessionKey === undefined ? 'missing' : JSON.stringify(sessionKey)}\n` +
-          `  expected: 宿主登录后 provideAppContext({ ..., sessionKey: '<非敏感登录代次 ID>' })\n` +
-          `  修法: 宿主登录流程每次成功登录/重登生成新代次 ID（禁止用 token 充当），并在 loadRemote 前提供`,
+        `现象：远程应用 "${remote.name}" 声明了 onSession，但宿主尚未提供有效的 AppContext.sessionKey。\n` +
+          `原因：当前值为 ${sessionKey === undefined ? '缺失' : JSON.stringify(sessionKey)}。\n` +
+          `修法：宿主每次登录或重登时生成新的非敏感登录代次 ID，并在加载远程页面前调用 provideAppContext({ ..., sessionKey: '登录代次 ID' })；不要使用 token 原文。`,
         { remote: remote.name },
       )
     }
@@ -386,7 +390,7 @@ function createRuntime() {
       const ok = typeof v === 'number' && (int10 ? Number.isInteger(v) && v >= 0 && v <= 10 : Number.isFinite(v) && v > 0)
       if (!ok) {
         throw new Error(
-          `[fulgurjs] registerRemote("${r.name}"): ${name} must be a ${int10 ? 'integer 0..10' : 'finite positive number'}, got ${String(v)}`,
+          `[fulgurjs] 远程应用 "${r.name}" 的 ${name} 配置无效：当前为 ${String(v)}，应为${int10 ? ' 0 到 10 的整数' : '大于 0 的有限数字'}。请修正 registerRemote 配置。`,
         )
       }
     }
@@ -451,9 +455,13 @@ function createRuntime() {
       // 落到下方通用路径走 fallback/报错。
       const loadedVersions = versions.filter((v) => byName[v].loaded)
       pick = [...(loadedVersions.length ? loadedVersions : versions)].sort(compareVersions).pop()
-      if (versions.length > 1 || !satisfying.includes(pick!)) {
+      // 多个候选版本共存并不代表冲突；只在最终复用的单例不满足消费方要求时提示。
+      if (!satisfying.includes(pick!)) {
         const entry0 = byName[pick!]
-        const msg = `singleton skew "${shareKey}": req "${req ?? 'any'}" use ${pick} from ${entry0.from}`
+        const msg = `现象：共享单例 "${shareKey}" 的实际版本不满足当前应用要求。\n` +
+          `原因：应用要求 ${req ?? '任意版本'}，作用域中有 ${versions.join('、')}；为保证全页只使用一个实例，最终复用 ${entry0.from} 提供的 ${pick}。\n` +
+          `影响：可能出现状态不一致或运行错误，具体取决于两端 API 是否兼容。\n` +
+          `修法：统一宿主与远程的依赖版本，或核对后调整 shared.requiredVersion；若必须拒绝不兼容版本，请启用 strictVersion。`
         if (opts.strictVersion) {
           const err = new FgError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
             shareKey,
@@ -463,7 +471,11 @@ function createRuntime() {
           throw err
         }
         // MFU-010：singleton 版本漂移告警（消费方要求与作用域实际提供不一致时的可诊断性）
-        console.warn(`[fulgurjs:MFU-010] ${msg}`)
+        const warningKey = `${scopeName}|${shareKey}|${req ?? '*'}|${pick}|${versions.join(',')}`
+        if (!reportedSingletonSkews.has(warningKey)) {
+          reportedSingletonSkews.add(warningKey)
+          console.warn(`[fulgurjs:MFU-010] ${msg}`)
+        }
       }
     } else {
       pick = [...satisfying].sort(compareVersions).pop()
@@ -471,7 +483,7 @@ function createRuntime() {
         if (opts.strictVersion) {
           const err = new FgError(
             ErrorCodes.SHARE_STRICT_VERSION,
-            `no satisfying version for "${shareKey}" (required "${req}") in share scope "${scopeName}"`,
+            `现象：共享作用域 "${scopeName}" 中找不到符合要求的 "${shareKey}"。\n原因：要求版本 ${req}，当前可用版本为 ${versions.join('、') || '无'}。\n修法：统一宿主与远程的依赖版本，或修正 shared.requiredVersion。`,
           )
           emitError({ remote: shareKey, error: err })
           throw err
@@ -479,7 +491,7 @@ function createRuntime() {
         if (opts.fallback) return opts.fallback()
         const err = new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
-          `shared "${shareKey}" (${req ?? 'any'}) unavailable in scope "${scopeName}" (no local fallback)`,
+          `现象：无法加载共享依赖 "${shareKey}"。\n原因：作用域 "${scopeName}" 中没有符合 ${req ?? '任意版本'} 要求的版本，且未配置本地副本。\n修法：在宿主或远程注册该依赖，或为 shared 配置可用的本地副本。`,
           { shareKey, requiredVersion: req },
         )
         emitError({ remote: shareKey, error: err })
@@ -514,7 +526,7 @@ function createRuntime() {
 
   function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(`timeout after ${ms}ms: ${label}`)), ms)
+      const t = setTimeout(() => reject(new Error(`等待超过 ${ms} 毫秒：${label}`)), ms)
       p.then(
         (v) => {
           clearTimeout(t)
@@ -533,14 +545,14 @@ function createRuntime() {
   function validateContainerInterface(container: any, remote: RemoteInternal): void {
     if (!container || typeof container.get !== 'function') {
       throw new Error(
-        `remoteEntry of "${remote.name}" does not export a container interface (get/init)`,
+        `远程应用 "${remote.name}" 的 remoteEntry 未导出容器接口。请确认入口导出了 get()，并检查该地址是否返回正确的联邦入口 JS。`,
       )
     }
     // webpack promise-based remote 不承诺容器名：名称不匹配仅告警；URL 型 remoteEntry 严格校验
     if (container.name && remote.name && container.name !== remote.name) {
-      const msg = `remoteEntry self-reported name "${container.name}" mismatches configured name "${remote.name}"`
+      const msg = `远程入口自报名称 "${container.name}" 与宿主配置名称 "${remote.name}" 不一致。请统一两侧 federation({ name }) 与 remotes 的名称。`
       if (remote.promise) {
-        console.warn(`[fulgurjs] ${msg} (promise-based remote, continuing)`)
+        console.warn(`[fulgurjs] ${msg} 当前是动态 Promise 远程，继续加载。`)
       } else {
         throw Object.assign(new Error(msg), { code: ErrorCodes.REMOTE_NAME_MISMATCH })
       }
@@ -557,7 +569,7 @@ function createRuntime() {
       remote.entryInflight.set(url, inflight)
       inflight.catch(() => remote.entryInflight.delete(url))
     }
-    return withTimeout(inflight, remote.timeout ?? DEFAULT_TIMEOUT, `load remoteEntry ${url}`)
+    return withTimeout(inflight, remote.timeout ?? DEFAULT_TIMEOUT, `加载远程入口 ${sanitizeUrl(url)}`)
   }
 
   async function acquireContainer(remote: RemoteInternal, overrides?: { retries?: number }): Promise<any> {
@@ -568,7 +580,7 @@ function createRuntime() {
       if (prevScope && prevScope !== scopeKey) {
         throw new FgError(
           ErrorCodes.CONTAINER_REINIT_CONFLICT,
-          `container "${remote.name}" already initialized with share scope "${prevScope}", cannot re-init with "${scopeKey}"`,
+          `远程容器 "${remote.name}" 已使用共享作用域 "${prevScope}" 初始化，不能再以 "${scopeKey}" 初始化。请统一 shareScope 配置。`,
         )
       }
       return remote.container
@@ -580,7 +592,7 @@ function createRuntime() {
     if (b.openUntil > Date.now()) {
       const err = new FgError(
         ErrorCodes.REMOTE_LOAD_FAILED,
-        `circuit breaker open for remote "${remote.name}" until ${new Date(b.openUntil).toISOString()}`,
+        `远程应用 "${remote.name}" 连续加载失败，熔断器已开启；将在 ${new Date(b.openUntil).toISOString()} 后允许重试。请先检查远程入口服务和网络。`,
         { remote: remote.name },
       )
       emitError({ remote: remote.name, error: err })
@@ -598,7 +610,7 @@ function createRuntime() {
           const resolved = await withTimeout(
             remote.promise!(),
             remote.timeout ?? DEFAULT_TIMEOUT,
-            `resolve promise remote "${remote.name}"`,
+            `解析动态远程应用 "${remote.name}"`,
           )
           const container = typeof resolved === 'string' ? await importEntry(resolved, remote) : resolved
           validateContainerInterface(container, remote)
@@ -645,17 +657,17 @@ function createRuntime() {
         const shown = sanitizeUrl(remote.entry)
         const hints: string[] = []
         if (/^https?:\/\//.test(remote.entry) && typeof location !== 'undefined') {
-          hints.push(`1. is the remote dev server running?  open ${shown} in a browser — it must return JS, not HTML`)
-          hints.push(`2. is the URL correct in federation({ remotes })?  dev/prod entries can differ`)
-          hints.push(`3. CORS: the remote dev server must allow cross-origin requests (check its server.cors)`)
+          hints.push(`1. 在浏览器打开 ${shown}，确认远程开发服务已启动，并返回 JS 而非 HTML。`)
+          hints.push(`2. 核对 federation({ remotes }) 中的地址；开发和生产地址可以不同。`)
+          hints.push(`3. 若跨域，检查远程开发服务的 server.cors 配置。`)
         } else {
-          hints.push(`1. is the remote deployed?  open ${shown} in a browser — it must return JS`)
-          hints.push(`2. NGINX/CDN routing: the entry path must serve the remoteEntry JS (check try_files)`)
+          hints.push(`1. 在浏览器打开 ${shown}，确认远程应用已部署，且入口返回 JS。`)
+          hints.push(`2. 检查 Nginx/CDN 的入口路径映射；该地址不能回退到 index.html。`)
         }
         throw new FgError(
           ErrorCodes.REMOTE_LOAD_FAILED,
-          `failed to load remote "${remote.name}" from ${shown}: ${String((lastErr as Error)?.message ?? lastErr)}\n` +
-            hints.join('\n'),
+          `现象：无法从 ${shown} 加载远程应用 "${remote.name}"。\n` +
+            `原因：${String((lastErr as Error)?.message ?? lastErr)}\n修法：\n${hints.join('\n')}`,
           { remote: remote.name },
         )
       }
@@ -668,7 +680,7 @@ function createRuntime() {
       if (prevScope && prevScope !== scopeKey) {
         throw new FgError(
           ErrorCodes.CONTAINER_REINIT_CONFLICT,
-          `container "${remote.name}" already initialized with share scope "${prevScope}", cannot re-init with "${scopeKey}"`,
+          `远程容器 "${remote.name}" 已使用共享作用域 "${prevScope}" 初始化，不能再以 "${scopeKey}" 初始化。请统一 shareScope 配置。`,
         )
       }
       if (typeof container.init === 'function') {
@@ -704,7 +716,7 @@ function createRuntime() {
         emitError({ remote: remote.name, error: err as FgError })
         throw err
       }
-      const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, String((err as Error)?.message ?? err), {
+      const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, `远程应用 "${remote.name}" 加载失败。底层原因：${String((err as Error)?.message ?? err)}。请检查远程入口、网络及共享依赖。`, {
         remote: remote.name,
       })
       emitError({ remote: remote.name, error: wrapped })
@@ -732,8 +744,8 @@ function createRuntime() {
     if (module && lifecycleSyncRemote === name) {
       throw new FgError(
         ErrorCodes.SETUP_RECURSION,
-        `loadRemote("${spec}") re-entered from setup/onSession of "${name}" — the initialization promise would await itself (deadlock)\n` +
-          `  修法: setup/onSession 内不 loadRemote 同一远程的模块；需要的业务模块改为在页面组件内加载，或经 context 通道解耦`,
+        `现象：加载 "${spec}" 时，远程应用 "${name}" 的 setup/onSession 又同步加载了自身模块，形成循环等待。\n` +
+          `原因：初始化尚未完成，不能等待自身的初始化结果。\n修法：不要在 setup/onSession 中加载同一远程的模块；请在页面组件中加载，或通过 context 解耦。`,
         { remote: name },
       )
     }
@@ -741,13 +753,13 @@ function createRuntime() {
     try {
       hooks.beforeLoadRemote?.({ remote: name, module })
     } catch (hookErr) {
-      console.warn('[fulgurjs] beforeLoadRemote hook error (ignored):', hookErr)
+      console.warn('[fulgurjs] beforeLoadRemote 观测钩子执行失败；模块加载将继续。请检查该钩子：', hookErr)
     }
     const remote = remotes.get(name)
     if (!remote) {
       throw new FgError(
         ErrorCodes.REMOTE_UNKNOWN,
-        `unknown remote "${name}". Register it via federation({ remotes }) or registerRemote().`,
+        `未知远程应用 "${name}"。请在 federation({ remotes }) 中配置，或在加载前调用 registerRemote()。`,
         { remote: name },
       )
     }
@@ -757,7 +769,7 @@ function createRuntime() {
       ;[container] = await Promise.all([acquireContainer(remote, { retries: opts?.retries }), stylesReady])
     } catch (err) {
       if (opts?.fallbackModule) {
-        console.error(`[fulgurjs] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
+        console.error(`[fulgurjs] 远程模块 "${spec}" 加载失败，正在使用显式配置的 fallbackModule；原始错误：`, err)
         emitError({ remote: name, error: err as FgError })
         return await opts.fallbackModule()
       }
@@ -776,7 +788,7 @@ function createRuntime() {
           if (err instanceof FgError || (err as any)?.code) throw err
           throw new FgError(
             ErrorCodes.REMOTE_LOAD_FAILED,
-            `failed to load module "${module}" from remote "${name}": ${String((err as Error)?.message ?? err)}`,
+            `无法从远程应用 "${name}" 加载模块 "${module}"。底层原因：${String((err as Error)?.message ?? err)}。请核对 exposes 键和远程构建产物。`,
             { remote: name, module },
           )
         }),
@@ -787,7 +799,7 @@ function createRuntime() {
       ns = await loadedModules.get(cacheKey)
     } catch (err) {
       if (opts?.fallbackModule) {
-        console.error(`[fulgurjs] loadRemote("${spec}") failed; returning fallbackModule (显式降级，错误已透出)`, err)
+        console.error(`[fulgurjs] 远程模块 "${spec}" 加载失败，正在使用显式配置的 fallbackModule；原始错误：`, err)
         emitError({ remote: name, error: err as FgError })
         return await opts.fallbackModule()
       }
@@ -796,18 +808,18 @@ function createRuntime() {
     try {
       hooks.afterLoadRemote?.({ remote: name, module, module_ns: ns })
     } catch (hookErr) {
-      console.warn('[fulgurjs] afterLoadRemote hook error (ignored):', hookErr)
+      console.warn('[fulgurjs] afterLoadRemote 观测钩子执行失败；已加载模块仍可使用。请检查该钩子：', hookErr)
     }
     // MFU-009：加载到的模块没有任何导出——exposes 指向了不导出内容的文件（误导出/空文件）。
     // 仅告警不抛错：命名空间为空对调用方必然不可用，但保留返回值避免破坏既有容错路径
     if (ns && typeof ns === 'object' && Object.keys(ns).length === 0) {
       const err = new FgError(
         ErrorCodes.EMPTY_EXPORTS,
-        `no exports: ${module} @ ${name}`,
+        `远程应用 "${name}" 的模块 "${module}" 没有任何导出。请检查 exposes 指向的文件及其 export 声明。`,
         { remote: name, module },
       )
       emitError({ remote: name, error: err })
-      console.error(`[fulgurjs:MFU-009] ${err.message}`)
+      console.error(err.message)
     }
     return ns
   }
@@ -815,7 +827,7 @@ function createRuntime() {
   function getContainer(name: string): Promise<any> {
     const remote = remotes.get(name)
     if (!remote) {
-      throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
+      throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `未知远程应用 "${name}"。请先注册该远程应用。`, { remote: name })
     }
     return acquireContainer(remote)
   }
@@ -827,7 +839,7 @@ function createRuntime() {
     const { remote: name, module } = parseSpec(spec)
     const remote = remotes.get(name)
     if (!remote) {
-      throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `unknown remote "${name}"`, { remote: name })
+      throw new FgError(ErrorCodes.REMOTE_UNKNOWN, `未知远程应用 "${name}"。请先注册该远程应用。`, { remote: name })
     }
     const mode = opts.mode ?? 'preload'
     const waitForStylesheet = (link: HTMLLinkElement, href: string): Promise<void> => {
@@ -843,7 +855,7 @@ function createRuntime() {
         const failed = () => {
           emitError({
             remote: name,
-            error: new FgError(ErrorCodes.PRELOAD_FAILED, `failed to load remote stylesheet ${href}`, {
+            error: new FgError(ErrorCodes.PRELOAD_FAILED, `远程应用 "${name}" 的样式资源加载失败：${href}。请检查文件是否存在以及跨域和缓存配置。`, {
               remote: name,
             }),
           })
@@ -914,7 +926,7 @@ function createRuntime() {
           if (typeof sv === 'number' && (!Number.isInteger(sv) || sv > 1)) {
             emitError({
               remote: name,
-              error: new FgError(ErrorCodes.PRELOAD_FAILED, `unsupported manifest schemaVersion ${String(sv)} (expected 1)`, {
+              error: new FgError(ErrorCodes.PRELOAD_FAILED, `远程应用 "${name}" 的 manifest 协议版本为 ${String(sv)}，当前仅支持版本 1。请统一宿主和远程的插件版本。`, {
                 remote: name,
               }),
             })
@@ -955,7 +967,7 @@ function createRuntime() {
       // 预加载失败不阻断业务，仅上报
       emitError({
         remote: name,
-        error: new FgError(ErrorCodes.PRELOAD_FAILED, String((err as Error)?.message ?? err), {
+        error: new FgError(ErrorCodes.PRELOAD_FAILED, `远程应用 "${name}" 预加载失败。底层原因：${String((err as Error)?.message ?? err)}。请检查 manifest 和资源地址。`, {
           remote: name,
         }),
       })

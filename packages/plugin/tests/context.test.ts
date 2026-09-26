@@ -69,10 +69,10 @@ describe('AppContext：require 显式校验', () => {
       expect(err.code).toBe(ContextErrorCodes.CONTEXT_MISSING_KEY)
       expect(err.message).toContain('CC-001')
       expect(err.message).toContain('"store"')
-      expect(err.message).toContain('got:')
-      expect(err.message).toContain('expected:')
+      expect(err.message).toContain('当前字段：')
+      expect(err.message).toContain('预期：')
       expect(err.message).toContain('provideAppContext')
-      expect(err.message).toContain('bridge')
+      expect(err.message).toContain('宿主桥')
       expect(err.details).toMatchObject({ missing: ['store', 'user', 'hostApp'] })
     }
   })

@@ -51,8 +51,8 @@ describe('options: remotes 解析（webpack 语法 + 单地址自动切换）', 
   })
 
   it('@ 位置非法 → 抛错（对齐 webpack Invalid request）', () => {
-    expect(() => norm({ name: 'h', remotes: { a: '@http://x' } })).toThrow('misplaced')
-    expect(() => norm({ name: 'h', remotes: { a: 'http://x@' } })).toThrow('misplaced')
+    expect(() => norm({ name: 'h', remotes: { a: '@http://x' } })).toThrow('@ 位置错误')
+    expect(() => norm({ name: 'h', remotes: { a: 'http://x@' } })).toThrow('@ 位置错误')
   })
 
   it('promise-based remote 标记', () => {
@@ -112,7 +112,7 @@ describe('options: exposes / 其余选项', () => {
   it('exposes 键自动补 ./ 并告警', () => {
     const n = norm({ name: 'h', exposes: { Button: './src/Button.vue' } })
     expect(n.exposes[0].name).toBe('./Button')
-    expect(n.warnings.some((w) => w.includes('normalized to'))).toBe(true)
+    expect(n.warnings.some((w) => w.includes('已规范化为'))).toBe(true)
   })
 
   it('exposes 对象形式保留稳定 chunk 名', () => {
@@ -136,19 +136,19 @@ describe('配置校验（DX：清晰报错）', () => {
       norm({} as any)
       throw new Error('should throw')
     } catch (e: any) {
-      expect(e.message).toContain('`name` is required')
-      expect(e.message).toContain('got:')
-      expect(e.message).toContain('expected:')
-      expect(e.message).toContain('example:')
+      expect(e.message).toContain('缺少必填的 name')
+      expect(e.message).toContain('当前值：')
+      expect(e.message).toContain('预期值：')
+      expect(e.message).toContain('修法示例：')
     }
   })
 
   it('name 非法字符 → 报错并给出示例', () => {
-    expect(() => norm({ name: 'my app!' })).toThrow(/must match/)
+    expect(() => norm({ name: 'my app!' })).toThrow(/name 格式不正确/)
   })
 
   it('remote 地址全空 → 报错给出三种地址形态示例', () => {
-    expect(() => norm({ name: 'h', remotes: { 'remote-a': { } as any } })).toThrow(/no address/)
+    expect(() => norm({ name: 'h', remotes: { 'remote-a': { } as any } })).toThrow(/没有地址/)
     try {
       norm({ name: 'h', remotes: { 'remote-a': { dev: '', prod: '' } as any } })
       throw new Error('should throw')
@@ -159,26 +159,26 @@ describe('配置校验（DX：清晰报错）', () => {
   })
 
   it('remotes 键含 @ 或 / → 报错', () => {
-    expect(() => norm({ name: 'h', remotes: { 'a/b': 'http://x' } })).toThrow(/invalid characters/)
-    expect(() => norm({ name: 'h', remotes: { 'a@b': 'http://x' } })).toThrow(/invalid characters/)
+    expect(() => norm({ name: 'h', remotes: { 'a/b': 'http://x' } })).toThrow(/非法字符/)
+    expect(() => norm({ name: 'h', remotes: { 'a@b': 'http://x' } })).toThrow(/非法字符/)
   })
 
   it('exposes.import 缺失 → 报错', () => {
-    expect(() => norm({ name: 'h', exposes: { './Button': {} as any } })).toThrow(/\.import is missing/)
+    expect(() => norm({ name: 'h', exposes: { './Button': {} as any } })).toThrow(/\.import 缺失/)
   })
 
   it('remotes 类型错误 → 报错', () => {
-    expect(() => norm({ name: 'h', remotes: 123 as any })).toThrow(/`remotes` must be an object/)
+    expect(() => norm({ name: 'h', remotes: 123 as any })).toThrow(/remotes 必须是对象/)
   })
 
   it('exposes 与 remotes 均空 → 警告（不阻断）', () => {
     const n = norm({ name: 'h' })
-    expect(n.warnings.some((w) => w.includes('neither `exposes` nor `remotes`'))).toBe(true)
+    expect(n.warnings.some((w) => w.includes('未配置 exposes 或 remotes'))).toBe(true)
   })
 
   it('纯 host（只有 remotes）→ 警告不阻断', () => {
     const n = norm({ name: 'h', remotes: { 'remote-a': 'http://localhost:5101' } })
-    expect(n.warnings.some((w) => w.includes('pure host'))).toBe(true)
+    expect(n.warnings.some((w) => w.includes('纯宿主'))).toBe(true)
   })
 
   it('合法最小配置不被误杀：host + remote 双形态', () => {
@@ -233,7 +233,7 @@ describe('W5/CFG-008: shared 非法组合', () => {
           'vue-demi': { shareKey: 'vue', singleton: true },
         },
       }),
-    ).toThrow(/declared twice/)
+    ).toThrow(/重复声明/)
   })
 
   it('不同 shareKey 同名包合法（vue 与 vue2 键并存）', () => {

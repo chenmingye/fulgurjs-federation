@@ -265,7 +265,7 @@ export async function loadAppConfig(configPath: string): Promise<AppConfigLoadRe
       build.onResolve({ filter: /^@fulgurjs\/federation(\/|$)/ }, (args) => {
         const resolved = resolveSelfEntry(abs, args.path)
         if (!resolved) {
-          return { errors: [{ text: `cannot resolve "${args.path}" from the config project or the CLI itself` }] }
+          return { errors: [{ text: `无法从配置项目或 CLI 自身解析 "${args.path}"；请先在当前项目安装 @fulgurjs/federation` }] }
         }
         return { path: resolved }
       })

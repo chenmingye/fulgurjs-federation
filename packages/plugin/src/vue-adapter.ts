@@ -125,7 +125,7 @@ export function createHostPages(
       if (route.startsWith(prefix) || `${route}/` === prefix) return name
     }
     throw new Error(
-      `[fulgurjs] page route "${route}" matches none of remotePrefixes { ${Object.entries(remotePrefixes).map(([k, v]) => `'${k}': '${v}'`).join(', ')} }\n` +
+      `[fulgurjs] 页面路由 "${route}" 未匹配任何 remotePrefixes：{ ${Object.entries(remotePrefixes).map(([k, v]) => `'${k}': '${v}'`).join(', ')} }\n` +
         `  根因: 页面表条目的路由不在任何已声明的远程前缀下。\n` +
         `  修法: 在 remotePrefixes 补充该路由前缀 → 远程名的映射，或修正页面表 route。`,
     )
@@ -202,7 +202,7 @@ export function createHostPages(
           const inner = mod?.default ?? mod
           if (!inner) {
             throw new Error(
-              `[fulgurjs] remote module "${spec}" did not export a component (got ${inner === null ? 'null' : typeof inner})。\n` +
+              `[fulgurjs] 远程模块 "${spec}" 没有导出可渲染组件；当前值类型为 ${inner === null ? 'null' : typeof inner}。\n` +
                 `  修法: 核对远程 exposes 键名与页面表 spec 是否一致（MFU-006 语义）`,
             )
           }

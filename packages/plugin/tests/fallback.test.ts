@@ -18,7 +18,7 @@ describe('loadRemote errorLoadRemote 语义（源码契约）', () => {
     expect(runtimeSrc).toContain('overrides?.retries ?? remote.retries ?? DEFAULT_RETRIES')
   })
   it('fallback 生效时错误仍显式发出（不静默）', () => {
-    expect(runtimeSrc.match(/returning fallbackModule \(显式降级，错误已透出\)/g)?.length).toBe(2)
+    expect(runtimeSrc.match(/正在使用显式配置的 fallbackModule/g)?.length).toBe(2)
     expect(runtimeSrc).toContain('emitError({ remote: name, error: err as FgError })')
   })
 })

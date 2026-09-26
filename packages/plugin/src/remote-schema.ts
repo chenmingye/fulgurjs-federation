@@ -54,7 +54,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
         console.warn(
           formatFulgurjsDiagnostic({
             code: 'DEV-002',
-            symptom: `remote "${remote.key}" 的 manifest schemaVersion=${parsed.unsupportedVersion} 不受支持（本机支持 1）`,
+            symptom: `远程应用 "${remote.key}" 的 manifest 协议版本为 ${parsed.unsupportedVersion}，当前仅支持版本 1`,
             cause: '宿主与远程的 @fulgurjs/federation 大版本不一致',
             fix: '对齐宿主与远程的 @fulgurjs/federation 版本后重启 dev server',
             details: { remote: remote.key, url: u.href },
@@ -67,7 +67,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
         console.warn(
           formatFulgurjsDiagnostic({
             code: 'DEV-002',
-            symptom: `remote "${remote.key}" 的 dev manifest 契约校验失败（${u.href}）`,
+            symptom: `远程应用 "${remote.key}" 的开发 manifest 契约校验失败（${u.href}）`,
             cause: parsed.issues.map((x) => `${x.field}: ${x.message}`).join('；'),
             fix: '核对 remote 的 federation 配置 exposes，并确认 @fulgurjs/federation 版本与宿主一致',
             details: { remote: remote.key, url: u.href, issues: parsed.issues.slice(0, 5) },
@@ -84,7 +84,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
         console.warn(
           formatFulgurjsDiagnostic({
             code: 'DEV-002',
-            symptom: `remote "${remote.key}" 的 dev manifest 可达但 exposes 为空（${u.href}）`,
+            symptom: `远程应用 "${remote.key}" 的开发 manifest 可达，但 exposes 为空（${u.href}）`,
             cause: 'remote 侧 federation({ exposes }) 为空，或其插件版本过旧导致 manifest 缺字段',
             fix: '核对 remote 的 federation 配置 exposes，并确认 @fulgurjs/federation 版本与宿主一致',
             details: { remote: remote.key, url: u.href, pluginVersion: manifest.version },
@@ -98,8 +98,8 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
         console.warn(
           formatFulgurjsDiagnostic({
             code: 'DEV-006',
-            symptom: `宿主与 remote "${remote.key}" 的 @fulgurjs/federation 版本不一致`,
-            cause: `宿主 ${options.pluginVersion} vs 远程 ${remoteVersion}（pnpm tarball 断链/漏升级常见）`,
+            symptom: `宿主与远程应用 "${remote.key}" 的 @fulgurjs/federation 版本不一致`,
+            cause: `宿主为 ${options.pluginVersion}，远程为 ${remoteVersion}（常见于 pnpm 安装源断链或漏升级）`,
             fix: '统一升级各应用依赖到同一版本：pnpm add -D @fulgurjs/federation@<version> 并重启 dev server',
             details: { host: options.pluginVersion, remote: remoteVersion },
           }),
@@ -113,7 +113,7 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       console.warn(
         formatFulgurjsDiagnostic({
           code: 'DEV-001',
-          symptom: `remote "${remote.key}" 的 dev manifest 不可达（${u.href}）——该 remote 的路由存在性校验将跳过`,
+          symptom: `远程应用 "${remote.key}" 的开发 manifest 不可达（${u.href}）——将跳过该远程的路由存在性校验`,
           cause: portOpen
             ? '端口有进程监听但 manifest 端点异常：remote dev server 可能以非联邦配置启动，或 base/路径与 remotes[].dev 不一致'
             : '端口无进程监听：remote dev server 未启动，或 remotes[].dev 端口写错（server.origin 错位同款）',

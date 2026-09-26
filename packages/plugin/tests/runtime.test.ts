@@ -60,7 +60,30 @@ describe('runtime: 共享版本协商（webpack 语义对齐）', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const mod = await rt.loadShare('vue', { requiredVersion: '^3.5.0', singleton: true, shareScope: 'default' })
     expect(mod.v).toBe('only')
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('singleton skew'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('共享单例 "vue" 的实际版本不满足当前应用要求'))
+    warnSpy.mockRestore()
+  })
+
+  it('MFU-010：多个兼容版本不误报，strictVersion 也应允许加载', async () => {
+    rt.initSharing('default')
+    rt.registerShare('default', 'pinia', '2.1.7', async () => ({ version: 'old' }), { from: 'host' })
+    rt.registerShare('default', 'pinia', '2.3.1', async () => ({ version: 'new' }), { from: 'remote' })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const first = await rt.loadShare('pinia', { requiredVersion: '^2.1.7', singleton: true })
+    await rt.loadShare('pinia', { requiredVersion: '^2.1.7', singleton: true, strictVersion: true })
+    expect(first.version).toBe('new')
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('MFU-010：真正不兼容时相同告警只输出一次', async () => {
+    rt.initSharing('default')
+    rt.registerShare('default', 'pinia', '2.3.1', async () => ({ version: '2.3.1' }), { from: 'remote' })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await rt.loadShare('pinia', { requiredVersion: '^3.0.0', singleton: true })
+    await rt.loadShare('pinia', { requiredVersion: '^3.0.0', singleton: true })
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0][0]).toContain('实际版本不满足当前应用要求')
     warnSpy.mockRestore()
   })
 
@@ -162,7 +185,7 @@ describe('runtime: 容器加载与容错（B-6/B-14/B-15）', () => {
     })
     const ns = await rt.loadRemote('expected/Widget')
     expect(ns.ns).toBe(1)
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('mismatches'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('名称 "expected" 不一致'))
     warnSpy.mockRestore()
   })
 
@@ -196,7 +219,7 @@ describe('runtime: 容器加载与容错（B-6/B-14/B-15）', () => {
     const pFast = rt.loadRemote('flaky/Widget').catch((e) => e)
     await vi.advanceTimersByTimeAsync(100)
     const errFast = (await pFast) as Error
-    expect(errFast.message).toContain('circuit breaker')
+    expect(errFast.message).toContain('熔断器已开启')
     expect(calls).toBe(before)
     vi.useRealTimers()
   })
@@ -336,7 +359,7 @@ describe('WP6: 运行时输入与加载容错', () => {
       await expect(rt.getContainer('b')).rejects.toThrow()
       await expect(rt.getContainer('b')).rejects.toThrow()
       // 第三次：熔断打开 → 快速失败（不再尝试网络）
-      await expect(rt.getContainer('b')).rejects.toThrow(/circuit breaker open/)
+      await expect(rt.getContainer('b')).rejects.toThrow(/熔断器已开启/)
       // resetMs 后半开
       vi.advanceTimersByTime(1100)
       await expect(rt.getContainer('b')).rejects.toThrow() // 仍失败（地址不存在），但不再是 breaker open
@@ -352,7 +375,7 @@ describe('WP6: 运行时输入与加载容错', () => {
       await expect(rt.getContainer('r')).rejects.toThrow()
       // 重新注册（换地址/参数）——breaker 计数不重置，应立即熔断
       rt.registerRemote({ name: 'r', entry: '/missing-2.js', timeout: 3000, retries: 5, breaker: { threshold: 1, resetMs: 5000 } })
-      await expect(rt.getContainer('r')).rejects.toThrow(/circuit breaker open/)
+      await expect(rt.getContainer('r')).rejects.toThrow(/熔断器已开启/)
     } finally {
       vi.useRealTimers()
     }
@@ -426,7 +449,7 @@ describe('WP6: 运行时输入与加载容错', () => {
     const first = rt.getContainer('inf')
     first.catch(() => {})
     await new Promise((r) => setTimeout(r, 120)) // 超时（60ms）发生
-    await expect(first).rejects.toThrow(/timeout/)
+    await expect(first).rejects.toThrow(/等待超过/)
     // 慢成功：import 终于 resolve——第二次调用共享 promise remote 的语义面（此处验证不重复 init）
     const second = rt.getContainer('inf')
     release.resolve(undefined)
@@ -444,7 +467,7 @@ describe('WP6: 运行时输入与加载容错', () => {
       retries: 0,
       promise: () => new Promise(() => {}),
     })
-    await expect(rt.getContainer('hung')).rejects.toThrow(/timeout after 50ms/)
+    await expect(rt.getContainer('hung')).rejects.toThrow(/等待超过 50 毫秒/)
   })
 
   it('观测 hook 抛错不改写加载结果；resolveShare 抛错向调用方传播', async () => {

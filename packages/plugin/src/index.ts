@@ -79,9 +79,8 @@ function enumerateCjsExports(packageName: string, appRoot: string): string[] {
     names = Object.keys(mod)
   } catch {
     console.warn(
-      `[fulgurjs] cannot enumerate CJS exports of shared package "${packageName}" for the optimize-deps facade; ` +
-        `the facade will export default only. If consumers destructure named exports from it, add this package ` +
-        `to optimizeDeps.exclude to serve it through the transform pipeline instead.`,
+      `[fulgurjs] 无法枚举共享依赖 "${packageName}" 的 CJS 导出，预构建门面只会提供默认导出。` +
+        `如果业务代码需要具名导出，请将该依赖加入 optimizeDeps.exclude，使其经过联邦转换流程。`,
     )
   }
   nsExportCache.set(packageName, names)
@@ -141,7 +140,6 @@ function facadeChunkOf(id: string): string | null {
 }
 
 export function federation(options: FederationOptions): Plugin[] {
-  const warnedUnknownPrefixes = new Set<string>()
   let remoteSchemaPromise: Promise<string> | null = null
   const state: {
     normalized?: NormalizedOptions
@@ -299,7 +297,7 @@ export function federation(options: FederationOptions): Plugin[] {
         if (userTarget) {
           if (/es20(0\d|1\d|20|21)/.test(String(userTarget))) {
             normalized.warnings.push(
-              `build.target="${String(userTarget)}" does not support top-level await; fulgurjs requires es2022 or higher.`,
+              `build.target="${String(userTarget)}" 不支持顶层 await；fulgurjs 需要 es2022 或更高版本。请调整 build.target。`,
             )
           }
         } else {
@@ -327,7 +325,7 @@ export function federation(options: FederationOptions): Plugin[] {
             console.warn(
               formatFulgurjsDiagnostic({
                 code: 'BLD-006',
-                symptom: 'build.rollupOptions.output is an array; fulgurjs cannot inject the shared-facade chunk guard automatically',
+                symptom: 'build.rollupOptions.output 是数组，fulgurjs 无法自动注入共享门面 chunk 防护',
                 cause: 'devSharedSelf 门面化 + manualChunks 强制分组可能形成 chunk 循环依赖（运行时 TypeError：协商函数未初始化）',
                 fix: `在每个 output 项的 manualChunks 最前面加分支：if (id.startsWith('virtual:fulgurjs-')) return 'fulgurjs-shared-facades'`,
               }),
@@ -370,7 +368,7 @@ export function federation(options: FederationOptions): Plugin[] {
     configResolved(resolved) {
       state.base = normalizeBase(resolved.base)
       if ((resolved as unknown as { build?: { ssr?: boolean } }).build?.ssr) {
-        console.warn('[fulgurjs] SSR builds are not supported in this version; plugin hooks disabled.')
+        console.warn('[fulgurjs] 当前版本不支持 SSR 构建；联邦插件钩子已停用。请使用客户端构建。')
       }
       // D.5 DEV-003/004：optimizeDeps 与联邦 shared/UMD 依赖的配置矛盾，启动前显式提示
       const n0 = state.normalized
@@ -435,28 +433,6 @@ export function federation(options: FederationOptions): Plugin[] {
           const hit = state.normalized.shared.find((sh) => sh.aliases.includes(bareClean))
           if (hit) {
             return RESOLVED.sharedNsFacade(hit.shareKey) + query
-          }
-        }
-      }
-
-      // 高频坑提示：import 'xxx/yyy' 但 xxx 不是已配置的 remote/shared——十有八九是 remotes
-      // 键名拼错或漏配。只警告一次/前缀，不打断构建（也可能只是普通 npm 包）。
-      const n = state.normalized
-      if (n && !bare.startsWith('\0') && !bareClean.startsWith('.') && !bareClean.startsWith('/') && !bareClean.startsWith('virtual:')) {
-        const slash = bareClean.indexOf('/')
-        if (slash > 0) {
-          const prefix = bareClean.slice(0, slash)
-          const known =
-            bareClean === '@fulgurjs/federation/runtime' ||
-            n.remotes.some((r) => r.key === prefix) ||
-            n.shared.some((sh) => sh.aliases.includes(prefix) || sh.aliases.some((a) => a.endsWith('/') && prefix.startsWith(a)))
-          if (!known && !warnedUnknownPrefixes.has(prefix)) {
-            warnedUnknownPrefixes.add(prefix)
-            console.warn(
-              `[fulgurjs] "${source}" uses prefix "${prefix}/", which is not in federation({ remotes }) or shared. ` +
-                `If "${prefix}" is a federated remote, add it: remotes: { '${prefix}': '<url>' }. ` +
-                `(Ignore this if it is a plain npm package.)`,
-            )
           }
         }
       }
@@ -649,14 +625,12 @@ export function federation(options: FederationOptions): Plugin[] {
               state.manualChunkGroups.set(r.id.split('?')[0], group)
             } else {
               console.warn(
-                `[fulgurjs] manualChunks: could not resolve "${specifier}" for group "${group}"; ` +
-                  `those modules will fall back to automatic chunking. (Their shared-negotiation facades are still guarded.)`,
+                `[fulgurjs] manualChunks 分组 "${group}" 中的模块 "${specifier}" 无法解析，已回退为自动分包；共享协商门面仍受保护。请检查模块路径。`,
               )
             }
           } catch {
             console.warn(
-              `[fulgurjs] manualChunks: resolving "${specifier}" (group "${group}") failed; ` +
-                `those modules will fall back to automatic chunking.`,
+              `[fulgurjs] manualChunks 分组 "${group}" 中的模块 "${specifier}" 解析失败，已回退为自动分包。请检查模块路径。`,
             )
           }
         }

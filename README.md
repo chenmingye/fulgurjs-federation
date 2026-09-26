@@ -400,7 +400,7 @@ shared: {
 }
 ```
 
-版本裁决语义对齐 webpack：满足 requiredVersion 的最高版本胜出；已加载版本永不替换；singleton 收敛到唯一实例（skew 告警 MFU-010）；strictVersion 不满足抛 MFU-003。
+版本裁决语义对齐 webpack：满足 requiredVersion 的最高版本胜出；已加载版本永不替换；singleton 收敛到唯一实例；strictVersion 冲突抛 MFU-003。`MFU-010` 仅在最终选中的单例版本不满足某个消费方的 `requiredVersion` 时告警。提示会列出候选版本、实际提供方、影响及修法；同一版本组合只提示一次。多个候选版本本身不是错误，例如 `^2.1.7` 包含 `2.3.1`，不能仅凭两个版本号不同就判定不兼容。
 
 ### 2. 运行时 API — `@fulgurjs/federation/runtime`
 
@@ -595,7 +595,7 @@ apps[] })` 形态自动识别并保持 4.1.0 行为；程序化加载 `loadRepoC
 | | `MFU-007` | 预加载失败（不阻断业务） |
 | | `MFU-008` | 未知远程 |
 | | `MFU-009` | 加载到的模块没有任何导出 |
-| | `MFU-010` | singleton 共享版本漂移（使用作用域版本，告警） |
+| | `MFU-010` | 选中的共享单例版本不满足消费方要求；显示版本、提供方、影响和修法，同一组合只告警一次 |
 | | `MFU-011` | setup 生命周期入口导出形态非法（默认导出/具名 onSession 不是函数；报实际类型/预期签名/修法） |
 | | `MFU-012` | setup/onSession 执行抛错（该次 loadRemote 拒绝；仅清失败阶段缓存，可直接重试，已成功的阶段不重复） |
 | | `MFU-013` | 远程声明 onSession 但宿主 AppContext 缺 sessionKey（登录代次；禁止用 token 充当） |
@@ -988,16 +988,16 @@ const Panel = await loadRemote('shop/Panel', {
 所有配置问题在 `vite` 启动瞬间即报，固定三段式，可直接照抄修正：
 
 ```
-[fulgurjs] Invalid federation() config — remotes["remote-a"] has no address (need one of external / dev / prod)
-  got:      {"dev":""}
-  expected: at least one address; with only one URL it is used for both dev and prod
-  example:  remotes: { 'remote-a': 'http://localhost:5101' }
-  // or split: { 'remote-a': { dev: 'http://localhost:5101', prod: '/remote-a' } }
+[fulgurjs] federation() 配置无效：remotes["remote-a"] 没有地址（external、dev、prod 至少填写一个）
+  当前值：{"dev":""}
+  预期值：至少一个地址；只填一个地址时开发与生产共用
+  修法示例：remotes: { 'remote-a': 'http://localhost:5101' }
+  // 或分别填写：{ 'remote-a': { dev: 'http://localhost:5101', prod: '/remote-a' } }
 ```
 
 运行时加载失败同样给排查指引（remote dev server 未启动 / 地址配错 / CORS / NGINX 回退），并携带统一错误码：
 
-统一错误码体系（CFG/DEV/BLD/MFU/CC 五段共 41 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表41-个)**；报错文案一律「现象 → 根因 → 修法」三段式。
+统一错误码体系（CFG/DEV/BLD/MFU/CC 五段共 41 个）——**完整总表见上方 [API 参考 §6](#6-错误码总表41-个)**。插件自身的诊断文案使用中文，保留 API 名、配置键、版本号及第三方底层异常原文，以便定位问题。`MFU-010` 只表示实际复用的单例版本不满足消费方要求；多个兼容版本共存不会触发该告警。浏览器中来自 qiankun/single-spa、vue-i18n 等第三方的告警不由 fulgurjs 生成，应按各自来源排查。
 
 调试出口：`window.__FULGURJS_SCOPE__`（share 协商实时结果）、`window.__FULGURJS_INFO__`（remote 状态/耗时/错误）。
 

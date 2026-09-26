@@ -225,9 +225,7 @@ function normalizeRemoteValue(
 ): NormalizedRemote {
   if (typeof value === 'function') {
     warnings.push(
-      `remotes["${key}"] is a function (promise-based remote): it cannot be serialized into the bundle; ` +
-        `register it at runtime via registerRemote() (same semantics as webpack "promise new Promise"). ` +
-        `The key stays in config for import-syntax rewriting.`,
+      `远程应用 "${key}" 使用动态 Promise 配置，无法直接写入构建产物。请在运行时调用 registerRemote() 注册；配置中的键仍用于改写 import 语法。`,
     )
     return {
       key,
@@ -247,7 +245,7 @@ function normalizeRemoteValue(
       selfName = raw.slice(0, at)
       raw = raw.slice(at + 1)
     } else if (at === 0 || at === raw.length - 1) {
-      throw new Error(`Invalid remote request "${raw}" for "${key}": misplaced "@".`)
+      throw new Error(`远程应用 "${key}" 的地址 "${raw}" 无效：@ 位置错误。请使用 name@url，或直接填写远程地址。`)
     }
   }
 
@@ -327,10 +325,10 @@ function normalizeShared(
     // 与 eager 语义互斥；同 shareKey+shareScope 重复声明会让版本裁决与 loaded 标记歧义
     if (hint.eager && hint.import === false) {
       configError(
-        `CFG-008: shared["${configKey}"] combines eager with import:false`,
+        `CFG-008：shared["${configKey}"] 不能同时配置 eager 和 import:false`,
         hint,
-        'eager requires a local copy to bundle into the initial chunk',
-        `shared: { '${configKey}': { eager: true } }  // or drop eager: { '${configKey}': { import: false } }`,
+        'eager 需要将本地副本打进初始 chunk，而 import:false 表示没有本地副本',
+        `shared: { '${configKey}': { eager: true } }  // 或取消 eager：{ '${configKey}': { import: false } }`,
       )
     }
     const canonical = configKey.endsWith('/') ? configKey.slice(0, -1) : configKey
@@ -342,10 +340,10 @@ function normalizeShared(
     const dup = out.find((s) => s.shareKey === shareKeyOfHint && s.shareScope === shareScopeOfHint)
     if (dup) {
       configError(
-        `CFG-008: shared key "${shareKeyOfHint}" is declared twice in share scope "${shareScopeOfHint}" (keys "${dup.configKey}" and "${configKey}")`,
+        `CFG-008：共享键 "${shareKeyOfHint}" 在作用域 "${shareScopeOfHint}" 中重复声明（配置键 "${dup.configKey}" 与 "${configKey}"）`,
         configKey,
-        'one declaration per shareKey per share scope',
-        `merge hints: { '${shareKeyOfHint}': { singleton: true } }  // or use distinct shareKey values`,
+        '每个共享作用域内，同一 shareKey 只能声明一次',
+        `合并配置：{ '${shareKeyOfHint}': { singleton: true } }  // 或使用不同的 shareKey`,
       )
     }
 
@@ -362,7 +360,7 @@ function normalizeShared(
       } else {
         requiredVersion = false
         warnings.push(
-          `shared["${configKey}"]: requiredVersion could not be inferred from package.json; accepting any version.`,
+          `共享依赖 "${configKey}" 无法从 package.json 推断 requiredVersion，暂接受任意版本。建议显式填写版本约束。`,
         )
       }
     }
@@ -379,7 +377,7 @@ function normalizeShared(
       } else {
         version = '0.0.0'
         warnings.push(
-          `shared["${configKey}"]: installed version not found; registering as 0.0.0 (it will still be consumable but ranked lowest).`,
+          `共享依赖 "${configKey}" 未找到已安装版本，暂按 0.0.0 注册；仍可使用，但版本选择优先级最低。请检查依赖是否安装或显式填写 shared.version。`,
         )
       }
     }
@@ -419,10 +417,10 @@ function configError(what: string, got: unknown, expect: string, example: string
   const gotText = typeof got === 'string' ? `"${got}"` : JSON.stringify(got)
   throw new Error(
     [
-      `[fulgurjs] Invalid federation() config — ${what}`,
-      `  got:      ${gotText}`,
-      `  expected: ${expect}`,
-      `  example:  ${example}`,
+      `[fulgurjs] federation() 配置无效：${what}`,
+      `  当前值：${gotText}`,
+      `  预期值：${expect}`,
+      `  修法示例：${example}`,
     ].join('\n'),
   )
 }
@@ -434,17 +432,17 @@ function configError(what: string, got: unknown, expect: string, example: string
 function validateOptions(options: FederationOptions): void {
   if (options.name === undefined || options.name === null || options.name === '') {
     configError(
-      '`name` is required (container name, also used as uniqueName)',
+      '缺少必填的 name（容器名称，也是页面内的唯一标识）',
       options.name,
-      'a non-empty string unique among host/remotes in the same page',
+      '同一页面的宿主与远程之间唯一的非空字符串',
       `federation({ name: 'my-app', ... })`,
     )
   }
   if (typeof options.name !== 'string' || !/^[a-zA-Z][\w.-]*$/.test(options.name)) {
     configError(
-      '`name` must match /^[a-zA-Z][\\w.-]*$/ (letters first, no spaces/slashes)',
+      'name 格式不正确：必须以英文字母开头，不能包含空格或斜杠',
       options.name,
-      'e.g. "my-app", "host-app"',
+      '例如 "my-app" 或 "host-app"',
       `federation({ name: 'my-app', ... })`,
     )
   }
@@ -453,7 +451,7 @@ function validateOptions(options: FederationOptions): void {
   // 会造成"配置写的是 script/var、实际构建的是 module"的错觉——升级为配置期硬错误
   if (options.remoteType !== undefined && options.remoteType !== 'module') {
     configError(
-      'CFG-011: remoteType other than "module" is not supported',
+      'CFG-011：remoteType 目前仅支持 "module"',
       options.remoteType,
       '"module"（缺省即可）——webpack script/var remote 互操作未实现',
       `// 删除 remoteType 配置（fulgurjs 只产出 ESM module remote）`,
@@ -461,7 +459,7 @@ function validateOptions(options: FederationOptions): void {
   }
   if (options.library?.type !== undefined && options.library.type !== 'module' && options.library.type !== 'esm') {
     configError(
-      'CFG-011: library.type other than "module"/"esm" is not supported',
+      'CFG-011：library.type 目前仅支持 "module" 或 "esm"',
       options.library.type,
       '"module" 或 "esm"（缺省即可）——webpack UMD/var 输出互操作未实现',
       `// 删除 library 配置（fulgurjs remoteEntry 恒为 ESM）`,
@@ -469,7 +467,7 @@ function validateOptions(options: FederationOptions): void {
   }
   if (options.automaticAsyncBoundary === false) {
     configError(
-      'CFG-011: automaticAsyncBoundary=false cannot be honored',
+      'CFG-011：不能关闭自动异步边界（automaticAsyncBoundary=false）',
       options.automaticAsyncBoundary,
       '缺省或 true——fulgurjs 使用 TLA 自动异步边界，不存在手工 bootstrap 模式',
       `// 删除 automaticAsyncBoundary 配置（容器协议天然异步）`,
@@ -482,9 +480,9 @@ function validateOptions(options: FederationOptions): void {
     const norm = key.startsWith('./') ? key : `./${key}`
     if (norm === SETUP_EXPOSE_KEY) {
       configError(
-        `CFG-012: exposes key "${norm}" is reserved for the federation setup entry`,
+        `CFG-012：exposes 键 "${norm}" 已由联邦 setup 入口保留`,
         key,
-        `a public expose name（内部保留键 "${SETUP_EXPOSE_KEY}" 由 setup 选项自动生成）`,
+        `使用其他公开 expose 名称；内部保留键 "${SETUP_EXPOSE_KEY}" 由 setup 选项自动生成`,
         `// 把该 expose 改名，或删除它并把原文件路径配置到 federation({ setup })`,
       )
     }
@@ -492,31 +490,31 @@ function validateOptions(options: FederationOptions): void {
   if (options.setup !== undefined) {
     if (typeof options.setup !== 'string' || options.setup.trim() === '') {
       configError(
-        'CFG-012: setup must be a non-empty module path relative to the app root',
+        'CFG-012：setup 必须是相对应用根目录的非空模块路径',
         options.setup,
-        'e.g. "./src/fulgurjs/setup.ts"（默认导出 setup(context)，可选具名导出 onSession(context)）',
+        '例如 "./src/fulgurjs/setup.ts"（默认导出 setup(context)，可选具名导出 onSession(context)）',
         `federation({ name: 'my-app', setup: './src/fulgurjs/setup.ts', ... })`,
       )
     }
   }
 
   if (options.exposes !== undefined && typeof options.exposes !== 'object') {
-    configError('`exposes` must be an object', options.exposes, 'an object of { "./Module": "./src/path" }', `exposes: { './Button': './src/Button.vue' }`)
+    configError('exposes 必须是对象', options.exposes, '形如 { "./Module": "./src/path" } 的对象', `exposes: { './Button': './src/Button.vue' }`)
   }
   if (options.remotes !== undefined && typeof options.remotes !== 'object') {
-    configError('`remotes` must be an object', options.remotes, 'an object of { name: url | { dev, prod } | () => Promise<container> }', `remotes: { 'remote-a': 'http://localhost:5101' }`)
+    configError('remotes 必须是对象', options.remotes, '形如 { 名称: 地址 | { dev, prod } | 动态加载函数 } 的对象', `remotes: { 'remote-a': 'http://localhost:5101' }`)
   }
   if (options.shared !== undefined && typeof options.shared !== 'object') {
-    configError('`shared` must be an array or an object', options.shared, '["vue"] or { vue: { singleton: true } }', `shared: { vue: { singleton: true } }`)
+    configError('shared 必须是数组或对象', options.shared, '["vue"] 或 { vue: { singleton: true } }', `shared: { vue: { singleton: true } }`)
   }
 
   for (const [key, val] of Object.entries(options.exposes ?? {})) {
     const importPath = typeof val === 'string' ? val : (val as ExposeHint)?.import
     if (!importPath || typeof importPath !== 'string') {
       configError(
-        `exposes["${key}"].import is missing`,
+        `exposes["${key}"].import 缺失`,
         val,
-        'a source path string, or { import: "./src/path" }',
+        '源码路径字符串，或 { import: "./src/path" }',
         `exposes: { '${key.startsWith('./') ? key : './' + key}': './src/views/Home.vue' }`,
       )
     }
@@ -525,32 +523,32 @@ function validateOptions(options: FederationOptions): void {
   for (const [key, val] of Object.entries(options.remotes ?? {})) {
     if (/[/@\s]/.test(key)) {
       configError(
-        `remotes key "${key}" contains invalid characters (@, / or whitespace)`,
+        `remotes 键 "${key}" 包含非法字符（@、/ 或空白字符）`,
         key,
-        'a bare module-style name used as import prefix, e.g. "remote-a"',
+        '作为 import 前缀使用的纯模块名，例如 "remote-a"',
         `remotes: { 'remote-a': '...' }  // then: import X from 'remote-a/Button'`,
       )
     }
     if (typeof val === 'function') continue // promise-based remote，运行时注册
     const cfg = typeof val === 'string' ? { external: val } : (val as RemoteEntryConfig)
     if (typeof val === 'string' && val.trim() === '') {
-      configError(`remotes["${key}"] is an empty string`, val, 'a remote base URL or full entry URL', `remotes: { '${key}': 'http://localhost:5101' }`)
+      configError(`remotes["${key}"] 是空字符串`, val, '远程基础地址或完整入口地址', `remotes: { '${key}': 'http://localhost:5101' }`)
     }
     if (typeof val !== 'string' && typeof cfg !== 'object') {
-      configError(`remotes["${key}"] has unsupported type`, val, 'string | { dev?, prod?, external? } | () => Promise<container>', `remotes: { '${key}': { dev: 'http://localhost:5101', prod: '/remote-a' } }`)
+      configError(`remotes["${key}"] 的值类型不受支持`, val, '字符串、{ dev?, prod?, external? } 对象或动态加载函数', `remotes: { '${key}': { dev: 'http://localhost:5101', prod: '/remote-a' } }`)
     }
     if (!cfg?.external && !cfg?.dev && !cfg?.prod) {
       configError(
-        `remotes["${key}"] has no address (need one of external / dev / prod)`,
+        `remotes["${key}"] 没有地址（external、dev、prod 至少填写一个）`,
         val,
-        'at least one address; with only one URL it is used for both dev and prod',
-        `remotes: { '${key}': 'http://localhost:5101' }\n  // or split: { '${key}': { dev: 'http://localhost:5101', prod: '/${key}' } }`,
+        '至少一个地址；只填一个地址时开发与生产共用',
+        `remotes: { '${key}': 'http://localhost:5101' }\n  // 或分别填写：{ '${key}': { dev: 'http://localhost:5101', prod: '/${key}' } }`,
       )
     }
     // CFG-009（WP6）：remote 运行参数在配置期校验——坏数值不留到运行时无限循环/永久等待
     if (cfg.timeout !== undefined && (typeof cfg.timeout !== 'number' || !Number.isFinite(cfg.timeout) || cfg.timeout <= 0)) {
       configError(
-        `CFG-009: remotes["${key}"].timeout must be a finite positive number (ms)`,
+        `CFG-009：remotes["${key}"].timeout 必须是大于 0 的有限毫秒数`,
         cfg.timeout,
         'e.g. 15000（省略用默认 15s）',
         `remotes: { '${key}': { external: '…', timeout: 15000 } }`,
@@ -558,7 +556,7 @@ function validateOptions(options: FederationOptions): void {
     }
     if (cfg.retries !== undefined && (typeof cfg.retries !== 'number' || !Number.isInteger(cfg.retries) || cfg.retries < 0 || cfg.retries > 10)) {
       configError(
-        `CFG-009: remotes["${key}"].retries must be an integer in 0..10`,
+        `CFG-009：remotes["${key}"].retries 必须是 0 到 10 的整数`,
         cfg.retries,
         'e.g. 2（省略用默认 2；上限 10 防退避风暴）',
         `remotes: { '${key}': { external: '…', retries: 2 } }`,
@@ -568,7 +566,7 @@ function validateOptions(options: FederationOptions): void {
     if (brk) {
       if (brk.threshold !== undefined && (typeof brk.threshold !== 'number' || !Number.isFinite(brk.threshold) || brk.threshold <= 0)) {
         configError(
-          `CFG-009: remotes["${key}"].breaker.threshold must be a finite positive number`,
+          `CFG-009：remotes["${key}"].breaker.threshold 必须是大于 0 的有限数字`,
           brk.threshold,
           'e.g. 5（连续失败 5 次后熔断）',
           `remotes: { '${key}': { external: '…', breaker: { threshold: 5, resetMs: 30000 } } }`,
@@ -576,7 +574,7 @@ function validateOptions(options: FederationOptions): void {
       }
       if (brk.resetMs !== undefined && (typeof brk.resetMs !== 'number' || !Number.isFinite(brk.resetMs) || brk.resetMs <= 0)) {
         configError(
-          `CFG-009: remotes["${key}"].breaker.resetMs must be a finite positive number (ms)`,
+          `CFG-009：remotes["${key}"].breaker.resetMs 必须是大于 0 的有限毫秒数`,
           brk.resetMs,
           'e.g. 30000（熔断 30s 后半开）',
           `remotes: { '${key}': { external: '…', breaker: { threshold: 5, resetMs: 30000 } } }`,
@@ -586,7 +584,7 @@ function validateOptions(options: FederationOptions): void {
     for (const slot of ['dev', 'prod', 'external'] as const) {
       const v = (cfg as RemoteEntryConfig)[slot]
       if (v !== undefined && typeof v !== 'string') {
-        configError(`remotes["${key}"].${slot} must be a string`, v, 'a URL string', `remotes: { '${key}': { ${slot}: 'http://localhost:5101' } }`)
+        configError(`remotes["${key}"].${slot} 必须是字符串`, v, 'URL 字符串', `remotes: { '${key}': { ${slot}: 'http://localhost:5101' } }`)
       }
       // CFG-007（remotes name@ 对象形式误用，2026-09-17 testbed 实踩）：name@ 前缀仅字符串
       // external 语法支持（normalizeRemoteValue 拆名重命名）；对象形式 dev/prod 槽位整串当
@@ -596,9 +594,9 @@ function validateOptions(options: FederationOptions): void {
         const slotUrl = (cfg as RemoteEntryConfig)[slot]
         if (typeof slotUrl === 'string' && /^[A-Za-z][\w.-]*@/.test(slotUrl)) {
           configError(
-            `CFG-007: remotes["${key}"].${slot} uses the "name@url" prefix, which the object form does not support (it is concatenated verbatim into a broken URL)`,
+            `CFG-007：remotes["${key}"].${slot} 使用了 name@url 前缀；对象写法不支持该前缀，否则会拼出错误地址`,
             slotUrl,
-            'a bare URL (the remote self-name defaults to the key), or the plain string form if renaming is needed',
+            '不带前缀的 URL（远程名称默认使用键名）；需要改名时改用字符串写法',
             `remotes: { '${key}': 'http://localhost:5101' }  // or: remotes: { '${key}': { dev: 'http://localhost:5101', prod: '/${key}' } }`,
           )
         }
@@ -616,7 +614,7 @@ function validateOptions(options: FederationOptions): void {
   }
   if (options.devFsRoot !== undefined && typeof options.devFsRoot !== 'boolean') {
     configError(
-      '`devFsRoot` must be a boolean',
+      'devFsRoot 必须是布尔值',
       options.devFsRoot,
       'true（dev manifest 携带 fsRoot，现状默认）或 false（不暴露本机路径）',
       `devFsRoot: false`,
@@ -627,12 +625,12 @@ function validateOptions(options: FederationOptions): void {
 export function normalizeOptions(options: FederationOptions, root: string, command: 'serve' | 'build'): NormalizedOptions {
   const warnings: string[] = []
   validateOptions(options)
-  if (!options.name) throw new Error('[fulgurjs] option `name` is required.')
+  if (!options.name) throw new Error('[fulgurjs] 缺少必填配置 name。请在 federation({ name: "应用名" }) 中声明唯一的应用名。')
 
   const exposes: NormalizedExpose[] = []
   for (const [rawName, val] of Object.entries(options.exposes ?? {})) {
     const name = rawName.startsWith('./') ? rawName : `./${rawName}`
-    if (rawName !== name) warnings.push(`exposes key "${rawName}" normalized to "${name}".`)
+    if (rawName !== name) warnings.push(`暴露模块键 "${rawName}" 已规范化为 "${name}"。建议在 exposes 中直接使用带 ./ 前缀的键。`)
     const hint: ExposeHint = typeof val === 'string' ? { import: val } : val
     exposes.push({ name, import: hint.import, chunkName: hint.name })
   }
@@ -657,7 +655,7 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
   const seenNames = new Map<string, string>()
   for (const r of remotes) {
     if (seenNames.has(r.name) && seenNames.get(r.name) !== r.key) {
-      warnings.push(`remote name "${r.name}" is declared for multiple keys; names must be unique.`)
+      warnings.push(`远程名称 "${r.name}" 被多个 remotes 键重复声明；请为每个远程使用唯一名称。`)
     }
     seenNames.set(r.name, r.key)
   }
@@ -666,15 +664,13 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
   if ((options.exposes === undefined || Object.keys(options.exposes).length === 0) &&
       (options.remotes === undefined || Object.keys(options.remotes).length === 0)) {
     warnings.push(
-      'federation() has neither `exposes` nor `remotes` — it only sets up shared modules. ' +
-        'If you intended a remote, add `exposes: { "./Module": "./src/path" }`; if a host, add `remotes: { ... }`.',
+      'federation() 未配置 exposes 或 remotes，目前只会注册共享依赖。若要提供远程模块，请配置 exposes；若要消费远程应用，请配置 remotes。',
     )
   }
   // remote 应用配了 remotes / host 配了 exposes 属合法（宿主亦可被消费），但 pure remote 没有 exposes 提醒一次
   if (Object.keys(options.exposes ?? {}).length === 0 && Object.keys(options.remotes ?? {}).length > 0) {
     warnings.push(
-      `federation({ name: "${options.name}" }) consumes remotes but exposes nothing — this app is a pure host. ` +
-        'Files will not be available to other apps; add `exposes` if that is unintended.',
+      `应用 "${options.name}" 配置了 remotes，但没有 exposes，因此是纯宿主；其他应用无法从它加载模块。若希望对外提供模块，请添加 exposes。`,
     )
   }
 

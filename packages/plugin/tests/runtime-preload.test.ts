@@ -149,7 +149,7 @@ describe('runtime: preloadRemote manifest 契约（WP4/WP6 对齐）', () => {
     expect(hrefs).toContain('/remote-a/fulgurjs-remoteEntry.js')
     expect(hrefs).not.toContain('https://host.example.test/remote-a/assets/boot.js')
     expect(reported.error.code).toBe('MFU-007')
-    expect(String(reported.error.message)).toContain('schemaVersion 2')
+    expect(String(reported.error.message)).toContain('协议版本为 2')
   })
 
   it('manifest fetch 超时不再永久挂起（AbortSignal.timeout 语义）', async () => {

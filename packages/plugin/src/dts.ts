@@ -27,14 +27,14 @@ async function fetchManifest(devEntry: string, attempts = 30, delayMs = 2000): P
         const parsed = parseManifest(await res.json())
         if (parsed.unsupportedVersion) {
           console.warn(
-            `[fulgurjs] dts: remote manifest schemaVersion=${parsed.unsupportedVersion} 不被当前插件支持（本机支持 1）；` +
-              `类型映射跳过。请对齐宿主与远程的 @fulgurjs/federation 版本。`,
+            `[fulgurjs] 类型生成：远程 manifest 的协议版本为 ${parsed.unsupportedVersion}，当前仅支持版本 1；` +
+              `已跳过类型映射。请对齐宿主与远程的 @fulgurjs/federation 版本。`,
           )
           return null
         }
         if (parsed.issues.length > 0) {
           console.warn(
-            `[fulgurjs] dts: remote manifest 契约校验失败（${manifestUrl.href}）：` +
+            `[fulgurjs] 类型生成：远程 manifest 契约校验失败（${manifestUrl.href}）：` +
               parsed.issues.map((x) => `${x.field}: ${x.message}`).join('；') +
               `。类型映射跳过。`,
           )
@@ -165,14 +165,14 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
     if (!remote.devEntry || remote.promise) continue
     const manifest = await fetchManifest(remote.devEntry)
     if (!manifest || !manifest.exposes) {
-      console.warn(`[fulgurjs] dts: remote "${remote.key}" dev manifest unavailable; type mapping skipped.`)
+      console.warn(`[fulgurjs] 类型生成：远程应用 "${remote.key}" 的开发 manifest 不可用，已跳过类型映射。请检查远程开发服务和 manifest 地址。`)
       continue
     }
     const remoteRoot = manifest.fsRoot
     if (!remoteRoot) {
       console.warn(
-        `[fulgurjs] dts: remote "${remote.key}" 的 manifest 未携带 fsRoot（devFsRoot: false 或远程插件版本过旧）；` +
-          `类型映射降级为 any 桩。同机联调需远程 devFsRoot: true（默认）并重启其 dev server。`,
+        `[fulgurjs] 类型生成：远程应用 "${remote.key}" 的 manifest 未携带 fsRoot（可能关闭了 devFsRoot，或远程插件版本过旧）；` +
+          `类型映射将降级为 any。同机联调请在远程启用 devFsRoot: true（默认值）并重启开发服务。`,
       )
       continue
     }
@@ -182,7 +182,7 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       realRoot = fs.realpathSync(remoteRoot)
     } catch {
       console.warn(
-        `[fulgurjs] dts: remote "${remote.key}" is not on this machine (fsRoot unreachable); type mapping skipped (module types fall back to any).`,
+        `[fulgurjs] 类型生成：远程应用 "${remote.key}" 的 fsRoot 在本机不可访问，已跳过类型映射，模块类型将降级为 any。请检查项目位置或关闭本机类型直连。`,
       )
       continue
     }
@@ -197,7 +197,7 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       // 用户不直接 loadRemote 该键，其文件也不属于公开 API 面）
       if (manifest.setup && expose.name === manifest.setup) continue
       const skipped = (reason: string) =>
-        console.warn(`[fulgurjs] dts: remote "${remote.key}" expose ${JSON.stringify(expose.name)} 跳过：${reason}`)
+        console.warn(`[fulgurjs] 类型生成：远程应用 "${remote.key}" 的暴露模块 ${JSON.stringify(expose.name)} 已跳过。原因：${reason}。请检查该模块在远程 manifest 中的源文件路径。`)
       // WP5：expose src 只接受相对路径——绝对路径 / 含 .. / 空路径一律拒绝（不可信 manifest 防线）
       const src = expose.src
       if (!src || typeof src !== 'string') {
@@ -205,11 +205,11 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
         continue
       }
       if (src.startsWith('/') || /^[a-z]+:/i.test(src)) {
-        skipped(`src 必须是相对路径，got ${JSON.stringify(src)}`)
+        skipped(`src 必须是相对路径，当前值为 ${JSON.stringify(src)}`)
         continue
       }
       if (src.split('/').includes('..')) {
-        skipped(`src 不得包含 ..，got ${JSON.stringify(src)}`)
+        skipped(`src 不得包含 ..，当前值为 ${JSON.stringify(src)}`)
         continue
       }
       const abs = path.join(realRoot, src)
@@ -264,8 +264,8 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       fs.writeFileSync(path.join(outDir, `${remote.key}.d.ts`), `${lines.join('\n')}\n`)
     }
     console.log(
-      `[fulgurjs] dts: generated ${dir}/${remote.key}.d.ts (${accepted}/${manifest.exposes?.length ?? 0} exposes, mode=${mode}). ` +
-        `确保 tsconfig include 包含 "${dir}" 以获得类型补全。`,
+      `[fulgurjs] 类型生成：已生成 ${dir}/${remote.key}.d.ts（已收录 ${accepted}/${manifest.exposes?.length ?? 0} 个暴露模块，模式 ${mode}）。` +
+        `请确保 tsconfig 的 include 包含 "${dir}"，以获得类型补全。`,
     )
   }
 }

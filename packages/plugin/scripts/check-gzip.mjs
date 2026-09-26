@@ -1,7 +1,7 @@
 /**
  * runtime bundle gzip 门禁（build 末尾自动执行，CI 同步）。
- * 阈值 8192B（zlib level9）：4.0.0 时代 6144B 基线 + setup/onSession 生命周期
- * （MFU-011~014）固有增量 ~1.4KB（4.1.0 实测 7564B）。
+ * 阈值 9216B（zlib level9）：中文运行时诊断需要保留可操作的原因与修法，
+ * 4.3.0 英文诊断基线为 7547B，本轮中文化后实测 8649B；仍以 9KB 门禁约束增长。
  * 超限 exit 1 —— runtime 体积是本插件核心卖点之一，防止无意膨胀。
  */
 import zlib from 'node:zlib'
@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const LIMIT = 8192
+const LIMIT = 9216
 const file = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist', 'runtime.js')
 
 if (!fs.existsSync(file)) {

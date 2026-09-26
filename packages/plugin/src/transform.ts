@@ -487,8 +487,8 @@ export async function transformModule(
         const inner = clauseRaw.slice(clauseRaw.indexOf('{') + 1, clauseRaw.lastIndexOf('}'))
         if (/export\s+\*/.test(clauseRaw) && !clauseRaw.includes('{')) {
           throw new Error(
-            `[fulgurjs] "export * from '${spec}'" on a shared module is not supported (ESM cannot create dynamic export bindings). ` +
-              `Use named re-exports: "export { a, b } from '${spec}'".`,
+            `[fulgurjs] 共享模块不支持 "export * from '${spec}'"：ESM 无法为动态协商的模块创建通配符导出绑定。` +
+              `请改为明确列出名称："export { a, b } from '${spec}'"。`,
           )
         }
         const bindings = parseBindings(inner).map((b) => (b.imported === 'default' ? 'default' : b.imported))
