@@ -30,21 +30,10 @@ e2e/.playwright/
 .env.local
 .env.*.local
 
-# 公司业务数据截图：本地保留供手册/对照使用，不入库（公开仓库前无需再审查）
-docs/screenshots/baseline-8661/
-docs/screenshots/migration1-dev/
-docs/screenshots/tb-dev-*
-docs/screenshots/tb-prod-*
-# npm 真实用户视角验证截图（本轮验证证据，本地留证不上传）
-docs/screenshots/npm-testbed/
-docs/screenshots/npm-install/
-# 验证证据截图（e2e 与 testbed 两套，每次跑都重生成／本地留证不上传）
-docs/screenshots/dev-*
-docs/screenshots/d6-*
-docs/screenshots/tb-*
-docs/screenshots/prod-auto-import-*
-docs/screenshots/prod-eager-pinia-*
-docs/screenshots/INDEX.md
+# 所有测试截图与业务截图仅保留本地，不纳入公开 Git 仓库
+docs/screenshots/
+e2e/**/screenshots/
+fixtures/**/screenshots/
 # 项目本地工作区（不入库：验证产物/截图/工作记录）
 docs/_workspace/
 docs/func-results/
