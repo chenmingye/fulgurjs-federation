@@ -2,6 +2,8 @@
 
 > **交给另一位 AI 直接执行。** 编写日期：2026-09-27。此前 5.0.1 报告只能当作“已知问题线索”，不能当作本轮通过证据，也不能复用它的浏览器 profile、测试副本、构建产物、JSON 或截图。本轮从空目录获取源码，按执行当时实际发布的**最新正式 API**重新接入和测试。这里的“从零”包含插件 Git 工作区与 MES-ZC SVN 测试副本两个独立来源。
 
+> **2026-09-27 续做提示**：本轮从零检出和接入已经执行过，但完整验收未完成。现在要补完该轮时，请优先执行 [`最新API复验续做与问题闭环任务书-20260927.md`](./最新API复验续做与问题闭环任务书-20260927.md)，保留既有副本及失败证据；不要按本文件重新从头检出。
+
 ## 0. 任务目标、边界与完成定义
 
 1. 从 `https://github.com/chenmingye/fulgurjs-federation.git` **新克隆**插件仓库；从已核实的 MES-ZC SVN 地址**新检出**测试工程。两个目录都不能从旧工作区复制、移动或软链接源码、`node_modules`、`dist`、`.vite`、生成类型或测试结果。用户会处理旧项目的删除；执行者**不要自行删除仍存在的旧目录或覆盖用户文件**。若目标目录仍被占用，选择一个新的并列目录并在报告中记录其绝对路径。
@@ -35,13 +37,13 @@
 
 - 在空目录运行 `git clone https://github.com/chenmingye/fulgurjs-federation.git <新目录>`。记录命令、clone 目标、`git remote -v`、`git rev-parse HEAD`、当前分支与 tag、`git status --short`（新克隆预期为空）。不得把旧工作区打包后解压，也不得从旧 `testbed/` 拷文件。
 - 读新克隆的 `AGENTS.md`（若有）、根 README、`packages/plugin/README.md` 的实际来源关系、`packages/plugin/package.json`、`CHANGELOG.md`、`examples/`、当前导出类型和 e2e 脚本。历史任务书仅用来查漏，**当前公开 API 以最新版源码与正式 npm 包为准**。如果历史文档与当前 API 冲突，记录冲突并按当前 API 执行，必要时修正文档。
-- 分清两个版本状态：`git HEAD` 可以因为文档提交领先发布 tag；只有插件代码或包内容领先 npm 时才构成“未发布代码”。比较 tag 到 HEAD 的实际差异，不凭提交数量猜。记录包 `version`、Git tag、release commit 与 registry package 的关系。
+- 分清两个版本状态：`git HEAD` 可以因为**纯文档/报告**提交领先发布 tag；插件源码或测试源码提交（即使 dist 字节未变）都按用户「代码提交后发版」规则处理。比较 tag 到 HEAD 的实际差异，不凭提交数量猜。记录包 `version`、Git tag、release commit 与 registry package 的关系。
 - 新克隆不含旧机器的未跟踪根 `pnpm-lock.yaml`。检查**实际被 Git 跟踪**的锁文件；已知插件包有 `packages/plugin/pnpm-lock.yaml`，e2e 有 `e2e/pnpm-lock.yaml`。按各子工程已有 package manager/锁文件安装，优先 frozen lockfile；不要从旧工作区复制根锁文件或依赖目录来“修复”安装问题。记录 Node、pnpm、npm、系统版本与安装命令。
 
 ### 1.2 正式包
 
 - 现场查询 `npm view @fulgurjs/federation version dist.tarball dist.integrity dist.attestations --json` 与 dist-tag；核实对应 GitHub Release、publish 工作流成功以及 npm 包的真实 exports、README、CLI。把完整 tarball URL、integrity、provenance、查询时间放进报告。安装后的三个应用必须精确锁定同一个最终版本，`package.json`、各自 lockfile resolution/integrity、`node_modules/@fulgurjs/federation/package.json` 三处逐项一致。
-- 先在插件新克隆运行当前仓库支持的包级 `build`、`test`、`typecheck`、`typecheck:latest`、pack-smoke，以及必要的独立目录 npm 包最小接入检查；记录实际命令与退出码。**pack-smoke 当前是仓库根的 `node e2e/scripts/pack-smoke.mjs`，不是 `packages/plugin/package.json` 里的 npm script**；执行前先读新克隆的 `.github/workflows/ci.yml` 与 package scripts，以新克隆实际命令、依赖安装前置条件和顺序为准，不凭本任务书猜命令。独立目录检查要从 npm registry 安装正式版，不把 `npm pack` 的本地产物当作正式包。此处是质量门禁，**不在新版本发布前额外跑完整 MES 业务验收**。若本轮发现需修改插件代码：补有意义的回归验证，更新版本、README/CHANGELOG、提交并推送 Git，创建 tag/Release，确认 publish 工作流与 npm registry 正式包，再用**新正式版本**开始或重新开始 MES dev 与 8662 全量测试。不能只提交代码不发版。仅改验收报告或测试证据，不因此人为发一个插件代码版本。
+- 先在插件新克隆运行当前仓库支持的包级 `build`、`test`、`typecheck`、`typecheck:latest`、pack-smoke，以及必要的独立目录 npm 包最小接入检查；记录实际命令与退出码。**pack-smoke 当前是仓库根的 `node e2e/scripts/pack-smoke.mjs`，不是 `packages/plugin/package.json` 里的 npm script**；执行前先读新克隆的 `.github/workflows/ci.yml` 与 package scripts，以新克隆实际命令、依赖安装前置条件和顺序为准，不凭本任务书猜命令。独立目录检查要从 npm registry 安装正式版，不把 `npm pack` 的本地产物当作正式包。此处是质量门禁，**不在新版本发布前额外跑完整 MES 业务验收**。若本轮发现需修改插件源码或测试源码：补有意义的回归验证，更新版本、README/CHANGELOG、提交并推送 Git，创建 tag/Release，确认 publish 工作流与 npm registry 正式包，再用**新正式版本**开始或重新开始 MES dev 与 8662 全量测试。不能只提交代码不发版。仅改任务书、验收报告或不入包的文字证据，不因此人为发一个插件代码版本。
 
 ## 2. 全新 SVN 检出与当前 API 接入
 
@@ -143,7 +145,7 @@ dev 完成后，串行构建 BPM、lowcode、admin（含 admin postBuild），�
 
 在新克隆的 `docs/` 新写**本轮独立验收报告**，并给用户一个仓库外证据根的绝对路径与索引。报告首页写：Git clone 目录/HEAD/tag、registry 正式包与 integrity/provenance、SVN URL/revision/初始及最终 status、三项目安装来源、dev/prod 地址、8662 监听与备份、首次尝试和重试次数。正文按 dev 与 8662 分表列每页/菜单、业务闭环、账号切换、韧性、懒加载、负向诊断、截图与原始 JSON；结果应可由证据重新计算。失败和复测**分别成行、分别链接**。附插件缺陷和项目侧问题归因，列任何未测项。
 
-提交并推送**可公开的报告及必要脚本/非图片脱敏摘要**到插件 Git；**所有测试截图**、完整 HAR、令牌相关数据放仓库外证据根，不推公开仓库。若本轮只是测试与文档提交，不为此单独发布代码版本。最终报告必须给出用户可打开的本机截图路径，不能说“证据已上传 Git”而实际只在被删除的工作树中。只有下列条件同时成立，才可以写“本轮完整验收通过”：
+提交并推送**可公开的报告及必要脚本/非图片脱敏摘要**到插件 Git；**所有测试截图**、完整 HAR、令牌相关数据放仓库外证据根，不推公开仓库。若本轮只提交任务书、报告或不入包的文字证据，不为此单独发布代码版本；插件源码或测试源码提交仍须发布。最终报告必须给出用户可打开的本机截图路径，不能说“证据已上传 Git”而实际只在被删除的工作树中。只有下列条件同时成立，才可以写“本轮完整验收通过”：
 
 1. 新 Git clone、新 SVN checkout 可核实，未借旧产物；三个项目只用当时最新的正式 API 与同一 registry 正式包。
 2. 插件质量门禁、dev 全量、8662 全量、当前 API 负向诊断、中文真实截图均完成；失败有首次证据、复测有独立证据、归因有来源。
