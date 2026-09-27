@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.0.2（2026-09-27）
+
+- **测试可移植性修复**：`build-manifest-css.test.ts` 改用 `fs.realpathSync(os.tmpdir())` 建 vite root——macOS 的 `os.tmpdir()` 返回 `/var/...`（符号链接），vite 会把 root realpath 成 `/private/var/...`，两者不一致使 `vite:build-html` 生成跨符号链接的相对 fileName 被 rollup 拒绝，单测在 macOS 上必失败（CI Linux 不受影响）。仅测试代码，dist 产物零变化；修复后本机单测 385/385。
+
 ## 5.0.1（2026-09-26）
 
 - **修复 dev manifest 的 version 恒为 0.0.0**：`genDevManifest` 此前查 `pkgDependencies['fulgurjs']`（0.5.0 品牌更名前的旧包名键，更名后真实包名 `@fulgurjs/federation` 使该键永不命中），导致宿主 DEV-006 对每个远程都误报「版本不一致（远程为 0.0.0）」。现直接写远程自身插件版本（`pluginVersion`），DEV-006 恢复真实比对语义；附回归测试。prod manifest 不受影响。
