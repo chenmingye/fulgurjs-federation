@@ -180,9 +180,16 @@ test('R11 React 开发更新：远程源码真实修改后新代码可达宿主�
   } finally {
     writeFileSync(abs, original)
   }
-  // 恢复源码后（刷新路径）回到 v1
+  // 恢复源码后回到 v1：远程 dev server 的模块失效传播有延迟，先等再刷（仍见 v2 则再刷一次）
+  await page.waitForTimeout(1500)
   await page.reload()
   await login(page, 'alice')
+  const first = await page.getByTestId('home-greeting').textContent()
+  if (first?.includes('remote-data-v2')) {
+    await page.waitForTimeout(1500)
+    await page.reload()
+    await login(page, 'alice')
+  }
   await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v1')
 })
 
