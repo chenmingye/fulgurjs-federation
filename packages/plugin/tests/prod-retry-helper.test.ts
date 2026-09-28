@@ -89,6 +89,30 @@ describe('D04: prod 重试 helper（失败驱动状态机）', () => {
     expect(h.requested).toEqual(['/assets/x.js?v=1', '/assets/x.js?v=1&fulgurjs_retry=1'])
   })
 
+  it('集成：包装后的产物代码（helper + __fgR(url) 调用形态）可真实加载模块', async () => {
+    // 复现 5.1.1 首发回归守卫：产物层把 import('url') 改写为 __fgR('url')。若把调用
+    // 形态误改回 import(__fgR(url))（helper 返回 Promise → import(Promise)）此用例即失败
+    const { genProdRetryHelper } = await import('../src/virtual')
+    const helper = genProdRetryHelper()
+    const wrapped = 'import("./target.js")'.replace(
+      /import\((['"])([^'")]+)\1\)/,
+      (_m, q, u) => `__fgR(${q}${u}${q})`,
+    )
+    const body = helper.replace('import(s.u)', '__import(s.u)')
+    const factory = new Function('__import', body + '\nreturn { __fgR, run: () => ' + wrapped + ' };')
+    const cache = new Map()
+    const requested = []
+    const api = factory((u) => {
+      requested.push(u)
+      if (!cache.has(u)) cache.set(u, { from: u })
+      return Promise.resolve(cache.get(u))
+    })
+    const mod = await api.run()
+    expect(mod.from).toBe('./target.js')
+    expect(requested).toEqual(['./target.js'])
+    await expect(api.run()).resolves.toBe(mod)
+  })
+
   it('白盒：两个 expose 别名同 chunk——成功后 identity 一致', async () => {
     const h = makeCaptureHelper(new Set())
     const a = await h.__fgR('/assets/Context.js')

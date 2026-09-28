@@ -787,14 +787,17 @@ export function federation(options: FederationOptions): Plugin[] {
         const entryChunkName = Object.keys(bundle).find((k) => bundle[k].type === 'chunk' && k === n.filename)
         // 失败重试穿透（prod）：浏览器 module map 缓存 import 失败（同 URL 再 import 直接
         // 拒绝、零网络请求）。rollup 把 expose loader 重写为字面量 import('./assets/x.js')，
-        // 此处在产物层把每个字面量包上 __fgR(url)（第 2 次起追加 fulgurjs_retry=N）——
-        // URL 变化才能穿透 module map 到达网络层（与 runtime importEntry、dev 容器同款）。
+        // 此处在产物层把每个字面量 import 改写为 __fgR(url)——helper 自持 per-URL 状态机
+        // 并返回模块 Promise：成功永远复用同一 URL（身份/单例保持），失败后的下一次调用
+        // 才变更 URL（fulgurjs_retry=N）穿透失败缓存。注意 __fgR 返回的是模块 Promise 而
+        // 非 URL 字符串——不能再包一层 import()（5.1.1 回归：import(Promise) →
+        // "[object Promise]" 解析失败，全框架 prod 挂）。
         const entryChunk = entryChunkName ? bundle[entryChunkName] : undefined
         if (entryChunk && entryChunk.type === 'chunk' && /import\((['"])[^'")]+\1\)/.test(entryChunk.code)) {
           const helper = genProdRetryHelper()
           entryChunk.code = entryChunk.code.replace(
             /import\((['"])([^'")]+)\1\)/g,
-            (_m, q: string, u: string) => `import(__fgR(${q}${u}${q}))`,
+            (_m, q: string, u: string) => `__fgR(${q}${u}${q})`,
           )
           entryChunk.code = `${helper}\n${entryChunk.code}`
           debugLog('manifest', { stage: 'generateBundle', retryBust: 'remoteEntry loaders wrapped' })
