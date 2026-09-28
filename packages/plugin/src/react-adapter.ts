@@ -377,13 +377,13 @@ export interface UseLoadRemoteOptions {
 }
 
 export interface UseLoadRemoteResult<Module = any> {
-  /** 加载成功后的模块命名空间；未成功时 undefined */
+  /** 加载成功后的模块命名空间；开始新尝试（包括 reload）时清空，失败时为 undefined */
   data: Module | undefined
   /** 失败原因；无错误时恒为 undefined（统一空值） */
   error: unknown
   /** 是否有请求在途 */
   loading: boolean
-  /** 重新走一次加载生命周期；已成功的模块经运行时缓存不会重新下载。Promise<void> 正常结束（不抛） */
+  /** 清空旧数据并重新走加载生命周期；卸载后调用不发起请求。成功模块复用缓存，Promise<void> 正常结束（不抛） */
   reload: () => Promise<void>
 }
 
@@ -400,6 +400,7 @@ export function createUseLoadRemote(loadRemote: LoadRemoteFn) {
     /** 请求代次：effect/reload 各自递增，只有最新代次可写状态（StrictMode 双 effect、
      * 快速 A→B、慢请求晚返回、卸载后返回均被拦截） */
     const reqGen = useRef(0)
+    const active = useRef(false)
     // 最新 opts（reload 闭包用）：render 期同步写入，避免 effect 依赖对象引用
     const optsRef = useRef(opts)
     optsRef.current = opts
@@ -408,6 +409,7 @@ export function createUseLoadRemote(loadRemote: LoadRemoteFn) {
     const sessionKey = readSessionKey()
 
     useEffect(() => {
+      active.current = true
       const gen = ++reqGen.current
       let cancelled = false
       const isCurrent = (): boolean => gen === reqGen.current && !cancelled
@@ -431,25 +433,30 @@ export function createUseLoadRemote(loadRemote: LoadRemoteFn) {
       )
       return () => {
         cancelled = true
+        active.current = false
+        // 同时作废 effect 和显式 reload；StrictMode 下一轮仍使用新的请求代次。
+        ++reqGen.current
       }
       // 按字段依赖（非对象引用）：调用方每次 render 新建 options 对象不会无限重载；
       // sessionKey 变化（登录/换账号/登出）即重跑
     }, [spec, shareScope, retries, fallbackModule, loadRemote, sessionKey])
 
     const reload = useCallback(async (): Promise<void> => {
+      if (!active.current) return
       const gen = ++reqGen.current
+      setData(undefined)
       setLoading(true)
       setError(undefined)
       const o = optsRef.current
       try {
         const ns = (await loadRemote(spec, { shareScope: o.shareScope, retries: o.retries, fallbackModule: o.fallbackModule })) as Module
         // gen === reqGen：期间无新 effect（如会话切换触发的重载）或新 reload——过期不写
-        if (gen === reqGen.current) {
+        if (active.current && gen === reqGen.current) {
           setData(ns)
           setLoading(false)
         }
       } catch (err) {
-        if (gen === reqGen.current) {
+        if (active.current && gen === reqGen.current) {
           setError(err)
           setLoading(false)
         }

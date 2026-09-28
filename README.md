@@ -726,7 +726,7 @@ const { data, error, loading, reload } = useLoadRemote<Utils>('remote-react/util
 - `options`：`shareScope` / `retries` / `fallbackModule`（透传 `loadRemote`；配置 `fallbackModule` 是显式声明的行为——失败返回兜底值而非写 error）
 - 按字段比较依赖（调用方每次 render 新建 options 对象不会无限重载）；spec/选项变化时清理旧数据进入新请求
 - 每轮 effect 与 `reload` 有独立代次：快速 A→B、慢请求晚返回、连续 reload、卸载后返回、StrictMode 双 effect 都只允许最新有效请求写状态；不宣称重复 effect 从未发生（运行时缓存去重网络与生命周期）
-- `reload` 重走生命周期与失败重试，但已成功缓存的模块不会重新下载；`Promise<void>` 正常结束（按钮 `onClick` 调用不产生未处理拒绝）
+- `reload` 开始时清空旧 data/error 并设 loading=true；当前尝试成功后写 data，失败后仅写 error，均结束 loading。卸载会作废未完成的 effect/reload，卸载后调用已保存的 reload 不发起请求。已成功缓存的模块不会重新下载；`Promise<void>` 正常结束（按钮 `onClick` 调用不产生未处理拒绝）
 - `AppContext` 不是 React 状态订阅：宿主读到新的非空 `sessionKey` 时由**宿主自身状态/路由**触发重新渲染（`createHostPages` 的组件缓存会在新登录代次自动重建，触发新代次 `onSession`）
 
 #### `RemoteErrorBoundary`
@@ -1124,25 +1124,28 @@ const Panel = await loadRemote('shop/Panel', {
 ## 开发与测试
 
 ```bash
-# 各子项目独立安装（根目录不是 workspace）；插件需先 build，
+# 各子项目独立安装；插件需先 build，
 # fixtures 经 link: 消费插件 dist，而 dist 运行时依赖就地安装在插件目录
 pnpm --dir packages/plugin install && pnpm --dir packages/plugin build
-for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b e2e; do pnpm --dir "$app" install; done
+for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto fixtures/remote-react fixtures/host-react e2e; do pnpm --dir "$app" install; done
+pnpm --dir e2e exec playwright install chromium
 
 pnpm test:unit   # 全量单测（数量以本次输出为准）
-pnpm test:dev    # dev e2e（10）
-pnpm test:prod   # prod e2e（8，需 NGINX，见 e2e/scripts/prod-setup.sh）
+pnpm test:dev    # Vue + React 的 dev 与 fault 四个项目
+pnpm test:prod   # Vue + React 的 prod 两个项目；需 NGINX，结束后清理脚本启动的隔离实例
 pnpm test        # unit + dev + prod 全跑
-pnpm --dir e2e exec playwright test --project=dev --project=fault   # dev + 容错 e2e（12）
-bash e2e/h7-install-test.sh   # H7 装后实测：pack → 干净目录 → dev+prod 双引擎断言
+pnpm --dir e2e exec playwright test --list   # 核对用例归属，数量以本次输出为准
+node e2e/scripts/pack-smoke.mjs             # 本地 tarball 的隔离消费者检查，不替代发版后正式包验收
 ```
 
-CI（GitHub Actions，每次推送/PR 自动运行）两个作业：
+CI（GitHub Actions）：
 
 - `test`：单测 + 双口径 typecheck（pinned / latest）+ build 门禁（runtime gzip ≤ 9216B、错误码三方一致性）；
-- `e2e`：fixtures e2e（dev + fault 共 12 例）× Vite 6.4.3 / 7.3.6 / 8.3.0 兼容矩阵。
+- `e2e`：Vue + React 的 dev/fault × Vite 6.4.3 / 7.3.6 / 8.3.0 兼容矩阵；
+- `prod-e2e`：隔离 NGINX 下的 Vue + React 生产套件；`tarball`：真实打包消费者检查；
+- `vite5`：schedule/workflow_dispatch 运行最低支持线；已复现的 5.1.4 双 client 错误覆盖层用例单列跳过，不算通过，也不跳过其他 Vite 5 版本。
 
-prod e2e 需 NGINX，不进 CI（本地或真实项目 testbed 验证）。
+fixtures 测试与真实项目验收分别记录；fixture 全过不代表 MES 双环境已完成验收。
 
 ## License
 

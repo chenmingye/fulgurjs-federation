@@ -165,7 +165,7 @@ Re-exports the common runtime API of §8.2 **except** the Vue-only items (`remot
 - Options: `shareScope`, `retries`, `fallbackModule` (explicit degradation — failures return the fallback value instead of writing `error`)
 - Uniform state contract: first load, spec/option/session change and explicit `reload` all enter `data=undefined, error=undefined, loading=true`; the current attempt writes `data` on success or `error` on failure and clears `loading`; stale attempts never write
 - Generation guards: fast A→B switching, late slow responses, consecutive reloads, unmount-during-flight and StrictMode double effects can only write from the latest valid request
-- `reload` re-runs the lifecycle (onSession dedup by generation) but never re-downloads cached successful modules; resolves normally (failures surface in `error`, never an unhandled rejection)
+- `reload` clears old data and re-runs the lifecycle (onSession dedup by generation) but never re-downloads cached successful modules; resolves normally (failures surface in `error`, never an unhandled rejection). Unmount invalidates pending effects and reloads; calling a saved reload after unmount starts no request
 - Session-aware: re-runs when `sessionKey` changes; same-session re-renders don't
 
 #### `RemoteErrorBoundary`
@@ -339,17 +339,23 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 
 ```bash
 pnpm --dir packages/plugin install && pnpm --dir packages/plugin build
-for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-react fixtures/host-react e2e; do pnpm --dir "$app" install; done
+for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto fixtures/remote-react fixtures/host-react e2e; do pnpm --dir "$app" install; done
+pnpm --dir e2e exec playwright install chromium
 
 pnpm test:unit                                # full unit suite
-pnpm test:dev                                 # dev e2e (Vue)
-pnpm test:prod                                # prod e2e (NGINX, isolated instance)
+pnpm test:dev                                 # Vue + React: dev and fault (four projects)
+pnpm test:prod                                # Vue + React: prod (two projects), isolated NGINX; cleans up after tests
+pnpm test                                    # unit + all dev/fault + all prod projects
+pnpm --dir e2e exec playwright test --list     # inspect unique cases and project ownership
+node e2e/scripts/pack-smoke.mjs                # local tarball consumer checks; not registry acceptance
 node e2e/scripts/react-types-check.mjs        # dual-track dev types + negative matrix
 node e2e/scripts/react-negative-check.mjs     # N08/N10/N11 negative checks
 bash e2e/scripts/prod-setup.sh                # build all fixtures + isolated NGINX
 ```
 
 CI: unit + dual typecheck + build gates (gzip, error-code consistency); e2e Vue+React suites across Vite 6.4.3 / 7.3.6 / 8.3.0; scheduled Vite 5.1 floor job; prod-e2e; tarball consumer smoke (Vue + React).
+
+The known dual-client error-overlay case is skipped only on the reproduced Vite 5.1.4 version and reported as skipped, never passed. Other Vite 5 versions still execute it. Fixture tests do not replace final registry-package testing in a real application's development and production environments.
 
 ## License
 

@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:dev": "playwright test --project=dev",
-    "test:prod": "playwright test --project=prod",
+    "test:dev": "playwright test --project=dev --project=fault --project=react-dev --project=react-fault",
+    "test:prod": "playwright test --project=prod --project=prod-react",
     "report": "playwright show-report"
   },
   "devDependencies": {

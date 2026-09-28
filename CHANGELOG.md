@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.1.2（2026-09-29）
+
+- **修复 React hook 重载清理**：`useLoadRemote.reload()` 在发起新尝试时清空旧数据；失败后不再同时保留上次成功的数据。卸载和 effect 清理使在途 reload 失效，卸载后调用保存的 reload 不再发起请求或写状态；StrictMode 的新 effect 使用独立请求代次。
+- **回归验证**：新增直接记录卸载后状态 setter 调用的测试，覆盖成功/失败迟到结果、失败重载的数据清理、连续 reload 乱序和 StrictMode；不以 React 忽略卸载后的更新作为取消成功的证据。
+- **测试入口与文档**：默认开发命令包含 Vue/React 的 dev/fault 四个项目，生产命令包含两个框架的 prod 项目；中英文安装清单补齐 auto-import 与 React fixtures，删除过时的用例数量和“生产测试不进 CI”表述。
+- **Vite 5 已知限制范围**：错误覆盖层用例只对已复现的 5.1.4 跳过，其他 Vite 5 版本执行正常断言；跳过仍单列，不算通过。
+- 本版是小范围修复；TS 应用配置上下文识别、生产重试完整浏览器验证和 MES 双环境全量验收仍需后续任务完成，不宣称完整验收通过。
+
 ## 5.1.1（2026-09-28）
 
 - **修复：同实例会话切换（React）**——已挂载的 `useLoadRemote`/`remoteComponent`/页面组件此前不观察 `AppContext.sessionKey`，宿主换账号后同实例不重载。现在渲染期读取当前登录代次，`sessionKey` 变化即在同一实例上重走加载生命周期（不重挂载、不产生第二份 React；同会话 rerender 不重载；`undefined→A`、`A→B`、`A→登出→B` 均覆盖；Vue KeepAlive 退出语义不受影响）。
