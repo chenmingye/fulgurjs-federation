@@ -47,8 +47,12 @@ test.describe('dev: 远程模块消费与 shared 语义', () => {
     await expect(page.getByTestId('slot-a').getByTestId('vue-check')).toBeVisible()
     await page.goto(`${HOST}/#/scope`)
     await expect(page.getByTestId('scope-table')).toBeVisible()
-    // scope 中 vue 只应有一个被实际选用的版本条目存在（host 3.5.42）
-    await expect(page.getByTestId('scope-vue-3.5.42')).toBeVisible()
+    // scope 中 vue 只应有一个被实际选用的版本条目存在（host 实际安装版本——^3.5.22
+    // 浮动，测试动态读取 fixtures/host-vue 的安装版本，不硬编码补丁号）
+    const hostVue = await import('node:fs').then((fs) =>
+      JSON.parse(fs.readFileSync(new URL('../../fixtures/host-vue/node_modules/vue/package.json', import.meta.url), 'utf8')).version,
+    )
+    await expect(page.getByTestId(`scope-vue-${hostVue}`)).toBeVisible()
     await shotFull(page, 'dev-scope-debug-panel')
   })
 

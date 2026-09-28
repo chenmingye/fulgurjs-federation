@@ -10,7 +10,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const LIMIT = 9216
-const file = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist', 'runtime.js')
+const dist = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist')
+const file = path.join(dist, 'runtime.js')
+// React 适配器预算（5.1.0）：任务书建议 3072B，实测 3538B——差值全部来自两条中文三段式
+// 诊断文案（与 runtime.js 同一「中文诊断保留可操作性」口径）+ timeout/retry/代次守卫状态机。
+// 显式定档 4096B（zlib level9，external react 剔除后）；超限退出码 1，与 runtime 同级硬门禁。
+const REACT_ADAPTER_LIMIT = 4096
+const reactAdapter = path.join(dist, 'react-adapter.js')
 
 if (!fs.existsSync(file)) {
   console.error('[check-gzip] dist/runtime.js 不存在——先 build')
@@ -27,3 +33,14 @@ if (gz.length > LIMIT) {
   process.exit(1)
 }
 console.log(`[check-gzip] runtime.js gzip ${gz.length}B ≤ ${LIMIT}B ✓（raw ${raw.length}B）`)
+
+if (fs.existsSync(reactAdapter)) {
+  const raRaw = fs.readFileSync(reactAdapter)
+  const raGz = zlib.gzipSync(raRaw, { level: 9 })
+  if (raGz.length > REACT_ADAPTER_LIMIT) {
+    console.error(`[check-gzip] 超限：react-adapter.js gzip=${raGz.length}B > 阈值 ${REACT_ADAPTER_LIMIT}B（raw ${raRaw.length}B）`)
+    console.error('修法：核查是否引入了适配器逻辑增量；确属必要增长时，同步上调 REACT_ADAPTER_LIMIT 并在 CHANGELOG 说明测量口径')
+    process.exit(1)
+  }
+  console.log(`[check-gzip] react-adapter.js gzip ${raGz.length}B ≤ ${REACT_ADAPTER_LIMIT}B ✓（raw ${raRaw.length}B）`)
+}

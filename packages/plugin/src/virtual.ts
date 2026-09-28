@@ -377,6 +377,23 @@ export async function get(moduleName) {
 `
 }
 
+/**
+ * dev expose loader 代码：主路径是**真正的字面量** dynamic import——importAnalysis 会把它
+ * 重写为与远程内部静态 import 完全一致的 URL 形态（同 URL = 同模块条目；Vue 侧 SharedState
+ * 跨端同实例的既有契约）。拼接表达式会被 vite 包成 __vite__injectQuery(..., 'import') 产生
+ * `?import` 变体 URL，与内部裸 URL 形成双实例（React Context 跨端共享实测回归），不可用。
+ * 失败重试分支用 /* @vite-ignore *\/ 运行时拼接 fulgurjs_retry=<n>：浏览器 module map 缓存
+ * import 失败（同 URL 再 import 直接拒绝、零网络请求），必须变更 URL 才能穿透到网络层
+ * （与 runtime importEntry 的 entryFailCounts 同款语义）。
+ */
+function exposeLoaderCode(devUrl: string): string {
+  return [
+    `(() => { let __fg_n = 0; const __fg_u = ${JSON.stringify(devUrl)}; return () => __fg_n === 0`,
+    `  ? import(${JSON.stringify(devUrl)}).catch((e) => { __fg_n = 1; throw e })`,
+    `  : import(/* @vite-ignore */ __fg_u + '?fulgurjs_retry=' + (__fg_n++)); })()`,
+  ].join('\n')
+}
+
 /** dev provides 虚拟模块（走 vite 转换管线，dev URL 会被 importAnalysis 正确补 base/重写） */
 export function genDevProvides(options: NormalizedOptions): string {
   const exposes: string[] = []
@@ -384,7 +401,7 @@ export function genDevProvides(options: NormalizedOptions): string {
     // 根相对 URL：'/src/x.vue'，importAnalysis 负责解析与补 base
     const devUrl = `/${e.import.replace(/^\.?\//, '')}`
     exposes.push(
-      `  ${JSON.stringify(e.name)}: () => import(${JSON.stringify(devUrl)}),`,
+      `  ${JSON.stringify(e.name)}: ${exposeLoaderCode(devUrl)},`,
     )
   }
   const provides = providesRecords(options).map(
@@ -417,6 +434,8 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
   for (const e of options.exposes) {
     const abs = exposeAbsPaths[e.import]
     if (!abs) continue
+    // 字面量 import（rollup 静态分析拆 chunk / 重写产物路径）；失败重试穿透由 index.ts
+    // generateBundle 的产物后处理（__fgR 包装）注入——生成期动态拼接会破坏 rollup 静态分析
     exposes.push(`  ${JSON.stringify(e.name)}: () => import(${JSON.stringify(abs)}),`)
   }
   const provides = providesRecords(options).map(
@@ -460,11 +479,13 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
 }
 
 /**
- * 开发态 expose 的内部代理门面。应用代码仍写物理 /runtime，transform 后指向此模块。
- * Vue 适配器接收代理 loadRemote，remoteComponent 同步返回组件且不导入第二份内核。
+ * 开发态 expose 的内部代理门面。应用代码仍写物理入口（/runtime 或 /react），transform 后指向此模块。
+ * 适配器接收代理 loadRemote（页面级单例），不导入第二份内核。
+ * framework 决定接入的适配层：vue → remoteComponent/createHostPages（defineAsyncComponent 形态），
+ * react → remoteComponent/useLoadRemote/RemoteErrorBoundary/createReactHostPages。
  */
-export function genApiFacade(): string {
-  return [
+export function genApiFacade(framework: 'vue' | 'react' = 'vue'): string {
+  const head = [
     'export {',
     '  loadRemote, loadShare, preloadRemote, getContainer,',
     '  registerRemote, registerRemotes, registerShare, initSharing, registerPlugins,',
@@ -472,12 +493,21 @@ export function genApiFacade(): string {
     '} from "virtual:fulgurjs-runtime-proxy";',
     "export { provideAppContext, getAppContext, requireAppContext, clearAppContext } from '@fulgurjs/federation/internal/context.js';",
     "export { definePages, validatePages } from '@fulgurjs/federation/internal/pages.js';",
-    "import { createRemoteComponent, createHostPages as __fulgurjs_chp } from '@fulgurjs/federation/internal/vue-adapter.js';",
     "import { loadRemote as __fulgurjs_loadRemote } from 'virtual:fulgurjs-runtime-proxy';",
+  ]
+  const vueBody = [
+    "import { createRemoteComponent, createHostPages as __fulgurjs_chp } from '@fulgurjs/federation/internal/vue-adapter.js';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     'export const createHostPages = (options) => __fulgurjs_chp(options, __fulgurjs_loadRemote);',
-    '',
-  ].join('\n')
+  ]
+  const reactBody = [
+    "import { createRemoteComponent, createUseLoadRemote, RemoteErrorBoundary, createReactHostPages as __fulgurjs_rhp } from '@fulgurjs/federation/internal/react-adapter.js';",
+    'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
+    'export const useLoadRemote = createUseLoadRemote(__fulgurjs_loadRemote);',
+    'export { RemoteErrorBoundary };',
+    'export const createReactHostPages = (options) => __fulgurjs_rhp(options, __fulgurjs_loadRemote);',
+  ]
+  return [...head, ...(framework === 'react' ? reactBody : vueBody), ''].join('\n')
 }
 
 /** dev manifest（remote 端中间件动态返回；契约见 manifest.ts，消费端经 parseManifest 校验） */

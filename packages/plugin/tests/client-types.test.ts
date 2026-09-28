@@ -35,6 +35,47 @@ describe('runtime 物理入口类型', () => {
   })
 })
 
+describe('/react 物理入口类型', () => {
+  it('声明文件与公开类型真实存在', () => {
+    const file = join(PKG, 'dist/react.d.ts')
+    expect(existsSync(file)).toBe(true)
+    const text = readFileSync(file, 'utf8')
+    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteComponent', 'useLoadRemote', 'RemoteErrorBoundary', 'createReactHostPages', 'remoteSchema']) {
+      expect(text).toContain(name)
+    }
+  })
+
+  it('type-only 导出面与批准清单相同（不含 Vue 专属类型）', () => {
+    const text = readFileSync(join(PKG, 'dist/react.d.ts'), 'utf8')
+    const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
+    const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
+    expect(names).toEqual([
+      'AppContext', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
+      'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
+      'ReactHostPages', 'ReactHostPagesOptions', 'ReactRemoteComponentOptions',
+      'RemoteConfig', 'RemoteDebugInfo', 'RemoteErrorBoundaryProps', 'RemoteErrorFallback',
+      'RemoteInput', 'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
+      'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap',
+      'UseLoadRemoteOptions', 'UseLoadRemoteResult',
+    ].sort())
+    // Vue 专属类型不得混入 React 入口（type HostPages, 与 type ReactHostPages, 区分）
+    for (const vueOnly of ['type HostPagesOptions,', 'type RemoteComponentOptions,', 'type HostPages,', 'keepAliveNames', 'createHostPages']) {
+      expect(text).not.toContain(vueOnly)
+    }
+  })
+
+  it('package.json 导出 /react 与内部 react-adapter', () => {
+    const pkg = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'))
+    expect(pkg.exports['./react'].import).toBe('./dist/react.js')
+    expect(pkg.exports['./react'].types).toBe('./dist/react.d.ts')
+    expect(pkg.exports['./internal/react-adapter.js'].import).toBe('./dist/react-adapter.js')
+    expect(pkg.typesVersions['*'].react).toEqual(['dist/react.d.ts'])
+    expect(pkg.peerDependenciesMeta.react?.optional).toBe(true)
+    expect(pkg.peerDependenciesMeta['react-dom']?.optional).toBe(true)
+  })
+})
+
 describe('dts 生成路径规则（skipLibCheck 静默失败回归）', () => {
   it('非 .vue 源码 re-export 去掉 .ts 扩展名（默认禁 allowImportingTsExtensions）', async () => {
     const { sourceImportPath, stripTsExtension } = await import('../src/dts')

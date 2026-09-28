@@ -52,7 +52,7 @@ fs.writeFileSync(
   JSON.stringify({ name: 'pack-smoke-consumer', private: true, type: 'module' }, null, 2),
 )
 const npmEnv = { ...process.env, npm_config_yes: 'true' }
-execSync(`npm install "${tarballPath}" vue@^3.5.22 vite@^6.3.5 @vitejs/plugin-vue@^5.2.0 --no-audit --no-fund`, {
+execSync(`npm install "${tarballPath}" vue@^3.5.22 vite@^6.3.5 @vitejs/plugin-vue@^5.2.0 react@19.3.0 react-dom@19.3.0 @types/react@19.3.0 @types/react-dom@19.3.0 @vitejs/plugin-react@5.2.0 --no-audit --no-fund`, {
   cwd: consumer,
   stdio: 'inherit',
   env: npmEnv,
@@ -71,7 +71,7 @@ for (const ep of entryPoints) {
   }
 }
 const pkgJson = JSON.parse(fs.readFileSync(path.join(consumer, 'node_modules/@fulgurjs/federation/package.json'), 'utf8'))
-for (const sub of ['.', './runtime']) {
+for (const sub of ['.', './runtime', './react']) {
   const typesFile = pkgJson.exports[sub]?.types
   if (!typesFile || !fs.existsSync(path.join(consumer, 'node_modules/@fulgurjs/federation', typesFile))) {
     fail(`类型文件缺失：exports["${sub}"].types = ${typesFile}`)
@@ -90,7 +90,7 @@ for (const removedDist of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.t
   }
 }
 if (pkgJson.exports['./runtime']?.require) fail('/runtime 必须只有 ESM import 条件')
-fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), `import * as runtimeEntry from '@fulgurjs/federation/runtime'\nimport * as pluginEntry from '@fulgurjs/federation'\nif (!('loadRemote' in runtimeEntry && 'remoteComponent' in runtimeEntry && 'remoteSchema' in runtimeEntry)) process.exit(2)\nif ('loadRemote' in pluginEntry) process.exit(3)\n`)
+fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), `import * as runtimeEntry from '@fulgurjs/federation/runtime'\nimport * as pluginEntry from '@fulgurjs/federation'\nimport * as reactEntry from '@fulgurjs/federation/react'\nif (!('loadRemote' in runtimeEntry && 'remoteComponent' in runtimeEntry && 'remoteSchema' in runtimeEntry)) process.exit(2)\nif ('loadRemote' in pluginEntry) process.exit(3)\nif (!('remoteComponent' in reactEntry && 'useLoadRemote' in reactEntry && 'RemoteErrorBoundary' in reactEntry && 'createReactHostPages' in reactEntry && 'remoteSchema' in reactEntry)) process.exit(4)\nif ('createHostPages' in reactEntry || 'keepAliveNames' in reactEntry) process.exit(5)\n`)
 const esmCheck = spawnSync(process.execPath, ['check-runtime.mjs'], { cwd: consumer, encoding: 'utf8' })
 if (esmCheck.status !== 0) fail(`ESM 包路径导入失败：${esmCheck.stderr}`)
 let requireRejected = false
@@ -109,7 +109,7 @@ for (const name of ['loadRemote', 'remoteComponent', 'remoteSchema', 'clearAppCo
 log('types OK: . ./runtime；旧子路径（含 /config）已删除 ✓')
 
 const tsc = path.join(PLUGIN_DIR, 'node_modules/.bin/tsc')
-fs.writeFileSync(path.join(consumer, 'check-types.ts'), `import { loadRemote, definePages, remoteSchema } from '@fulgurjs/federation/runtime'\nimport type { RemoteInput } from '@fulgurjs/federation/runtime'\nconst remote: RemoteInput = { name: 'demo', entry: '/remoteEntry.js' }\ndefinePages([{ route: '/demo/list' }], { schema: remoteSchema })\nvoid loadRemote; void remote\n`)
+fs.writeFileSync(path.join(consumer, 'check-types.ts'), `import { loadRemote, definePages, remoteSchema } from '@fulgurjs/federation/runtime'\nimport type { RemoteInput } from '@fulgurjs/federation/runtime'\nimport { remoteComponent, useLoadRemote, RemoteErrorBoundary, createReactHostPages } from '@fulgurjs/federation/react'\nimport type { ReactRemoteComponentOptions, UseLoadRemoteResult } from '@fulgurjs/federation/react'\nimport { createElement } from 'react'\nconst remote: RemoteInput = { name: 'demo', entry: '/remoteEntry.js' }\ndefinePages([{ route: '/demo/list' }], { schema: remoteSchema })\nconst RC = remoteComponent<{ label: string }>('demo/Button', { fallback: createElement('p', null, 'loading') })\nconst hp = createReactHostPages({ pages: [], remotePrefixes: {} })\nconst opts: ReactRemoteComponentOptions = { retries: 1, timeout: 5000 }\nfunction useProbe(): UseLoadRemoteResult<{ v: number }> { return useLoadRemote('demo/utils') }\nvoid loadRemote; void remote; void RC; void hp; void opts; void useProbe; void RemoteErrorBoundary\n`)
 for (const [name, module, moduleResolution] of [['bundler', 'esnext', 'bundler'], ['node10', 'commonjs', 'node10']]) {
   const config = `tsconfig.${name}.json`
   fs.writeFileSync(path.join(consumer, config), JSON.stringify({ compilerOptions: { target: 'es2022', module, moduleResolution, strict: true, noEmit: true, skipLibCheck: true, types: [] }, files: ['check-types.ts'] }))
@@ -199,5 +199,75 @@ try {
   dev.kill('SIGTERM')
 }
 
+// ── 7. React consumer：tarball 的 /react 入口真实工程（build + dev 门面探测） ──
+const reactApp = path.join(tmp, 'react-app')
+fs.mkdirSync(path.join(reactApp, 'src'), { recursive: true })
+fs.writeFileSync(
+  path.join(reactApp, 'package.json'),
+  JSON.stringify({ name: 'pack-smoke-react', private: true, type: 'module' }, null, 2),
+)
+execSync(`npm install "${tarballPath}" react@19.3.0 react-dom@19.3.0 @vitejs/plugin-react@5.2.0 vite@^6.3.5 --no-audit --no-fund`, {
+  cwd: reactApp,
+  stdio: 'inherit',
+  env: npmEnv,
+})
+fs.writeFileSync(path.join(reactApp, 'index.html'), `<!doctype html><html><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`)
+fs.writeFileSync(
+  path.join(reactApp, 'src/main.tsx'),
+  `import { createElement } from 'react'\nimport { createRoot } from 'react-dom/client'\nimport { remoteComponent, remoteSchema, version } from '@fulgurjs/federation/react'\nconst RC = remoteComponent('r/Widget')\nexport const v = version\nexport const schema = remoteSchema\ncreateRoot(document.getElementById('root')!).render(createElement(RC))\n`,
+)
+fs.writeFileSync(
+  path.join(reactApp, 'src/exposed.tsx'),
+  `import { remoteComponent, provideAppContext } from '@fulgurjs/federation/react'\nexport const Widget = remoteComponent('r/Widget')\nexport const provide = provideAppContext\n`,
+)
+fs.writeFileSync(
+  path.join(reactApp, 'vite.config.ts'),
+  `import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nimport federation from '@fulgurjs/federation'\n\nexport default defineConfig({\n  plugins: [\n    react(),\n    federation({\n      name: 'pack-smoke-react',\n      exposes: { './Widget': './src/exposed.tsx' },\n      remotes: { 'r': { dev: 'http://localhost:${PORT}', prod: '/r' } },\n      shared: { react: { singleton: true }, 'react-dom': { singleton: true } },\n    }),\n  ],\n})\n`,
+)
+const reactVite = path.join(reactApp, 'node_modules/.bin/vite')
+const reactBuild = spawnSync(reactVite, ['build'], { cwd: reactApp, encoding: 'utf8' })
+if (reactBuild.status !== 0) {
+  console.error(reactBuild.stdout)
+  console.error(reactBuild.stderr)
+  fail('React consumer vite build 失败')
+}
+for (const f of ['fulgurjs-remoteEntry.js', 'fulgurjs-manifest.json']) {
+  if (!fs.existsSync(path.join(reactApp, 'dist', f))) fail(`React build 产物缺失：dist/${f}`)
+}
+log('React consumer vite build OK')
+
+const REACT_PORT = '5598'
+const reactDev = spawn(reactVite, ['--port', REACT_PORT, '--strictPort'], { cwd: reactApp, stdio: 'ignore', detached: false })
+let reactDevOk = false
+try {
+  const deadline = Date.now() + 60_000
+  const get = async (u) => await fetch(u, { signal: AbortSignal.timeout(3000) })
+  while (Date.now() < deadline) {
+    try {
+      const [page, entry, mainMod, exposedMod] = await Promise.all([
+        get(`http://localhost:${REACT_PORT}/`),
+        get(`http://localhost:${REACT_PORT}/@fulgurjs-entry.js`),
+        get(`http://localhost:${REACT_PORT}/src/main.tsx`),
+        get(`http://localhost:${REACT_PORT}/src/exposed.tsx`),
+      ])
+      const mainText = await mainMod.text().catch(() => '')
+      const exposedText = await exposedMod.text().catch(() => '')
+      if (page.ok && entry.ok && mainMod.ok && exposedMod.ok &&
+          mainText.includes('virtual:fulgurjs-remote-schema') &&
+          exposedText.includes('virtual:fulgurjs-api-facade-react')) {
+        reactDevOk = true
+        break
+      }
+    } catch {
+      /* dev server 尚未就绪，继续轮询 */
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  if (!reactDevOk) fail('React dev server 探测失败（/react 门面未接入 expose 转换）')
+  log('React dev page load OK（/react schema 拆分 + react 门面）')
+} finally {
+  reactDev.kill('SIGTERM')
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
-log(`PASS: tarball ${tarball} — exports 解析 / 类型文件 / vite build / dev 页面加载 全部通过`)
+log(`PASS: tarball ${tarball} — exports 解析（./react）/ 类型文件 / vite build（Vue+React）/ dev 页面加载（Vue+React）全部通过`)

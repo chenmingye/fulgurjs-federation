@@ -40,18 +40,29 @@ function splitNamedImportBindings(inner: string): string[] {
   return parts.filter(Boolean)
 }
 
-/** 开发态将公开入口的静态 schema 绑定拆出，并让 expose 使用页面级代理。 */
+/** 浏览器公开入口 → expose 目标的内部代理门面（dev 转换用；见 virtual.ts genApiFacade） */
+const ENTRY_FACADES: Record<string, string> = {
+  '@fulgurjs/federation/runtime': 'virtual:fulgurjs-api-facade',
+  '@fulgurjs/federation/react': 'virtual:fulgurjs-api-facade-react',
+}
+
+/**
+ * 开发态将公开入口的静态 schema 绑定拆出，并让 expose 使用页面级代理。
+ * 覆盖两个浏览器入口（/runtime 与 /react）：remoteSchema 绑定拆到虚拟 schema 模块，
+ * expose 目标整条导入改写到对应框架门面；宿主端导入保持原 specifier（node_modules 包）。
+ */
 export async function rewriteRuntimeEntryImports(code: string, exposeTarget: boolean): Promise<string | null> {
-  if (!code.includes('@fulgurjs/federation/runtime')) return null
+  if (!code.includes('@fulgurjs/federation/runtime') && !code.includes('@fulgurjs/federation/react')) return null
   await ensureLexer()
   const [imports] = parse(code)
   const out = new MagicString(code)
   let changed = false
   for (const imp of imports) {
-    if (imp.n !== '@fulgurjs/federation/runtime' || imp.d !== -1) continue
+    const facade = ENTRY_FACADES[imp.n ?? '']
+    if (!facade || imp.d !== -1) continue
     const statement = code.slice(imp.ss, imp.se)
     if (/^\s*import\s+type\b/.test(statement)) continue
-    const destination = exposeTarget ? 'virtual:fulgurjs-api-facade' : '@fulgurjs/federation/runtime'
+    const destination = exposeTarget ? facade : imp.n!
     const braces = statement.match(/\{([\s\S]*?)\}/)
     if (braces && /^\s*import\b/.test(statement)) {
       const parts = splitNamedImportBindings(braces[1])

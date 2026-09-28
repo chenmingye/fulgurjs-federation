@@ -44,6 +44,7 @@ e2e/*.mjs
 e2e/h3-audit.sh
 e2e/nginx/30-fulgur-test-8662.conf
 packages/plugin/README.md
+packages/plugin/README.en.md
 packages/plugin/docs/
 packages/plugin/CHANGELOG.md
 packages/plugin/DESIGN.md
@@ -56,3 +57,6 @@ packages/plugin/*.tgz
 # e2e prod 隔离实例状态（prod-setup.sh 写入）
 e2e/.prod-port
 e2e/.prod-nginx.json
+
+# React fixtures 类型检查探针（R15 脚本生成，不入库）
+fixtures/host-react/typecheck/

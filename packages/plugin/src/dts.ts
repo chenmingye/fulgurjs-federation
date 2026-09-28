@@ -167,6 +167,44 @@ function writeAnyModules(outDir: string, remoteKey: string, manifest: DevFederat
   fs.writeFileSync(file, ['// 自动生成：远程源码不可访问，模块导出降级为 any。', ...modules, ''].join('\n'))
 }
 
+
+/**
+ * 宿主 tsconfig 是否已为 remote 配置 paths（精确轨开关）：compilerOptions.paths 中存在
+ * 「<remoteKey>/*」或「<remoteKey>」键即视为已启用。tsconfig 含注释/尾逗号时 JSON.parse
+ * 失败则宽松降级为文本匹配（paths 键形态足够特异）。
+ */
+function hostPathsCovers(root: string, remoteKey: string): boolean {
+  // 扫描宿主全部 tsconfig*.json（主配置或任一子上下文配置了该 remote 的 paths 都算启用）
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(root).filter((f) => /^tsconfig[\w.-]*\.json$/i.test(f))
+  } catch {
+    return false
+  }
+  for (const f of files) {
+    let text: string
+    try {
+      text = fs.readFileSync(path.join(root, f), 'utf8')
+    } catch {
+      continue
+    }
+    // 宽松文本匹配（tsconfig 常含注释/尾逗号，JSON.parse 可能失败）
+    const exact = new RegExp(`"${remoteKey}"\\s*:`)
+    const wildcard = new RegExp(`"${remoteKey}/\\*"\\s*:`)
+    if (exact.test(text) || wildcard.test(text)) return true
+    try {
+      const cfg = JSON.parse(text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/,\s*([}\]])/g, '$1')) as {
+        compilerOptions?: { paths?: Record<string, unknown> }
+      }
+      const paths = cfg.compilerOptions?.paths
+      if (paths && (remoteKey in paths || `${remoteKey}/*` in paths)) return true
+    } catch {
+      /* 宽松匹配已尝试，继续下一份 */
+    }
+  }
+  return false
+}
+
 export async function generateDevTypes(options: NormalizedOptions, server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
@@ -210,6 +248,15 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
       `// 自动生成：fulgurjs-federation dev 类型直连（remote: ${remote.name}，mode: ${mode}）`,
       `// 重新生成：重启 host dev server`,
     ]
+    // 双轨输出（5.1.0）：本文件是「零配置轨」的 ambient 声明；同名的 remote.d/ 目录是
+    // 「精确轨」的转发模块（普通模块文件里的相对 re-export 合法）。TS 语言限制：ambient
+    // declare module 内禁止相对 re-export（TS2439，用户工程常规 skipLibCheck 会把该错误
+    // 静默吞掉使导出退 any），且模块文件不能声明新外部模块——精确类型只能经 tsconfig
+    // paths 解析到转发模块获得（配置见 remote.d/ 内注释）。
+    const preciseDir = path.join(outDir, `${remote.key}.d`)
+    fs.rmSync(preciseDir, { recursive: true, force: true }) // 重启重建：移除已下线 expose 的残留转发文件
+    fs.mkdirSync(preciseDir, { recursive: true })
+    const preciseFiles: string[] = []
     let accepted = 0
     for (const expose of manifest.exposes ?? []) {
       // 内部 setup 生命周期入口不生成用户可导入的类型声明（manifest.setup 标识；
@@ -247,6 +294,10 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
       if (!fs.existsSync(realAbs)) continue
       const rel = path.relative(outDir, realAbs).split(path.sep).join('/')
       const importPath = realAbs.endsWith('.vue') ? sourceImportPath(rel) : stripTsExtension(sourceImportPath(rel))
+      // 精确轨转发文件的相对路径按其自身位置计算（expose 含目录层级时转发文件在子目录）
+      const preciseFileDir = path.join(outDir, `${remote.key}.d`, path.dirname(expose.name.replace(/^\.\//, '').split('/').map((seg) => seg.replace(/[^A-Za-z0-9_-]/g, '_')).join('/')))
+      const relPrecise = path.relative(preciseFileDir, realAbs).split(path.sep).join('/')
+      const importPathPrecise = realAbs.endsWith('.vue') ? sourceImportPath(relPrecise) : stripTsExtension(sourceImportPath(relPrecise))
       // WP5：模块名统一合法 TS 字符串序列化（远程提供的 name 不直接拼进声明代码）
       const moduleSpecifier = `${remote.key}/${expose.name.replace(/^\.\//, '')}` // 'remote-a' + './Button' → 'remote-a/Button'
       const moduleLiteral = JSON.stringify(moduleSpecifier)
@@ -258,29 +309,89 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
         continue
       }
       if (realAbs.endsWith('.vue')) {
+        // .vue：宽松形态（宿主 tsc 解析 .vue import 需要自备 shim，不能假设）
         lines.push(`declare module ${moduleLiteral} {`)
         lines.push(`  import type { DefineComponent } from 'vue'`)
         lines.push(`  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>`)
         lines.push(`  export default component`)
-        lines.push(`  export * from ${importLiteral}`)
         lines.push(`}`)
+        // 精确轨：同样宽松（.vue 的精确类型依赖宿主 vue-tsc/shim，非插件可解）。
+        // 子路径保留 expose 的目录层级（paths 通配 $1 直接命中）
+        const subPath = expose.name.replace(/^\.\//, '').split('/').map((seg) => seg.replace(/[^A-Za-z0-9_-]/g, '_')).join('/')
+        const preciseFile = path.join(preciseDir, `${subPath}.ts`)
+        fs.mkdirSync(path.dirname(preciseFile), { recursive: true })
+        preciseFiles.push(`${subPath}.ts`)
+        fs.writeFileSync(
+          preciseFile,
+          [
+            `// 自动生成（精确轨）：.vue expose 为宽松形态（精确类型需宿主 vue-tsc/shim）`,
+            `import type { DefineComponent } from 'vue'`,
+            `declare const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>`,
+            `export default component`,
+            ``,
+          ].join('\n'),
+        )
       } else {
+        // .ts/.tsx：零配置轨用带体 ambient（default/具名导出/类型均为 any——可解析）。
+        // 不能用简写 `declare module "x";`：简写会拦截同名 paths 解析，精确轨失效
+        // （实测 paths 已命中转发文件仍被简写 shadow 成 any）。带体 ambient 不参与
+        // resolution 竞争，配置 paths 后转发文件（源码级类型）自然接管。TS 语言限制：
+        // 声明文件一旦有顶层 import 即成模块文件、其 declare module 失去全局性（TS2307）；
+        // ambient 体内又禁止相对 re-export（TS2439，skipLibCheck 下静默退 any）、嵌套
+        // import 的类型不流动——零配置下不存在合法的精确通路，源码级类型经精确轨
+        // （remote.d/ 转发模块 + tsconfig paths）获得，见 _paths.d.ts 的启用说明。
+        const srcText = fs.readFileSync(realAbs, 'utf8')
+        const names = extractTsExportNames(srcText)
+        const hasDefault = sourceHasDefaultExport(realAbs)
         lines.push(`declare module ${moduleLiteral} {`)
-        const names = extractTsExportNames(fs.readFileSync(realAbs, 'utf8'))
-        if (names.length > 0) {
-          lines.push(`  export { ${names.join(', ')} } from ${importLiteral}`)
-        } else {
-          // 无具名导出可枚举：退回 export *（副作用导入至少可用）
-          lines.push(`  export * from ${importLiteral}`)
-        }
-        if (sourceHasDefaultExport(realAbs)) lines.push(`  export { default } from ${importLiteral}`)
+        if (hasDefault) lines.push(`  const __fg_default: any`, `  export default __fg_default`)
+        for (const n of names) lines.push(`  export const ${n}: any`, `  export type ${n} = any`)
+        if (!hasDefault && names.length === 0) lines.push(`  // 纯副作用模块（无可枚举导出）`)
         lines.push(`}`)
+        // 精确轨：转发模块（普通文件相对 re-export 合法；paths 命中后经此拿到源码级类型）。
+        // 子路径保留 expose 的目录层级（paths 通配 * 直接命中）
+        const subPath = expose.name.replace(/^\.\//, '').split('/').map((seg) => seg.replace(/[^A-Za-z0-9_-]/g, '_')).join('/')
+        // 普通模块（非 ambient）：export * 完整转发类型与值（含 interface/type）。
+        // 后缀用 .ts（非 .d.ts）：.d.ts 引用 .tsx 实现文件时 TS 会把导出折叠成
+        // namespace（TS2709 无法用作类型），普通源文件参与编译则类型从源符号流动
+        const preciseFile = path.join(preciseDir, `${subPath}.ts`)
+        fs.mkdirSync(path.dirname(preciseFile), { recursive: true })
+        const fwd: string[] = [`// 自动生成（精确轨）：经 tsconfig paths 解析到本文件后获得源码级类型`]
+        const preciseImportLiteral = JSON.stringify(importPathPrecise)
+        if (names.length > 0 || hasDefault) fwd.push(`export * from ${preciseImportLiteral}`)
+        if (hasDefault) fwd.push(`export { default } from ${preciseImportLiteral}`)
+        if (fwd.length === 1) fwd.push(`import ${preciseImportLiteral}`) // 副作用模块
+        fwd.push('')
+        preciseFiles.push(`${subPath}.ts`)
+        fs.writeFileSync(preciseFile, fwd.join('\n'))
       }
       accepted++
     }
     // WP5：异常 remote 只跳过自身（continue 已处理）；此处仅在有产出时落盘，杜绝半截声明
     if (accepted > 0) {
-      fs.writeFileSync(path.join(outDir, `${remote.key}.d.ts`), `${lines.join('\n')}\n`)
+      // 智能双轨：宿主 tsconfig 已为该 remote 配置 paths（精确轨已启用）时不写同名
+      // ambient——任何同名 ambient（含带体）都会 shadow paths 命中的转发文件（实测：
+      // paths 解析成功但类型仍被 ambient 拦成 any），二者的切换开关就是 paths 配置本身
+      const pathsEnabled = hostPathsCovers(options.root, remote.key)
+      if (pathsEnabled) {
+        if (fs.existsSync(path.join(outDir, `${remote.key}.d.ts`))) fs.unlinkSync(path.join(outDir, `${remote.key}.d.ts`))
+        console.log(
+          `[fulgurjs] 类型生成：检测到宿主 tsconfig 已配置 "${remote.key}/*" 的 paths——精确轨生效，跳过同名 ambient 声明（避免 shadow 转发模块）。`,
+        )
+      } else {
+        fs.writeFileSync(path.join(outDir, `${remote.key}.d.ts`), `${lines.join('\n')}\n`)
+      }
+      // 精确轨 paths 说明（README 同步）：include 目录不变，加一段 paths 即升级精确类型
+      fs.writeFileSync(
+        path.join(preciseDir, '_paths.d.ts'),
+        [
+          `// 精确轨启用方法（把下面片段合入宿主 tsconfig 的 compilerOptions；baseUrl 指向本 tsconfig 所在目录）：`,
+          `//   "paths": { "${remote.key}/*": ["${dir}/${remote.key}.d/*"] }`,
+          `// 说明：零配置轨（${remote.key}.d.ts 的 ambient 声明）可解析但导出为宽松类型；`,
+          `// 配置 paths 后同形态导入解析到本目录的转发模块，获得远程源码级类型精度。`,
+          ``,
+        ].join('\n'),
+      )
     }
     console.log(
       `[fulgurjs] 类型生成：已生成 ${dir}/${remote.key}.d.ts（已收录 ${accepted}/${manifest.exposes?.length ?? 0} 个暴露模块，模式 ${mode}）。` +

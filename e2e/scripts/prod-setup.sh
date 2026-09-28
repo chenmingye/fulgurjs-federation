@@ -51,6 +51,8 @@ build_fix "$FIX/remote-b" '/remote-b/'
 build_fix "$FIX/remote-auto" '/remote-auto/'
 build_fix "$FIX/host-vue"
 build_fix "$FIX/host-auto" '/host-auto/'
+build_fix "$FIX/remote-react" '/remote-react/'
+build_fix "$FIX/host-react" '/host-react/'
 
 # 2. 组装部署目录（本次运行专属临时目录）
 TMP_PROD="$(mktemp -d "${TMPDIR:-/tmp}/fulgurjs-e2e-prod.XXXXXX")"
@@ -59,7 +61,7 @@ mkdir -p "$PROD"
 # 跨平台内容拷贝：BSD cp（macOS）`cp -R src/ dest` 拷内容，GNU cp（CI）忽略尾斜杠拷目录本身——
 # 统一为子 shell 内 `cp -R .`（两端语义一致），否则 CI 上产物会多套一层 dist/
 (cd "$FIX/host-vue/dist" && cp -R . "$PROD/")
-for app in remote-a remote-b remote-auto host-auto; do
+for app in remote-a remote-b remote-auto host-auto remote-react host-react; do
   mkdir -p "$PROD/$app"
   (cd "$FIX/$app/dist" && cp -R . "$PROD/$app/")
 done
@@ -112,7 +114,8 @@ PY
 echo "$PORT" > "$PORT_FILE"
 
 for u in "/" "/remote-a/fulgurjs-remoteEntry.js" "/remote-a/fulgurjs-manifest.json" \
-         "/remote-b/fulgurjs-remoteEntry.js" "/remote-auto/fulgurjs-manifest.json" "/host-auto/"; do
+         "/remote-b/fulgurjs-remoteEntry.js" "/remote-auto/fulgurjs-manifest.json" "/host-auto/" \
+         "/remote-react/fulgurjs-remoteEntry.js" "/remote-react/fulgurjs-manifest.json" "/host-react/"; do
   code=$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "http://localhost:$PORT$u" || echo 000)
   echo "nginx $u -> $code"
 done

@@ -57,8 +57,17 @@ async function runWithManifest(root: string, manifest: unknown) {
     globalThis.fetch = origFetch
   }
   const outDir = path.join(root, 'types')
-  const files = fs.existsSync(outDir) ? fs.readdirSync(outDir) : []
-  const content = files.map((f) => fs.readFileSync(path.join(outDir, f), 'utf8')).join('\n')
+  // 5.1.0 双轨：outDir 下既有 .d.ts 文件也有 remote.d/ 精确轨目录——全量收集
+  const readDir = (dir: string, prefix = ''): string[] =>
+    fs.existsSync(dir)
+      ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+          e.isDirectory() ? readDir(path.join(dir, e.name), `${prefix}${e.name}/`) : [`${prefix}${e.name}`],
+        )
+      : []
+  const files = readDir(outDir)
+  const content = files
+    .map((f) => fs.readFileSync(path.join(outDir, f), 'utf8'))
+    .join('\n')
   return { files, content }
 }
 
@@ -80,7 +89,7 @@ describe('WP5: dts 路径边界', () => {
       })
       expect(files).toContain('evil.d.ts')
       expect(content).toContain('declare module "evil/Ok"')
-      expect(content).toContain('export { ok }')
+      expect(content).toContain('export const ok: any')
       expect(content).not.toContain('PWNED')
     } finally {
       fs.rmSync(root, { recursive: true, force: true })

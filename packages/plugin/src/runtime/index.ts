@@ -145,6 +145,9 @@ interface RemoteInternal extends Omit<RemoteConfig, 'breaker'> {
   breakerState: { fails: number; openUntil: number }
   /** WP6：entry 动态 import 的单一 in-flight 记录（按 URL；超时不清除——import 无法取消） */
   entryInflight: Map<string, Promise<any>>
+  /** entry URL 的连续失败计数：浏览器 module map 会缓存 import 失败（同 URL 再 import 直接
+   *  拒绝且零网络请求），失败后的下一次尝试必须变更 URL（fulgurjs_retry query）才能真重试 */
+  entryFailCounts: Map<string, number>
   debug: RemoteDebugInfo
 }
 
@@ -417,6 +420,7 @@ function createRuntime() {
         state: prev?.state ?? 'idle',
         breakerState: prev?.breakerState ?? { fails: 0, openUntil: 0 },
         entryInflight: prev?.entryInflight ?? new Map(),
+        entryFailCounts: prev?.entryFailCounts ?? new Map(),
         debug: prev?.debug ?? { entry: r.entry, status: 'idle', setup: 'none' },
       })
     }
@@ -563,11 +567,18 @@ function createRuntime() {
     // WP6：单一 in-flight 记录——动态 import 无法取消，调用方超时只代表不再等待；
     // 后续调用（含超时后的重试）复用同一条 promise，绝不重复发起同一 URL 的 import。
     // 请求层失败（fetch error）后清除记录以允许真实重试。
+    // 失败缓存穿透：浏览器 module map 缓存 import 失败（同 URL 再 import 直接拒绝、零网络
+    // 请求），失败后的下一次尝试在 URL 上追加 fulgurjs_retry=<n> 才能穿透到网络层。
+    const fails = remote.entryFailCounts.get(url) ?? 0
+    const attemptUrl = fails > 0 ? `${url}${url.includes('?') ? '&' : '?'}fulgurjs_retry=${fails}` : url
     const cached = remote.entryInflight.get(url)
-    const inflight = cached ?? import(/* @vite-ignore */ url)
+    const inflight = cached ?? import(/* @vite-ignore */ attemptUrl)
     if (!cached) {
       remote.entryInflight.set(url, inflight)
-      inflight.catch(() => remote.entryInflight.delete(url))
+      inflight.catch(() => {
+        remote.entryInflight.delete(url)
+        remote.entryFailCounts.set(url, (remote.entryFailCounts.get(url) ?? 0) + 1)
+      })
     }
     return withTimeout(inflight, remote.timeout ?? DEFAULT_TIMEOUT, `加载远程入口 ${sanitizeUrl(url)}`)
   }

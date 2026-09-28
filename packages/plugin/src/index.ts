@@ -442,6 +442,7 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
       if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api-facade-react') return bareClean
       if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
@@ -471,7 +472,10 @@ export function federation(options: FederationOptions): Plugin[] {
         return genDevProvides(state.normalized)
       }
       if (clean === 'virtual:fulgurjs-api-facade' && state.command === 'serve') {
-        return genApiFacade()
+        return genApiFacade('vue')
+      }
+      if (clean === 'virtual:fulgurjs-api-facade-react' && state.command === 'serve') {
+        return genApiFacade('react')
       }
       if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）
@@ -753,6 +757,20 @@ export function federation(options: FederationOptions): Plugin[] {
           if (hit) state.exposeFiles[e.name] = hit
         }
         const entryChunkName = Object.keys(bundle).find((k) => bundle[k].type === 'chunk' && k === n.filename)
+        // 失败重试穿透（prod）：浏览器 module map 缓存 import 失败（同 URL 再 import 直接
+        // 拒绝、零网络请求）。rollup 把 expose loader 重写为字面量 import('./assets/x.js')，
+        // 此处在产物层把每个字面量包上 __fgR(url)（第 2 次起追加 fulgurjs_retry=N）——
+        // URL 变化才能穿透 module map 到达网络层（与 runtime importEntry、dev 容器同款）。
+        const entryChunk = entryChunkName ? bundle[entryChunkName] : undefined
+        if (entryChunk && entryChunk.type === 'chunk' && /import\((['"])[^'")]+\1\)/.test(entryChunk.code)) {
+          const helper = 'var __fgN={};var __fgR=function(u){__fgN[u]=(__fgN[u]||0)+1;return __fgN[u]>1?u+(u.indexOf("?")>-1?"&":"?")+"fulgurjs_retry="+(__fgN[u]-1):u};'
+          entryChunk.code = entryChunk.code.replace(
+            /import\((['"])([^'")]+)\1\)/g,
+            (_m, q: string, u: string) => `import(__fgR(${q}${u}${q}))`,
+          )
+          entryChunk.code = `${helper}\n${entryChunk.code}`
+          debugLog('manifest', { stage: 'generateBundle', retryBust: 'remoteEntry loaders wrapped' })
+        }
         const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
         debugLog('manifest', {
           stage: 'generateBundle',

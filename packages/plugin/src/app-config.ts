@@ -316,7 +316,7 @@ export async function loadAppConfig(configPath: string): Promise<AppConfigLoadRe
   try {
     const bundleFile = path.join(tmpDir, 'fulgurjs.config.bundle.mjs')
     fs.writeFileSync(bundleFile, out.outputFiles[0].text)
-    const mod = (await import(`${pathToFileURL(bundleFile).href}?t=${Date.now()}`)) as {
+    const mod = (await import(/* @vite-ignore */ `${pathToFileURL(bundleFile).href}?t=${Date.now()}`)) as {
       default?: unknown
       hostPages?: unknown
     }

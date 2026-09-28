@@ -84,6 +84,25 @@ export default defineConfig({
           stderr: serverStdio,
           timeout: 90_000,
         },
+        // React fixtures（remote-react 5103 / host-react 5104；react-*.spec 使用）
+        {
+          command: 'pnpm dev',
+          cwd: '../fixtures/remote-react',
+          url: 'http://localhost:5103/@fulgurjs-manifest.json',
+          reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
+          timeout: 90_000,
+        },
+        {
+          command: 'pnpm dev',
+          cwd: '../fixtures/host-react',
+          url: 'http://localhost:5104',
+          reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
+          timeout: 90_000,
+        },
       ],
   projects: [
     {
@@ -99,6 +118,21 @@ export default defineConfig({
     {
       name: 'prod',
       testMatch: /prod\.spec\.ts/,
+      use: { baseURL: `http://localhost:${readProdPort()}` },
+    },
+    {
+      name: 'react-dev',
+      testMatch: /react-dev\.spec\.ts/,
+      use: { baseURL: 'http://localhost:5104' },
+    },
+    {
+      name: 'react-fault',
+      testMatch: /react-fault\.spec\.ts/,
+      use: { baseURL: 'http://localhost:5104' },
+    },
+    {
+      name: 'prod-react',
+      testMatch: /react-prod\.spec\.ts/,
       use: { baseURL: `http://localhost:${readProdPort()}` },
     },
   ],

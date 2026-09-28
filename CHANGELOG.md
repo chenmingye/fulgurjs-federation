@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.1.0（2026-09-28）
+
+- **React 完整支持（浏览器客户端）**：新增 `@fulgurjs/federation/react` 入口——`remoteComponent`（pending/错误占位与错误边界内置、timeout 适配层超时、不用 React.lazy 的失败缓存陷阱）、`useLoadRemote`（代次守卫的模块 hook：StrictMode 双 effect/快速切换/慢请求晚返回/卸载后返回只允许最新有效请求写状态）、`RemoteErrorBoundary`（页面级兜底 + resetKeys）、`createReactHostPages`（与 Vue 共用同一份页面表数据与 definePages R1–R5 校验；不提供 keepAliveNames）。peer 新增可选 `react`/`react-dom`（`>=18 <20`）；纯 React 项目零 Vue 依赖、纯 Vue 项目零 React 依赖（静态导入图与 tarball 消费双向守护）。共享 `react`/`react-dom` singleton：dev 期预构建外部化自动改道 jsx-runtime/jsx-dev-runtime 内部引用，prod 期 CJS require 垫片覆盖 `react-dom/client` 子路径；Hooks/StrictMode/Context 跨端单实例经真实浏览器 e2e 验证（React 19.3；18 隔离验证见验收报告）。
+- **修复：失败恢复穿透浏览器 ESM 失败缓存**（Vue/React 通用）——同 URL 的失败 `import()` 会被浏览器 module map 缓存为失败（重试零网络请求）。运行时入口（`entryFailCounts` + `fulgurjs_retry=N` query）、dev 容器 expose loader（字面量主路径保持 vite URL 规范化一致 + `@vite-ignore` 重试分支）、prod remoteEntry 产物（`__fgR` 包装）三处统一实现「失败后的重试变更 URL」；服务恢复后点击重试真实重新拉取（此前仅整页刷新可恢复）。
+- **修复：`react-adapter` 产物内联 react 的隐患**——peerDependencies 曾漏列 react/react-dom 导致 tsup 未外置；本版 peer 完整（此前版本无 React 入口，无实际影响面）。
+- **开发类型双轨（Vue/React 通用）**：此前 ambient declare module 内的相对 re-export 是 TS2439 非法声明，被用户工程常规 skipLibCheck 静默吞成 any。现零配置生成合法带体宽松声明（可解析）；新增精确轨 `<types>/<remote>.d/` 目录转发模块，宿主 tsconfig 配一段 `"paths": { "<remote>/*": ["<types目录>/<remote>.d/*"] }` 即获得源码级类型（错误 props/参数编译失败）；配置了 paths 的远程自动跳过同名宽松声明避免遮蔽。
+- **完整英文 README（README.en.md）**：与中文 README 同源的当前用法全量文档（含 React API/41 错误码/边界/懒加载口径），随 npm 包发布；npm 默认 README 仍为中文，两份顶部互链。
+- 内部：vue-adapter 纯页面解析提取为共用的 host-pages-core.ts（Vue 行为与既有断言保持）；新增 fixtures/host-react + fixtures/remote-react、examples/react-host + examples/react-remote、React dev/fault/prod e2e 套件与 CI 矩阵接线；prod-setup 隔离 NGINX 增加 /host-react 与 /remote-react 子路径。
+
 ## 5.0.4（2026-09-28）
 
 - **修复开发类型生成的地址解析**：按宿主开发服务的 origin（包含协议）解析协议相对与同源相对的 remote dev 地址，避免页面可加载却因 `new URL()` 缺基址而跳过类型生成。新增真实 HTTP manifest 回归测试；5.0.3 的 any 降级声明修复保留。

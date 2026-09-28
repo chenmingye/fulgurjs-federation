@@ -65,6 +65,28 @@ http {
       try_files $uri $uri/ /host-auto/index.html;
     }
 
+    # 远程应用 remote-react（React 支持，子路径部署）
+    location /remote-react/ {
+      alias "__PROD_DIST__/remote-react/";
+      index index.html;
+      try_files $uri $uri/ /remote-react/index.html;
+
+      location = /remote-react/fulgurjs-remoteEntry.js {
+        alias "__PROD_DIST__/remote-react/fulgurjs-remoteEntry.js";
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Access-Control-Allow-Origin "*";
+        add_header Access-Control-Expose-Headers "*";
+      }
+      add_header Access-Control-Allow-Origin "*";
+    }
+
+    # 宿主应用 host-react（React 支持，子路径部署）
+    location /host-react/ {
+      alias "__PROD_DIST__/host-react/";
+      index index.html;
+      try_files $uri $uri/ /host-react/index.html;
+    }
+
     # 宿主应用（根路径）
     location / {
       root "__PROD_DIST__";

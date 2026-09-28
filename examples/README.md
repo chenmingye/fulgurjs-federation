@@ -5,6 +5,11 @@
 - [`remote-a/fulgurjs.config.ts`](./remote-a/fulgurjs.config.ts) — 远程应用：exposes / setup / shared
 - [`host/fulgurjs.config.ts`](./host/fulgurjs.config.ts) — 宿主应用：remotes 消费地址 + 可选 `hostPages` 页面核对数据（仅供 CLI）
 
+React 完整可运行工程（5.1.0 起，npm registry 安装即跑，区别于上面两个「配置样例」目录）：
+
+- [`react-remote/`](./react-remote) — React 远程（5203）：Button/utils/pages expose + shared react/react-dom singleton
+- [`react-host/`](./react-host) — React 宿主（5204）：`@fulgurjs/federation/react` 导入 + 页面表 + React Router；运行说明见其 README
+
 复制方式：把对应文件整份复制到**你自己的项目根目录**（两个项目不共享配置文件、不共享父目录配置），再在各自 `vite.config.ts` 的 plugins 里加一次 `federation(fulgurjsConfig)`：
 
 ```ts

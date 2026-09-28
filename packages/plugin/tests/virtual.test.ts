@@ -211,6 +211,18 @@ describe('开发态内部 API 门面', () => {
     expect(code).toContain('@fulgurjs/federation/internal/vue-adapter.js')
     expect(code).toContain('provideAppContext')
   })
+  it('React 门面接 react-adapter，不引入 Vue', async () => {
+    const { genApiFacade } = await import('../src/virtual')
+    const code = genApiFacade('react')
+    expect(code).toContain('from "virtual:fulgurjs-runtime-proxy"')
+    expect(code).toContain('@fulgurjs/federation/internal/react-adapter.js')
+    expect(code).toContain('createRemoteComponent(__fulgurjs_loadRemote)')
+    expect(code).toContain('createUseLoadRemote(__fulgurjs_loadRemote)')
+    expect(code).toContain('export { RemoteErrorBoundary };')
+    expect(code).toContain('__fulgurjs_rhp(options, __fulgurjs_loadRemote)')
+    expect(code).not.toContain('vue-adapter')
+    expect(code).toContain('provideAppContext')
+  })
   it('parseSpec 同步直读单例', async () => {
     const { genApiFacade } = await import('../src/virtual')
     const { genRuntimeProxyModule } = await import('../src/virtual')

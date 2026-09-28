@@ -159,6 +159,17 @@ remote 样式改动立即生效；host 自身业务 HMR 不受影响。
 - **dev 与 prod（NGINX）两套截图各自备齐**，手册按环境归档引用
 - 手动冒烟（如后台接口连通、NGINX reload）同样截图留证
 
+## 6.1 双框架浏览器入口（5.1.0 React 支持）
+
+- 构建期入口 `@fulgurjs/federation`（dist/index.js）不变。
+- Vue 浏览器入口 `@fulgurjs/federation/runtime` → dist/runtime-entry.js → runtime.js（框架无关内核）+ context/pages + vue-adapter。
+- React 浏览器入口 `@fulgurjs/federation/react` → dist/react.js（gen-runtime-entry.mjs 生成薄壳）→ 同一 runtime.js + context/pages + react-adapter（类型面 dist/react.d.ts 由 tsup 从 src/react.ts 生成；双入口独立 tsup 构建，防止 dts 共享 chunk）。
+- 纯解析核心 `host-pages-core.ts` 自 vue-adapter 提取共用（definePages 接入/最长前缀/base/参数匹配/会话代次判定）；Vue 保留组件命名缓存与 KeepAlive 语义，React 侧组件缓存仅按「新非空 sessionKey」重建且不提供 keepAliveNames。
+- 开发态：`transform.rewriteRuntimeEntryImports` 同时识别 /runtime 与 /react（remoteSchema 拆分共用，expose 目标分别指向 `virtual:fulgurjs-api-facade` / `virtual:fulgurjs-api-facade-react`）；`virtual.genApiFacade(framework)` 分别接两套适配器；纯 React 静态图无 Vue、纯 Vue 图无 React（runtime-entry-graph.test 双向守护，tarball smoke 以独立 React consumer 复核）。
+- 共享子路径：`react`/`react-dom` singleton 协商 + dev 期 optimize-shared-external 预构建外部化（jsx-runtime 内部 require 改道门面）+ prod 期 cjsRequireRewrite；peer 声明 `react >=18 <20`（optional）——peer 缺失会导致 tsup 不外置、react 内联进适配器产物（双实例风险，实测教训）。
+- 失败恢复：runtime `importEntry`（entryFailCounts）+ dev 容器 loader（字面量主路径 + `@vite-ignore` 重试分支；字面量保证与 vite importAnalysis 重写形态一致，拼接表达式会经 injectQuery 产生 `?import` 变体 URL 与内部静态 import 形成双模块实例）+ prod remoteEntry 产物后处理（`__fgR` 包装）三处统一「失败后重试变更 URL（fulgurjs_retry=N）穿透浏览器 module map 失败缓存」。
+- 开发类型双轨：零配置 ambient（带体 any，可解析；简写 ambient 会 shadow paths 命中的转发文件，TS2439/TS2709 语言限制见 dts.ts 注释）+ 精确轨 `remote.d/` 目录 .ts 转发模块（export *）配 tsconfig paths；宿主配了 paths 的远程自动跳过同名 ambient。
+
 ## 7. 文档交付物
 
 **唯一权威文档 = 仓库根 `README.md`**（随 npm 包发布，GitHub 与 npm 双端可读）；迁移路径见 `docs/迁移指南.md`。内容组织：
