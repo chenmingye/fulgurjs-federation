@@ -56,45 +56,62 @@ if (!pathsHint.includes('"paths"')) fail('精确轨缺少 paths 启用说明')
 log('双轨声明内容 OK（ambient 可解析 / 转发模块含 props 与具名导出 / paths 说明）')
 
 // 2+3. 探针工程（typecheck/ 目录被 .gitignore；tsconfig.typecheck.json 已配 paths→精确轨）
+// D06 §8.1：用例矩阵独立化——每个负向用例单独写盘、单独编译、断言预期错误码与位置，
+// 不得把任意非零退出当通过；任何 as any/as unknown 断言遮蔽都禁止。
 const probeDir = path.join(HOST, 'typecheck')
 fs.mkdirSync(probeDir, { recursive: true })
-const writeProbe = (bad) => {
-  fs.writeFileSync(path.join(probeDir, 'probe.tsx'), `import RemoteButton from 'remote-react/Button'\nimport type { ButtonProps } from 'remote-react/Button'\nimport { formatMoney } from 'remote-react/utils'\nimport ThemeContext from 'remote-react/theme-context'\nimport { createElement } from 'react'\n\nconst props: ButtonProps = { label: ${bad ? '42' : "'远程按钮'"}${bad ? ' as unknown as string' : ''}, onClick: () => {} }\nexport const Ok = () => createElement(RemoteButton, props)\nexport const money = formatMoney(${bad ? "'not-a-number' as unknown as number" : '12.5'})\nexport const ctx: React.Context<{ theme: 'light' | 'dark'; account: string }> = ThemeContext\n`)
-}
 const tscRun = () => spawnSync(TSC, ['-p', 'tsconfig.typecheck.json'], { cwd: HOST, encoding: 'utf8' })
 
-writeProbe(false)
+const LEGAL = `import RemoteButton from 'remote-react/Button'\nimport type { ButtonProps } from 'remote-react/Button'\nimport type { Context } from 'react'\nimport { formatMoney, formatDate } from 'remote-react/utils'\nimport ThemeContext from 'remote-react/theme-context'\n\nconst props: ButtonProps = { label: '远程按钮', onClick: () => {} }\nexport const Ok = () => <RemoteButton label="合法" onClick={() => {}} />\nexport const money = formatMoney(12.5)\nexport const d = formatDate('2026-09-28T00:00:00Z')\nexport const ctx: Context<{ theme: 'light' | 'dark'; account: string }> = ThemeContext\n`
+
+// 负向用例矩阵：[名称, 完整探针源码, 预期诊断片段]（D06 §8.1：独立用例+预期错误定位）
+const NEGATIVE_CASES = [
+  ['遗漏必填字段 label',
+    `import RemoteButton from 'remote-react/Button'\nexport const Probe = () => <RemoteButton onClick={() => {}} />\n`, ['label']],
+  ['错误字段类型 label={42}',
+    `import RemoteButton from 'remote-react/Button'\nexport const Probe = () => <RemoteButton label={42} onClick={() => {}} />\n`, ['TS2322']],
+  ['错误回调签名 onClick 接收数字',
+    `import RemoteButton from 'remote-react/Button'\nexport const Probe = () => <RemoteButton label="x" onClick={(n: number) => void n} />\n`, ['TS2322']],
+  ['普通函数错误参数',
+    `import { formatMoney } from 'remote-react/utils'\nexport const call = () => formatMoney('definitely-not-a-number')\n`, ['TS2345']],
+]
+
+const writeProbe = (code) => {
+  fs.writeFileSync(path.join(probeDir, 'probe.tsx'), code)
+}
+
+writeProbe(LEGAL)
 let r = tscRun()
 if (r.status !== 0) {
   console.error(r.stdout)
   fail('合法消费者类型检查失败（应通过）')
 }
-log('合法消费者 tsc 通过')
+log('合法消费者 tsc 通过（JSX 合法 props / 具名函数 / Context 类型）')
 
-// 故意错误：绕过 as 断言的硬错误（label 类型不匹配在 as unknown as string 下会被掩盖——
-// 用真正无法断言通过的形态：必填 onClick 缺失 + formatMoney 参数错误）
-fs.writeFileSync(path.join(probeDir, 'probe.tsx'), `import RemoteButton from 'remote-react/Button'\nimport { formatMoney } from 'remote-react/utils'\n\nexport const Bad = () => RemoteButton\nexport const money = formatMoney('definitely-not-a-number')\n`)
-r = tscRun()
-if (r.status === 0) fail('故意错误的 props/参数仍编译通过——类型已退化为 any')
-if (!/formatMoney|Argument/.test(r.stdout ?? '')) {
-  console.error(r.stdout)
-  fail('编译失败但不是预期的参数类型错误')
+for (const [name, probe, expectedTokens] of NEGATIVE_CASES) {
+  writeProbe(probe)
+  r = tscRun()
+  if (r.status === 0) fail(`负向用例「${name}」仍编译通过——类型已退化为 any`)
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
+  if (!expectedTokens.some((tok) => out.includes(tok))) {
+    console.error(out)
+    fail(`负向用例「${name}」的诊断未命中预期标记 ${expectedTokens.join('/')}`)
+  }
+  log(`负向用例「${name}」被拒绝 ✓（诊断含 ${expectedTokens.join('/')}）`)
 }
-log(`故意错误被类型系统拒绝 ✓（非零退出）`)
 
-// 4. any 降级：模拟 devFsRoot:false 的远程（manifest 不带 fsRoot → writeAnyModules 形态）
-writeProbe(false) // 先还原合法 probe（第 3 步的故意错误版不能混入本段编译）
-const anyDecl = `declare module "remote-x/Button";\ndeclare module "remote-x/utils";\n`
-const anyDir = path.join(probeDir, 'any-mode')
-fs.mkdirSync(anyDir, { recursive: true })
-fs.writeFileSync(path.join(anyDir, 'remote-x.d.ts'), anyDecl)
-fs.writeFileSync(path.join(probeDir, 'any-probe.ts'), `import Button from 'remote-x/Button'\nimport * as utils from 'remote-x/utils'\nexport const b = Button\nexport const u = utils\n`)
-r = tscRun()
-if (r.status !== 0) {
-  console.error(r.stdout)
-  fail('any 降级声明的合法导入应编译通过（默认/具名/副作用导入可解析）')
-}
-log('any 降级声明编译通过（无源码精度，但可解析）')
+// 清理负向探针，避免混入后续编译
+fs.rmSync(path.join(probeDir, 'probe.tsx'), { force: true })
+
+// 4. any 降级：真实生成器路径由 packages/plugin/tests/dts-degrade.test.ts 权威覆盖
+//（真实 manifest/fsRoot 配置 + generateDevTypes 输出 + 真实 TypeScript 程序编译，
+// 含 精确→降级→恢复 三步不重建工程）。本脚本调用同一测试文件作为 e2e 门禁的一部分，
+// 不再手写 declare module 冒充生成器输出（D06 §8.1）。
+const unit = spawnSync('npx', ['vitest', 'run', 'tests/dts-degrade.test.ts', 'tests/dts-paths-covers.test.ts'], {
+  cwd: path.join(REPO, 'packages/plugin'), encoding: 'utf8', stdio: 'inherit',
+})
+if (unit.status !== 0) fail('真实生成器 any 降级/双轨判定单测未通过（见上方输出）')
+log('any 降级（真实生成器+真实编译）与双轨判定 单测通过 ✓')
 
 fs.rmSync(probeDir, { recursive: true, force: true })
-log('PASS: R15 类型直连 / 故意错误拒绝 / any 降级 全部通过')
+log('PASS: R15 类型直连 / 负向用例矩阵 / any 降级（真实生成器） 全部通过')

@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.1.1（2026-09-28）
+
+- **修复：同实例会话切换（React）**——已挂载的 `useLoadRemote`/`remoteComponent`/页面组件此前不观察 `AppContext.sessionKey`，宿主换账号后同实例不重载。现在渲染期读取当前登录代次，`sessionKey` 变化即在同一实例上重走加载生命周期（不重挂载、不产生第二份 React；同会话 rerender 不重载；`undefined→A`、`A→B`、`A→登出→B` 均覆盖；Vue KeepAlive 退出语义不受影响）。
+- **修复：tsconfig paths 判定语义化**——宽松声明是否让位于精确轨，现在按 JSONC 语义解析（注释/无关配置/纯 exact 键不再误判），沿 extends 链继承，排除 `tsconfig.node.json`（node 上下文不影响应用导入）；指向非插件精确目录的映射会跳过宽松声明并给出诊断。
+- **修复：类型降级残留失效转发文件**——`devFsRoot:false` 或源码不可达降级时同步清理插件自有的 `<remote>.d/` 精确轨目录；同一工程内「精确→降级→恢复」全程真实编译通过（此前残留转发文件导致 TS2307）。`dts:false` 明确为只停不删。
+- **修复：生产重试 URL 污染成功加载**——remoteEntry 的重试 helper 此前按调用次数 cache-bust（第二次成功加载也被改写成 retry URL，模块重复求值、单例身份分裂）。现在为失败驱动的 per-URL 状态机：成功永不改写（身份保持），仅真实失败后的下一次尝试变更 URL（`fulgurjs_retry=N` 单调递增，已带 query 用 `&` 拼接）。dev 容器 loader 与运行时入口语义不受影响。
+- **修复：Vite 8 依赖预构建外部化**——Vite 8 的 rolldown 优化器对 `optimizeDeps.esbuildOptions.plugins` 仅执行 resolve（不执行 load），共享键外部化桩不可加载（UNLOADABLE_DEPENDENCY），远程 React 协商链全断。现在同时注入 `optimizeDeps.rolldownOptions.plugins`（识别兼容层产出的 namespace 前缀 id；门面 URL external；`isEntry` 放行预构建入口）；Vite ≤ 7 行为不变。
+- **测试与文档**：Playwright 项目与 spec 文件一一对应（此前 Vue 项目重复执行 React 用例）；R15 类型检查改为独立负向用例矩阵（遗漏必填字段/错误字段类型/错误回调签名/函数参数，各断言预期诊断）+ 真实生成器 any 降级编译链；跨框架普通模块断言改真实导出成员与计算值；错误监听前置到导航前；英文 README 重写为独立完整手册（全部公共 API/字段/错误码/边界，不依赖中文补全）。React 18.0.0 精确下界补验（隔离工程 dev 全链）。
+
 ## 5.1.0（2026-09-28）
 
 - **React 完整支持（浏览器客户端）**：新增 `@fulgurjs/federation/react` 入口——`remoteComponent`（pending/错误占位与错误边界内置、timeout 适配层超时、不用 React.lazy 的失败缓存陷阱）、`useLoadRemote`（代次守卫的模块 hook：StrictMode 双 effect/快速切换/慢请求晚返回/卸载后返回只允许最新有效请求写状态）、`RemoteErrorBoundary`（页面级兜底 + resetKeys）、`createReactHostPages`（与 Vue 共用同一份页面表数据与 definePages R1–R5 校验；不提供 keepAliveNames）。peer 新增可选 `react`/`react-dom`（`>=18 <20`）；纯 React 项目零 Vue 依赖、纯 Vue 项目零 React 依赖（静态导入图与 tarball 消费双向守护）。共享 `react`/`react-dom` singleton：dev 期预构建外部化自动改道 jsx-runtime/jsx-dev-runtime 内部引用，prod 期 CJS require 垫片覆盖 `react-dom/client` 子路径；Hooks/StrictMode/Context 跨端单实例经真实浏览器 e2e 验证（React 19.3；18 隔离验证见验收报告）。

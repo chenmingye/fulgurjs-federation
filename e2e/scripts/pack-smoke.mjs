@@ -90,6 +90,19 @@ for (const removedDist of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.t
   }
 }
 if (pkgJson.exports['./runtime']?.require) fail('/runtime 必须只有 ESM import 条件')
+if (pkgJson.exports['./react']?.require) fail('/react 必须只有 ESM import 条件')
+// D08：可选 peer 三件套核对（vue/react/react-dom 均声明且 optional）
+{
+  const peers = pkgJson.peerDependencies ?? {}
+  const meta = pkgJson.peerDependenciesMeta ?? {}
+  for (const dep of ['vue', 'react', 'react-dom']) {
+    if (!peers[dep]) fail(`peerDependencies 缺少 ${dep}`)
+    if (meta[dep]?.optional !== true) fail(`${dep} 未声明 optional（纯框架消费者会被强制安装另一框架）`)
+  }
+  if (!/^>=18\.0\.0 <20$/.test(peers.react)) fail(`react peer 范围异常：${peers.react}`)
+  if (!/^>=18\.0\.0 <20$/.test(peers['react-dom'])) fail(`react-dom peer 范围异常：${peers['react-dom']}`)
+  log('peers OK: vue/react/react-dom 均 optional；react 范围 >=18.0.0 <20')
+}
 fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), `import * as runtimeEntry from '@fulgurjs/federation/runtime'\nimport * as pluginEntry from '@fulgurjs/federation'\nimport * as reactEntry from '@fulgurjs/federation/react'\nif (!('loadRemote' in runtimeEntry && 'remoteComponent' in runtimeEntry && 'remoteSchema' in runtimeEntry)) process.exit(2)\nif ('loadRemote' in pluginEntry) process.exit(3)\nif (!('remoteComponent' in reactEntry && 'useLoadRemote' in reactEntry && 'RemoteErrorBoundary' in reactEntry && 'createReactHostPages' in reactEntry && 'remoteSchema' in reactEntry)) process.exit(4)\nif ('createHostPages' in reactEntry || 'keepAliveNames' in reactEntry) process.exit(5)\n`)
 const esmCheck = spawnSync(process.execPath, ['check-runtime.mjs'], { cwd: consumer, encoding: 'utf8' })
 if (esmCheck.status !== 0) fail(`ESM 包路径导入失败：${esmCheck.stderr}`)

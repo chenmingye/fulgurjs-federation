@@ -5,6 +5,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import type { ViteDevServer } from 'vite'
 import type { NormalizedOptions } from './options'
 import { parseManifest, type DevFederationManifest } from './manifest'
@@ -159,6 +160,11 @@ function writeAnyModules(outDir: string, remoteKey: string, manifest: DevFederat
     .filter((expose) => !manifest.setup || expose.name !== manifest.setup)
     .map((expose) => `declare module ${JSON.stringify(`${remoteKey}/${expose.name.replace(/^\.\//, '')}`)};`)
   const file = path.join(outDir, `${remoteKey}.d.ts`)
+  // 降级同时清理插件自有的精确轨输出（<outDir>/<remoteKey>.d/，D03）：源码不可用后
+  // 旧转发文件是失效 import（消费者 TS2307）。只删插件命名形态的自有输出，不触碰
+  // 用户类型文件或其他远程目录。宿主 paths 指向该目录时目标缺失 → TS 跳过该映射 →
+  // 回退到本函数写入的 ambient（导入可解析 any），不要求用户手动删 paths。
+  fs.rmSync(path.join(outDir, `${remoteKey}.d`), { recursive: true, force: true })
   if (modules.length === 0) {
     if (fs.existsSync(file)) fs.unlinkSync(file)
     return
@@ -169,40 +175,160 @@ function writeAnyModules(outDir: string, remoteKey: string, manifest: DevFederat
 
 
 /**
- * 宿主 tsconfig 是否已为 remote 配置 paths（精确轨开关）：compilerOptions.paths 中存在
- * 「<remoteKey>/*」或「<remoteKey>」键即视为已启用。tsconfig 含注释/尾逗号时 JSON.parse
- * 失败则宽松降级为文本匹配（paths 键形态足够特异）。
+ * JSONC → JSON 文本（保留字符串字面量，去 // 与 块注释、去 } ] 前的尾逗号）。
+ * 线性扫描一次完成：JSON 只有 " 一种字符串，转义形态 \\ 与 \" 可靠判别；
+ * 不用 eval/Function 构造（插件产物保持无 eval 纪律）。
  */
-function hostPathsCovers(root: string, remoteKey: string): boolean {
-  // 扫描宿主全部 tsconfig*.json（主配置或任一子上下文配置了该 remote 的 paths 都算启用）
+export function stripJsonc(text: string): string {
+  let out = ''
+  let i = 0
+  const n = text.length
+  let inStr = false
+  let esc = false
+  const skipWsAndComments = (from: number): number => {
+    let j = from
+    for (;;) {
+      while (j < n && /\s/.test(text[j]!)) j++
+      if (text[j] === '/' && text[j + 1] === '/') { while (j < n && text[j] !== '\n') j++; continue }
+      if (text[j] === '/' && text[j + 1] === '*') { j += 2; while (j < n && !(text[j] === '*' && text[j + 1] === '/')) j++; j += 2; continue }
+      return j
+    }
+  }
+  while (i < n) {
+    const c = text[i]!
+    if (inStr) {
+      out += c
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      i++
+      continue
+    }
+    if (c === '"') { inStr = true; out += c; i++; continue }
+    if (c === '/' && text[i + 1] === '/') { while (i < n && text[i] !== '\n') i++; continue }
+    if (c === '/' && text[i + 1] === '*') { i += 2; while (i < n && !(text[i] === '*' && text[i + 1] === '/')) i++; i += 2; continue }
+    if (c === ',') {
+      const j = skipWsAndComments(i + 1)
+      if (text[j] === '}' || text[j] === ']') { i = i + 1; continue } // 尾逗号：丢弃
+      out += c
+      i++
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
+}
+
+function parseJsoncFile(file: string): { compilerOptions?: { paths?: Record<string, readonly string[]>; baseUrl?: string } ; extends?: string } | null {
+  let text: string
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+  try {
+    return JSON.parse(stripJsonc(text))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 宿主是否为该 remote 配置了 paths（精确轨开关，决定是否跳过同名 ambient）。
+ *
+ * 语义化判定（5.1.1 修正 D02）：
+ * - 只检查**主上下文** tsconfig.json（浏览器应用导入的解析上下文）——tsconfig.node.json
+ *   等子上下文配置不影响应用导入，也不参与判定；
+ * - 沿 extends 链继承：链上第一个声明 paths 的配置生效（TS 继承语义：子级声明整体覆盖
+ *   父级 paths）；extends 相对路径按声明文件所在目录解析；
+ * - 语义解析（JSONC 注释/尾逗号安全），不做原文正则匹配——注释里的 paths、其他键中的
+ *   同名片段不构成误判；
+ * - 命中键：精确键 `<remote>` 或通配键 `<remote>/*`（TS 用 wildcard 匹配 `<remote>/Button`）。
+ *   仅 exact 键不能覆盖 `<remote>/Button` 子路径，不算命中；
+ * - 返回 true = 用户已接管该 remote 的解析（任何目标都算——ambient 一旦生成会遮蔽 paths
+ *   命中的模块，必须跳过）；目标未指向插件精确目录时由调用方给出提示。
+ * 配置无效或无法解析：按「未配置」处理（生成默认宽松轨，导入可解析）——宁可多生成可用
+ * 声明，不让导入因误判失效。
+ */
+export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: string): boolean {
+  // 扫描宿主全部 tsconfig*.json，但排除 tsconfig.node.json（Vite 约定的 node 侧上下文，
+  // 不参与浏览器应用导入的解析——D02：node 配置不得影响应用类型轨判定）。
   let files: string[] = []
   try {
-    files = fs.readdirSync(root).filter((f) => /^tsconfig[\w.-]*\.json$/i.test(f))
+    files = fs.readdirSync(root).filter((f) => /^tsconfig[\w.-]*\.json$/i.test(f) && f !== 'tsconfig.node.json')
   } catch {
     return false
   }
   for (const f of files) {
-    let text: string
-    try {
-      text = fs.readFileSync(path.join(root, f), 'utf8')
-    } catch {
-      continue
-    }
-    // 宽松文本匹配（tsconfig 常含注释/尾逗号，JSON.parse 可能失败）
-    const exact = new RegExp(`"${remoteKey}"\\s*:`)
-    const wildcard = new RegExp(`"${remoteKey}/\\*"\\s*:`)
-    if (exact.test(text) || wildcard.test(text)) return true
-    try {
-      const cfg = JSON.parse(text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/,\s*([}\]])/g, '$1')) as {
-        compilerOptions?: { paths?: Record<string, unknown> }
+    const paths = inheritedPaths(path.join(root, f))
+    if (!paths) continue
+    // 命中判定：只有通配键 `<remote>/*` 才覆盖 `<remote>/Button` 子路径（TS 语义——exact 键
+    // 只映射模块 `<remote>` 本身，与生成的 `<remote>/<expose>` 声明无遮蔽关系，不算接管）
+    if (!Object.keys(paths).some((k) => k === `${remoteKey}/*`)) continue
+    // 目标核对（诊断级）：任一通配目标应解析到插件生成的精确目录；否则提示用户自查。
+    // 无论如何都跳过 ambient——ambient 一旦生成会遮蔽 paths 命中的模块（实测行为），
+    // 用户自有映射（指向别处）同样会被遮蔽，必须让位。
+    if (preciseDir) {
+      const preciseReal = safeReal(preciseDir)
+      const coversPrecise = preciseReal !== null && Object.entries(paths)
+        .filter(([k]) => k === `${remoteKey}/*`)
+        .some(([, targets]) =>
+          (Array.isArray(targets) ? targets : [targets]).some((t) => {
+            if (typeof t !== 'string') return false
+            const base = t.includes('*') ? t.slice(0, t.indexOf('*')) : t
+            const resolvedBase = path.resolve(path.dirname(path.join(root, f)), base)
+            return preciseReal === resolvedBase || preciseReal.startsWith(resolvedBase + path.sep)
+          }),
+        )
+      if (!coversPrecise) {
+        console.warn(
+          `[fulgurjs] 类型生成：宿主 ${f} 已为 "${remoteKey}" 配置 paths，但目标未指向插件生成的精确目录（${preciseDir}）。` +
+            `已跳过同名宽松声明以避免遮蔽你的映射；源码级类型由你的 paths 目标决定，请核对其解析结果。`,
+        )
       }
-      const paths = cfg.compilerOptions?.paths
-      if (paths && (remoteKey in paths || `${remoteKey}/*` in paths)) return true
-    } catch {
-      /* 宽松匹配已尝试，继续下一份 */
     }
+    return true
   }
   return false
+}
+
+/** 沿 extends 链取该配置实际生效的 paths（链上第一个声明者生效——TS 继承语义：子级声明整体覆盖父级） */
+function inheritedPaths(tsconfigFile: string): Record<string, readonly string[]> | undefined {
+  const seen = new Set<string>()
+  let current: string | null = tsconfigFile
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const cfg = parseJsoncFile(current)
+    if (!cfg) return undefined
+    if (cfg.compilerOptions?.paths) return cfg.compilerOptions.paths as Record<string, readonly string[]>
+    if (!cfg.extends) return undefined
+    // extends 解析：相对路径按声明文件所在目录（TS 语义，无 .json 后缀自动补）；包名走 node 解析
+    const ext = cfg.extends
+    let next: string | null = null
+    if (path.isAbsolute(ext)) {
+      next = ext
+    } else if (ext.startsWith('.')) {
+      next = path.resolve(path.dirname(current), ext)
+    } else {
+      try {
+        next = createRequire(current).resolve(ext.endsWith('.json') ? ext : `${ext}.json`, { paths: [path.dirname(current)] })
+      } catch {
+        next = null
+      }
+    }
+    if (next !== null && !next.endsWith('.json')) next = `${next}.json`
+    current = next && fs.existsSync(next) ? next : null
+  }
+  return undefined
+}
+
+function safeReal(p: string): string | null {
+  try {
+    return fs.realpathSync(p)
+  } catch {
+    return path.resolve(p)
+  }
 }
 
 export async function generateDevTypes(options: NormalizedOptions, server: ViteDevServer): Promise<void> {
@@ -372,7 +498,7 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
       // 智能双轨：宿主 tsconfig 已为该 remote 配置 paths（精确轨已启用）时不写同名
       // ambient——任何同名 ambient（含带体）都会 shadow paths 命中的转发文件（实测：
       // paths 解析成功但类型仍被 ambient 拦成 any），二者的切换开关就是 paths 配置本身
-      const pathsEnabled = hostPathsCovers(options.root, remote.key)
+      const pathsEnabled = hostPathsCovers(options.root, remote.key, preciseDir)
       if (pathsEnabled) {
         if (fs.existsSync(path.join(outDir, `${remote.key}.d.ts`))) fs.unlinkSync(path.join(outDir, `${remote.key}.d.ts`))
         console.log(

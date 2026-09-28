@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
+import { Link, Route, Routes, useParams, useSearchParams, useLocation } from 'react-router-dom'
 import {
   createReactHostPages,
   provideAppContext,
@@ -100,6 +100,27 @@ function DetailRoute() {
   return <RemoteDetail id={id ?? ''} tab={sp.get('tab') ?? undefined} />
 }
 
+/** D01 浏览器探针：同实例会话切换。挂在 App 顶层（不随 account 卸载）——
+ *  登录 A→B 仅触发宿主 rerender；hook 必须随新 sessionKey 重新加载并展示 B 的真实数据。
+ *  加载次数挂 window 供 e2e 断言（同会话 rerender 不重载）。 */
+const g = window as unknown as { __SESSION_LIVE_LOADS__?: number }
+function SessionLive(): React.ReactNode {
+  const { data, loading } = useLoadRemote<{ formatMoney(v: number, c?: string): string }>('remote-react/utils')
+  const [renders, setRenders] = useState(0)
+  const location = useLocation()
+  useEffect(() => { setRenders((x) => x + 1) }, [])
+  const key = (window).__FULGURJS_APP_CONFIG__?.sessionKey as string | undefined
+  if (loading) g.__SESSION_LIVE_LOADS__ = (g.__SESSION_LIVE_LOADS__ ?? 0) + 1
+  const money = data ? `session-live:${key?.split('-')[1] ?? 'anon'}:${data.formatMoney(1)}` : ''
+  return (
+    <div data-testid="session-live" style={{ display: location.pathname === '/session-live' ? 'block' : 'none' }}>
+      <p data-testid="session-live-money">{loading ? 'loading…' : money}</p>
+      <p data-testid="session-live-loads">loads:{g.__SESSION_LIVE_LOADS__}</p>
+      <p data-testid="session-live-renders">renders:{renders}</p>
+    </div>
+  )
+}
+
 export default function App() {
   const [account, setAccount] = useState<string | null>(null)
   const [buttonClicks, setButtonClicks] = useState(0)
@@ -122,6 +143,7 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: 16 }}>
+      <SessionLive />
       <h1>host-react（fulgurjs federation）</h1>
       <nav>
         <Link to="/">首页</Link> · <Link to="/remote-react/home">远程首页</Link> · <Link to="/remote-react/detail/42?tab=basic">远程参数页</Link> · <Link to="/utils">远程 utils</Link> · <Link to="/hooks">Hooks 探针</Link> · <Link to="/session">会话</Link> · <Link to="/fault">故障注入</Link>

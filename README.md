@@ -467,7 +467,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 
 #### 函数总表
 
-> 下表全部函数与 `definePages` / `remoteSchema` / `provideAppContext` 等 context 函数 / `remoteComponent` / `createHostPages` 都从**唯一入口** `@fulgurjs/federation/runtime` 导入（见 §2）；旧入口已删除。
+> 下表全部函数与 `definePages` / `remoteSchema` / `provideAppContext` 等 context 函数 / `remoteComponent` / `createHostPages` 都从 Vue 入口 `@fulgurjs/federation/runtime` 导入（见 §2）；旧入口已删除。**React 浏览器应用请使用 `@fulgurjs/federation/react`**（通用函数同名提供 + §8.1 的 React 适配 API；不含本表的 Vue 专属项 `remoteComponent` Vue 形态 / `createHostPages` / `keepAliveNames`）。
 
 > **TS 提示**：`@fulgurjs/federation/runtime` 的类型随包发布，由包的 `exports` 和 `typesVersions` 直接解析；不需要 `client` 类型垫片。dev 启动时插件仅在类型目录（默认 `src/fulgurjs/types/`）生成远程 exposes 的类型声明。
 

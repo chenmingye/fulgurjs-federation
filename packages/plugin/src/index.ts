@@ -41,6 +41,7 @@ import {
   genRemoteBindingFacade,
   genSharedFacade,
   genSharedNsFacade,
+  genProdRetryHelper,
   type ManifestExposeEntry,
 } from './virtual'
 import { generateDevTypes } from './dts'
@@ -208,11 +209,11 @@ export function federation(options: FederationOptions): Plugin[] {
           const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
           const filter = new RegExp(`^(${[...aliasToShare.keys()].map(escapeRe).join('|')})$`)
           const devBase = normalizeBase(userConfig.base ?? '/')
+          const facadeUrlFor = (shareKey: string) =>
+            `${devBase}@id/__x00__virtual:fulgurjs-shared-ns:${shareKey}?import`
           const sharedExternal: { name: string; setup: (build: unknown) => void } = {
             name: 'fulgurjs:optimize-shared-external',
             setup(build) {
-              const facadeUrlFor = (shareKey: string) =>
-                `${devBase}@id/__x00__virtual:fulgurjs-shared-ns:${shareKey}?import`
               const b = build as {
                 onResolve: (
                   opts: { filter: RegExp },
@@ -248,9 +249,36 @@ export function federation(options: FederationOptions): Plugin[] {
               })
             },
           }
-          // mergeConfig 会把插件数组拼接在用户已有 esbuildOptions.plugins 之后，无需手动合并
+          // D05（Vite ≥ 8 rolldown 预构建器）：esbuildOptions 已废弃，其 esbuild→rolldown
+          // 兼容层只执行 onResolve（产出 `<namespace>:fulgurjs-stub:<key>` 形态的虚拟 id）、
+          // 不执行 onLoad → UNLOADABLE_DEPENDENCY（react 协商链全断，CI 实测）。rolldown
+          // 插件按 rolldownOptions 注入同一外部化语义：resolveId 识别裸键与兼容层两种
+          // 虚拟 id 形态，load 产出同款 re-export 桩；门面 URL 标记 external。Vite ≤ 7
+          // 不读取 rolldownOptions（仅 esbuildOptions 生效），两条路径互不干扰。
+          const rolldownShared = {
+            name: 'fulgurjs:optimize-shared-external',
+            resolveId(source: string, _importer: string | undefined, opts: { isEntry?: boolean } = {}) {
+              // 桩内容里的门面 URL（浏览器 URL）保持 external，rolldown 原样保留静态 import
+              if (source.includes('fulgurjs-shared-ns:')) return { id: source, external: true }
+              // 兼容层产出的 namespace 前缀形态：fulgurjs-opt-stub:fulgurjs-stub:<key>
+              if (source.startsWith(`${FULGURJS_STUB_NAMESPACE}:fulgurjs-stub:`)) return source.slice(FULGURJS_STUB_NAMESPACE.length + 1)
+              if (source.startsWith('fulgurjs-stub:')) return source
+              // shared 键本身常是预构建入口（扫描/include 发现）：放行本地预构建，
+              // 只有依赖包内部的 import/require 才改道协商门面
+              if (opts.isEntry) return null
+              const s = aliasToShare.get(source)
+              if (!s) return null
+              return `fulgurjs-stub:${s.shareKey}`
+            },
+            load(id: string) {
+              if (!id.startsWith('fulgurjs-stub:')) return null
+              const url = facadeUrlFor(id.slice('fulgurjs-stub:'.length))
+              return `export * from ${JSON.stringify(url)};\nexport { default } from ${JSON.stringify(url)};\n`
+            },
+          }
           ;(extra as Record<string, unknown>).optimizeDeps = {
             esbuildOptions: { plugins: [sharedExternal] },
+            rolldownOptions: { plugins: [rolldownShared] },
           }
         }
       }
@@ -763,7 +791,7 @@ export function federation(options: FederationOptions): Plugin[] {
         // URL 变化才能穿透 module map 到达网络层（与 runtime importEntry、dev 容器同款）。
         const entryChunk = entryChunkName ? bundle[entryChunkName] : undefined
         if (entryChunk && entryChunk.type === 'chunk' && /import\((['"])[^'")]+\1\)/.test(entryChunk.code)) {
-          const helper = 'var __fgN={};var __fgR=function(u){__fgN[u]=(__fgN[u]||0)+1;return __fgN[u]>1?u+(u.indexOf("?")>-1?"&":"?")+"fulgurjs_retry="+(__fgN[u]-1):u};'
+          const helper = genProdRetryHelper()
           entryChunk.code = entryChunk.code.replace(
             /import\((['"])([^'")]+)\1\)/g,
             (_m, q: string, u: string) => `import(__fgR(${q}${u}${q}))`,

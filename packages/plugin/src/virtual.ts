@@ -378,6 +378,20 @@ export async function get(moduleName) {
 }
 
 /**
+ * prod remoteEntry 重试穿透 helper（D04 修正：失败驱动，不再按调用次数 cache-bust）。
+ * per-URL 状态机：成功 → 永远复用同一 URL（module map 缓存 ⇒ 模块身份/单实例保持）；
+ * 失败 → 下一次调用改用 fulgurjs_retry=N 新 URL（穿透浏览器失败缓存），再失败继续递增。
+ * 并发首调共用同一 good URL（同 URL 同一 module map 条目，单次求值）。
+ */
+export function genProdRetryHelper(): string {
+  return [
+    'var __fgS={};',
+    'var __fgR=function(u){var s=__fgS[u]||(__fgS[u]={u:u,n:0});',
+    'return import(s.u).then(function(m){return m},function(e){s.n++;s.u=u+(u.indexOf("?")>-1?"&":"?")+"fulgurjs_retry="+s.n;throw e})};',
+  ].join('')
+}
+
+/**
  * dev expose loader 代码：主路径是**真正的字面量** dynamic import——importAnalysis 会把它
  * 重写为与远程内部静态 import 完全一致的 URL 形态（同 URL = 同模块条目；Vue 侧 SharedState
  * 跨端同实例的既有契约）。拼接表达式会被 vite 包成 __vite__injectQuery(..., 'import') 产生

@@ -104,35 +104,38 @@ export default defineConfig({
           timeout: 90_000,
         },
       ],
+  // 项目与文件一一对应（D06 §8.4 修正）：此前 /dev\.spec\.ts/ 这类子串正则同时命中
+  // react-dev.spec.ts，Vue 项目重复执行 React 用例（CI 统计虚高、baseURL 也不对）。
+  // 现以「文件名精确边界」匹配，互斥；用 --list 可核对每项目恰好一个文件。
   projects: [
     {
       name: 'dev',
-      testMatch: /dev\.spec\.ts/,
+      testMatch: /(^|\/)dev\.spec\.ts$/,
       use: { baseURL: 'http://localhost:5100' },
     },
     {
       name: 'fault',
-      testMatch: /fault\.spec\.ts/,
+      testMatch: /(^|\/)fault\.spec\.ts$/,
       use: { baseURL: 'http://localhost:5100' },
     },
     {
       name: 'prod',
-      testMatch: /prod\.spec\.ts/,
+      testMatch: /(^|\/)prod\.spec\.ts$/,
       use: { baseURL: `http://localhost:${readProdPort()}` },
     },
     {
       name: 'react-dev',
-      testMatch: /react-dev\.spec\.ts/,
+      testMatch: /(^|\/)react-dev\.spec\.ts$/,
       use: { baseURL: 'http://localhost:5104' },
     },
     {
       name: 'react-fault',
-      testMatch: /react-fault\.spec\.ts/,
+      testMatch: /(^|\/)react-fault\.spec\.ts$/,
       use: { baseURL: 'http://localhost:5104' },
     },
     {
       name: 'prod-react',
-      testMatch: /react-prod\.spec\.ts/,
+      testMatch: /(^|\/)react-prod\.spec\.ts$/,
       use: { baseURL: `http://localhost:${readProdPort()}` },
     },
   ],

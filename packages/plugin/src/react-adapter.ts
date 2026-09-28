@@ -194,6 +194,8 @@ interface RemoteLoaderProps {
   beforeLoad?: () => void | Promise<void>
   /** 受控加载尝试计数：变化即重跑加载 effect（retry / 代次切换） */
   attempt: number
+  /** 当前有效登录代次（页面级 AppContext.sessionKey）：变化即重跑加载 effect（会话切换） */
+  sessionKey: string | undefined
   /** 错误占位可操作的重试（触发外层 attempt 递增） */
   retry: () => void
   /** 透传给远程组件的用户 props（已剥除内部字段与 ref） */
@@ -201,7 +203,7 @@ interface RemoteLoaderProps {
   fwdRef?: Ref<unknown>
 }
 
-function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, retry, passthrough, fwdRef }: RemoteLoaderProps): ReactNode {
+function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey, retry, passthrough, fwdRef }: RemoteLoaderProps): ReactNode {
   const [state, setState] = useState<LoadState>({ phase: 'pending' })
   // 最新 passthrough/fwdRef 引用（createElement 用，无需触发重渲染）
   const latest = useRef({ passthrough, fwdRef })
@@ -209,13 +211,13 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, retry, pass
 
   useEffect(() => {
     // 每轮 effect 独立守卫：cancelled（本 effect 已清理）或 settled（本代次已终态写入）
-    // 都拒绝旧结果——超时后迟到的成功/失败、旧 attempt 的返回都不覆盖当前状态
+    // 都拒绝旧结果——超时后迟到的成功/失败、旧 attempt/旧会话的返回都不覆盖当前状态
     let cancelled = false
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
-    const gen = attempt
+    const gen = `${attempt}@${sessionKey ?? ''}`
     const commit = (next: LoadState): void => {
-      if (cancelled || settled || gen !== attempt) return
+      if (cancelled || settled || gen !== `${attempt}@${sessionKey ?? ''}`) return
       settled = true
       setState(next)
     }
@@ -261,9 +263,10 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, retry, pass
       cancelled = true
       if (timer !== undefined) clearTimeout(timer)
     }
-    // attempt 受控递增（retry）；spec/opts/loadRemote/beforeLoad 为工厂闭包常量
+    // attempt 受控递增（retry）；sessionKey 变化即重跑（会话切换 A→B/登出/重登）；
+    // spec/opts/loadRemote/beforeLoad 为工厂闭包常量
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt])
+  }, [attempt, sessionKey])
 
   if (state.phase === 'pending') return opts.fallback ?? null
   if (state.phase === 'error') return renderErrorNode(opts.error, state.error, retry, 'load')
@@ -314,6 +317,10 @@ function buildRemoteComponent<P>(
     const retry = useCallback(() => setAttempt((a) => a + 1), [])
     const { __fulgurjsRef, ...rest } = props
     const passthrough = rest as Record<string, unknown>
+    // 渲染期读取当前登录代次：宿主 provide 新 context 后 rerender ⇒ 本值变化 ⇒
+    // RemoteLoader 的 effect 依赖变化 ⇒ 已挂载实例重新走加载生命周期（D01 修复核心）。
+    // 同代次 rerender 值不变，不触发重载（state 保持，组件本地状态不重置）。
+    const sessionKey = readSessionKey()
     return createElement(
       RemoteRenderBoundary,
       {
@@ -328,6 +335,7 @@ function buildRemoteComponent<P>(
                 loadRemote,
                 beforeLoad,
                 attempt,
+                sessionKey,
                 retry,
                 passthrough,
                 fwdRef: __fulgurjsRef,
@@ -395,12 +403,17 @@ export function createUseLoadRemote(loadRemote: LoadRemoteFn) {
     // 最新 opts（reload 闭包用）：render 期同步写入，避免 effect 依赖对象引用
     const optsRef = useRef(opts)
     optsRef.current = opts
+    // 渲染期读取当前登录代次：宿主 provide 新 context 后 rerender ⇒ 本值变化 ⇒
+    // effect 依赖变化 ⇒ 重新加载（D01）。同代次 rerender 值不变，不重载。
+    const sessionKey = readSessionKey()
 
     useEffect(() => {
       const gen = ++reqGen.current
       let cancelled = false
       const isCurrent = (): boolean => gen === reqGen.current && !cancelled
 
+      // 统一状态契约（§3.4）：首次加载/spec/有效选项/会话变化均重置为 undefined/undefined/true；
+      // 当前尝试成功写 data、失败写 error，二者都令 loading=false；过期尝试不修改三者
       setData(undefined)
       setError(undefined)
       setLoading(true)
@@ -419,8 +432,9 @@ export function createUseLoadRemote(loadRemote: LoadRemoteFn) {
       return () => {
         cancelled = true
       }
-      // 按字段依赖（非对象引用）：调用方每次 render 新建 options 对象不会无限重载
-    }, [spec, shareScope, retries, fallbackModule, loadRemote])
+      // 按字段依赖（非对象引用）：调用方每次 render 新建 options 对象不会无限重载；
+      // sessionKey 变化（登录/换账号/登出）即重跑
+    }, [spec, shareScope, retries, fallbackModule, loadRemote, sessionKey])
 
     const reload = useCallback(async (): Promise<void> => {
       const gen = ++reqGen.current
@@ -429,6 +443,7 @@ export function createUseLoadRemote(loadRemote: LoadRemoteFn) {
       const o = optsRef.current
       try {
         const ns = (await loadRemote(spec, { shareScope: o.shareScope, retries: o.retries, fallbackModule: o.fallbackModule })) as Module
+        // gen === reqGen：期间无新 effect（如会话切换触发的重载）或新 reload——过期不写
         if (gen === reqGen.current) {
           setData(ns)
           setLoading(false)

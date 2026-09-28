@@ -1,5 +1,5 @@
 import type { FederationOptions } from '@fulgurjs/federation'
-import { pages, remotePrefixes } from './src/federation/pages.data'
+import { pages, remotePrefixes } from './src/federation/pages.data.ts'
 
 export default {
   name: 'host-react',
