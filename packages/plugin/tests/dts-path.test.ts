@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import ts from 'typescript'
+import http from 'node:http'
 import { generateDevTypes } from '../src/dts'
 import type { NormalizedOptions } from '../src/options'
 
@@ -246,6 +247,36 @@ describe('WP5: dts 路径边界', () => {
       expect(content).not.toContain('missing-remote')
     } finally {
       warnSpy.mockRestore()
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('协议相对与同源相对 dev 地址可从真实 HTTP manifest 生成声明', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wp5-relative-url-'))
+    const received: string[] = []
+    const server = http.createServer((req, res) => {
+      received.push(req.url ?? '')
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({
+        schemaVersion: 1, name: 'evil', devServer: true, base: '/remote/', entry: '/remote/@fulgurjs-entry.js',
+        exposes: [{ name: './X', src: './x.ts', file: '/x' }], shared: [],
+      }))
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      const address = server.address() as { port: number }
+      const origin = `http://127.0.0.1:${address.port}`
+      for (const entry of [`//127.0.0.1:${address.port}/remote/@fulgurjs-entry.js`, '/remote/@fulgurjs-entry.js']) {
+        const options = fakeOptions(root)
+        options.remotes[0].devEntry = entry
+        await generateDevTypes(options, { resolvedUrls: { local: [origin] } } as never)
+        expect(fs.readFileSync(path.join(root, 'types/evil.d.ts'), 'utf8')).toContain('declare module "evil/X";')
+      }
+      expect(received).toEqual(['/remote/@fulgurjs-manifest.json', '/remote/@fulgurjs-manifest.json'])
+    } finally {
+      warnSpy.mockRestore()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
       fs.rmSync(root, { recursive: true, force: true })
     }
   })

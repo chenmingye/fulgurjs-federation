@@ -9,10 +9,10 @@ import type { ViteDevServer } from 'vite'
 import type { NormalizedOptions } from './options'
 import { parseManifest, type DevFederationManifest } from './manifest'
 
-async function fetchManifest(devEntry: string, attempts = 30, delayMs = 2000): Promise<DevFederationManifest | null> {
+async function fetchManifest(devEntry: string, origin: string, attempts = 30, delayMs = 2000): Promise<DevFederationManifest | null> {
   let manifestUrl: URL
   try {
-    const u = new URL(devEntry)
+    const u = new URL(devEntry, origin)
     // 容器入口 @fulgurjs-entry.js → 对应 manifest 端点 @fulgurjs-manifest.json
     u.pathname = u.pathname.replace('@fulgurjs-entry.js', '@fulgurjs-manifest.json')
     manifestUrl = u
@@ -167,7 +167,7 @@ function writeAnyModules(outDir: string, remoteKey: string, manifest: DevFederat
   fs.writeFileSync(file, ['// 自动生成：远程源码不可访问，模块导出降级为 any。', ...modules, ''].join('\n'))
 }
 
-export async function generateDevTypes(options: NormalizedOptions, _server: ViteDevServer): Promise<void> {
+export async function generateDevTypes(options: NormalizedOptions, server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
   const mode = resolveDtsMode(dtsOpt)
@@ -175,9 +175,12 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
   const outDir = path.join(options.root, dir)
   fs.mkdirSync(outDir, { recursive: true })
 
+  const origin = server.config?.server?.origin ?? server.resolvedUrls?.local[0] ??
+    `${server.config?.server?.https ? 'https' : 'http'}://localhost:${server.config?.server?.port ?? 5173}`
+
   for (const remote of options.remotes) {
     if (!remote.devEntry || remote.promise) continue
-    const manifest = await fetchManifest(remote.devEntry)
+    const manifest = await fetchManifest(remote.devEntry, origin)
     if (!manifest || !manifest.exposes) {
       console.warn(`[fulgurjs] 类型生成：远程应用 "${remote.key}" 的开发 manifest 不可用，已跳过类型映射。请检查远程开发服务和 manifest 地址。`)
       continue

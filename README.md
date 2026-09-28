@@ -1016,7 +1016,7 @@ const Panel = await loadRemote('shop/Panel', {
 pnpm --dir packages/plugin install && pnpm --dir packages/plugin build
 for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b e2e; do pnpm --dir "$app" install; done
 
-pnpm test:unit   # 单测（当前 385）
+pnpm test:unit   # 全量单测（数量以本次输出为准）
 pnpm test:dev    # dev e2e（10）
 pnpm test:prod   # prod e2e（8，需 NGINX，见 e2e/scripts/prod-setup.sh）
 pnpm test        # unit + dev + prod 全跑
@@ -1026,7 +1026,7 @@ bash e2e/h7-install-test.sh   # H7 装后实测：pack → 干净目录 → dev+
 
 CI（GitHub Actions，每次推送/PR 自动运行）两个作业：
 
-- `test`：单测 + 双口径 typecheck（pinned / latest）+ build 门禁（runtime gzip ≤ 6144B、错误码三方一致性）；
+- `test`：单测 + 双口径 typecheck（pinned / latest）+ build 门禁（runtime gzip ≤ 9216B、错误码三方一致性）；
 - `e2e`：fixtures e2e（dev + fault 共 12 例）× Vite 6.4.3 / 7.3.6 / 8.3.0 兼容矩阵。
 
 prod e2e 需 NGINX，不进 CI（本地或真实项目 testbed 验证）。
@@ -1038,3 +1038,5 @@ prod e2e 需 NGINX，不进 CI（本地或真实项目 testbed 验证）。
 ### 远程源码不可访问时的开发类型
 
 远程设置 `devFsRoot: false`，或远程源码目录在宿主机器上不可访问时，插件根据开发 manifest 为每个公开暴露模块生成 `any` 声明。默认导入、具名导入和副作用导入均可解析，但没有源码补全、类型约束或源码跳转；内部 setup 生命周期入口不生成声明。生成目录遵循 `dts.dir`；默认有 `src` 时为 `src/fulgurjs/types`，否则为 `.fulgurjs/types`。确保项目 tsconfig 包含该目录。恢复源码直连后重启宿主开发服务即可重新生成精确映射；`dts: false` 会完全关闭生成。
+
+开发类型生成与运行时使用同一份 `remotes.dev` 地址：绝对 URL、`//host:port/path` 和同源相对路径均支持。相对地址以宿主 Vite 开发服务的 origin 解析；显式 `server.origin` 优先，其次实际本地服务地址。
