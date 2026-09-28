@@ -7,6 +7,8 @@ export interface PageRecord {
   spec?: string
   name?: string
   title?: string
+  /** 宿主自由扩展位（keepAlive 等）——与插件 PageRouteLike 的 index signature 对齐 */
+  [key: string]: unknown
 }
 
 export const pages: PageRecord[] = [
