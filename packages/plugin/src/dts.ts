@@ -1,7 +1,7 @@
 /**
  * dev 类型直连：host 的 dev server 启动后，拉取各 remote 的 dev manifest，
  * 为 exposes 生成 declare module 声明，映射到 remote 本机源码（同机联调时获得源码级补全）。
- * remote 不在本机时跳过并提示。
+ * remote 未提供可访问源码时生成 any 声明并提示。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -153,6 +153,20 @@ export function buildShimModule(abs: string, moduleSpecifier: string): string {
   return lines.join('\n')
 }
 
+/** 无源码可读取时，以环境模块简写同时支持默认、具名和副作用导入。 */
+function writeAnyModules(outDir: string, remoteKey: string, manifest: DevFederationManifest): void {
+  const modules = manifest.exposes
+    .filter((expose) => !manifest.setup || expose.name !== manifest.setup)
+    .map((expose) => `declare module ${JSON.stringify(`${remoteKey}/${expose.name.replace(/^\.\//, '')}`)};`)
+  const file = path.join(outDir, `${remoteKey}.d.ts`)
+  if (modules.length === 0) {
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+    return
+  }
+  // 覆盖旧源码映射，避免切换为跨机开发后仍引用过期的本机路径。
+  fs.writeFileSync(file, ['// 自动生成：远程源码不可访问，模块导出降级为 any。', ...modules, ''].join('\n'))
+}
+
 export async function generateDevTypes(options: NormalizedOptions, _server: ViteDevServer): Promise<void> {
   const dtsOpt = options.dts === undefined ? true : options.dts
   if (dtsOpt === false) return
@@ -172,8 +186,9 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
     if (!remoteRoot) {
       console.warn(
         `[fulgurjs] 类型生成：远程应用 "${remote.key}" 的 manifest 未携带 fsRoot（可能关闭了 devFsRoot，或远程插件版本过旧）；` +
-          `类型映射将降级为 any。同机联调请在远程启用 devFsRoot: true（默认值）并重启开发服务。`,
+          `已生成 any 模块声明；不提供源码补全或跳转。同机联调请在远程启用 devFsRoot: true（默认值）并重启开发服务。`,
       )
+      writeAnyModules(outDir, remote.key, manifest)
       continue
     }
     // WP5 路径边界：fsRoot 经 realpath 解析后再做包含判定——symlink 指向 root 外同样越界
@@ -182,8 +197,9 @@ export async function generateDevTypes(options: NormalizedOptions, _server: Vite
       realRoot = fs.realpathSync(remoteRoot)
     } catch {
       console.warn(
-        `[fulgurjs] 类型生成：远程应用 "${remote.key}" 的 fsRoot 在本机不可访问，已跳过类型映射，模块类型将降级为 any。请检查项目位置或关闭本机类型直连。`,
+        `[fulgurjs] 类型生成：远程应用 "${remote.key}" 的 fsRoot 在本机不可访问，已生成 any 模块声明，不提供源码补全或跳转。请检查项目位置或关闭本机类型直连。`,
       )
+      writeAnyModules(outDir, remote.key, manifest)
       continue
     }
 

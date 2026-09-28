@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import ts from 'typescript'
 import { generateDevTypes } from '../src/dts'
 import type { NormalizedOptions } from '../src/options'
 
@@ -196,22 +197,31 @@ describe('WP5: dts 路径边界', () => {
     }
   })
 
-  it('manifest 缺 fsRoot（devFsRoot:false）给出明确降级提示', async () => {
+  it('manifest 缺 fsRoot 时生成 any 声明，真实 TS 默认和具名导入均可编译', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wp5-nofs-'))
     try {
       const warns: string[] = []
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...a) => warns.push(String(a[0])))
       try {
-        const { files } = await runWithManifest(root, {
+        const { files, content } = await runWithManifest(root, {
           schemaVersion: 1,
           name: 'evil',
           devServer: true,
           base: '/',
           entry: '/@fulgurjs-entry.js',
-          exposes: [{ name: './X', src: './x.ts', file: '/x' }],
+          setup: './setup',
+          exposes: [{ name: './X', src: './x.ts', file: '/x' }, { name: './setup', src: './setup.ts', file: '/setup' }],
           shared: [],
         })
-        expect(files).not.toContain('evil.d.ts')
+        expect(files).toContain('evil.d.ts')
+        expect(content).not.toContain('evil/setup')
+        const consumer = path.join(root, 'consumer.ts')
+        fs.writeFileSync(consumer, `import value, { named } from 'evil/X';\nconst n: number = named; const s: string = value; named.anyMethod();\n`)
+        const program = ts.createProgram([consumer, path.join(root, 'types/evil.d.ts')], {
+          strict: true, noEmit: true, types: [], module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler, target: ts.ScriptTarget.ES2022,
+        })
+        expect(ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
         expect(warns.some((w) => w.includes('fsRoot') && w.includes('any'))).toBe(true)
       } finally {
         warnSpy.mockRestore()
@@ -220,4 +230,24 @@ describe('WP5: dts 路径边界', () => {
       fs.rmSync(root, { recursive: true, force: true })
     }
   })
+  it('fsRoot 不可访问时覆盖旧源码声明，生成可用的 any 模块', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wp5-unreachable-'))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      fs.mkdirSync(path.join(root, 'types'))
+      fs.writeFileSync(path.join(root, 'types/evil.d.ts'), 'STALE_SOURCE_PATH')
+      const { content } = await runWithManifest(root, {
+        schemaVersion: 1, name: 'evil', devServer: true, base: '/', entry: '/@fulgurjs-entry.js',
+        fsRoot: path.join(root, 'missing-remote'),
+        exposes: [{ name: './X', src: './x.ts', file: '/x' }], shared: [],
+      })
+      expect(content).toContain('declare module "evil/X";')
+      expect(content).not.toContain('STALE_SOURCE_PATH')
+      expect(content).not.toContain('missing-remote')
+    } finally {
+      warnSpy.mockRestore()
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
 })

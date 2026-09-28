@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.0.3（2026-09-28）
+
+- **修复开发类型降级失效**：远程关闭 `devFsRoot` 或源码目录在宿主不可访问时，按 manifest 的公开暴露模块生成真正的 `any` 环境声明，支持默认、具名和副作用导入，覆盖过期源码映射；内部 setup 不生成用户声明。此前只有降级提示，没有声明文件，实际 TypeScript 导入会报 TS2307。新增真实 TypeScript 编译与不可访问目录回归验证。
+
 ## 5.0.2（2026-09-27）
 
 - **测试可移植性修复**：`build-manifest-css.test.ts` 改用 `fs.realpathSync(os.tmpdir())` 建 vite root——macOS 的 `os.tmpdir()` 返回 `/var/...`（符号链接），vite 会把 root realpath 成 `/private/var/...`，两者不一致使 `vite:build-html` 生成跨符号链接的相对 fileName 被 rollup 拒绝，单测在 macOS 上必失败（CI Linux 不受影响）。仅测试代码，dist 产物零变化；修复后本机单测 385/385。

@@ -1034,3 +1034,7 @@ prod e2e 需 NGINX，不进 CI（本地或真实项目 testbed 验证）。
 ## License
 
 [MIT](./LICENSE) © chenmingye (Jason)
+
+### 远程源码不可访问时的开发类型
+
+远程设置 `devFsRoot: false`，或远程源码目录在宿主机器上不可访问时，插件根据开发 manifest 为每个公开暴露模块生成 `any` 声明。默认导入、具名导入和副作用导入均可解析，但没有源码补全、类型约束或源码跳转；内部 setup 生命周期入口不生成声明。生成目录遵循 `dts.dir`；默认有 `src` 时为 `src/fulgurjs/types`，否则为 `.fulgurjs/types`。确保项目 tsconfig 包含该目录。恢复源码直连后重启宿主开发服务即可重新生成精确映射；`dts: false` 会完全关闭生成。
