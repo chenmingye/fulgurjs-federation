@@ -44,7 +44,17 @@ command -v nginx >/dev/null || { echo "ERROR: nginx not found in PATH" >&2; exit
 build_fix() {
   local dir="$1"; local base="${2:-}"
   echo "== build $(basename "$dir") =="
-  (cd "$dir" && pnpm exec vite build ${base:+--base=$base} 2>&1 | tail -3)
+  # 全量输出落文件：失败时打印完整错误（此前 tail -3 只剩 pnpm 堆栈尾部，真实原因被吞）
+  local log
+  log="$(mktemp /tmp/fulgurjs-build.XXXXXX.log)"
+  if ! (cd "$dir" && pnpm exec vite build ${base:+--base=$base}) >"$log" 2>&1; then
+    cat "$log"
+    rm -f "$log"
+    echo "ERROR: $(basename "$dir") build failed" >&2
+    exit 1
+  fi
+  tail -3 "$log"
+  rm -f "$log"
 }
 build_fix "$FIX/remote-a" '/remote-a/'
 build_fix "$FIX/remote-b" '/remote-b/'
