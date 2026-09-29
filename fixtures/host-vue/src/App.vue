@@ -9,7 +9,8 @@
       <a href="#/error" data-testid="nav-error">error</a> |
       <a href="#/rename" data-testid="nav-rename">rename</a> |
       <a href="#/promise-remote" data-testid="nav-promise">promise</a> |
-      <a href="#/shared-state" data-testid="nav-shared">shared-state</a>
+      <a href="#/shared-state" data-testid="nav-shared">shared-state</a> |
+      <a href="#/static-dep" data-testid="nav-static-dep">static-dep</a>
     </nav>
     <router-view v-slot="{ Component }">
       <suspense>

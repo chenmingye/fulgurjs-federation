@@ -341,6 +341,50 @@ export function genRuntimeProxyModule(): string {
 }
 
 /**
+ * dev react-refresh 单例 shim（D3 跨源 Fast Refresh 修复）。
+ *
+ * 背景：宿主页消费远程 dev 模块时，远程组件链 import 的是远程 origin 的 /@react-refresh——
+ * react-refresh 运行时的 helpersByRendererID / pending 队列是**模块私有状态**，
+ * 第二副本里 performReactRefresh 遍历的是自己的空 helpers 表（宿主 renderer 注册在
+ * 宿主副本上）→ 更新被 accept 后刷新静默空转（实测复现：WS update 到达、
+ * "hot updated" 日志出现、DOM 不更新）。
+ *
+ * 修复：全页共享单一 react-refresh 实例。宿主 index.html 在 plugin-react preamble 之后
+ * 注入发布脚本（globalThis.__FULGURJS_REACT_REFRESH__ = 宿主副本，helpers 已注册）；
+ * 远程组件的 react-refresh 导入被改写到本 shim，shim 优先委托页面级单例；
+ * standalone 远程页无发布脚本时回退本 origin 的 /@react-refresh 并自发布，行为不变。
+ * 仅 dev serve 生效；prod 不含任何 react-refresh 引用。
+ */
+export const REACT_REFRESH_SHIM_URL = '/@fulgurjs-react-refresh'
+export const REACT_REFRESH_GLOBAL_KEY = '__FULGURJS_REACT_REFRESH__'
+
+export function genReactRefreshShim(): string {
+  const g = `(globalThis).${REACT_REFRESH_GLOBAL_KEY}`
+  return [
+    `let __fulgurjs_rr = ${g};`,
+    `if (!__fulgurjs_rr) {`,
+    `  __fulgurjs_rr = await import("/@react-refresh");`,
+    `  ${g} = __fulgurjs_rr;`,
+    `}`,
+    `export const register = __fulgurjs_rr.register;`,
+    `export const createSignatureFunctionForTransform = __fulgurjs_rr.createSignatureFunctionForTransform;`,
+    `export const registerExportsForReactRefresh = __fulgurjs_rr.registerExportsForReactRefresh;`,
+    `export const validateRefreshBoundaryAndEnqueueUpdate = __fulgurjs_rr.validateRefreshBoundaryAndEnqueueUpdate;`,
+    `export const __hmr_import = __fulgurjs_rr.__hmr_import;`,
+    `export default __fulgurjs_rr.default ?? { injectIntoGlobalHook: __fulgurjs_rr.injectIntoGlobalHook };`,
+    ``,
+  ].join('\n')
+}
+
+/** dev 宿主 index.html 的 react-refresh 发布脚本（在 plugin-react preamble 之后注入执行） */
+export function genReactRefreshPublisherScript(): string {
+  return (
+    `<script type="module">import * as __fulgurjs_rr from "/@react-refresh";` +
+    `(globalThis).${REACT_REFRESH_GLOBAL_KEY} ??= __fulgurjs_rr;</script>`
+  )
+}
+
+/**
  * dev 容器入口（remote 端 dev server 中间件直出的自包含 JS）。
  * init(shareScopeMap) 按引用收养 scope map 并注册 provides——对齐 webpack 容器协议。
  * 顶层注册自身 remotes：远程页面被宿主加载后可能再消费其他远程（双向联邦/嵌套联邦），

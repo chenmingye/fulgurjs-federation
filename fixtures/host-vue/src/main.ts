@@ -10,6 +10,7 @@ import ErrorPage from './pages/Error.vue'
 import RenamePage from './pages/Rename.vue'
 import PromiseRemotePage from './pages/PromiseRemote.vue'
 import SharedStatePage from './pages/SharedState.vue'
+import StaticDepPage from './pages/StaticDep.vue'
 
 const routes = [
   { path: '/', component: HomePage },
@@ -20,6 +21,7 @@ const routes = [
   { path: '/rename', component: RenamePage },
   { path: '/promise-remote', component: PromiseRemotePage },
   { path: '/shared-state', component: SharedStatePage },
+  { path: '/static-dep', component: StaticDepPage },
 ]
 
 const router = createRouter({ history: createWebHashHistory(), routes })

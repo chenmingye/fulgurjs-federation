@@ -50,7 +50,7 @@ export type RemoteErrorFallback = (error: unknown, retry: () => void) => ReactNo
 export interface ReactRemoteComponentOptions {
   /** 本次加载 pending 时的占位（区别于失败占位）；默认 null */
   fallback?: ReactNode
-  /** 加载失败或子树渲染错误的展示；默认内置中文占位（错误码+根因+修法+重试） */
+  /** 加载失败或子树渲染错误的展示；默认内置中文占位（错误码+根因+修法+重试加载/刷新页面重试） */
   error?: ReactNode | RemoteErrorFallback
   /** 透传现行 loadRemote 的重试选项（0-10 整数），不另叠自动重试 */
   retries?: number
@@ -66,6 +66,16 @@ const ERROR_STYLE: Record<string, string> = {
 const TITLE_STYLE = { margin: '0 0 4px', fontWeight: 600 } as const
 const MESSAGE_STYLE = { margin: '0 0 8px', wordBreak: 'break-all' } as const
 const FIX_STYLE = { margin: '0 0 8px' } as const
+const BUTTON_STYLE = {
+  padding: '4px 14px', marginRight: '8px', border: '1px solid #c45656',
+  borderRadius: '4px', background: '#c45656', color: '#fff',
+  fontSize: '13px', cursor: 'pointer',
+} as const
+const SECONDARY_BUTTON_STYLE = {
+  padding: '4px 14px', border: '1px solid #c45656',
+  borderRadius: '4px', background: '#fff', color: '#c45656',
+  fontSize: '13px', cursor: 'pointer',
+} as const
 
 const DefaultErrorView = function FulgurjsRemoteError({ error, retry, phase }: {
   error: unknown
@@ -82,7 +92,20 @@ const DefaultErrorView = function FulgurjsRemoteError({ error, retry, phase }: {
     createElement('p', { key: 'f', style: FIX_STYLE }, phase === 'render'
       ? '修法：查看浏览器 console 中的组件调用栈定位远程组件内部的渲染异常（错误抛自远程代码本身，与网络加载无关）。'
       : '修法：① 核对 spec 的「远程名/expose 名」与远程应用 exposes 是否一致（MFU-006/008）；② 核对 remotes 地址端口与远程服务可达性（MFU-001）；③ 查看 window 的 fulgurjs:error 事件与 console 同源错误定位根因。'),
-    createElement('button', { key: 'r', onClick: retry, type: 'button' }, '重试'),
+    phase === 'load'
+      ? createElement('p', { key: 'recover', style: FIX_STYLE },
+          '「重试加载」在当前页面重建加载；若浏览器已缓存失败的模块（如远程静态子依赖曾加载失败），请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。')
+      : null,
+    createElement('button', { key: 'r', onClick: retry, type: 'button', style: BUTTON_STYLE, 'data-fulgurjs-retry': '' }, '重试加载'),
+    phase === 'load'
+      ? createElement('button', {
+          key: 'rl',
+          type: 'button',
+          style: SECONDARY_BUTTON_STYLE,
+          'data-fulgurjs-reload': '',
+          onClick: () => window.location.reload(),
+        }, '刷新页面重试')
+      : null,
   ])
 }
 

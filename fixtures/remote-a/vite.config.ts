@@ -13,6 +13,8 @@ export default defineConfig({
         './StyledCard': './src/exposes/StyledCard.vue',
         './VueCheck': './src/exposes/VueCheck.vue',
         './utils': './src/exposes/utils.ts',
+        './StaticDep': './src/exposes/StaticDep.vue',
+        './static-dep-second': './src/exposes/static-dep-second.ts',
         './counter': './src/exposes/counter.ts',
       },
       shared: {

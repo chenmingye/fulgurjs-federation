@@ -133,19 +133,10 @@ test.describe('容错专项（B-15 完整链路）', () => {
 })
 
 test.describe('HMR L3：编译报错 → 覆盖层 → 修复自动恢复', () => {
-  // 已复现的 Vite 5.1.4 双 client 覆盖层缺陷：第二个 vite client
-  // 的 ErrorOverlay 类因 `vite-error-overlay` 已被宿主注册而未注册，其 `new ErrorOverlay()`
-  // 抛 IllegalConstructor（vite ≥6 client 经注册表构造，无此问题）。上游缺陷在基线 8e41de5
-  // 已存在（run 36404620886 同签名），与本轮改动无关。按真实版本门控跳过并在报告单列，
-  // 只对已有证据的 5.1.4 跳过；其他 Vite 5 版本正常执行，不推断整条 5.x 都有缺陷。
-  test.skip(() => {
-    try {
-      const vitePkg = JSON.parse(fs.readFileSync('../fixtures/host-vue/node_modules/vite/package.json', 'utf8'))
-      return vitePkg.version === '5.1.4'
-    } catch {
-      return false
-    }
-  }, '已复现的 Vite 5.1.4 双 client 覆盖层限制（ErrorOverlay 未注册 → IllegalConstructor，基线 run 36404620886 同签名）；仅跳过已验证版本，单列为未通过项')
+  // 5.2.0 起覆盖层缺陷已修复（fulgurjs:dev-client-compat 把 Vite ≥6 的注册表构造修法
+  // 前移到 Vite 5.x 客户端：双 client 场景第二份客户端的本地 ErrorOverlay 类未注册，
+  // new 时按 HTML 规范抛 IllegalConstructor）。原 5.1.4 的版本门控 skip 已随修复移除，
+  // 全支持矩阵（Vite 5.1.4 / 5.2 / 6 / 7 / 8）真实执行本用例，不再有支持范围内 skip。
   test('remote 语法错误覆盖层出现并消失', async ({ page }) => {
     await page.goto(`${HOST}/#/`)
     await page.getByTestId('load-btn').click()

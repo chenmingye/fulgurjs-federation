@@ -131,6 +131,52 @@ test.describe('prod(NGINX): 容错', () => {
     await page.goto(`${HOST}/#/scope`)
     await expect(page.getByTestId('remotes-info')).toContainText('"remote-a"')
   })
+
+  test('D2 Vue 静态子依赖失败：默认占位提供刷新恢复操作，产品按钮点击后目标页面真实恢复', async ({ page }) => {
+    // 阻断与监听先于导航安装（R09 教训）
+    let blocked = true
+    await page.route(/\/remote-a\/assets\/static-dep-leaf-[^?]*(\?.*)?$/, (route) => {
+      if (blocked) route.abort('failed')
+      else route.continue()
+    })
+    await page.goto(`${HOST}/#/static-dep`)
+    await page.getByTestId('static-dep-load').click()
+    const box = page.locator('[data-fulgurjs-error]').first()
+    await expect(box).toBeVisible({ timeout: 20000 })
+    await expect(box).toContainText('远程组件加载失败')
+    // Vue 默认占位与 React 一致：重试加载 + 刷新页面重试 双操作
+    const retryBtn = page.locator('[data-fulgurjs-retry]').first()
+    const reloadBtn = page.locator('[data-fulgurjs-reload]').first()
+    await expect(retryBtn).toBeVisible()
+    await expect(reloadBtn).toBeVisible()
+    await shot(page, 'prod-vue-static-dep-error-with-recovery')
+
+    blocked = false
+    // 同页重试对静态 leaf 失败预期无效（浏览器失败缓存）；记录结果不作门禁
+    await retryBtn.click()
+    await page.waitForTimeout(1200)
+    const samePageRecovered = await page
+      .getByTestId('static-dep-value')
+      .waitFor({ state: 'visible', timeout: 4000 })
+      .then(() => true)
+      .catch(() => false)
+
+    if (!samePageRecovered) {
+      // 产品「刷新页面重试」按钮触发整页导航（本测试全程不调用 page.reload）。
+      // 整页刷新 = 新 document：点前设置跨刷新标记，刷新后标记消失即真实导航证据。
+      await page.evaluate(() => { (window as unknown as Record<string, number>).__FG_D2_MARKER__ = 42 })
+      await reloadBtn.click()
+      await page.waitForLoadState('load')
+      const marker = await page.evaluate(() => (window as unknown as Record<string, number>).__FG_D2_MARKER__)
+      expect(marker, '刷新必须由产品按钮触发（新 document 中跨刷新标记消失）').toBeUndefined()
+      // 恢复后重新加载目标页面 → 业务值真实可见
+      await page.getByTestId('static-dep-load').click()
+      await expect(page.getByTestId('static-dep-value')).toHaveText('static-dep:418', { timeout: 20000 })
+      await shot(page, 'prod-vue-static-dep-recovered')
+    } else {
+      await expect(page.getByTestId('static-dep-value')).toHaveText('static-dep:418')
+    }
+  })
 })
 
 /**

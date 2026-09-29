@@ -38,10 +38,13 @@ import {
   genDevRemoteEntry,
   genInitModule,
   genProdManifest,
+  genReactRefreshPublisherScript,
+  genReactRefreshShim,
   genRemoteBindingFacade,
   genSharedFacade,
   genSharedNsFacade,
   genProdRetryHelper,
+  REACT_REFRESH_SHIM_URL,
   type ManifestExposeEntry,
 } from './virtual'
 import { generateDevTypes } from './dts'
@@ -473,6 +476,12 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean === 'virtual:fulgurjs-api-facade-react') return bareClean
       if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
+      // D3：react-refresh 单例 shim（dev）。注册为可解析模块——改写后的根相对导入在
+      // importAnalysis 转换期就要解析成功，不注册会直接 Failed to resolve import。
+      if (state.command === 'serve') {
+        const sourceNorm = source.startsWith(state.base) ? `/${source.slice(state.base.length)}` : source
+        if (sourceNorm.split('?')[0] === REACT_REFRESH_SHIM_URL) return '\0virtual:fulgurjs-react-refresh-shim'
+      }
       if (bareClean.startsWith(SHARED_NS_FACADE_PREFIX)) {
         return RESOLVED.sharedNsFacade(bareClean.slice(SHARED_NS_FACADE_PREFIX.length)) + query
       }
@@ -488,6 +497,7 @@ export function federation(options: FederationOptions): Plugin[] {
     },
 
     load(id) {
+      if (id === '\0virtual:fulgurjs-react-refresh-shim') return genReactRefreshShim()
       const raw = id.startsWith('\0') ? id.slice(1) : id
       const q = raw.indexOf('?')
       const clean = q === -1 ? raw : raw.slice(0, q)
@@ -1047,7 +1057,61 @@ export function federation(options: FederationOptions): Plugin[] {
   // 路由以 props 回调（params+query 全量透传）供给，页面完全正常。插件无法感知宿主是否
   // 透传 props，按预授权（排期文档 §4.5 #6）降级为手册 §8 文档化检查项，不自动发射。
 
-  return [pre, post]
+  // D3：页面级 react-refresh 单例发布（跨源 Fast Refresh 的宿主侧）。post 阶段执行：
+  // @vitejs/plugin-react 的 preamble 注入在 normal 阶段（晚于本插件 pre 钩子），只有
+  // post 能看到最终的 preamble 内联脚本。脚本插在 preamble 之后、应用模块之前执行。
+  const reactRefreshPublisher: Plugin = {
+    name: 'fulgurjs:react-refresh-publisher',
+    enforce: 'post',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        if (state.command !== 'serve' || !state.normalized) return html
+        if (!html.includes('/@react-refresh')) return html
+        const lastRef = html.lastIndexOf('/@react-refresh')
+        const scriptEnd = html.indexOf('</script>', lastRef)
+        if (scriptEnd === -1) return html
+        const out = html.slice(0, scriptEnd + '</script>'.length) + genReactRefreshPublisherScript() + html.slice(scriptEnd + '</script>'.length)
+        return out
+      },
+    },
+  }
+
+  // D3 + D4：dev client 双实例兼容（post 阶段，转换一次对所有消费方生效）。
+  // 1) react-refresh 导入改写到单例 shim：@vitejs/plugin-react 可能在本插件之前或之后
+  //    注入导入，post 阶段保证两种顺序都覆盖；纯字符串替换幂等。
+  // 2) vite-error-overlay 构造注册表化（Vite 5.x 双 client 缺陷修复）：Vite 5 客户端
+  //    define 有注册守卫，双 client 场景第二份客户端的本地 ErrorOverlay 类未注册，
+  //    而未注册的 HTMLElement 子类 new 时按 HTML 规范抛 IllegalConstructor → 远程编译
+  //    错误覆盖层无法显示。Vite ≥6 已改为 customElements.get(overlayId) 构造（client
+  //    createErrorOverlay 同款修法）；此处把该修法前移到 Vite 5 客户端代码上——第一份
+  //    客户端经注册表取到自身注册类（行为不变），第二份取到第一份的注册类（覆盖层可
+  //    构造、可见、可关闭）。不改已安装 Vite 源码；不匹配的客户端版本零改动。
+  const devClientCompat: Plugin = {
+    name: 'fulgurjs:dev-client-compat',
+    enforce: 'post',
+    transform(code, id) {
+      if (state.command !== 'serve' || !state.normalized) return null
+      const clean = id.split('?')[0]
+      let rewritten = code
+      if (code.includes('"/@react-refresh"')) {
+        rewritten = rewritten
+          .split('from "/@react-refresh"')
+          .join(`from "${REACT_REFRESH_SHIM_URL}"`)
+          .split('import("/@react-refresh")')
+          .join(`import("${REACT_REFRESH_SHIM_URL}")`)
+      }
+      if (clean.includes('vite/dist/client/client') && rewritten.includes('new ErrorOverlay(')) {
+        rewritten = rewritten
+          .split('new ErrorOverlay(')
+          .join('new (customElements.get(overlayId) ?? ErrorOverlay)(')
+      }
+      if (rewritten === code) return null
+      return { code: rewritten, map: null }
+    },
+  }
+
+  return [pre, post, devClientCompat, reactRefreshPublisher]
 }
 
 export default federation

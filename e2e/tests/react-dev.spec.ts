@@ -184,48 +184,85 @@ test('R10 深链强刷（dev）', async ({ page }) => {
   await expect(page.getByTestId('detail-tab')).toHaveText('tab:deep')
 })
 
-test('R11 React 开发更新：远程源码真实修改后新代码可达宿主（跨源 HMR 不稳定，如实记录）', async ({ page }) => {
-  await login(page, 'alice')
-  await page.goto('http://localhost:5104/remote-react/home')
-  await login(page, 'alice')
-  await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v1')
-
-  // 真实修改远程源码（v1 → v2）。实测：远程组件链携带 @vitejs/plugin-react refresh 边界，
-  // 远程 HMR 推送经远程 @vite/client（ws 连远程 origin）有时可达宿主并热替换；但跨源
-  // ws 时机不稳定（冷启动后首轮常不可达，此时需刷新宿主页面）。两种形态都验证
-  // 「更新可达」；跨源 Fast Refresh 的组件状态保留不作产品承诺（README 边界同述）。
-  const apiFile = 'fixtures/remote-react/src/api.ts'
+test('R11 React 兼容组件修改自动热更新并保活（5 轮冷启动 × 3 次修改，零人工刷新）', async ({ browser }) => {
+  test.setTimeout(300_000)
   const { readFileSync, writeFileSync } = await import('node:fs')
   const path = await import('node:path')
-  const abs = path.resolve(import.meta.dirname, '../../', apiFile)
-  const original = readFileSync(abs, 'utf8')
+  const homeFile = path.resolve(import.meta.dirname, '../../fixtures/remote-react/src/pages/Home.tsx')
+  const original = readFileSync(homeFile, 'utf8')
+  expect(original).toContain('<h2>remote-react / Home</h2>')
   try {
-    writeFileSync(abs, original.replace('remote-data-v1', 'remote-data-v2'))
-    // 热替换窗口（3s 内推送到达则页面自动更新）
-    await page.waitForTimeout(3000)
-    const current = await page.getByTestId('home-greeting').textContent()
-    if (current?.includes('remote-data-v2')) {
-      // 形态 A：热替换已生效
-    } else {
-      // 形态 B：推送未达——刷新宿主页面后新代码可见（当前产品的可靠路径）
-      await page.reload()
-      await login(page, 'alice')
-      await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v2')
+    for (let round = 1; round <= 5; round++) {
+      // 冷启动：全新浏览器上下文（WS/模块图全新建立），更新监听先于任何导航
+      const ctx = await browser.newContext()
+      const page = await ctx.newPage()
+      const errors: string[] = []
+      page.on('pageerror', (e) => errors.push(`pageerror:${e.message.slice(0, 120)}`))
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(`console:${m.text().slice(0, 120)}`) })
+      await page.goto('http://localhost:5104/remote-react/home', { waitUntil: 'load' })
+      await page.getByTestId('login-alice').click()
+      await expect(page.getByTestId('remote-home')).toBeVisible({ timeout: 20000 })
+      const nav0 = await page.evaluate(() => performance.getEntriesByType('navigation').length)
+      // 制造本地状态：HMR 后必须保留
+      await page.getByTestId('home-count').click()
+      await expect(page.getByTestId('home-count')).toHaveText('计数 1')
+      for (let cycle = 1; cycle <= 3; cycle++) {
+        const marker = `HMR-r${round}c${cycle}`
+        writeFileSync(homeFile, original.replace('<h2>remote-react / Home</h2>', `<h2>remote-react / Home ${marker}</h2>`))
+        // 自动热更新：不由测试脚本刷新；15s 内远程 dev server 推送必须落到宿主 DOM
+        await expect(page.locator('[data-testid="remote-home"] h2')).toHaveText(new RegExp(marker), { timeout: 15000 })
+        // 状态保留 + 零整页导航
+        await expect(page.getByTestId('home-count')).toHaveText('计数 1')
+        expect(await page.evaluate(() => performance.getEntriesByType('navigation').length)).toBe(nav0)
+        // 恢复本轮源码，热更新回原文（同一通道反向验证）
+        writeFileSync(homeFile, original)
+        await expect(page.locator('[data-testid="remote-home"] h2')).toHaveText('remote-react / Home', { timeout: 15000 })
+      }
+      expect(errors, `第 ${round} 轮出现页面错误：${errors.join(' | ')}`).toEqual([])
+      await ctx.close()
     }
   } finally {
-    writeFileSync(abs, original)
+    writeFileSync(homeFile, original)
   }
-  // 恢复源码后回到 v1：远程 dev server 的模块失效传播有延迟，先等再刷（仍见 v2 则再刷一次）
-  await page.waitForTimeout(1500)
-  await page.reload()
-  await login(page, 'alice')
-  const first = await page.getByTestId('home-greeting').textContent()
-  if (first?.includes('remote-data-v2')) {
-    await page.waitForTimeout(1500)
-    await page.reload()
-    await login(page, 'alice')
+  // 源文件恢复校验（内容级，不依赖页面表现）
+  expect(readFileSync(homeFile, 'utf8')).toBe(original)
+})
+
+test('R11b 普通 TS 依赖修改传播到正在显示的宿主（零刷新、新代码可达、状态保留）', async ({ page }) => {
+  const { readFileSync, writeFileSync } = await import('node:fs')
+  const path = await import('node:path')
+  const apiFile = path.resolve(import.meta.dirname, '../../fixtures/remote-react/src/api.ts')
+  const original = readFileSync(apiFile, 'utf8')
+  expect(original).toContain('remote-data-v1')
+  try {
+    await page.goto('http://localhost:5104/remote-react/home', { waitUntil: 'load' })
+    await page.getByTestId('login-alice').click()
+    await expect(page.getByTestId('remote-home')).toBeVisible({ timeout: 20000 })
+    await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v1', { timeout: 20000 })
+    const nav0 = await page.evaluate(() => performance.getEntriesByType('navigation').length)
+    await page.getByTestId('home-count').click()
+    await expect(page.getByTestId('home-count')).toHaveText('计数 1')
+
+    // 修改普通 TS 数据模块（无组件边界）→ 更新沿模块图冒泡到 Home 组件边界热替换
+    writeFileSync(apiFile, original.replace('remote-data-v1', 'remote-data-v2'))
+    await page.waitForTimeout(2000) // 给跨源 HMR 推送留完成窗口（组件 state 中的旧值不自动变）
+    // 挂载中的宿主页面实际拿到新代码：重新问候按钮调用（已热替换的）Home 内的 fetchGreeting
+    await page.getByTestId('home-refresh').click()
+    await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v2', { timeout: 10000 })
+    // 全程零整页导航；组件本地状态经 Fast Refresh 保留
+    expect(await page.evaluate(() => performance.getEntriesByType('navigation').length)).toBe(nav0)
+    await page.getByTestId('home-count').click()
+    await expect(page.getByTestId('home-count')).toHaveText('计数 2')
+
+    // 恢复源码 → 同通道回到 v1（同样零刷新）
+    writeFileSync(apiFile, original)
+    await page.waitForTimeout(2000)
+    await page.getByTestId('home-refresh').click()
+    await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v1', { timeout: 10000 })
+  } finally {
+    writeFileSync(apiFile, original)
   }
-  await expect(page.getByTestId('home-greeting')).toHaveText('hello alice @ remote-data-v1')
+  expect(readFileSync(apiFile, 'utf8')).toBe(original)
 })
 
 test('R12 双向普通模块跨框架（React host ← Vue remote 纯 TS / Vue host ← React remote 纯 TS）', async ({ page }) => {

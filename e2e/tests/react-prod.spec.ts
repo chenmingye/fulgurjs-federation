@@ -170,17 +170,20 @@ test('prod B3b expose chunk 失败→解除→同页重试恢复（__fgR 换 URL
   // 恢复请求必须换用 retry URL（穿透浏览器失败缓存）——记录到网络层证据
 })
 
-test('prod B3c expose 的静态依赖 chunk 失败：如实记录同页恢复边界（不做全图改写）', async ({ page }) => {
-  // 阻断与监听先于导航安装：StaticDepProbe 随登录树挂载即发起加载
+test('prod B3c 静态子依赖失败：占位恢复操作真正恢复目标页面（刷新按钮触发导航，持续失败不算 PASS）', async ({ page }) => {
+  // 阻断与监听先于导航安装：StaticDepProbe 随登录树挂载即发起加载。
+  // 静态 leaf 失败被浏览器 module map 缓存（同 URL 再 import 直接拒绝），同页重试
+  // 无法穿透——产品契约 = 默认占位提供「刷新页面重试」，用户点击后整页恢复。
   let blocked = true
   const leafRequests: string[] = []
+  const leafFailed: string[] = []
   page.on('request', (r) => {
     const u = r.url()
     if (u.includes('/remote-react/assets/static-dep-leaf-')) leafRequests.push(u)
   })
   page.on('requestfailed', (r) => {
     const u = r.url()
-    if (u.includes('/remote-react/assets/static-dep-leaf-')) leafRequests.push(`${u} [FAILED]`)
+    if (u.includes('/remote-react/assets/static-dep-leaf-')) leafFailed.push(u)
   })
   await page.route(/\/remote-react\/assets\/static-dep-leaf-[^?]*(\?.*)?$/, (route) => {
     if (blocked) route.abort('failed')
@@ -191,22 +194,44 @@ test('prod B3c expose 的静态依赖 chunk 失败：如实记录同页恢复边
   const box = page.locator('section [data-fulgurjs-error]').first()
   await expect(box).toBeVisible({ timeout: 20000 })
   await expect(box).toContainText('远程组件加载失败')
+  // 默认占位必须同时提供两个恢复操作（Vue/React 一致的产品契约）
+  await expect(page.locator('[data-fulgurjs-retry]').first()).toBeVisible()
+  const reloadBtn = page.locator('[data-fulgurjs-reload]').first()
+  await expect(reloadBtn).toBeVisible()
+  await page.screenshot({ path: 'screenshots/prod-react-b3c-error-with-recovery.png' })
+
   blocked = false
-  await page.getByRole('button', { name: '重试' }).first().click()
-  // 观察实际行为（不预设结论）：若 leaf 失败被浏览器 module map 缓存，同页重试仍失败——
-  // 这是静态依赖失败的已知边界（修复需全图改写，任务书明确不做），断言保留失败呈现
-  const recovered = await page
+  // 先给同页重试一次机会并记录结果（静态 leaf 场景预期仍失败——失败缓存不可同页穿透）
+  await page.getByTestId('alias-load-again').click().catch(() => {})
+  await page.waitForTimeout(1200)
+  const samePageRecovered = await page
     .getByTestId('static-dep-value')
-    .waitFor({ state: 'visible', timeout: 8000 })
+    .waitFor({ state: 'visible', timeout: 4000 })
     .then(() => true)
     .catch(() => false)
-  if (recovered) {
-    // 可恢复：leaf 请求必须真实重发（非缓存假成功）
-    expect(leafRequests.length).toBeGreaterThan(1)
+
+  if (!samePageRecovered) {
+    // 用户点击产品「刷新页面重试」按钮触发整页导航（本测试全程不调用 page.reload）。
+    // 整页刷新 = 新 document：点前设置跨刷新标记，刷新后标记消失即真实导航证据。
+    await page.evaluate(() => { (window as unknown as Record<string, number>).__FG_B3C_MARKER__ = 42 })
+    await reloadBtn.click()
+    await page.waitForLoadState('load')
+    const marker = await page.evaluate(() => (window as unknown as Record<string, number>).__FG_B3C_MARKER__)
+    expect(marker, '刷新必须由产品按钮触发（新 document 中跨刷新标记消失）').toBeUndefined()
+    // 刷新后重新登录 → 目标业务页面真实恢复（leaf 已解除阻断）
+    await login(page, 'alice')
+    await page.getByTestId('alias-load-both').click().catch(() => {})
+    await expect(page.getByTestId('static-dep-value')).toHaveText('static-dep:418', { timeout: 20000 })
+    await page.screenshot({ path: 'screenshots/prod-react-b3c-recovered.png' })
   } else {
-    // 不可恢复：错误占位仍在（边界如实记录，不计 PASS 于恢复项）
-    await expect(page.locator('section [data-fulgurjs-error]').first()).toBeVisible()
+    // 同页恢复也成立（更优结果）：leaf 必须真实重发且值正确
+    expect(leafRequests.length).toBeGreaterThan(leafFailed.length)
+    await expect(page.getByTestId('static-dep-value')).toHaveText('static-dep:418')
   }
+  // 恢复后业务可操作（按钮计数）
+  await login(page, 'alice')
+  await page.getByRole('link', { name: '远程首页' }).click()
+  await expect(page.getByTestId('remote-home')).toBeVisible({ timeout: 20000 })
 })
 
 import { reactContracts } from './react-contracts'
