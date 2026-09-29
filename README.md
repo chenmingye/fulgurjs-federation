@@ -714,7 +714,8 @@ React 浏览器应用唯一导入点：同时导出通用运行时 API（`loadRe
 - `ref` 透传：`forwardRef` 导出可正确接收 ref（React 18/19 实测）；普通函数组件传 ref 遵循 React 标准行为
 - 渲染期异常由内置边界捕获并与网络/导出错误**分开记录与展示**（文案区分「加载失败」与「渲染出错」）；ErrorBoundary 不捕获事件处理器与任意异步回调异常——这两类错误遵循 React 自身语义
 - 内置默认错误占位包含：错误码（FgError 的 `code`，无码渲染错误显示 `UNKNOWN`）、真实根因 message、可执行修法与「重试」按钮
-- 失败恢复真实穿透浏览器 ESM 失败缓存：运行时对入口 URL 与容器 expose loader 均在失败后的重试上变更 URL（`fulgurjs_retry=N`），服务恢复后点击重试可真实重新拉取（不是只在 mock 下可恢复）
+- 失败恢复真实穿透浏览器 ESM 失败缓存：运行时对入口 URL 与容器 expose loader 均在失败后的重试上变更 URL（`fulgurjs_retry=N`），服务恢复后点击重试可真实重新拉取（不是只在 mock 下可恢复）。并发加载同一模块失败后重试只推进一个代次（不会因并发失败产生多个重试 URL 导致模块实例分裂）；已成功模块的重复访问零重复网络请求
+- **已知边界**：expose 的**静态依赖** chunk（expose chunk 内 `import` 的普通 chunk）失败后，同页重试不可恢复——浏览器 module map 缓存了该依赖 URL 的失败，重试换 URL 的 expose chunk 重新拉取后其静态 import 仍命中缓存失败。恢复需整页刷新；动态 import 形态的共享依赖不受此限。插件不做全站依赖图递归改写来穿透该限制
 
 #### `useLoadRemote<Module>(spec, options?)`
 
@@ -745,7 +746,7 @@ const { data, error, loading, reload } = useLoadRemote<Utils>('remote-react/util
 
 #### React 的 dev 类型
 
-`@fulgurjs/federation/react` 的 `.tsx`/`.ts` expose 与 Vue 共用同一套 dev 类型生成（目录、`dts:false`、`dts.dir`、setup 过滤、`devFsRoot:false` 降级全部一致），并新增**双轨**形态：零配置时生成可解析的宽松声明（导出为 `any`）；在宿主任一 `tsconfig*.json` 配置一段 `"paths": { "<remote>/*": ["<types目录>/<remote>.d/*"] }` 后，同形态导入即解析到转发模块获得**源码级类型**（props/函数签名精确，错误 props/参数编译失败）——配置了 paths 的远程会自动跳过同名宽松声明避免遮蔽，启用说明见生成目录内 `_paths.d.ts`。
+`@fulgurjs/federation/react` 的 `.tsx`/`.ts` expose 与 Vue 共用同一套 dev 类型生成（目录、`dts:false`、`dts.dir`、setup 过滤、`devFsRoot:false` 降级全部一致），并新增**双轨**形态：零配置时生成可解析的宽松声明（导出为 `any`）；在宿主**应用 TS 上下文**（`tsconfig.json` 本身、其 `extends` 链，或其 `references` 指向且 include 覆盖应用源码/类型输出目录的子项目配置；独立的 `tsconfig.test.json`、只含 vite.config 的 `tsconfig.node.json` 等无关上下文不参与判定）配置一段 `"paths": { "<remote>/*": ["<types目录>/<remote>.d/*"] }` 后，同形态导入即解析到转发模块获得**源码级类型**（props/函数签名精确，错误 props/参数编译失败）——应用上下文配置了 paths 的远程会自动跳过同名宽松声明避免遮蔽，启用说明见生成目录内 `_paths.d.ts`。
 
 ### 9. `AppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/runtime`）
 

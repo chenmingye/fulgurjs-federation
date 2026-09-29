@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.1.3（2026-09-29）
+
+- **修复：TS 应用配置上下文识别（dev 类型双轨判定）**——宽松声明是否让位于精确轨，此前扫描根目录全部 `tsconfig*.json`（仅排除 `tsconfig.node.json`），任何一份无关配置（如 `tsconfig.test.json`）出现 `<remote>/*` paths 即误判「应用已接管」，抑制应用导入所需的 ambient 声明（导入 TS2307）。现在按真实 TS 上下文判定：主配置选择（`tsconfig.json`，或唯一/唯一覆盖应用源码的 `tsconfig*.json`——含只有 `tsconfig.typecheck.json` 的工程）+ `references` 链上 include 覆盖应用源码/类型输出目录的子项目（solution 型 `files: []` 配置自身不判定，不再按文件名排除）；`extends` 链 paths 继承，paths 目标与 baseUrl 按声明所在配置的目录解析。无法唯一确定上下文时安全回退（生成默认宽松声明，导入可解析）。真实 tsc 编译回归：无关测试配置不抑制 ambient；应用接管后精确轨拒绝错误 props。
+- **修复：生产重试 helper 并发失败代次竞态**——per-URL 状态机此前在并发失败时每个失败各自递增代次并改写当前 URL，并发中的其他调用可能落到不同 `fulgurjs_retry` 代次 URL 上（不同 URL = 不同 module map 条目 = 模块重复求值、单例身份分裂）。现在为 per-URL promise 状态机：并发调用共享同一 Promise（单请求、单失败、单代次推进）；成功缓存定型 Promise（重复访问零额外网络请求，身份严格保持，两个 expose 别名同 chunk 同样经此去重）。真实构建浏览器验证：别名身份/单次求值/成功后零多余请求与 retry 参数；入口失败、expose chunk 失败同页重试恢复；**静态依赖 chunk 失败为不可同页恢复的已知边界**（浏览器缓存该依赖 URL 失败，需整页刷新；已写入 README 边界说明，不做全站依赖图改写）。
+- **测试基建**：`fixtures/remote-react` 新增同源别名 expose、静态依赖链（两个消费者使 leaf 独立成 chunk）与模块求值计数探针；`fixtures/host-react` 新增别名身份面板与静态依赖组件；`prod-react` 新增 B1–B3c 生产形态浏览器回归（并发失败单代次推进的断言 = 恢复请求 URL 恰为 `fulgurjs_retry=1`）。
+- **文档**：中英文 README 的类型轨 paths 配置位置由「任一 tsconfig」订正为「应用 TS 上下文」语义；补生产重试恢复范围、并发语义与静态依赖边界说明。
+- 交接的 MES dev / 8662 双环境完整验收在正式包安装后单独执行；本条不含 MES 验收结论。
+
 ## 5.1.2（2026-09-29）
 
 - **修复 React hook 重载清理**：`useLoadRemote.reload()` 在发起新尝试时清空旧数据；失败后不再同时保留上次成功的数据。卸载和 effect 清理使在途 reload 失效，卸载后调用保存的 reload 不再发起请求或写状态；StrictMode 的新 effect 使用独立请求代次。

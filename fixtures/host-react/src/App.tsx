@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Route, Routes, useParams, useSearchParams, useLocation } from 'react-router-dom'
 import {
   createReactHostPages,
+  loadRemote,
   provideAppContext,
   clearAppContext,
   remoteComponent,
@@ -31,6 +32,7 @@ const FaultTimeout = remoteComponent('remote-react/slow-payload', { timeout: 150
 const FaultRender = remoteComponent('remote-react/broken-render')
 const RemoteHooksProbeA = remoteComponent<{ tag: string; instance: number }>('remote-react/HooksProbe')
 const RemoteHooksProbeB = remoteComponent<{ tag: string; instance: number }>('remote-react/HooksProbe')
+const StaticDepProbe = remoteComponent('remote-react/static-dep-target')
 
 // 页面表组件：与 Vue 相同动词 component(spec)，路由层渲染
 const RemoteHome = hp.component('remote-react/pages/home')
@@ -100,6 +102,37 @@ function DetailRoute() {
   return <RemoteDetail id={id ?? ''} tab={sp.get('tab') ?? undefined} />
 }
 
+/** B 验证探针：两个 expose 别名指向同一源码——并发加载、身份严格相等、求值次数、重复访问 */
+function AliasIdentityPanel(): React.ReactNode {
+  const [state, setState] = useState<{ identity: string; evals: number } | null>(null)
+  const [loadCalls, setLoadCalls] = useState(0)
+  const [err, setErr] = useState<string | null>(null)
+  const loadBoth = () => {
+    setLoadCalls((c) => c + 1)
+    setErr(null)
+    Promise.all([
+      loadRemote<{ default: unknown }>('remote-react/theme-context'),
+      loadRemote<{ default: unknown }>('remote-react/theme-context-alias'),
+    ])
+      .then(([a, b]) => {
+        const same = a.default === b.default
+        const evals = (window as unknown as { __FG_THEME_CTX_EVALS__?: number }).__FG_THEME_CTX_EVALS__ ?? 0
+        setState({ identity: same ? 'same' : 'diff', evals })
+      })
+      .catch((e) => setErr(String((e as Error).message ?? e).slice(0, 120)))
+  }
+  return (
+    <div data-testid="alias-panel">
+      <button data-testid="alias-load-both" onClick={loadBoth}>并发加载两个别名</button>
+      <button data-testid="alias-load-again" onClick={loadBoth}>重复加载</button>
+      <p data-testid="alias-identity">{state ? `identity:${state.identity}` : 'identity:?'}</p>
+      <p data-testid="alias-evals">{state ? `evals:${state.evals}` : 'evals:?'}</p>
+      <p data-testid="alias-loadcount">loadCalls:{loadCalls}</p>
+      {err && <p data-testid="alias-error">{err}</p>}
+    </div>
+  )
+}
+
 /** D01 浏览器探针：同实例会话切换。挂在 App 顶层（不随 account 卸载）——
  *  登录 A→B 仅触发宿主 rerender；hook 必须随新 sessionKey 重新加载并展示 B 的真实数据。
  *  加载次数挂 window 供 e2e 断言（同会话 rerender 不重载）。 */
@@ -146,7 +179,7 @@ export default function App() {
       <SessionLive />
       <h1>host-react（fulgurjs federation）</h1>
       <nav>
-        <Link to="/">首页</Link> · <Link to="/remote-react/home">远程首页</Link> · <Link to="/remote-react/detail/42?tab=basic">远程参数页</Link> · <Link to="/utils">远程 utils</Link> · <Link to="/hooks">Hooks 探针</Link> · <Link to="/session">会话</Link> · <Link to="/fault">故障注入</Link>
+        <Link to="/">首页</Link> · <Link to="/remote-react/home">远程首页</Link> · <Link to="/remote-react/detail/42?tab=basic">远程参数页</Link> · <Link to="/utils">远程 utils</Link> · <Link to="/hooks">Hooks 探针</Link> · <Link to="/alias">别名身份</Link> · <Link to="/session">会话</Link> · <Link to="/fault">故障注入</Link>
       </nav>
       <p data-testid="account-state">account:{account ?? '(未登录)'}</p>
       <div>
@@ -171,6 +204,10 @@ export default function App() {
               <RemoteHooksProbeB tag="B" instance={2} />
             </>} />
             <Route path="/session" element={<SessionPanel />} />
+            <Route path="/alias" element={<>
+              <AliasIdentityPanel />
+              <section><h3>静态依赖 expose</h3><StaticDepProbe /></section>
+            </>} />
             <Route path="/fault" element={<>
               <section><h3>N03 缺失 expose</h3><FaultMissing /></section>
               <section><h3>N04 超时</h3><FaultTimeout /></section>

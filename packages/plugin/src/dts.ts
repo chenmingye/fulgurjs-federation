@@ -220,7 +220,7 @@ export function stripJsonc(text: string): string {
   return out
 }
 
-function parseJsoncFile(file: string): { compilerOptions?: { paths?: Record<string, readonly string[]>; baseUrl?: string } ; extends?: string } | null {
+function parseJsoncFile(file: string): ParsedTsConfig | null {
   let text: string
   try {
     text = fs.readFileSync(file, 'utf8')
@@ -228,62 +228,186 @@ function parseJsoncFile(file: string): { compilerOptions?: { paths?: Record<stri
     return null
   }
   try {
-    return JSON.parse(stripJsonc(text))
+    return JSON.parse(stripJsonc(text)) as ParsedTsConfig
   } catch {
     return null
   }
 }
 
+interface ParsedTsConfig {
+  compilerOptions?: { paths?: Record<string, readonly string[]>; baseUrl?: string }
+  extends?: string
+  include?: unknown
+  files?: unknown
+  exclude?: unknown
+  references?: unknown
+}
+
+/** extends 链解析出的生效 paths 及其声明位置（用于按声明配置的目录/baseUrl 解析目标） */
+interface EffectivePaths {
+  paths: Record<string, readonly string[]>
+  declaredIn: string
+  baseUrlDir: string | null
+}
+
+/**
+ * 单个 include/exclude 模式是否在目录级覆盖 target（目录覆盖即递归含其下全部文件，
+ * 与 TS include 的目录语义一致；足够上下文判定，不做完整 glob 语义）。
+ */
+function patternCoversDir(pattern: string, target: string, cfgDir: string): boolean {
+  const norm = pattern.replace(/^\.\//, '').replace(/\\/g, '/')
+  if (norm === '' || norm === '.') return target === cfgDir || target.startsWith(cfgDir + path.sep)
+  let base: string
+  if (norm.includes('**')) {
+    base = norm.slice(0, norm.indexOf('**')).replace(/\/+$/, '')
+  } else if (norm.endsWith('/*')) {
+    base = norm.slice(0, -2)
+  } else {
+    base = norm.replace(/\/+$/, '')
+  }
+  const abs = base === '' ? cfgDir : path.resolve(cfgDir, base)
+  return target === abs || target.startsWith(abs + path.sep)
+}
+
+/** include 语义：缺省 = 默认覆盖配置目录下全部；显式 = 任一模式覆盖即可 */
+function includeCoversDir(target: string, include: unknown, cfgDir: string): boolean {
+  if (!Array.isArray(include)) return target === cfgDir || target.startsWith(cfgDir + path.sep)
+  return (include as unknown[]).some((p) => typeof p === 'string' && patternCoversDir(p, target, cfgDir))
+}
+
+/** exclude 语义：缺省排除不含工程内目录（node_modules 等默认排除不覆盖 src/输出目录） */
+function excludeCoversDir(target: string, exclude: unknown, cfgDir: string): boolean {
+  if (!Array.isArray(exclude)) return false
+  return (exclude as unknown[]).some((p) => typeof p === 'string' && patternCoversDir(p, target, cfgDir))
+}
+
+/**
+ * 该 tsconfig 的编译范围是否覆盖「应用源码或类型输出目录」——用于 references/多候选
+ * 配置中识别真正消费应用导入的 TS 上下文（tsconfig.node.json 只含 vite.config.ts、
+ * 独立 tsconfig.test.json 只含 tests 等，都算不上应用上下文）。
+ */
+function configCoversAppSource(cfgFile: string, cfg: ParsedTsConfig, root: string, outDir?: string): boolean {
+  const cfgDir = path.dirname(cfgFile)
+  const srcRoot = fs.existsSync(path.join(root, 'src')) ? path.join(root, 'src') : root
+  const targets = outDir && outDir !== srcRoot ? [srcRoot, outDir] : [srcRoot]
+  const hasInclude = Array.isArray(cfg.include)
+  if (!hasInclude && Array.isArray(cfg.files) && cfg.files.length > 0) {
+    // files 显式列出：仅当列出的文件位于应用源码/输出目录下才算覆盖
+    return (cfg.files as unknown[]).some((f) => {
+      if (typeof f !== 'string') return false
+      const abs = path.resolve(cfgDir, f)
+      return targets.some((t) => abs === t || abs.startsWith(t + path.sep))
+    })
+  }
+  return targets.some((t) => includeCoversDir(t, cfg.include, cfgDir) && !excludeCoversDir(t, cfg.exclude, cfgDir))
+}
+
+/**
+ * 选择主配置（浏览器应用导入的解析入口）：
+ * - 有 tsconfig.json → 它（TS/IDE 约定的默认工程入口）；
+ * - 无主配置且只有一份 tsconfig*.json（如仅 tsconfig.typecheck.json）→ 它即有效检查入口；
+ * - 无主配置且多份候选 → 按 include 覆盖应用源码筛选；仍不唯一 → 判定失败（安全回退）。
+ */
+function selectPrimaryConfig(root: string, outDir?: string): string | null {
+  const primary = path.join(root, 'tsconfig.json')
+  if (fs.existsSync(primary)) return primary
+  let files: string[]
+  try {
+    files = fs.readdirSync(root).filter((f) => /^tsconfig[\w.-]*\.json$/i.test(f))
+  } catch {
+    return null
+  }
+  if (files.length === 0) return null
+  if (files.length === 1) return path.join(root, files[0]!)
+  const matched = files.filter((f) => {
+    const file = path.join(root, f)
+    const cfg = parseJsoncFile(file)
+    return cfg !== null && configCoversAppSource(file, cfg, root, outDir)
+  })
+  if (matched.length === 1) return path.join(root, matched[0]!)
+  console.warn(
+    `[fulgurjs] 类型生成：无法唯一确定应用 tsconfig 上下文（候选：${files.join('、')}）；` +
+      `按未配置 paths 处理，生成默认宽松声明（导入可解析）。`,
+  )
+  return null
+}
+
 /**
  * 宿主是否为该 remote 配置了 paths（精确轨开关，决定是否跳过同名 ambient）。
  *
- * 语义化判定（5.1.1 修正 D02）：
- * - 只检查**主上下文** tsconfig.json（浏览器应用导入的解析上下文）——tsconfig.node.json
- *   等子上下文配置不影响应用导入，也不参与判定；
+ * 语义化判定（5.1.2 修正：按真实 TS 上下文，不再全目录扫描）：
+ * - 上下文选择：主配置（tsconfig.json，或唯一/唯一覆盖源码的 tsconfig*.json）+
+ *   references 链上「include 覆盖应用源码或类型输出目录」的子项目。独立存在的
+ *   tsconfig.test.json、只含 vite.config.ts 的 node 配置等不构成应用上下文，
+ *   其 paths 不参与判定（不再按文件名排除，按语义过滤）；
+ * - solution 型配置（files:[] + references）自身不编译文件，以其 references 判定；
  * - 沿 extends 链继承：链上第一个声明 paths 的配置生效（TS 继承语义：子级声明整体覆盖
  *   父级 paths）；extends 相对路径按声明文件所在目录解析；
- * - 语义解析（JSONC 注释/尾逗号安全），不做原文正则匹配——注释里的 paths、其他键中的
- *   同名片段不构成误判；
- * - 命中键：精确键 `<remote>` 或通配键 `<remote>/*`（TS 用 wildcard 匹配 `<remote>/Button`）。
- *   仅 exact 键不能覆盖 `<remote>/Button` 子路径，不算命中；
+ * - paths 目标与 baseUrl 按声明所在配置解析（baseUrl 相对其声明配置目录，目标相对
+ *   生效 baseUrl，无 baseUrl 时相对声明配置目录）——继承自父目录配置的 paths 不再按
+ *   子配置目录误算；
+ * - 语义解析（JSONC 注释/尾逗号安全），不做原文正则匹配；
+ * - 命中键：通配键 `<remote>/*`（TS 用 wildcard 匹配 `<remote>/Button`）。仅 exact 键
+ *   不能覆盖 `<remote>/Button` 子路径，不算命中；
  * - 返回 true = 用户已接管该 remote 的解析（任何目标都算——ambient 一旦生成会遮蔽 paths
  *   命中的模块，必须跳过）；目标未指向插件精确目录时由调用方给出提示。
- * 配置无效或无法解析：按「未配置」处理（生成默认宽松轨，导入可解析）——宁可多生成可用
- * 声明，不让导入因误判失效。
+ * 配置无效或无法唯一确定上下文：按「未配置」处理（生成默认宽松轨，导入可解析）——宁可
+ * 多生成可用声明，不让导入因误判失效。
  */
-export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: string): boolean {
-  // 扫描宿主全部 tsconfig*.json，但排除 tsconfig.node.json（Vite 约定的 node 侧上下文，
-  // 不参与浏览器应用导入的解析——D02：node 配置不得影响应用类型轨判定）。
-  let files: string[] = []
-  try {
-    files = fs.readdirSync(root).filter((f) => /^tsconfig[\w.-]*\.json$/i.test(f) && f !== 'tsconfig.node.json')
-  } catch {
-    return false
+export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: string, outDir?: string): boolean {
+  const primary = selectPrimaryConfig(root, outDir)
+  if (!primary) return false
+  const contexts: string[] = []
+  const visited = new Set<string>()
+  const walk = (file: string, isPrimary: boolean, depth: number): void => {
+    if (visited.has(file) || depth > 10) return
+    visited.add(file)
+    const cfg = parseJsoncFile(file)
+    if (!cfg) return
+    const isSolution = Array.isArray(cfg.files) && cfg.files.length === 0
+    // solution 配置自身不编译文件（paths 对应用导入无作用），不计入；其余主配置恒计入，
+    // 被 references 引用的配置按覆盖语义筛选
+    if ((isPrimary || configCoversAppSource(file, cfg, root, outDir)) && !isSolution) contexts.push(file)
+    if (!Array.isArray(cfg.references)) return
+    for (const ref of cfg.references as unknown[]) {
+      const refPath = (ref as { path?: unknown } | null)?.path
+      if (typeof refPath !== 'string' || refPath === '') continue
+      let next: string | null = null
+      if (path.isAbsolute(refPath)) next = refPath
+      else next = path.resolve(path.dirname(file), refPath)
+      if (next !== null && !next.endsWith('.json')) next = `${next}.json`
+      if (next !== null && fs.existsSync(next)) walk(next, false, depth + 1)
+    }
   }
-  for (const f of files) {
-    const paths = inheritedPaths(path.join(root, f))
-    if (!paths) continue
+  walk(primary, true, 0)
+
+  for (const ctxFile of contexts) {
+    const eff = inheritedPaths(ctxFile)
+    if (!eff) continue
     // 命中判定：只有通配键 `<remote>/*` 才覆盖 `<remote>/Button` 子路径（TS 语义——exact 键
     // 只映射模块 `<remote>` 本身，与生成的 `<remote>/<expose>` 声明无遮蔽关系，不算接管）
-    if (!Object.keys(paths).some((k) => k === `${remoteKey}/*`)) continue
+    if (!Object.keys(eff.paths).some((k) => k === `${remoteKey}/*`)) continue
     // 目标核对（诊断级）：任一通配目标应解析到插件生成的精确目录；否则提示用户自查。
     // 无论如何都跳过 ambient——ambient 一旦生成会遮蔽 paths 命中的模块（实测行为），
     // 用户自有映射（指向别处）同样会被遮蔽，必须让位。
     if (preciseDir) {
       const preciseReal = safeReal(preciseDir)
-      const coversPrecise = preciseReal !== null && Object.entries(paths)
+      const coversPrecise = preciseReal !== null && Object.entries(eff.paths)
         .filter(([k]) => k === `${remoteKey}/*`)
         .some(([, targets]) =>
           (Array.isArray(targets) ? targets : [targets]).some((t) => {
             if (typeof t !== 'string') return false
             const base = t.includes('*') ? t.slice(0, t.indexOf('*')) : t
-            const resolvedBase = path.resolve(path.dirname(path.join(root, f)), base)
+            const resolvedBase = eff.baseUrlDir !== null
+              ? path.resolve(eff.baseUrlDir, base)
+              : path.resolve(path.dirname(eff.declaredIn), base)
             return preciseReal === resolvedBase || preciseReal.startsWith(resolvedBase + path.sep)
           }),
         )
       if (!coversPrecise) {
         console.warn(
-          `[fulgurjs] 类型生成：宿主 ${f} 已为 "${remoteKey}" 配置 paths，但目标未指向插件生成的精确目录（${preciseDir}）。` +
+          `[fulgurjs] 类型生成：宿主 ${path.relative(root, ctxFile)} 已为 "${remoteKey}" 配置 paths，` +
+            `但目标未指向插件生成的精确目录（${preciseDir}）。` +
             `已跳过同名宽松声明以避免遮蔽你的映射；源码级类型由你的 paths 目标决定，请核对其解析结果。`,
         )
       }
@@ -293,15 +417,34 @@ export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: st
   return false
 }
 
-/** 沿 extends 链取该配置实际生效的 paths（链上第一个声明者生效——TS 继承语义：子级声明整体覆盖父级） */
-function inheritedPaths(tsconfigFile: string): Record<string, readonly string[]> | undefined {
+/**
+ * 沿 extends 链取该配置实际生效的 paths（链上第一个声明者生效——TS 继承语义：子级声明
+ * 整体覆盖父级），并记录声明位置与生效 baseUrl：目标解析按声明配置目录/baseUrl 进行，
+ * 不按使用方（子配置）目录误算。
+ */
+function inheritedPaths(tsconfigFile: string): EffectivePaths | undefined {
   const seen = new Set<string>()
   let current: string | null = tsconfigFile
+  let baseUrlDecl: { file: string; value: string } | null = null
   while (current && !seen.has(current)) {
     seen.add(current)
     const cfg = parseJsoncFile(current)
     if (!cfg) return undefined
-    if (cfg.compilerOptions?.paths) return cfg.compilerOptions.paths as Record<string, readonly string[]>
+    if (!baseUrlDecl && cfg.compilerOptions?.baseUrl) {
+      baseUrlDecl = { file: current, value: cfg.compilerOptions.baseUrl }
+    }
+    if (cfg.compilerOptions?.paths) {
+      // 生效 baseUrl：距 paths 声明者最近的声明（子级覆盖父级），相对其声明配置目录解析
+      const own = cfg.compilerOptions.baseUrl
+      const baseUrlDir = own !== undefined
+        ? path.resolve(path.dirname(current), own)
+        : baseUrlDecl !== null ? path.resolve(path.dirname(baseUrlDecl.file), baseUrlDecl.value) : null
+      return {
+        paths: cfg.compilerOptions.paths as Record<string, readonly string[]>,
+        declaredIn: current,
+        baseUrlDir,
+      }
+    }
     if (!cfg.extends) return undefined
     // extends 解析：相对路径按声明文件所在目录（TS 语义，无 .json 后缀自动补）；包名走 node 解析
     const ext = cfg.extends
@@ -498,7 +641,7 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
       // 智能双轨：宿主 tsconfig 已为该 remote 配置 paths（精确轨已启用）时不写同名
       // ambient——任何同名 ambient（含带体）都会 shadow paths 命中的转发文件（实测：
       // paths 解析成功但类型仍被 ambient 拦成 any），二者的切换开关就是 paths 配置本身
-      const pathsEnabled = hostPathsCovers(options.root, remote.key, preciseDir)
+      const pathsEnabled = hostPathsCovers(options.root, remote.key, preciseDir, outDir)
       if (pathsEnabled) {
         if (fs.existsSync(path.join(outDir, `${remote.key}.d.ts`))) fs.unlinkSync(path.join(outDir, `${remote.key}.d.ts`))
         console.log(

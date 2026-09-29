@@ -379,15 +379,21 @@ export async function get(moduleName) {
 
 /**
  * prod remoteEntry 重试穿透 helper（D04 修正：失败驱动，不再按调用次数 cache-bust）。
- * per-URL 状态机：成功 → 永远复用同一 URL（module map 缓存 ⇒ 模块身份/单实例保持）；
- * 失败 → 下一次调用改用 fulgurjs_retry=N 新 URL（穿透浏览器失败缓存），再失败继续递增。
- * 并发首调共用同一 good URL（同 URL 同一 module map 条目，单次求值）。
+ * per-URL promise 状态机：s.n 是当前重试代次（0=原始 URL），s.p 是当前代次 URL 的
+ * in-flight 或已定型 Promise。
+ * - 成功 → s.p 保持 resolved：后续调用直接复用同一 Promise，模块单实例、零额外请求、
+ *   身份严格保持（两个 expose 别名同 chunk 同样经 s.p 去重）；
+ * - 失败 → s.p 置空、s.n 递增一次：下一次调用用 fulgurjs_retry=N 新 URL 穿透浏览器
+ *   失败缓存。并发调用共享同一 Promise，拒绝处理器每代次只执行一次——并发失败只推进
+ *   一代，不会互相覆盖出多个代次 URL（否则不同代次 URL 各自求值会造成模块实例分裂）。
  */
 export function genProdRetryHelper(): string {
   return [
     'var __fgS={};',
-    'var __fgR=function(u){var s=__fgS[u]||(__fgS[u]={u:u,n:0});',
-    'return import(s.u).then(function(m){return m},function(e){s.n++;s.u=u+(u.indexOf("?")>-1?"&":"?")+"fulgurjs_retry="+s.n;throw e})};',
+    'var __fgR=function(u){var s=__fgS[u]||(__fgS[u]={n:0,p:null});',
+    'if(!s.p){var url=s.n===0?u:u+(u.indexOf("?")>-1?"&":"?")+"fulgurjs_retry="+s.n;',
+    's.p=import(url).then(function(m){return m},function(e){s.p=null;s.n++;throw e});}',
+    'return s.p};',
   ].join('')
 }
 
