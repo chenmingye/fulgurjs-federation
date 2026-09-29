@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.2
+
+- **修复：对象形式 manualChunks 的宿主也获得运行时 chunk 隔离**——5.2.1 的隔离只覆盖函数形式与未配置两种；jeecg 系工程普遍使用对象形式（`manualChunks: { 'vue-vendor': ['vue', ...] }`），此时隔离被静默跳过，运行时代码仍被并入巨型 vendor chunk。现在对象形式被包装为等价函数（插件专属 chunk 判定优先，其余按 `/node_modules/<包名>/` 前缀匹配回原组）。MES admin（vite 6 + 对象形式）真实构建验证。
+
 ## 5.2.1
 
 - **修复：宿主构建的运行时 chunk 隔离（MES admin 实测回归）**——宿主（remotes>0）构建此前仅在 devSharedSelf 下注入 manualChunks 隔离；普通宿主的运行时代码会被 rollup 默认归组并进巨型 vendor chunk，与对含动态 import 的 chunk 全量做 swc 变换的构建插件（vite-plugin-top-level-await@1.6.0，jeecg 系工程标配）冲突——printSync 必崩（missing field type / invalid type: null，@swc/core 1.13.5/1.15.47 同崩）。现在所有宿主构建都将运行时与共享门面隔离进插件专属 chunk；用户已有 manualChunks 时按 devSharedSelf 同款方式包装复用，output 为数组时显式告警（BLD-006）。真实工程（cku-mes-admin，vite 6）构建通过验证。

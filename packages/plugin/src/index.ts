@@ -424,7 +424,32 @@ export function federation(options: FederationOptions): Plugin[] {
           if (typeof userManualChunks === 'function') {
             const extraBuild2 = ((extra as any).build ??= {})
             extraBuild2.rollupOptions = { ...(extraBuild2.rollupOptions ?? {}), output: { manualChunks: wrap(userManualChunks as never) } }
-          } else if (!userManualChunks) {
+          } else if (userManualChunks && typeof userManualChunks === 'object') {
+            // 对象形式（jeecg 系工程常用）：包装为等价函数——插件专属 chunk 判定优先，
+            // 其余按「绝对路径包含 /node_modules/<spec 前缀>」匹配回原组名（对象形式的
+            // 常见用法是把 npm 包指到命名组；列出的都是包名，路径前缀匹配语义一致）。
+            const groups = Object.entries(userManualChunks as Record<string, string[]>).flatMap(
+              ([group, specs]) => (Array.isArray(specs) ? specs : []).map((spec) => ({ group, spec })),
+            )
+            const groupOf = (id: string): string | undefined => {
+              for (const { group, spec } of groups) {
+                const marker = `/node_modules/${spec.startsWith('@') ? spec : spec.split('/')[0]}/`
+                if (id.includes(marker)) return group
+              }
+              return undefined
+            }
+            const extraBuild2 = ((extra as any).build ??= {})
+            extraBuild2.rollupOptions = {
+              ...(extraBuild2.rollupOptions ?? {}),
+              output: {
+                manualChunks: (id: string, meta: unknown) => {
+                  const facade = facadeChunkOf(id)
+                  if (facade) return facade
+                  return groupOf(id)
+                },
+              },
+            }
+          } else {
             const extraBuild2 = ((extra as any).build ??= {})
             extraBuild2.rollupOptions = { ...(extraBuild2.rollupOptions ?? {}), output: { manualChunks: wrap() } }
           }
