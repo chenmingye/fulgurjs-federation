@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.2.0
+
+- **修复：Vue 默认错误占位没有可操作的恢复入口（D1）**——默认占位新增两个用户操作：「重试加载」（同页重建加载链，重跑真实 loader 含 beforeLoad；Vue 的 defineAsyncComponent userRetry 在 userFail 后永久失效，故恢复由占位组件自身承载，成功后原位渲染业务组件并透传 attrs）与「刷新页面重试」（用户点击才整页刷新，保留 pathname/query/hash，绝不自动触发）。`remoteComponent` 与 `createHostPages().component()` 两条路径一致；自定义 `errorComponent` 契约不变（完全接管、不注入按钮）；KeepAlive 组件树形状与 5.1.x 完全一致。
+- **修复：React 默认错误占位补齐刷新恢复（D1/D2）**——load 阶段默认占位同样提供「重试加载 / 刷新页面重试」双操作（渲染阶段错误仍只提供「重试加载」，文案明确区分网络与远程代码错误）。
+- **修复：生产静态子依赖失败的用户恢复闭环（D2）**——浏览器 module map 缓存静态子依赖失败（同 URL 再 import 直接拒绝），同页重试无法穿透；默认占位的「刷新页面重试」给出确定的整页恢复路径。`prod B3c` 由「两种结果都能 PASS」改写为确定性门禁：占位双操作可见 → 同页重试（记录结果）→ 产品按钮触发导航（跨刷新标记证明，非测试脚本 reload）→ 目标业务页面真实恢复；新增 Vue 静态依赖生产用例（remote-a 静态依赖链 fixture + host-vue 页面）。
+- **修复：React 跨应用开发更新真实自动传播（D3）**——根因：react-refresh 运行时状态（helpersByRendererID/pending 队列）为模块私有，宿主页内第二份副本（远程 origin）刷新空转。修复：宿主 preamble 后注入发布脚本把页面级 react-refresh 单例发布到 globalThis；远程组件的 /@react-refresh 导入改写到插件 shim（dev），shim 优先委托页面单例、standalone 回退本源实例。R11 重写为「5 轮冷启动 × 3 次修改」零人工刷新热更新保活门禁 + R11b 普通 TS 依赖传播门禁（挂载宿主实际看到新值）。
+- **修复：Vite 5.x 双 client 错误覆盖层 IllegalConstructor（D4）**——Vite 5 客户端对 `vite-error-overlay` 的 define 有注册守卫，双 client 场景第二份客户端的本地 ErrorOverlay 类未注册，按 HTML 规范 new 未注册 HTMLElement 子类抛 IllegalConstructor，远程编译错误覆盖层无法显示。修复：把 Vite ≥6 的注册表构造修法前移到 Vite 5 客户端代码（fulgurjs:dev-client-compat，不改已安装 Vite 源码）；fault.spec 的 5.1.4 版本门控 skip 移除，支持矩阵内该用例全部真实执行（Vite 5.1.4 本地实测通过）。
+- **示例重构（D7）**：examples 按框架分组为 `examples/vue/{host,remote}`（5214/5213）与 `examples/react/{host,remote}`（5204/5203）四个完整可复制工程（npm + registry 精确正式包 + 独立 fulgurjs.config.ts + 完整入口/源码/README），每对演示远程可点击组件、普通 TS 模块调用、联邦首页/参数详情页、宿主导航懒加载、默认错误恢复；旧 `examples/{host,remote-a,react-host,react-remote}` 目录移除。中英文 examples 总入口与 GitHub 根 README 同步。
+- **文档（D5）**：中英文 README 与恢复/HMR 实际行为对齐；「失败 dynamic import 绝对不会再次访问网络」等表述限定到真实浏览器边界；支持矩阵与恢复操作口径统一。
+
 ## 5.1.4
 
 - 修复类型生成的数组 extends、目录 references、独立 baseUrl 继承及继承 include 上下文识别；多个应用 paths 接管不一致时保留可解析声明并提示统一配置。

@@ -29,7 +29,7 @@
 - **UMD / CJS-only 依赖开箱即用**：element-plus、avue 等只有 UMD/CJS 产物的依赖直接进 `optimizeDeps.include` 即可——dev 期插件自动把预构建产物内的 shared 键改道协商门面；build 期自动把 CJS `require(<shared>)` 重定向到垫片，双运行时免疫
 - **自动异步边界**：top-level await 自动注入（es2022+），无需 webpack 式手工 `import('./bootstrap')`
 - **稳定产物**：remoteEntry 固定文件名便于稳定引用（入口内容每次构建变，**必须 no-cache**——只有带内容哈希的 chunk 才可长缓存）；`fulgurjs-manifest.json` 资源清单；expose 独立 chunk
-- **容错（对齐 webpack MF 2.0 errorLoadRemote）**：加载重试 / 熔断 / 超时内置；`loadRemote(spec, { retries, fallbackModule })` 单次调用级覆盖——失败时返回 fallback 模块，错误事件仍显式发出（**绝不静默兜底**，不传则照旧抛错）
+- **容错（对齐 webpack MF 2.0 errorLoadRemote）**：加载重试 / 熔断 / 超时内置；`loadRemote(spec, { retries, fallbackModule })` 单次调用级覆盖——失败时返回 fallback 模块，错误事件仍显式发出（**绝不静默兜底**，不传则照旧抛错）。组件级默认错误占位提供用户恢复操作：**重试加载**（同页重试，失败后换 URL 穿透浏览器失败缓存）与**刷新页面重试**（用户点击才整页刷新，覆盖浏览器失败缓存无法同页穿透的静态子依赖场景）
 - **增强能力**：dts 类型直连（dev 补全直达 remote 源码）、`preloadRemote()` manifest 驱动精确预载、runtimePlugins 钩子
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
@@ -37,8 +37,8 @@
 - **远程初始化生命周期（可选）**：`federation({ setup })` 显式声明初始化入口——默认导出 `setup(context)` 应用级执行一次、可选具名导出 `onSession(context)` 按宿主 `sessionKey` 去重执行（换账号/重登自动重跑，退出 `clearAppContext` 清理会话状态）；失败显式报错可重试（`MFU-011~014`），`preloadRemote`/`getContainer` 无副作用。不配置 `setup` 时零行为零体积
 - **宿主页面适配器（可选）**：`createHostPages({ pages, remotePrefixes, ... })`——一份页面表供宿主路由与布局共用；URL 解析（含 base 剥离）、最长前缀远程归属、`definePages` R1–R5 校验、异步组件缓存（会话切换自动重建）、骨架屏/错误占位、保活名称内置
 - **跨应用传值与方法引用**：`@fulgurjs/federation/runtime` 导出 `provideAppContext` / `getAppContext` / `requireAppContext` / `clearAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥写入页面级单例（user/getToken/store/hostApp/locale/sessionKey/events 标准字段 + 项目扩展位），远程 setup/onSession 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享承担，同页换账号由 onSession 会话同步承担，不依赖页面刷新）
-- **Vue 直渲染**：`remoteComponent('remote/X')`（`@fulgurjs/federation/runtime` 导出）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法），runtime.js 零框架依赖零体积增量
-- **React 完整支持（浏览器端）**：`@fulgurjs/federation/react` 独立入口——`remoteComponent`（含 Suspense 占位/错误占位/重试，不用 React.lazy 的失败缓存陷阱）、`useLoadRemote`（代次守卫的模块 hook）、`RemoteErrorBoundary`（页面级兜底）、`createReactHostPages`（与 Vue 同源页面表与 R1–R5 校验）；共享 `react`/`react-dom` singleton 协商，Hooks/StrictMode/Context 跨端同实例（dev 预构建外部化 + prod CJS 垫片自动处理 `react/jsx-runtime`、`react-dom/client` 子路径）；纯 React 项目零 Vue 依赖、纯 Vue 项目零 React 依赖
+- **Vue 直渲染**：`remoteComponent('remote/X')`（`@fulgurjs/federation/runtime` 导出）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法+**重试加载/刷新页面重试**），runtime.js 零框架依赖零体积增量
+- **React 完整支持（浏览器端）**：`@fulgurjs/federation/react` 独立入口——`remoteComponent`（含 Suspense 占位/错误占位/**重试加载+刷新页面重试**，不用 React.lazy 的失败缓存陷阱）、`useLoadRemote`（代次守卫的模块 hook）、`RemoteErrorBoundary`（页面级兜底）、`createReactHostPages`（与 Vue 同源页面表与 R1–R5 校验）；共享 `react`/`react-dom` singleton 协商，Hooks/StrictMode/Context 跨端同实例（dev 预构建外部化 + prod CJS 垫片自动处理 `react/jsx-runtime`、`react-dom/client` 子路径）；纯 React 项目零 Vue 依赖、纯 Vue 项目零 React 依赖
 - **CSP 友好**：原生 ESM 加载路径全程无 `eval` / `new Function`，可在严格 CSP（无 `unsafe-eval`）下运行
 - **全链路错误码体系（41 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §6 码表防漂移校验
 
@@ -102,7 +102,7 @@ const hp = createReactHostPages({ pages, remotePrefixes, schema: remoteSchema })
 const RemoteHome = hp.component('remote-react/pages/home')
 ```
 
-完整可复制工程见 [`examples/react-host`](./examples/react-host) 与 [`examples/react-remote`](./examples/react-remote)；API 精确语义（含 timeout/retry/StrictMode/Context/错误恢复）见 [§8.1 React 适配 API](#81-react-适配-api--fulgurjsfederationreact)。
+完整可复制工程见 [`examples/react/host`](./examples/react/host)（React 宿主）与 [`examples/react/remote`](./examples/react/remote)（React 远程）；Vue 对应 [`examples/vue/host`](./examples/vue/host) + [`examples/vue/remote`](./examples/vue/remote)。API 精确语义（含 timeout/retry/StrictMode/Context/错误恢复）见 [§8.1 React 适配 API](#81-react-适配-api--fulgurjsfederationreact)。
 
 ## 快速开始：三条接入路径
 
@@ -291,7 +291,7 @@ import { loadRemote, provideAppContext, getAppContext, requireAppContext, clearA
 ```bash
 # 1) 生成单项目 fulgurjs.config.ts 起步模板（默认导出直接是 federation() 选项；已存在则拒绝，--force 覆盖）
 npx fulgurjs init
-# 样例：examples/remote-a/fulgurjs.config.ts 与 examples/host/fulgurjs.config.ts（可整份复制的单项目配置）
+# 样例：examples/vue/remote/fulgurjs.config.ts 与 examples/vue/host/fulgurjs.config.ts（完整可复制工程的联邦声明）
 
 # 2) 校验配置并输出接入块：federation(fulgurjsConfig) 两行接法 + 通用核对清单（纯打印，不写文件）
 npx fulgurjs init --config fulgurjs.config.ts
@@ -682,7 +682,7 @@ const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
 | 选项 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `loadingComponent` | `Component` | — | 加载期间展示 |
-| `errorComponent` | `Component` | 内置错误占位 | 加载失败展示（Vue 会传入 `error` prop） |
+| `errorComponent` | `Component` | 内置错误占位 | 加载失败展示（Vue 会传入 `error` prop）。自定义时完全接管展示，插件不再注入恢复按钮；默认占位自带「重试加载 / 刷新页面重试」 |
 | `retries` | `number` | 远程注册值（默认 2） | 透传 `loadRemote` |
 | `delay` | `number` | `200` | 切到 loadingComponent 前的等待（ms） |
 | `timeout` | `number` | — | 超时进错误态（ms）；不设由 runtime 容器超时兜底 |
@@ -690,7 +690,7 @@ const FederatedAmisForm = remoteComponent('demo-host/AmisFormRouterPage', {
 语义与边界：
 
 - 内部 = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件，`props`（如 `form-params`）在使用处直接透传；
-- **无任何兜底/降级**（H3 零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法三段式文案），`window` 的 `fulgurjs:error` 事件由 runtime 层照常发出；
+- **无任何兜底/降级**（H3 零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法 + **重试加载 / 刷新页面重试**），`window` 的 `fulgurjs:error` 事件由 runtime 层照常发出；
 - 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
 - `vue` 为**可选 peerDependency**（`peerDependenciesMeta.optional`）：只使用包根（Vite 插件）时无需安装；应用使用 `/runtime` 时需要安装 Vue，因为该入口导出 `remoteComponent`。内部 `runtime.js` 仍不导入 Vue，体积零增量；
 - 运行时实例经 `globalThis.__FULGURJS_RUNTIME__` 页面级单例复用，与 `@fulgurjs/federation/runtime` 的导入殊途同归，无需额外接线。
@@ -713,9 +713,9 @@ React 浏览器应用唯一导入点：同时导出通用运行时 API（`loadRe
 - 组件导出校验：默认导出（或模块本身）必须是函数组件 / class / `memo` / `forwardRef` 等合法组件类型；字符串、数字、空命名空间显式报错（不渲染空白成功页）
 - `ref` 透传：`forwardRef` 导出可正确接收 ref（React 18/19 实测）；普通函数组件传 ref 遵循 React 标准行为
 - 渲染期异常由内置边界捕获并与网络/导出错误**分开记录与展示**（文案区分「加载失败」与「渲染出错」）；ErrorBoundary 不捕获事件处理器与任意异步回调异常——这两类错误遵循 React 自身语义
-- 内置默认错误占位包含：错误码（FgError 的 `code`，无码渲染错误显示 `UNKNOWN`）、真实根因 message、可执行修法与「重试」按钮
+- 内置默认错误占位包含：错误码（FgError 的 `code`，无码渲染错误显示 `UNKNOWN`）、真实根因 message、可执行修法，以及两个恢复操作——**「重试加载」**（同页重建加载链）与**「刷新页面重试」**（仅用户点击才整页刷新，保留当前地址；用于浏览器已缓存模块失败的场景，见下条边界）。渲染阶段错误只提供「重试加载」（错误抛自远程代码本身，刷新无法修复）
 - 失败恢复真实穿透浏览器 ESM 失败缓存：运行时对入口 URL 与容器 expose loader 均在失败后的重试上变更 URL（`fulgurjs_retry=N`），服务恢复后点击重试可真实重新拉取（不是只在 mock 下可恢复）。并发加载同一模块失败后重试只推进一个代次（不会因并发失败产生多个重试 URL 导致模块实例分裂）；已成功模块的重复访问零重复网络请求
-- **已知边界**：expose 的**静态依赖** chunk（expose chunk 内 `import` 的普通 chunk）失败后，同页重试不可恢复——浏览器 module map 缓存了该依赖 URL 的失败，重试换 URL 的 expose chunk 重新拉取后其静态 import 仍命中缓存失败。恢复需整页刷新；动态 import 形态的共享依赖不受此限。插件不做全站依赖图递归改写来穿透该限制
+- **已知边界**：expose 的**静态依赖** chunk（expose chunk 内 `import` 的普通 chunk）失败后，同页重试不可恢复——浏览器 module map 缓存了该依赖 URL 的失败，重试换 URL 的 expose chunk 重新拉取后其静态 import 仍命中缓存失败。恢复需整页刷新——默认占位的**「刷新页面重试」**就是这条路径的用户操作（用户点击触发，保留当前地址，永不自动刷新）；动态 import 形态的共享依赖不受此限。插件不做全站依赖图递归改写来穿透该限制
 
 #### `useLoadRemote<Module>(spec, options?)`
 
@@ -1110,7 +1110,7 @@ const Panel = await loadRemote('shop/Panel', {
 
 - Vue 3 与 React 18–19 的**浏览器客户端**联邦为支持面；不支持 SSR / React Server Components / Next.js 全栈 / React Native / Node 服务端加载远程 / Vue 与 React 组件直接混渲染（同一页面同时用两套框架渲染组件树）。两框架各自纯项目互不引入对方；跨框架消费**纯 TS 模块**（如 Vue 宿主加载 React 远程的 utils）可用
 - React 侧不承诺组件保活：`createReactHostPages` 不提供 `keepAliveNames`（Vue 的 KeepAlive 专属）；页面表里的 `keepAlive` 字段在 React 侧只作普通扩展位。重复打开已下载页面的模块复用照常
-- 跨源 Fast Refresh：远程 React 组件经远程 dev server 的 `@vite/client` 推送热更（实测 dev server 冷启动后首轮 ws 常未连稳，此时刷新宿主页面可见新代码）；跨联邦边界的组件状态保留不作承诺
+- 跨源 Fast Refresh（5.2.0 修复）：远程 React 组件修改（文本/样式/Hooks 结构不变的兼容改动）自动热更新到正在显示的宿主页面并保留组件本地状态，普通 TS 模块修改自动传播到引用它的组件边界——零手动刷新（插件保证全页单一 react-refresh 实例）。React Refresh 不兼容的导出/Hooks 结构变化、Vite 要求 full-reload 的改动按框架标准重新挂载/整页刷新；不承诺任意改动保活
 - 不兼容 originjs 的 `virtual:__federation__` 旧写法
 - 不支持 SSR（检测到即警告并禁用钩子）
 - 无浏览器 DevTools 扩展（提供 `window.__FULGURJS_SCOPE__ / __FULGURJS_INFO__` 调试面）
@@ -1122,7 +1122,7 @@ const Panel = await loadRemote('shop/Panel', {
 - [`docs/webpack-mf-对照与缺口.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md) — webpack MF 逐项对照与明确不支持清单
 - [`docs/沙箱边界审计.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/沙箱边界审计.md) — CSS / 全局变量 / 公共依赖三维度互扰实测
 - [`DESIGN.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/DESIGN.md) — 架构设计、对齐总表、测试与验收方案
-- 可复制示例：[`examples/react-host`](./examples/react-host) + [`examples/react-remote`](./examples/react-remote)（React，npm registry 安装即跑）；[`examples/host`](./examples/host) + [`examples/remote-a`](./examples/remote-a)（Vue 配置样例）；仓库内 e2e 回归夹具见 `fixtures/`（link: 本地插件）
+- 可复制示例：[`examples/vue/{host,remote}`](./examples) 与 [`examples/react/{host,remote}`](./examples)（四个完整工程，npm registry 精确正式包安装即跑，见 examples 总入口）；仓库内 e2e 回归夹具见 `fixtures/`（link: 本地插件）
 
 ## 开发与测试
 
@@ -1146,7 +1146,7 @@ CI（GitHub Actions）：
 - `test`：单测 + 双口径 typecheck（pinned / latest）+ build 门禁（runtime gzip ≤ 9216B、错误码三方一致性）；
 - `e2e`：Vue + React 的 dev/fault × Vite 6.4.3 / 7.3.6 / 8.3.0 兼容矩阵；
 - `prod-e2e`：隔离 NGINX 下的 Vue + React 生产套件；`tarball`：真实打包消费者检查；
-- `vite5`：schedule/workflow_dispatch 运行最低支持线；已复现的 5.1.4 双 client 错误覆盖层用例单列跳过，不算通过，也不跳过其他 Vite 5 版本。
+- `vite5`：schedule/workflow_dispatch 运行最低支持线（Vite 5.1.4 全量 dev/fault/react 套件；5.2.0 起双 client 错误覆盖层缺陷已修复，无 skip 项）。
 
 fixtures 测试与真实项目验收分别记录；fixture 全过不代表 MES 双环境已完成验收。
 

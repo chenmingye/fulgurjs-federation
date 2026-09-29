@@ -18,7 +18,7 @@
 | semantic parity | 100% | incomplete (version negotiation / singleton / fault tolerance often missing) | ✅ aligned clause-by-clause with webpack semantics, e2e-verified |
 | **UMD / CJS-only deps** | DIY | **commonly unusable** | ✅ automatic (dep-optimizer externalization + build-time require shims) |
 | remote load failures | raw errors | usually missing | ✅ retry / circuit breaker / timeout built in + explicit `fallbackModule` degradation |
-| failure recovery | reload the page | usually missing | ✅ retries vary the URL after a real failure, so they penetrate the browser's failed-import cache and genuinely re-fetch |
+| failure recovery | reload the page | usually missing | ✅ built-in placeholders offer **Retry load** (in-page; failed URLs are varied to penetrate the browser's failed-import cache) and **Refresh page to retry** (a user-initiated full reload for failures the browser caches beyond in-page reach) |
 | runtime size | ~40KB+ | varies | **gzip < 9KB** (framework-neutral core; adapters are separate) |
 | misconfiguration | hard to debug | cryptic | three-part diagnostics: symptom / cause / fix |
 
@@ -29,7 +29,7 @@
 - **Automatic async boundaries** — top-level await injected automatically (es2022+); no webpack-style manual `import('./bootstrap')`
 - **Stable artifacts** — remoteEntry keeps a fixed filename (content changes every build → **must be `no-cache`**; only content-hashed chunks may be cached long); `fulgurjs-manifest.json` asset manifest; one chunk per expose
 - **Fault tolerance (webpack MF 2.0 errorLoadRemote aligned)** — retry / circuit breaker / timeout built in; `loadRemote(spec, { retries, fallbackModule })` per-call overrides; on failure the fallback module is returned and the error event is still emitted (**never silent**; without `fallbackModule` the error re-throws)
-- **Real failure recovery** — browsers cache failed dynamic imports per URL (a retry of the same URL never reaches the network). After a real failure the runtime varies the URL (`fulgurjs_retry=N`) across remote-entry loading, dev container loaders and the prod remoteEntry, so "service recovered → click retry" genuinely re-fetches. Successful modules are never re-requested with a varied URL — module identity and singletons are preserved; concurrent failures advance exactly one retry generation (no module-instance split); repeated access to loaded modules issues zero extra requests. **Known boundary**: a failed **static dependency** chunk of an expose cannot recover in-page (the browser caches the dependency URL's failure; a full page reload recovers) — the plugin deliberately does not rewrite the whole site dependency graph to work around it
+- **Real failure recovery** — Chromium/Firefox/Safari cache failed dynamic imports per URL, so re-importing the same URL rejects without hitting the network again (verified per browser in this repo's e2e; see MDN import() for the underlying semantics). After a real failure the runtime varies the URL (`fulgurjs_retry=N`) across remote-entry loading, dev container loaders and the prod remoteEntry, so "service recovered → click Retry load" genuinely re-fetches. Successful modules are never re-requested with a varied URL — module identity and singletons are preserved; concurrent failures advance exactly one retry generation (no module-instance split); repeated access to loaded modules issues zero extra requests. **Known boundary**: a failed **static dependency** chunk of an expose cannot recover in-page (the browser caches the dependency URL's failure). The built-in placeholder therefore also offers **Refresh page to retry** — a user-initiated full reload that keeps the current URL (never automatic, no reload loops) — and that is the supported recovery path for this case; the plugin deliberately does not rewrite the whole site dependency graph to work around it
 - **Enhancements** — dev type generation (dual-track, see §8.6), manifest-driven `preloadRemote()`, runtime plugin hooks (`beforeLoadRemote` / `afterLoadRemote` / `onRemoteError` / `resolveShare`)
 - **Full HMR chain** — remote edits propagate to the host page: component hot swap, state retention, error overlay and recovery
 - **Zero-silent-failure discipline** — config problems fail at startup with three-part diagnostics; federation failures throw explicitly (error code + actionable fix); no silent fallback paths
@@ -115,7 +115,7 @@ const RemoteHome = hp.component('remote-react/pages/home')
 
 **Data flow for host state (context):** the host provides context (`provideAppContext`, including a non-sensitive `sessionKey`) and then triggers its own re-render (React state / router). Mounted remote components and hooks observe the new `sessionKey` on that render and re-run their load lifecycle — A→B account switching works on the same mounted instance without remounting. `AppContext` is a plain snapshot: the plugin does not subscribe to it reactively; the host must trigger the render. `beforeLoad` (page tables) runs before every actual load attempt to refresh context. Logout: call `clearAppContext()` before unmounting authed UI.
 
-Runnable examples: [`examples/react-host`](./examples/react-host) + [`examples/react-remote`](./examples/react-remote) (installed from the npm registry, no links). In-repo e2e fixtures: `fixtures/host-react` / `fixtures/remote-react`.
+Runnable examples: [`examples/vue/{host,remote}`](./examples) and [`examples/react/{host,remote}`](./examples) — four complete copy-and-run projects installed from the npm registry (see the examples entry page). In-repo e2e fixtures: `fixtures/host-react` / `fixtures/remote-react`.
 
 ## 6. Quick start — Vue
 
@@ -177,7 +177,7 @@ Standalone page-level boundary. Props: `children`, `fallback` (node or `({ error
 - Data options (identical to Vue): `pages`, `remotePrefixes`, `deriveSpec`, `schema`, `strict`, `base`
 - Display options (same semantics as `remoteComponent`): `fallback`, `error`, `retries`, `timeout`; plus `beforeLoad: () => void | Promise<void>` — runs before **every actual load attempt** (including retries) so the host can refresh context; never at table creation
 - `component<P>(spec)` returns a React component type; the component cache is keyed by spec + login generation (rebuilt only on a new non-empty `sessionKey`; logout → `undefined` does not rebuild). Module-level caching of `component(spec)` results is supported — mounted pages still follow session changes
-- No `keepAliveNames` / no keep-alive promise (Vue-specific); routing is not a runtime dependency — render `component(spec)` output from your router (React Router examples in `examples/react-host`; route params reach remote pages as props)
+- No `keepAliveNames` / no keep-alive promise (Vue-specific); routing is not a runtime dependency — render `component(spec)` output from your router (React Router examples in `examples/react/host`; route params reach remote pages as props)
 - Cross-framework Context: host and remote get the **same Context object** through the same expose instance; the plugin does not auto-bridge arbitrary React Contexts
 
 ### 8.2 Runtime API — `@fulgurjs/federation/runtime` (Vue apps) and common functions on `/react`
@@ -335,7 +335,7 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 - [webpack MF comparison & gaps (Chinese)](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md)
 - [Sandbox boundary audit (Chinese)](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/沙箱边界审计.md)
 - [`DESIGN.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/DESIGN.md) — architecture and alignment tables
-- Examples: [`examples/react-host`](./examples/react-host) + [`examples/react-remote`](./examples/react-remote) (React, registry-installable) · [`examples/host`](./examples/host) + [`examples/remote-a`](./examples/remote-a) (Vue config samples)
+- Examples: [`examples/vue/{host,remote}`](./examples) + [`examples/react/{host,remote}`](./examples) — four complete copy-and-run projects, registry-installable (see the examples entry page)
 
 ## 14. Development & testing
 
