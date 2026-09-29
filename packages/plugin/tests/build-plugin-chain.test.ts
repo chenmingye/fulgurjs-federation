@@ -145,20 +145,28 @@ describe.each(['rollup', 'rolldown'] as const)('WP1: 真实插件链 build（eng
       const pageChunk = chunks.find((c) => c.code.includes('ref-ok'))
       expect(pageChunk, '包含注入 API 使用的页面 chunk 必须存在').toBeTruthy()
 
-      // 2. 注入的 vue 导入经协商门面：页面 chunk 内存在对 vue 的 loadShare 协商调用
-      //    （门面可能被内联进页面 chunk——rollup 常见；协商参数对象不被压缩，
-      //    "vue", { shareKey: ... } 形态在两个引擎下一致）
-      expect(pageChunk!.code).toMatch(/"vue",\s*\{[^}]*shareKey:/)
+      // 2. 注入的 vue 导入经协商门面：产物中存在对 vue 的 loadShare 协商调用
+      //    （5.2.1 起运行时/门面隔离进插件专属 chunk——门面可能内联进页面 chunk，
+      //    也可能独立成 fulgurjs-shared-* chunk；协商参数对象不被压缩，
+      //    "vue", { shareKey: ... } 形态在两个引擎下一致。扫描全部 chunk 兼容两种布局）
+      const allCode = chunks.map((c) => c.code).join('\n')
+      expect(allCode).toMatch(/"vue",\s*\{[^}]*shareKey:/)
 
       // 3. 页面 chunk 不得直接静态依赖 vue 本体 chunk。本体 chunk 集合 = 命名空间门面
       //    chunk（facadeModuleId = virtual:fulgurjs-shared:vue）的静态依赖——引擎无关，
       //    且正是 loadShare fallback 最终落到的那份本地副本。
-      const nsFacade = chunks.find((c) => c.facadeModuleId === 'virtual:fulgurjs-shared:vue')
+      // 5.2.1 起门面隔离进插件专属 chunk：rollup 保留 facadeModuleId，rolldown 不保留——
+      // 按 facadeModuleId 或文件名（fulgurjs-shared-vue）双通道识别
+      const nsFacade =
+        chunks.find((c) => c.facadeModuleId === 'virtual:fulgurjs-shared:vue') ??
+        chunks.find((c) => /fulgurjs-shared-vue/.test(c.fileName))
       expect(nsFacade, 'vue 命名空间门面 chunk 必须存在').toBeTruthy()
-      const vueCoreNames = new Set(nsFacade!.imports)
-      expect(vueCoreNames.size).toBeGreaterThanOrEqual(1)
-      const directVueEdges = pageChunk!.imports.filter((f) => vueCoreNames.has(f))
-      expect(directVueEdges, `页面 chunk 不得直接静态依赖 vue 本体（实际依赖：${directVueEdges.join(',')}）`).toEqual([])
+      // 页面 → 门面/运行时 chunk 的依赖是设计内路径（5.2.1 起隔离布局下 vue 本体
+      // 经运行时 loadShare 兜底动态到达，不再静态成 chunk）。不变量改为：
+      // 页面 chunk 的静态依赖不得出现 fulgurjs 通道之外的 vue 代码 chunk——
+      // 双 vue（协商失败内联本地副本）在产物上的直接形态即此。
+      const badVueEdges = pageChunk!.imports.filter((f) => !/fulgurjs-/.test(f) && /vue/i.test(f))
+      expect(badVueEdges, `页面 chunk 静态依赖了 fulgurjs 通道之外的 vue chunk（实际：${badVueEdges.join(',')}）`).toEqual([])
 
       // 4. 同文件 runtime 导入 + 远程动态导入并存：远程导入仍被改写（c8c0ac1）
       expect(pageChunk!.code).not.toMatch(/import\(\s*["']wp1-other\//)

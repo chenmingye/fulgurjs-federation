@@ -392,6 +392,45 @@ export function federation(options: FederationOptions): Plugin[] {
         }
       }
 
+      // 5.2.1：宿主（remotes>0）通用隔离——运行时与共享门面进插件专属 chunk。
+      // 实证（MES admin + vite-plugin-top-level-await@1.6.0 + rollup 默认归组）：运行时
+      // 代码被并入巨型 vendor chunk 后，该插件对含动态 import 的 chunk 全量走 swc 变换，
+      // 对联邦运行时的压缩产物 printSync 必崩（missing field type / invalid type null，
+      // swc 1.13/1.15 同崩）。隔离后 TLA 插件只需处理小型门面 chunk（既有通过路径），
+      // vendor chunk 回到无联邦时的形状。用户已有 manualChunks 时包装复用（同 devSharedSelf）。
+      if (normalized.remotes.length > 0 && !state.facadeDynamic) {
+        const userOutput = userConfig.build?.rollupOptions?.output as
+          | { manualChunks?: unknown }
+          | Array<{ manualChunks?: unknown }>
+          | undefined
+        const wrap = (userFn?: (id: string, meta: unknown) => string | undefined) =>
+          (id: string, meta: unknown) => {
+            const facade = facadeChunkOf(id)
+            if (facade) return facade
+            return userFn?.(id, meta)
+          }
+        const extraBuild = ((extra as any).build ??= {})
+        if (Array.isArray(userOutput)) {
+          console.warn(
+            formatFulgurjsDiagnostic({
+              code: 'BLD-006',
+              symptom: 'build.rollupOptions.output 是数组，fulgurjs 无法自动注入运行时 chunk 隔离',
+              cause: '运行时代码可能被归组进大型 vendor chunk，与按 chunk 全量做 swc 变换的插件（如 vite-plugin-top-level-await）不兼容',
+              fix: "在每个 output 项的 manualChunks 最前面加分支：if (id.startsWith('virtual:fulgurjs-')) return 'fulgurjs-runtime'",
+            }),
+          )
+        } else {
+          const userManualChunks = userOutput?.manualChunks
+          if (typeof userManualChunks === 'function') {
+            const extraBuild2 = ((extra as any).build ??= {})
+            extraBuild2.rollupOptions = { ...(extraBuild2.rollupOptions ?? {}), output: { manualChunks: wrap(userManualChunks as never) } }
+          } else if (!userManualChunks) {
+            const extraBuild2 = ((extra as any).build ??= {})
+            extraBuild2.rollupOptions = { ...(extraBuild2.rollupOptions ?? {}), output: { manualChunks: wrap() } }
+          }
+        }
+      }
+
       for (const w of normalized.warnings) console.warn(`[fulgurjs] ${w}`)
       return extra
     },

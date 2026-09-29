@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.1
+
+- **修复：宿主构建的运行时 chunk 隔离（MES admin 实测回归）**——宿主（remotes>0）构建此前仅在 devSharedSelf 下注入 manualChunks 隔离；普通宿主的运行时代码会被 rollup 默认归组并进巨型 vendor chunk，与对含动态 import 的 chunk 全量做 swc 变换的构建插件（vite-plugin-top-level-await@1.6.0，jeecg 系工程标配）冲突——printSync 必崩（missing field type / invalid type: null，@swc/core 1.13.5/1.15.47 同崩）。现在所有宿主构建都将运行时与共享门面隔离进插件专属 chunk；用户已有 manualChunks 时按 devSharedSelf 同款方式包装复用，output 为数组时显式告警（BLD-006）。真实工程（cku-mes-admin，vite 6）构建通过验证。
+
 ## 5.2.0
 
 - **修复：Vue 默认错误占位没有可操作的恢复入口（D1）**——默认占位新增两个用户操作：「重试加载」（同页重建加载链，重跑真实 loader 含 beforeLoad；Vue 的 defineAsyncComponent userRetry 在 userFail 后永久失效，故恢复由占位组件自身承载，成功后原位渲染业务组件并透传 attrs）与「刷新页面重试」（用户点击才整页刷新，保留 pathname/query/hash，绝不自动触发）。`remoteComponent` 与 `createHostPages().component()` 两条路径一致；自定义 `errorComponent` 契约不变（完全接管、不注入按钮）；KeepAlive 组件树形状与 5.1.x 完全一致。
