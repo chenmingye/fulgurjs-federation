@@ -1,1 +1,0 @@
-import{j as e}from"./jsx-runtime-D_zvdyIk.js";import t from"./ClickButton-Crj7c0QB.js";import"./preload-helper-D3t9wfPu.js";import"./virtual_fulgurjs-runtime-D3BmYiop.js";function s(){return e.jsxs("div",{"data-testid":"demo-remote-home",children:[e.jsx("h3",{children:"react-remote / 首页"}),e.jsx("p",{children:"这是由 react-remote 暴露的联邦页面。"}),e.jsx(t,{})]})}export{s as default};

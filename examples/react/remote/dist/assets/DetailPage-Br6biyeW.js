@@ -1,1 +1,0 @@
-import{j as e}from"./jsx-runtime-D_zvdyIk.js";function i({id:t,tab:d}){return e.jsxs("div",{"data-testid":"demo-remote-detail",children:[e.jsx("h3",{children:"react-remote / 详情页"}),e.jsxs("p",{"data-testid":"demo-detail-id",children:["路由参数 id：",t??"(无)"]}),e.jsxs("p",{"data-testid":"demo-detail-tab",children:["query 参数 tab：",d??"(无)"]})]})}export{i as default};

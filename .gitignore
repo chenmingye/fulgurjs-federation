@@ -5,8 +5,8 @@ node_modules/
 packages/plugin/dist/
 fixtures/*/dist/
 fixtures/*/dist-*/
-examples/*/dist/
-examples/*/src/fulgurjs/types/
+examples/**/dist/
+examples/**/src/fulgurjs/types/
 # fixtures 无 tsconfig，插件 dev 启动生成的类型目录（每次运行重生成）不入库
 fixtures/*/src/fulgurjs/types/
 
