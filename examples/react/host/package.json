@@ -9,7 +9,7 @@
     "preview": "vite preview --port 5204 --strictPort"
   },
   "dependencies": {
-    "@fulgurjs/federation": "file:../../../../work/fulgurjs-federation-5.2.0.tgz",
+    "@fulgurjs/federation": "5.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.1.0"
