@@ -211,6 +211,7 @@ function createRuntime() {
           `原因：${String((err as Error)?.message ?? err)}\n` +
           `修法：检查并修复该 ${phase} 函数后重新加载；失败缓存已清除，可以直接重试。`,
         { remote: remoteName, phase },
+        { cause: err },
       )
     }
     lifecycleSyncRemote = remoteName

@@ -3,8 +3,8 @@ export class FgError extends Error {
   code: string
   details?: Record<string, unknown>
 
-  constructor(code: string, message: string, details?: Record<string, unknown>) {
-    super(`[fulgurjs:${code}] ${message}`)
+  constructor(code: string, message: string, details?: Record<string, unknown>, options?: ErrorOptions) {
+    super(`[fulgurjs:${code}] ${message}`, options)
     this.name = 'FgError'
     this.code = code
     this.details = details

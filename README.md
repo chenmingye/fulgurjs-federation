@@ -748,6 +748,8 @@ const { data, error, loading, reload } = useLoadRemote<Utils>('remote-react/util
 
 `@fulgurjs/federation/react` 的 `.tsx`/`.ts` expose 与 Vue 共用同一套 dev 类型生成（目录、`dts:false`、`dts.dir`、setup 过滤、`devFsRoot:false` 降级全部一致），并新增**双轨**形态：零配置时生成可解析的宽松声明（导出为 `any`）；在宿主**应用 TS 上下文**（`tsconfig.json` 本身、其 `extends` 链，或其 `references` 指向且 include 覆盖应用源码/类型输出目录的子项目配置；独立的 `tsconfig.test.json`、只含 vite.config 的 `tsconfig.node.json` 等无关上下文不参与判定）配置一段 `"paths": { "<remote>/*": ["<types目录>/<remote>.d/*"] }` 后，同形态导入即解析到转发模块获得**源码级类型**（props/函数签名精确，错误 props/参数编译失败）——应用上下文配置了 paths 的远程会自动跳过同名宽松声明避免遮蔽，启用说明见生成目录内 `_paths.d.ts`。
 
+类型生成支持字符串或数组 `extends`（后项覆盖前项）、指向目录的 `references`，并按声明文件目录解析继承路径。`baseUrl` 与 `paths` 独立继承。多个实际应用上下文的远程 `paths` 接管不一致时，会保留默认宽松声明并给出中文提示；需要精确类型时请统一这些应用配置。生命周期错误 `MFU-012` 的 `cause` 保留 setup/onSession 抛出的原始异常。
+
 ### 9. `AppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/runtime`）
 
 宿主向子应用传值、子应用向宿主反向注册方法，一律走这条一等公民通道（对标乾坤 `props`，但带类型与错误契约）——不再各自挂 `window.*` 裸口子。

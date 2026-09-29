@@ -264,3 +264,6 @@ test('R12 双向普通模块跨框架（React host ← Vue remote 纯 TS / Vue h
 // R05（页面表 resolve 纯函数行为）：由 packages/plugin/tests/host-pages-core.test.ts 全量
 // 覆盖（base/最长前缀/参数解码/无匹配/R1–R5），浏览器端一致性由 R03 的真实参数页断言
 // 端到端验证——不重复在 evaluate 里 import 裸包名（浏览器原生解析不了 bare specifier）。
+
+import { reactContracts } from './react-contracts'
+reactContracts(false)

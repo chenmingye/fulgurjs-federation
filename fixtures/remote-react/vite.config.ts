@@ -23,6 +23,8 @@ export default defineConfig({
         './pages/home': './src/pages/Home.tsx',
         './pages/detail': './src/pages/Detail.tsx',
         './utils': './src/utils.ts',
+        './race-a': './src/exposes/race-a.ts',
+        './race-b': './src/exposes/race-b.ts',
       },
       setup: './src/fulgurjs/setup.ts',
       shared: {

@@ -208,3 +208,6 @@ test('prod B3c expose 的静态依赖 chunk 失败：如实记录同页恢复边
     await expect(page.locator('section [data-fulgurjs-error]').first()).toBeVisible()
   }
 })
+
+import { reactContracts } from './react-contracts'
+reactContracts(true)

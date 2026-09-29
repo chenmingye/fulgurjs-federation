@@ -236,11 +236,70 @@ function parseJsoncFile(file: string): ParsedTsConfig | null {
 
 interface ParsedTsConfig {
   compilerOptions?: { paths?: Record<string, readonly string[]>; baseUrl?: string }
-  extends?: string
+  extends?: string | string[]
+  pathsDeclaredIn?: string
   include?: unknown
   files?: unknown
   exclude?: unknown
   references?: unknown
+}
+
+/** 配置入口可为 JSON 文件或含 tsconfig.json 的目录（TS references 契约）。 */
+function resolveConfigPath(value: string, declaringFile: string): string | null {
+  let candidate: string
+  if (path.isAbsolute(value) || value.startsWith('.')) {
+    candidate = path.resolve(path.dirname(declaringFile), value)
+  } else {
+    try {
+      candidate = createRequire(declaringFile).resolve(value)
+    } catch {
+      try { candidate = createRequire(declaringFile).resolve(`${value}.json`) } catch { return null }
+    }
+  }
+  if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) candidate = path.join(candidate, 'tsconfig.json')
+  else if (!candidate.endsWith('.json') && !fs.existsSync(candidate)) candidate += '.json'
+  return fs.existsSync(candidate) ? candidate : null
+}
+
+/**
+ * extends 可为数组：后面的配置覆盖前面的同名选项；子配置最后覆盖。
+ * baseUrl 与 paths 独立继承，include/files/exclude 的相对路径保留声明方目录。
+ * references 不继承。循环或无效配置回退，不让类型生成抛出未处理异常。
+ */
+function effectiveTsConfig(file: string, stack = new Set<string>()): ParsedTsConfig | null {
+  if (stack.has(file) || stack.size > 32) return null
+  const raw = parseJsoncFile(file)
+  if (!raw) return null
+  const nextStack = new Set(stack).add(file)
+  let merged: ParsedTsConfig = {}
+  const parents = raw.extends === undefined ? [] : Array.isArray(raw.extends) ? raw.extends : [raw.extends]
+  for (const parent of parents) {
+    if (typeof parent !== 'string') return null
+    const parentFile = resolveConfigPath(parent, file)
+    const inherited = parentFile ? effectiveTsConfig(parentFile, nextStack) : null
+    if (!inherited) return null
+    merged = {
+      ...merged, ...inherited,
+      compilerOptions: { ...merged.compilerOptions, ...inherited.compilerOptions },
+      pathsDeclaredIn: inherited.compilerOptions?.paths !== undefined ? inherited.pathsDeclaredIn : merged.pathsDeclaredIn,
+    }
+  }
+  const ownOptions = { ...raw.compilerOptions }
+  if (ownOptions.baseUrl !== undefined) {
+    if (typeof ownOptions.baseUrl !== 'string') return null
+    ownOptions.baseUrl = path.resolve(path.dirname(file), ownOptions.baseUrl)
+  }
+  const result: ParsedTsConfig = {
+    ...merged, ...raw,
+    compilerOptions: { ...merged.compilerOptions, ...ownOptions },
+    pathsDeclaredIn: ownOptions.paths !== undefined ? file : merged.pathsDeclaredIn,
+    references: raw.references,
+  }
+  for (const key of ['include', 'exclude', 'files'] as const) {
+    const own = raw[key]
+    if (Array.isArray(own)) result[key] = own.map((item) => typeof item === 'string' ? path.resolve(path.dirname(file), item) : item)
+  }
+  return result
 }
 
 /** extends 链解析出的生效 paths 及其声明位置（用于按声明配置的目录/baseUrl 解析目标） */
@@ -321,7 +380,7 @@ function selectPrimaryConfig(root: string, outDir?: string): string | null {
   if (files.length === 1) return path.join(root, files[0]!)
   const matched = files.filter((f) => {
     const file = path.join(root, f)
-    const cfg = parseJsoncFile(file)
+    const cfg = effectiveTsConfig(file)
     return cfg !== null && configCoversAppSource(file, cfg, root, outDir)
   })
   if (matched.length === 1) return path.join(root, matched[0]!)
@@ -335,14 +394,14 @@ function selectPrimaryConfig(root: string, outDir?: string): string | null {
 /**
  * 宿主是否为该 remote 配置了 paths（精确轨开关，决定是否跳过同名 ambient）。
  *
- * 语义化判定（5.1.2 修正：按真实 TS 上下文，不再全目录扫描）：
+ * 语义化判定（按真实 TS 上下文，不再全目录扫描）：
  * - 上下文选择：主配置（tsconfig.json，或唯一/唯一覆盖源码的 tsconfig*.json）+
  *   references 链上「include 覆盖应用源码或类型输出目录」的子项目。独立存在的
  *   tsconfig.test.json、只含 vite.config.ts 的 node 配置等不构成应用上下文，
  *   其 paths 不参与判定（不再按文件名排除，按语义过滤）；
  * - solution 型配置（files:[] + references）自身不编译文件，以其 references 判定；
- * - 沿 extends 链继承：链上第一个声明 paths 的配置生效（TS 继承语义：子级声明整体覆盖
- *   父级 paths）；extends 相对路径按声明文件所在目录解析；
+ * - 沿 extends 链继承：数组后项覆盖前项，子级声明整体覆盖父级 paths；
+ *   extends 相对路径按声明文件所在目录解析；
  * - paths 目标与 baseUrl 按声明所在配置解析（baseUrl 相对其声明配置目录，目标相对
  *   生效 baseUrl，无 baseUrl 时相对声明配置目录）——继承自父目录配置的 paths 不再按
  *   子配置目录误算；
@@ -362,9 +421,9 @@ export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: st
   const walk = (file: string, isPrimary: boolean, depth: number): void => {
     if (visited.has(file) || depth > 10) return
     visited.add(file)
-    const cfg = parseJsoncFile(file)
+    const cfg = effectiveTsConfig(file)
     if (!cfg) return
-    const isSolution = Array.isArray(cfg.files) && cfg.files.length === 0
+    const isSolution = Array.isArray(cfg.files) && cfg.files.length === 0 && !Array.isArray(cfg.include)
     // solution 配置自身不编译文件（paths 对应用导入无作用），不计入；其余主配置恒计入，
     // 被 references 引用的配置按覆盖语义筛选
     if ((isPrimary || configCoversAppSource(file, cfg, root, outDir)) && !isSolution) contexts.push(file)
@@ -372,14 +431,23 @@ export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: st
     for (const ref of cfg.references as unknown[]) {
       const refPath = (ref as { path?: unknown } | null)?.path
       if (typeof refPath !== 'string' || refPath === '') continue
-      let next: string | null = null
-      if (path.isAbsolute(refPath)) next = refPath
-      else next = path.resolve(path.dirname(file), refPath)
-      if (next !== null && !next.endsWith('.json')) next = `${next}.json`
-      if (next !== null && fs.existsSync(next)) walk(next, false, depth + 1)
+      const next = resolveConfigPath(path.isAbsolute(refPath) || refPath.startsWith('.') ? refPath : `./${refPath}`, file)
+      if (next) walk(next, false, depth + 1)
     }
   }
   walk(primary, true, 0)
+
+  const coverage = contexts.map((file) => {
+    const eff = inheritedPaths(file)
+    return Boolean(eff && Object.hasOwn(eff.paths, `${remoteKey}/*`))
+  })
+  if (coverage.some(Boolean) && !coverage.every(Boolean)) {
+    console.warn(
+      `[fulgurjs] 类型生成：多个应用 tsconfig 对 "${remoteKey}/*" 的 paths 接管不一致（${contexts.map((file) => path.relative(root, file)).join('、')}）。` +
+      `已保留默认宽松声明，避免未接管的项目无法导入；若需要精确类型，请统一这些应用配置的 paths。`,
+    )
+    return false
+  }
 
   for (const ctxFile of contexts) {
     const eff = inheritedPaths(ctxFile)
@@ -418,52 +486,17 @@ export function hostPathsCovers(root: string, remoteKey: string, preciseDir?: st
 }
 
 /**
- * 沿 extends 链取该配置实际生效的 paths（链上第一个声明者生效——TS 继承语义：子级声明
- * 整体覆盖父级），并记录声明位置与生效 baseUrl：目标解析按声明配置目录/baseUrl 进行，
+ * 沿 extends 链取该配置实际生效的 paths（数组后项与子级声明覆盖父级），并记录声明位置与生效 baseUrl：目标解析按声明配置目录/baseUrl 进行，
  * 不按使用方（子配置）目录误算。
  */
 function inheritedPaths(tsconfigFile: string): EffectivePaths | undefined {
-  const seen = new Set<string>()
-  let current: string | null = tsconfigFile
-  let baseUrlDecl: { file: string; value: string } | null = null
-  while (current && !seen.has(current)) {
-    seen.add(current)
-    const cfg = parseJsoncFile(current)
-    if (!cfg) return undefined
-    if (!baseUrlDecl && cfg.compilerOptions?.baseUrl) {
-      baseUrlDecl = { file: current, value: cfg.compilerOptions.baseUrl }
-    }
-    if (cfg.compilerOptions?.paths) {
-      // 生效 baseUrl：距 paths 声明者最近的声明（子级覆盖父级），相对其声明配置目录解析
-      const own = cfg.compilerOptions.baseUrl
-      const baseUrlDir = own !== undefined
-        ? path.resolve(path.dirname(current), own)
-        : baseUrlDecl !== null ? path.resolve(path.dirname(baseUrlDecl.file), baseUrlDecl.value) : null
-      return {
-        paths: cfg.compilerOptions.paths as Record<string, readonly string[]>,
-        declaredIn: current,
-        baseUrlDir,
-      }
-    }
-    if (!cfg.extends) return undefined
-    // extends 解析：相对路径按声明文件所在目录（TS 语义，无 .json 后缀自动补）；包名走 node 解析
-    const ext = cfg.extends
-    let next: string | null = null
-    if (path.isAbsolute(ext)) {
-      next = ext
-    } else if (ext.startsWith('.')) {
-      next = path.resolve(path.dirname(current), ext)
-    } else {
-      try {
-        next = createRequire(current).resolve(ext.endsWith('.json') ? ext : `${ext}.json`, { paths: [path.dirname(current)] })
-      } catch {
-        next = null
-      }
-    }
-    if (next !== null && !next.endsWith('.json')) next = `${next}.json`
-    current = next && fs.existsSync(next) ? next : null
+  const cfg = effectiveTsConfig(tsconfigFile)
+  if (!cfg?.compilerOptions?.paths || !cfg.pathsDeclaredIn) return undefined
+  return {
+    paths: cfg.compilerOptions.paths,
+    declaredIn: cfg.pathsDeclaredIn,
+    baseUrlDir: cfg.compilerOptions.baseUrl ?? null,
   }
-  return undefined
 }
 
 function safeReal(p: string): string | null {

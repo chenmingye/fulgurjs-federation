@@ -235,7 +235,7 @@ describe('setup/onSession：失败路径与错误码（T4/T6）', () => {
       },
     })
     await registerFake(rt, 'r13', c)
-    await expect(rt.loadRemote('r13/Page')).rejects.toThrow('MFU-012')
+    await expect(rt.loadRemote('r13/Page')).rejects.toMatchObject({ code: 'MFU-012', cause: expect.any(Error) })
     expect(attempts).toBe(1)
     const mod = await rt.loadRemote('r13/Page')
     expect((mod as any).default.__page).toBe('r13')
@@ -258,7 +258,7 @@ describe('setup/onSession：失败路径与错误码（T4/T6）', () => {
     })
     await registerFake(rt, 'r14', c)
     ;(globalThis as any).__FULGURJS_APP_CONFIG__ = { sessionKey: 's-1' }
-    await expect(rt.loadRemote('r14/Page')).rejects.toThrow('MFU-012')
+    await expect(rt.loadRemote('r14/Page')).rejects.toMatchObject({ code: 'MFU-012', cause: expect.any(Error) })
     expect(setupCount).toBe(1)
     await rt.loadRemote('r14/Page')
     expect(setupCount).toBe(1)

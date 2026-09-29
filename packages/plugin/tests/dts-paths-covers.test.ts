@@ -35,6 +35,62 @@ const MANIFEST = {
 }
 
 describe('hostPathsCovers 语义判定', () => {
+  it('多个应用上下文接管不一致，不能因其中一个 paths 就全局省略 ambient', () => {
+    const root = tmpProject()
+    fs.mkdirSync(path.join(root, 'src'))
+    fs.writeFileSync(path.join(root, 'a.json'), JSON.stringify({ include: ['src/**/*'], compilerOptions: { paths: { 'r/*': ['./types/*'] } } }))
+    fs.writeFileSync(path.join(root, 'b.json'), JSON.stringify({ include: ['src/**/*'] }))
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './a.json' }, { path: './b.json' }] }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(hostPathsCovers(root, 'r')).toBe(false)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('接管不一致'))
+    } finally { warn.mockRestore() }
+  })
+  it('extends 数组按从左到右覆盖，并继承独立的 baseUrl', () => {
+    const root = tmpProject()
+    fs.mkdirSync(path.join(root, 'config'))
+    fs.writeFileSync(path.join(root, 'config/base.json'), JSON.stringify({ compilerOptions: { baseUrl: '..', paths: { 'r/*': ['./wrong/*'] } } }))
+    fs.writeFileSync(path.join(root, 'config/app.json'), JSON.stringify({ compilerOptions: { paths: { 'r/*': ['./types/r.d/*'] } } }))
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ extends: ['./config/base.json', './config/app.json'] }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(hostPathsCovers(root, 'r', path.join(root, 'types/r.d'))).toBe(true)
+      expect(warn).not.toHaveBeenCalled()
+    } finally { warn.mockRestore() }
+  })
+
+  it('references 支持目录入口，不把 app 目录拼成 app.json', () => {
+    const root = tmpProject()
+    fs.mkdirSync(path.join(root, 'src'))
+    fs.mkdirSync(path.join(root, 'app'))
+    fs.writeFileSync(path.join(root, 'app/tsconfig.json'), JSON.stringify({ include: ['../src/**/*'], compilerOptions: { paths: { 'r/*': ['./types/*'] } } }))
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './app' }] }))
+    expect(hostPathsCovers(root, 'r')).toBe(true)
+  })
+
+  it('子配置声明 paths 时仍继承父配置 baseUrl', () => {
+    const root = tmpProject()
+    fs.mkdirSync(path.join(root, 'config'))
+    fs.writeFileSync(path.join(root, 'config/base.json'), JSON.stringify({ compilerOptions: { baseUrl: '..' } }))
+    fs.writeFileSync(path.join(root, 'config/app.json'), JSON.stringify({ extends: './base.json', compilerOptions: { paths: { 'r/*': ['./types/r.d/*'] } } }))
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ extends: './config/app.json' }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(hostPathsCovers(root, 'r', path.join(root, 'types/r.d'))).toBe(true)
+      expect(warn).not.toHaveBeenCalled()
+    } finally { warn.mockRestore() }
+  })
+
+  it('继承 include 的 node 子配置不能污染应用上下文', () => {
+    const root = tmpProject()
+    fs.mkdirSync(path.join(root, 'src'))
+    fs.writeFileSync(path.join(root, 'node-base.json'), JSON.stringify({ include: ['vite.config.ts'], compilerOptions: { paths: { 'r/*': ['./node-types/*'] } } }))
+    fs.writeFileSync(path.join(root, 'tsconfig.node.json'), JSON.stringify({ extends: './node-base.json' }))
+    fs.writeFileSync(path.join(root, 'tsconfig.app.json'), JSON.stringify({ include: ['src/**/*'] }))
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }, { path: './tsconfig.node.json' }] }))
+    expect(hostPathsCovers(root, 'r')).toBe(false)
+  })
   it('主 tsconfig 有效 wildcard paths → true', () => {
     const root = tmpProject()
     fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({

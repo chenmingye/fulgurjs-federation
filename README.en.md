@@ -251,6 +251,8 @@ export async function onSession(ctx: { appContext: any; sessionKey: string; sign
 
 - Zero config: ambient declarations per expose — imports resolve, exports typed `any`; setup entry never generates declarations
 - Precise track: add `"paths": { "<remote>/*": ["<typesDir>/<remote>.d/*"] }` to the app's **effective TS context** — `tsconfig.json` itself, its `extends` chain, or a referenced sub-project whose `include` covers the app source / types output dir. Standalone `tsconfig.test.json`, `tsconfig.node.json` (vite.config only) and other unrelated configs do not affect the decision; imports then resolve through forwarder modules to **source-level types** (wrong props/arguments fail compilation). Remotes covered by paths automatically skip their loose declaration to avoid shadowing
+
+Type generation supports string or array `extends` (later entries override earlier entries) and directory `references`; inherited paths retain their declaring directory. `baseUrl` and `paths` inherit independently. If application contexts disagree on remote `paths`, the plugin keeps loose declarations and reports a diagnostic; align application mappings to enable precise types. Lifecycle errors (`MFU-012`) retain the original setup/onSession exception in `cause`.
 - `devFsRoot: false` or unreachable source: degrades to resolvable `any` declarations and cleans stale precise-track files (precise → degrade → restore cycles compile cleanly)
 - `dts: false` stops generation without deleting existing output; `dts.dir` relocates; `mode: 'shim'` gives loose IDE-clean placeholders
 - Precise track requires the host and remote to share a filesystem (same-machine dev); verified bounds: React 18.0.0–19.x with matching @types

@@ -9,6 +9,7 @@ let effectCount = 0
  * - effect 计数每轮 effect +1（StrictMode dev 下 setup→cleanup→setup 应为 2）
  */
 export default function HooksProbe({ tag = 'default', instance = 1 }: { tag?: string; instance?: number }) {
+  const [clicks, setClicks] = useState(0)
   const [effects, setEffects] = useState(0)
   useEffect(() => {
     effectCount += 1
@@ -19,6 +20,8 @@ export default function HooksProbe({ tag = 'default', instance = 1 }: { tag?: st
   }, [])
   return (
     <div data-testid="hooks-probe">
+      <button data-testid="probe-click" onClick={() => setClicks((n) => n + 1)}>实例点击</button>
+      <span data-testid="probe-clicks">clicks:{clicks}</span>
       <span data-testid="probe-instance">{tag}#{instance}</span>
       <span data-testid="probe-effects">effects:{effects}</span>
       <span data-testid="probe-global">global-effects:{effectCount}</span>

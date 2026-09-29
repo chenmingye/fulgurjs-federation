@@ -74,6 +74,20 @@ function UtilsPanel() {
   )
 }
 
+/** 请求竞争探针：生产与开发共用真实远程模块，不替换插件 loader。 */
+function RacePanel() {
+  const [spec, setSpec] = useState('remote-react/race-a')
+  const { data, error, loading, reload } = useLoadRemote<{ value: string }>(spec)
+  return <section data-testid="race-panel">
+    <p data-testid="race-value">{data?.value ?? '(empty)'}</p>
+    <p data-testid="race-loading">{String(loading)}</p>
+    <p data-testid="race-error">{error ? String((error as Error).message) : ''}</p>
+    <button data-testid="race-fast" onClick={() => setSpec('remote-react/race-b')}>快 B</button>
+    <button data-testid="race-missing" onClick={() => setSpec('remote-react/missing-race')}>失败</button>
+    <button data-testid="race-reload" onClick={() => void reload()}>重载</button>
+  </section>
+}
+
 /** 会话面板：读远程 setup/onSession 计数（挂 window），验证 R06/R07 */
 function SessionPanel() {
   const [tick, setTick] = useState(0)
@@ -179,7 +193,7 @@ export default function App() {
       <SessionLive />
       <h1>host-react（fulgurjs federation）</h1>
       <nav>
-        <Link to="/">首页</Link> · <Link to="/remote-react/home">远程首页</Link> · <Link to="/remote-react/detail/42?tab=basic">远程参数页</Link> · <Link to="/utils">远程 utils</Link> · <Link to="/hooks">Hooks 探针</Link> · <Link to="/alias">别名身份</Link> · <Link to="/session">会话</Link> · <Link to="/fault">故障注入</Link>
+        <Link to="/">首页</Link> · <Link to="/remote-react/home">远程首页</Link> · <Link to="/remote-react/detail/42?tab=basic">远程参数页</Link> · <Link to="/utils">远程 utils</Link> · <Link to="/race">竞态探针</Link> · <Link to="/hooks">Hooks 探针</Link> · <Link to="/alias">别名身份</Link> · <Link to="/session">会话</Link> · <Link to="/fault">故障注入</Link>
       </nav>
       <p data-testid="account-state">account:{account ?? '(未登录)'}</p>
       <div>
@@ -199,6 +213,7 @@ export default function App() {
             <Route path="/remote-react/home" element={<RemoteHome />} />
             <Route path="/remote-react/detail/:id" element={<DetailRoute />} />
             <Route path="/utils" element={<UtilsPanel />} />
+            <Route path="/race" element={<RacePanel />} />
             <Route path="/hooks" element={<>
               <RemoteHooksProbeA tag="A" instance={1} />
               <RemoteHooksProbeB tag="B" instance={2} />

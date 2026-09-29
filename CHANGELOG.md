@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.1.4
+
+- 修复类型生成的数组 extends、目录 references、独立 baseUrl 继承及继承 include 上下文识别；多个应用 paths 接管不一致时保留可解析声明并提示统一配置。
+- setup/onSession 失败包装保留原始 Error.cause，中文 MFU-012 与重试语义不变。
+- 增加开发/生产共用 React 浏览器契约：冷加载、多实例、真实慢快请求竞态、双向跨框架模块及生命周期失败恢复。
+- 忽略 examples 构建与自动类型产物；完整验收结果在发版后的独立报告记录。
+
 ## 5.1.3（2026-09-29）
 
 - **修复：TS 应用配置上下文识别（dev 类型双轨判定）**——宽松声明是否让位于精确轨，此前扫描根目录全部 `tsconfig*.json`（仅排除 `tsconfig.node.json`），任何一份无关配置（如 `tsconfig.test.json`）出现 `<remote>/*` paths 即误判「应用已接管」，抑制应用导入所需的 ambient 声明（导入 TS2307）。现在按真实 TS 上下文判定：主配置选择（`tsconfig.json`，或唯一/唯一覆盖应用源码的 `tsconfig*.json`——含只有 `tsconfig.typecheck.json` 的工程）+ `references` 链上 include 覆盖应用源码/类型输出目录的子项目（solution 型 `files: []` 配置自身不判定，不再按文件名排除）；`extends` 链 paths 继承，paths 目标与 baseUrl 按声明所在配置的目录解析。无法唯一确定上下文时安全回退（生成默认宽松声明，导入可解析）。真实 tsc 编译回归：无关测试配置不抑制 ambient；应用接管后精确轨拒绝错误 props。
