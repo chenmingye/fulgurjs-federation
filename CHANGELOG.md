@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.4
+
+- **修正：示例锁文件的 integrity 字段改为不固定（registry 校验）**——锁文件无法内嵌"包含它自身的发布 tarball"的哈希（自引用悖论），5.2.3 包内预填的 integrity 与实际发布产物不一致（npm 安装不受影响，但元数据错误）。现在 `@fulgurjs/federation` 条目保留精确版本与 resolved URL、移除 integrity，安装时以 registry 元数据校验，永不再失配。插件运行时代码与 5.2.2/5.2.3 完全一致，无源码变更。
+
 ## 5.2.3
 
 - **修正：包内四份示例（examples/{vue,react}/{host,remote}）的 `@fulgurjs/federation` 依赖声明与锁文件统一指向本版本 5.2.3**——5.2.1/5.2.2 包内示例仍声明 5.2.0（上一轮锁文件回填发生在发布后，未能进入当版产物）。插件运行时代码与 5.2.2 完全一致，无任何源码变更；`src/version.ts` 常量随版本同源门禁同步。
