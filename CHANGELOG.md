@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.3
+
+- **修正：包内四份示例（examples/{vue,react}/{host,remote}）的 `@fulgurjs/federation` 依赖声明与锁文件统一指向本版本 5.2.3**——5.2.1/5.2.2 包内示例仍声明 5.2.0（上一轮锁文件回填发生在发布后，未能进入当版产物）。插件运行时代码与 5.2.2 完全一致，无任何源码变更；`src/version.ts` 常量随版本同源门禁同步。
+
 ## 5.2.2
 
 - **修复：对象形式 manualChunks 的宿主也获得运行时 chunk 隔离**——5.2.1 的隔离只覆盖函数形式与未配置两种；jeecg 系工程普遍使用对象形式（`manualChunks: { 'vue-vendor': ['vue', ...] }`），此时隔离被静默跳过，运行时代码仍被并入巨型 vendor chunk。现在对象形式被包装为等价函数（插件专属 chunk 判定优先，其余按 `/node_modules/<包名>/` 前缀匹配回原组）。MES admin（vite 6 + 对象形式）真实构建验证。
