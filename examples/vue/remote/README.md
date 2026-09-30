@@ -40,7 +40,7 @@ utils.sumNumbers(2, 3, 7) // 12
 npm run build        # dist/（含 fulgurjs-remoteEntry.js 与 fulgurjs-manifest.json）
 ```
 
-部署到 Nginx 子路径 `/vue-remote/`（与宿主 `fulgurjs.config.ts` 的 `prod: '/vue-remote'` 对应；产物内 chunk 引用为相对路径，天然适配子路径）。完整 Nginx 示例见[组合说明](../README.md#生产构建与最小-nginx-部署)。
+部署到 Nginx 子路径 `/vue-remote/`（与宿主 `fulgurjs.config.ts` 的 `prod: '/vue-remote'` 对应；`vite.config.ts` 已配置 `base` 随 `build` 自动切换为 `/vue-remote/`（dev 不受影响）；不要去掉它，否则 modulepreload 链接会指向站点根导致 404）。完整 Nginx 示例见[组合说明](../README.md#生产构建与最小-nginx-部署)。
 
 ## 故障演练（配合宿主）
 

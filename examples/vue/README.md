@@ -48,7 +48,7 @@ cd vue/remote && npm run build -- --base=/vue-remote/   # 产物 remote/dist/（
 cd vue/host   && npm run build   # 产物 host/dist/
 ```
 
-部署形态：宿主部署在站点根 `/`，远程部署在子路径 `/vue-remote/`（与 `host/fulgurjs.config.ts` 的 `prod: '/vue-remote'` 对应）。远程构建产物内部的 chunk 引用是相对路径，天然适配子路径。最小 Nginx 配置（SPA fallback + 联邦入口正确 Content-Type）：
+部署形态：宿主部署在站点根 `/`，远程部署在子路径 `/vue-remote/`（与 `host/fulgurjs.config.ts` 的 `prod: '/vue-remote'` 对应）。远程工程的 `vite.config.ts` 已配置 `base` 随 `build` 命令自动切换为 `/vue-remote/`（dev 不变）——Vite 的 preload helper 会把依赖链接转成根绝对路径，远程子路径部署必须带此 base。最小 Nginx 配置（SPA fallback + 联邦入口正确 Content-Type）：
 
 ```nginx
 server {

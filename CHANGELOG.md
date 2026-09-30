@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.2.5
+
+- **修复：远程示例（examples/{vue,react}/remote）子路径生产部署的 modulepreload 404**——Vite 的 preload helper 会把依赖链接转成**根绝对路径**（`"/"+dep`），remote 以默认 base `/` 构建时，modulepreload 会打到宿主站点的根 `/assets/`（SPA fallback 回 HTML → MIME 错误）。`vite.config.ts` 现按 `command === 'build'` 自动切换 `base` 为 `/vue-remote/`、`/react-remote/`（dev 不受影响）；两份 README 的部署说明同步订正（不再声称"相对路径天然适配子路径"）。运行时代码无变更。
+
 ## 5.2.4
 
 - **修正：示例锁文件的 integrity 字段改为不固定（registry 校验）**——锁文件无法内嵌"包含它自身的发布 tarball"的哈希（自引用悖论），5.2.3 包内预填的 integrity 与实际发布产物不一致（npm 安装不受影响，但元数据错误）。现在 `@fulgurjs/federation` 条目保留精确版本与 resolved URL、移除 integrity，安装时以 registry 元数据校验，永不再失配。插件运行时代码与 5.2.2/5.2.3 完全一致，无源码变更。
