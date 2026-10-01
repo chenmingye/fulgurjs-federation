@@ -47,6 +47,24 @@ test.describe('bridge-prod：隔离 NGINX 生产形态', () => {
     await expect(page.locator('[data-fulgurjs-bridge-root]')).toHaveAttribute('data-fulgurjs-bridge-status', 'ready')
   })
 
+  test('U08：URL 同步生产深链刷新直达（真实 nginx 回退，资源/API 404 不被掩盖）', async ({ page }) => {
+    // Vue 宿主 × React 子：深链首开直达详情（不闪默认页）
+    await page.goto('/host-bridge-vue/approval/detail/123?tab=history&routed=1', { waitUntil: 'networkidle' })
+    await expect(page.locator('[data-testid="routed-react-page"]')).toHaveText(/react-routed:\/detail\/123\?tab=history/, { timeout: 30000 })
+    // 刷新（真实部署回退）：同一位置恢复，history 回退由 nginx try_files 回宿主 index.html——
+    // remoteEntry/manifest/静态资源命中精确 location，真实 404 仍可见
+    await page.reload({ waitUntil: 'networkidle' })
+    await expect(page.locator('[data-testid="routed-react-page"]')).toHaveText(/react-routed:\/detail\/123\?tab=history/, { timeout: 30000 })
+    // 资源 404 不被回退掩盖：请求一个不存在的 js 必须得到 404
+    const res = await page.request.get('/host-bridge-vue/assets/not-exist-bundle.js')
+    expect(res.status()).toBe(404)
+    // React 宿主 × Vue 子：同口径深链刷新
+    await page.goto('/host-bridge-react/approval/detail/456?src=prod&routed=1', { waitUntil: 'networkidle' })
+    await expect(page.locator('[data-testid="routed-vue-page"]')).toHaveText(/vue-routed:\/detail\/456\?src=prod/, { timeout: 30000 })
+    await page.reload({ waitUntil: 'networkidle' })
+    await expect(page.locator('[data-testid="routed-vue-page"]')).toHaveText(/vue-routed:\/detail\/456\?src=prod/, { timeout: 30000 })
+  })
+
   test('BR11：生产加载失败→恢复语义与 dev 一致（故障 expose 占位）', async ({ page }) => {
     await page.goto(`${VUE_HOST}?spec=mount-fail`, { waitUntil: 'networkidle' })
     await expect(page.locator('[data-fulgurjs-error="MFU-016"]')).toBeVisible()

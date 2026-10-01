@@ -87,7 +87,12 @@ http {
       try_files $uri $uri/ /host-react/index.html;
     }
 
-    # 桥接宿主 host-bridge-vue（Vue 宿主 × React 桥接子应用，子路径部署）
+    # 桥接宿主 host-bridge-vue（Vue 宿主 × React 桥接子应用，子路径部署）。
+    # 资源目录不参与 SPA 回退：真实 404 必须 404（U08 口径——HTML 回退不得掩盖缺失资源）。
+    location /host-bridge-vue/assets/ {
+      alias "__PROD_DIST__/host-bridge-vue/assets/";
+      try_files $uri =404;
+    }
     location /host-bridge-vue/ {
       alias "__PROD_DIST__/host-bridge-vue/";
       index index.html;
@@ -95,6 +100,10 @@ http {
     }
 
     # 桥接宿主 host-bridge-react（React 宿主 × Vue 桥接子应用，子路径部署）
+    location /host-bridge-react/assets/ {
+      alias "__PROD_DIST__/host-bridge-react/assets/";
+      try_files $uri =404;
+    }
     location /host-bridge-react/ {
       alias "__PROD_DIST__/host-bridge-react/";
       index index.html;

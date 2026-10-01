@@ -12,7 +12,7 @@
  * appProps 是挂载时浅拷贝快照（顶层替换不追踪、不重渲染子应用，重挂由 :key 重建）；
  * sessionKey 是桥接控制参数，不混入业务 props。
  */
-import { defineComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch, type Component, type PropType } from 'vue'
+import { defineComponent, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, toRaw, watch, type Component, type PropType } from 'vue'
 import type { AppContext } from './context'
 import { provideAppContext } from './context'
 import {
@@ -26,8 +26,11 @@ import {
   type BridgeApp,
 } from './bridge-core'
 import { bridgeLifecycleError } from './bridge-errors'
+import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
 
 type LoadRemoteFn = (spec: string, opts?: { retries?: number }) => Promise<any>
+
+const assertBridgeRoutingProtocolSpec = (spec: string, contract: BridgeApp): void => assertBridgeRoutingProtocol(spec, contract)
 
 export interface VueBridgeAppOptions {
   /** 加载 pending 占位组件（默认无占位节点） */
@@ -40,6 +43,12 @@ export interface VueBridgeAppOptions {
   timeout?: number
   /** 无副作用的同步 getter：首次、重试及换会话的实际加载前返回本次所需上下文快照 */
   getContext?: () => Partial<AppContext> & Record<string, unknown>
+}
+
+/** routing prop 的绑定键：normalized basePath + navigation 引用（同键不重挂、不重复订阅） */
+function routingKey(routing: BridgeHostRouting | undefined): string | undefined {
+  if (!routing) return undefined
+  return routing.basePath + '|' + String(routing.navigation && typeof routing.navigation.navigate === 'function')
 }
 
 type BridgeStatus = 'idle' | 'pending' | 'ready' | 'error'
@@ -116,6 +125,8 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         appProps: { type: Object as PropType<P>, required: false, default: undefined },
         // 桥接控制参数：undefined（不启用受控会话）/ null（登出态）/ 非空字符串（登录代次）
         sessionKey: { type: null as unknown as PropType<string | null>, required: false, default: undefined },
+        // URL 同步控制通道（独立于 appProps/Context；省略 = 原 memory 模式）
+        routing: { type: Object as PropType<BridgeHostRouting>, required: false, default: undefined },
       },
       setup(props) {
         const status = ref<BridgeStatus>('idle')
@@ -129,6 +140,10 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         let containerBlocked = false
         /** 当前代次已登记的受控会话（页面级单会话登记；换会话/卸载时释放） */
         let acquiredSession: string | undefined
+        /** 当前代次的路由通道（URL 同步启用时存在；invalidate 时销毁） */
+        let channel: RoutingChannel | undefined
+        /** 当前代次的作废信号（异步写回前检查 aborted） */
+        let genAbort: AbortController | undefined
 
         const releaseAcquired = (): void => {
           if (acquiredSession !== undefined) {
@@ -144,6 +159,10 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
           generation++
           const el = container.value
           releaseAcquired()
+          genAbort?.abort()
+          genAbort = undefined
+          channel?.dispose()
+          channel = undefined
           if (contract && el) {
             const c = contract
             contract = undefined
@@ -194,7 +213,20 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             // 3) 挂载（首次根提交语义由契约实现保证；appProps 挂载时浅拷贝快照——
             //    toRaw 先还原 Vue props 的 reactive 包装，保证嵌套对象/函数为原引用）
             const appPropsSource = props.appProps ? (toRaw(props.appProps) as P) : undefined
-            await contract.mount(el, { ...(appPropsSource ?? {}) })
+            genAbort = new AbortController()
+            let mountOptions: { signal: AbortSignal; routing?: RoutingChannel } = { signal: genAbort.signal }
+            if (props.routing) {
+              // URL 同步（§4.1）：协议校验 → 挂载前读最新宿主位置（不能用旧快照）→
+              // 建通道（前缀登记冲突 MFU-030）→ 通道随第三参数交给子应用
+              assertBridgeRoutingProtocolSpec(spec, contract)
+              const navigation = props.routing.navigation
+              const latestLoc = navigation.getLocation()
+              if (myGeneration !== generation) return
+              channel = new RoutingChannel(`bridge-vue:${spec}:${myGeneration}`, props.routing.basePath, navigation, spec)
+              mountOptions = { signal: genAbort.signal, routing: channel }
+              void latestLoc
+            }
+            await contract.mount(el, { ...(appPropsSource ?? {}) }, mountOptions)
             if (myGeneration !== generation) return
             status.value = 'ready'
           } catch (e) {
@@ -222,6 +254,14 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         // 会话变化（换账号 A→B / 登出 →null / 重登）：作废旧代次并卸载后启动新代次；
         // 同会话重渲染不触发（sessionKey 值未变），只换 appProps 引用也不重挂（§4.3）
         watch(() => props.sessionKey, () => { start() })
+        // routing 配置变化：引用重建但键相同（normalized basePath + navigation）不重挂；
+        // 启用/关闭/换前缀/换端口属于控制配置变化 → 旧代次作废重挂（旧监听器随通道销毁）
+        watch(() => routingKey(props.routing), (after, before) => {
+          if (after !== before) start()
+        })
+        // KeepAlive：缓存离页暂停通道写入（不抢占 URL、不销毁共享端口），激活重同步
+        onDeactivated(() => { channel?.setActive(false) })
+        onActivated(() => { channel?.setActive(true) })
         onBeforeUnmount(() => {
           // 组件卸载：先通知契约清理，再释放容器（§4.5）；清理失败仅记录，不阻断 Vue 卸载
           invalidate()

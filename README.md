@@ -614,7 +614,7 @@ CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ re
 | `fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<路径\|URL>]... [--require-verified]` | 页面契约核对：宿主页面表（`hostPages` 具名导出）↔ 远程 manifest exposes。manifest 来源优先级 **`--manifest`（可多次、文件路径或 URL） > `--site`/消费方 prod 地址推导**（显式来源失败不回退、无本地 dist 兜底），输出每个 remote 的实际命中来源（防止旧本地 dist 冒充线上核对）。报告未知 remote、映射到未消费远程、缺失 expose、路由冲突（R1–R5）；**确定性错误退出码 1**，远程不可达报「无法验证」，`--require-verified` 时无法验证也非零（CI 严格模式，避免 0 条核对显示通过）。`--json` 供 CI |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
-### 6. 错误码总表（44 个）
+### 6. 错误码总表（48 个）
 
 | 段 | 码 | 含义 |
 |---|---|---|
@@ -660,6 +660,10 @@ CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ re
 | | `MFU-015` | 桥接契约非法（`./bridge` 默认导出缺 mount/unmount 或非函数；修法指向 defineBridgeApp） |
 | | `MFU-016` | 桥接准备或生命周期失败（`details.phase` 区分 getContext/mount/unmount；根因含子应用原始错误） |
 | | `MFU-017` | 桥接会话参数与 AppContext 不一致（受控 sessionKey 与全局会话矛盾、非法值（空串/数字）、页面级单会话冲突） |
+| | `MFU-030` | 桥接路由同步配置/前缀冲突（basePath 非法：空/根/带 query·hash·通配、同页重叠前缀登记） |
+| | `MFU-031` | 桥接路由协议缺失/通道失效（子应用未以 `{ routing: true }` 声明协议、通道销毁后复用） |
+| | `MFU-032` | 桥接非法导航（子应用导航目标越界自身前缀、`go` 参数非法、失效通道的请求被拒绝） |
+| | `MFU-033` | 桥接路由同步失败（重定向链超出上限，附目标链；不静默回退 memory） |
 | CC 跨应用上下文 | `CC-001` | AppContext 必需字段缺失（三段式：got/expected/example，修法指向宿主桥 `provideAppContext`） |
 | | `CC-002` | 运行时单例不可用（独立直开远程页；修法 = 经宿主联邦加载，时序契约 bridge → 远程 setup → 页面模块） |
 
@@ -872,6 +876,84 @@ const RemoteVueApp = createReactBridgeApp('bridge-vue-remote/bridge', {
 - **多实例与页面级单会话**：同页多个同 spec 实例并存合法（契约按 el 分键）；`AppContext` 是页面级单例——同页所有受控桥接实例必须同一会话，后挂实例与活跃实例代次不一致按 `MFU-017` 拒绝（不让两实例互相覆盖身份）。不承诺同页同时承载两个账号。
 - **DOM 所有权**：包装组件只创建并保持稳定的空挂载容器；pending/error 占位是它的兄弟节点，宿主重渲染不 patch 子应用 root 内部。React 宿主 StrictMode 双 effect（mount→cleanup→mount）安全。Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态；需要离页即销毁就别缓存该页，登出流程应同时移除缓存的私有页面。
 - **旧请求不冒充取消**：已进入 `loadRemote` 的工作不因桥接层作废而被取消——迟到的旧结果按代次丢弃（不 mount、不覆盖、无未处理拒绝）；远程 `onSession` 必须遵守既有 `signal.aborted` 契约（异步等待后、写私有状态前检查信号）。
+
+### 8.3 桥接 URL 同步 — `/bridge/router/*`（子应用内部路由 ↔ 宿主浏览器地址，5.4.0 起）
+
+桥接默认 memory 路由：子应用内部跳转不改浏览器地址、刷新不能恢复子应用内部页面。URL 同步让**宿主 URL 表达子应用内部位置**——刷新直达、收藏分享、前进后退、宿主菜单跳转全部一致。显式开启，**默认关闭**（5.3.x 行为与老契约完全不变）。
+
+**架构约定**：宿主 Router 是浏览器历史唯一写入方；子应用使用受控 memory 路由；两端经独立路由通道（不进 appProps/Context）传递位置；同实例内 path/search/hash 变化**不重挂 root、不重建 store、不重新加载远程**。
+
+**① 宿主（Vue Router 4，history/hash 模式皆可）**：
+
+```ts
+// main.ts：宿主路由声明后缀匹配（缺它详情导航会卸载子应用！）
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL), // hash 模式用 createWebHashHistory
+  routes: [
+    { path: '/', component: Home },
+    { path: '/approval/:pathMatch(.*)*', component: ApprovalBridgePage },
+  ],
+})
+// 真实权限守卫：拒绝 → 通道收到 cancelled，URL/历史/子应用位置全部不变
+router.beforeEach((to) => (to.path.startsWith('/approval/secret') ? false : undefined))
+```
+
+```vue
+<!-- ApprovalBridgePage.vue：路由 prop = 独立控制通道 -->
+<script setup lang="ts">
+import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/bridge/router/vue'
+const navigation = createVueBridgeNavigation(router) // routerBase 用于 createWebHistory(base) 场景
+const routing: BridgeHostRouting = { basePath: '/approval', navigation }
+const RemoteApp = createVueBridgeApp('remote/bridge-routed', { /* 同 8.2 */ })
+</script>
+<template>
+  <RemoteApp :session-key="sess" :routing="routing" :app-props="props" />
+</template>
+```
+
+**② 子应用（声明协议 + 接线受控路由）**：
+
+```ts
+// bridge.ts（Vue 子应用）：defineBridgeApp(工厂, { routing: true })——工厂第二参数 { signal, routing }
+import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
+import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { connectVueBridgeRouter } from '@fulgurjs/federation/bridge/router/vue'
+export default defineBridgeApp(async (props, ctx) => {
+  const router = createRouter({ history: createMemoryHistory(), routes: [
+    { path: '/list', component: List },
+    { path: '/detail/:id', component: Detail },
+  ] })
+  await connectVueBridgeRouter(ctx.routing!, router).ready // 初始 push 落定后再 install（顺序不能反）
+  const app = createApp({ setup: () => () => h(RouterView) }, props)
+  app.use(router)
+  return app
+}, { routing: true })
+```
+
+```tsx
+// bridge.tsx（React 子应用）：createReactBridgeRouter 返回 RouterProvider 元素
+import { createReactBridgeRouter } from '@fulgurjs/federation/bridge/router/react'
+export default defineBridgeApp((_props, ctx) =>
+  createReactBridgeRouter(ctx.routing!, [
+    { path: '/list', element: <List /> },
+    { path: '/detail/:id', element: <Detail /> },
+  ]).element, { routing: true })
+```
+
+宿主端 React Router 仅支持 **data router 模式**（`createBrowserRouter` / `createHashRouter` + `RouterProvider`）：`createReactBridgeNavigation(router, { basename, canNavigate })`。`canNavigate` 与树内 `useBlocker` 传同一谓词——子应用发起的导航被拒绝时由端口预判返回 cancelled（URL/历史零副作用），菜单/POP 等其他来源由 useBlocker 真实拦截。declarative 模式（BrowserRouter）无取消语义，不支持。React Router 要求 ≥ 6.11（createMemoryRouter）。
+
+**③ 行为契约与边界**：
+
+- **basePath**：宿主路由视角的静态绝对路径（拒绝空/根/带 query·hash·通配符，`MFU-030`）；按路径段匹配（`/approval` 命中 `/approval/detail/1`，不命中 `/approval-old`）；同页各同步实例前缀不得相同或重叠。`/approval` 对应子应用 `/`；根重定向由子应用路由定义、以 replace 规范化（不凭空多一条历史）。
+- **Vite base 与路由分层**：部署在 `/erp/` 时 Vite base/宿主 Router base 是 `/erp/`，bridge basePath 仍是 `/approval`（Vue 传 `routerBase`、React 传 `basename`）；适配器输出的逻辑路径不含部署前缀，不会拼出 `/erp/erp/...`。子目录部署 + hash 模式内层片段见 e2e fixtures（`fixtures/host-bridge-*/`，可运行参考实现）。
+- **位置三段全等**：search/hash 原样保留（重复 query 键、编码、中文、片段不二次 decode/encode）；仅参数变化也同步，且不重挂。
+- **取消语义**：Vue Router 4 的 push/replace 落定 `NavigationFailure` 即真实取消；React Router data router 用 canNavigate 预判（与 useBlocker 同谓词）+ 树内 blocker。取消后 URL、历史、子应用位置保持最后确认状态，**绝不自动重试**（`router.push` 的函数返回不冒充提交成功）。
+- **会话与生命周期**：换账号/登出（`sessionKey→null`）作废旧通道——旧通道的导航一律 cancelled、不写 URL、不复活子应用；unmount 后迟到通知失效（通道销毁，再订阅得 `MFU-031`）。KeepAlive 缓存离页的实例暂停路由写入（不抢占 URL、不销毁通道，激活重同步）。同一容器 unmount 抛错的持久封锁（BN09）不因路由绕过。
+- **协议校验**：宿主启用 routing 而子应用未声明 `{ routing: true }`（契约 `routing: { protocol: 1 }`）→ `MFU-031` 占位，**不静默退回 memory 假装深链成功**。
+- **非法导航与循环**：目标越界自身前缀（`../`、跨前缀）、非法 `go` 参数 → `MFU-032`；连续内部 replace 超过 5 次（重定向环）→ `MFU-033`（附目标链，不静默回入口）。
+- **按需加载**：`/bridge`、`/runtime`、`/react` 默认入口不引入任何路由库；`/bridge/router/vue`、`/bridge/router/react` 为按需入口（`vue-router` / `react-router-dom` 为可选 peer，消费者自装）。两个入口各 ≤4096B gzip 门禁。
+- **不承诺**：SSR/RSC、跨浏览器窗口、嵌套多级桥接子应用路由代理、TanStack Router 及其他路由库（可经 `BridgeHostNavigation`/`BridgeChildRoute` 端口自定义扩展）。
 
 ### 9. `AppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/runtime`）
 

@@ -113,8 +113,26 @@ function Host(): React.ReactElement {
   )
 }
 
+// URL 同步（/approval/*）：data router 承载路由；'/' 原页面不变（既有 e2e 口径不变）。
+// basename = Vite base（子目录部署不与 bridge basePath 重复拼前缀，任务书 §2.3）。
 const basename = import.meta.env.BASE_URL === '/' ? undefined : import.meta.env.BASE_URL
 void basename
-createRoot(document.getElementById('root')!).render(
-  createElement(StrictMode, null, createElement(Host)),
-)
+
+async function bootstrap(): Promise<void> {
+  const { createBrowserRouter, RouterProvider } = await import('react-router-dom')
+  const { RoutedApproval, registerRouting } = await import('./RoutedApproval')
+  const router = createBrowserRouter(
+    [
+      { path: '/', element: createElement(Host) },
+      { path: '/approval/*', element: createElement(RoutedApproval) },
+      // fixture 宿主 404 策略：未知路径回宿主首页
+      { path: '*', element: createElement(Host) },
+    ],
+    basename ? { basename } : undefined,
+  )
+  registerRouting(router, basename)
+  createRoot(document.getElementById('root')!).render(
+    createElement(StrictMode, null, createElement(RouterProvider, { router })),
+  )
+}
+void bootstrap()

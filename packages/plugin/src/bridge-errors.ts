@@ -1,5 +1,5 @@
 /**
- * 桥接层错误码表（MFU-015/016/017，任务书 D3）。
+ * 桥接层错误码表（MFU-015/016/017 + 路由同步 MFU-030~033，任务书 D3 / URL 同步 §6）。
  *
  * 与 runtime.js 解耦：桥接专用分支不进内核 bundle（runtime 内核零改动为首选目标）；
  * 码值登记于 src/diagnostics.ts 的 CODE_REGISTRY，由 scripts/check-manual-codes.mjs
@@ -15,6 +15,14 @@ export const BridgeErrorCodes = {
   BRIDGE_LIFECYCLE_FAILED: 'MFU-016',
   /** 桥接会话参数与 AppContext 不一致（受控 sessionKey 与全局会话矛盾） */
   BRIDGE_SESSION_MISMATCH: 'MFU-017',
+  /** 路由同步配置/前缀冲突（basePath 非法、同页前缀冲突或重叠） */
+  ROUTING_CONFIG_INVALID: 'MFU-030',
+  /** 路由协议缺失/通道失效（子应用未声明 routing 协议，或已销毁通道被再次使用） */
+  ROUTING_PROTOCOL_MISSING: 'MFU-031',
+  /** 非法导航（目标越界前缀、非法 go 参数、失效实例的请求） */
+  ROUTING_NAVIGATION_INVALID: 'MFU-032',
+  /** 路由准备/同步失败（重定向循环、子应用路由准备失败且已阻止错误页面显示） */
+  ROUTING_SYNC_FAILED: 'MFU-033',
 } as const
 
 /** 桥接生命周期阶段（MFU-016 details.phase 取值） */
@@ -103,5 +111,43 @@ export function invalidSessionKeyError(spec: string, value: unknown): FgError {
       `  根因: sessionKey 只接受 undefined（不启用受控会话）、null（登出态）或非空字符串（登录代次 ID）。\n` +
       `  修法: 登出传 null 而不是空字符串；登录代次用非空字符串；不要传数字/布尔等其他类型。`,
     { spec, value: String(value) },
+  )
+}
+
+// ── 路由同步（URL 同步功能，任务书 §6）────────────────────────────
+
+/** MFU-030：路由同步配置非法或前缀冲突（basePath 校验失败、同页重叠前缀登记） */
+export function routingConfigError(spec: string, reason: string): FgError {
+  return new FgError(
+    BridgeErrorCodes.ROUTING_CONFIG_INVALID,
+    `现象：桥接应用 "${spec}" 的 URL 同步配置无法启用。\n原因：${reason}\n修法：修正 routing.basePath 为宿主路由视角的静态绝对路径（如 "/approval"），并保证同页各同步实例前缀互不重叠；宿主路由需声明对应的后缀匹配（Vue "/approval/:pathMatch(.*)*"、React "/approval/*"）。`,
+    { spec },
+  )
+}
+
+/** MFU-031：路由协议缺失/通道失效（子应用未以 { routing: true } 声明协议，或通道已销毁仍被使用） */
+export function routingProtocolError(spec: string, reason: string): FgError {
+  return new FgError(
+    BridgeErrorCodes.ROUTING_PROTOCOL_MISSING,
+    `现象：桥接应用 "${spec}" 的 URL 同步通道不可用。\n原因：${reason}\n修法：子应用以 defineBridgeApp(工厂, { routing: true }) 声明路由协议并在工厂第二参数接收 { signal, routing } 接线受控路由；通道随挂载生命周期创建，销毁后不得复用（重挂会得到新通道）。`,
+    { spec },
+  )
+}
+
+/** MFU-032：非法导航（越界目标、非法 go 参数、失效通道请求被拒绝） */
+export function routingNavigationError(spec: string, reason: string): FgError {
+  return new FgError(
+    BridgeErrorCodes.ROUTING_NAVIGATION_INVALID,
+    `现象：桥接应用 "${spec}" 的一次导航请求被拒绝。\n原因：${reason}\n修法：子应用导航目标必须位于自身 basePath 前缀内（跨前缀请用宿主菜单/宿主能力）；go 参数为有限整数且 |delta| ≤ 50。`,
+    { spec },
+  )
+}
+
+/** MFU-033：路由准备/同步失败（重定向循环等；不伪装成功也不静默回退 memory） */
+export function routingSyncError(spec: string, reason: string, chain: string[]): FgError {
+  return new FgError(
+    BridgeErrorCodes.ROUTING_SYNC_FAILED,
+    `现象：桥接应用 "${spec}" 的 URL 同步在重定向链上超出上限（${chain.length} 次）。\n原因：${reason}\n修法：检查子应用路由的重定向规则是否互相成环；同步重定向使用 replace 且不得对同一位置重复发起。目标链：${chain.join(' → ')}。`,
+    { spec, chain: [...chain] },
   )
 }

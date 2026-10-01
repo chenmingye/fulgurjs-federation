@@ -64,3 +64,22 @@ for (const name of ['bridge-host-vue.js', 'bridge-host-react.js']) {
   }
   console.log(`[check-gzip] ${name} gzip ${gz.length}B ≤ ${BRIDGE_HOST_LIMIT}B ✓（raw ${raw.length}B）`)
 }
+
+// 路由适配入口预算（5.4.0 URL 同步）：/bridge/router/{vue,react} 按需入口（含通道内核
+// 打入），框架与路由库外置。显式定档 4096B 防止路由层无意膨胀；默认 /bridge 不含本模块。
+const BRIDGE_ROUTER_LIMIT = 4096
+for (const name of ['bridge-router-vue.js', 'bridge-router-react.js']) {
+  const file = path.join(dist, name)
+  if (!fs.existsSync(file)) {
+    console.error(`[check-gzip] dist/${name} 不存在——build 脚本未产出路由适配入口`)
+    process.exit(1)
+  }
+  const raw = fs.readFileSync(file)
+  const gz = zlib.gzipSync(raw, { level: 9 })
+  if (gz.length > BRIDGE_ROUTER_LIMIT) {
+    console.error(`[check-gzip] 超限：${name} gzip=${gz.length}B > 阈值 ${BRIDGE_ROUTER_LIMIT}B（raw ${raw.length}B）`)
+    console.error('修法：核查是否引入了路由适配逻辑增量；确属必要增长时，同步上调 BRIDGE_ROUTER_LIMIT 并在 CHANGELOG 说明测量口径')
+    process.exit(1)
+  }
+  console.log(`[check-gzip] ${name} gzip ${gz.length}B ≤ ${BRIDGE_ROUTER_LIMIT}B ✓（raw ${raw.length}B）`)
+}

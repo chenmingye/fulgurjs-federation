@@ -178,6 +178,17 @@ export default defineConfig({
       testMatch: /(^|\/)bridge-prod\.spec\.ts$/,
       use: { baseURL: `http://localhost:${readProdPort()}` },
     },
+    // 5.4.0 URL 同步：bridge-router 双向 dev + prod
+    {
+      name: 'bridge-router-dev',
+      testMatch: /(^|\/)bridge-router\.spec\.ts$/,
+      use: { baseURL: 'http://localhost:5105' },
+    },
+    {
+      name: 'bridge-router-react-dev',
+      testMatch: /(^|\/)bridge-router-react\.spec\.ts$/,
+      use: { baseURL: 'http://localhost:5106' },
+    },
   ],
   outputDir: './artifacts',
 })

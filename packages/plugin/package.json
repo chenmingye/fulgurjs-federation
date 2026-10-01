@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "5.3.3",
+  "version": "5.4.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -73,6 +73,14 @@
     "./internal/bridge-host-react.js": {
       "types": "./dist/bridge-host-react.d.ts",
       "import": "./dist/bridge-host-react.js"
+    },
+    "./bridge/router/vue": {
+      "types": "./dist/bridge-router-vue.d.ts",
+      "import": "./dist/bridge-router-vue.js"
+    },
+    "./bridge/router/react": {
+      "types": "./dist/bridge-router-react.d.ts",
+      "import": "./dist/bridge-router-react.js"
     }
   },
   "typesVersions": {
@@ -91,6 +99,12 @@
       ],
       "bridge": [
         "dist/bridge.d.ts"
+      ],
+      "bridge/router/vue": [
+        "dist/bridge-router-vue.d.ts"
+      ],
+      "bridge/router/react": [
+        "dist/bridge-router-react.d.ts"
       ]
     }
   },
@@ -108,7 +122,7 @@
     "docs/P5-vite7-8兼容矩阵.md"
   ],
   "scripts": {
-    "build": "cp ../../README.md README.md && cp ../../README.en.md README.en.md && mkdir -p docs && cp ../../docs/迁移指南.md ../../docs/webpack-mf-对照与缺口.md ../../docs/沙箱边界审计.md ../../docs/P5-vite7-8兼容矩阵.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && rm -rf examples && cp -R ../../examples examples && find examples \\( -name node_modules -o -name dist -o -path '*/src/fulgurjs/types' \\) -exec rm -rf {} + && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/vue-adapter.ts src/react-adapter.ts src/context.ts src/bridge-core.ts src/bridge-errors.ts src/bridge-app-vue.ts src/bridge-app-react.ts src/bridge-host-vue.ts src/bridge-host-react.ts --format esm,cjs --dts --external vite --target node18 --clean && tsup src/runtime-entry.ts --format esm --dts --external vite,vue --target node18 && tsup src/react.ts --format esm --dts --external vite,react --target node18 && tsup src/bridge.ts src/bridge-vue.ts src/bridge-react.ts --format esm --dts --external vite,vue,react,react-dom --target node18 && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime-entry.mjs && node scripts/check-gzip.mjs && node scripts/check-manual-codes.mjs",
+    "build": "cp ../../README.md README.md && cp ../../README.en.md README.en.md && mkdir -p docs && cp ../../docs/迁移指南.md ../../docs/webpack-mf-对照与缺口.md ../../docs/沙箱边界审计.md ../../docs/P5-vite7-8兼容矩阵.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && rm -rf examples && cp -R ../../examples examples && find examples \\( -name node_modules -o -name dist -o -path '*/src/fulgurjs/types' \\) -exec rm -rf {} + && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/vue-adapter.ts src/react-adapter.ts src/context.ts src/bridge-core.ts src/bridge-errors.ts src/bridge-app-vue.ts src/bridge-app-react.ts src/bridge-host-vue.ts src/bridge-host-react.ts --format esm,cjs --dts --external vite --target node18 --clean && tsup src/runtime-entry.ts --format esm --dts --external vite,vue --target node18 && tsup src/react.ts --format esm --dts --external vite,react --target node18 && tsup src/bridge.ts src/bridge-vue.ts src/bridge-react.ts --format esm --dts --external vite,vue,react,react-dom --target node18 && tsup src/bridge-router-vue.ts --format esm --dts --external vite,vue,vue-router --target node18 && tsup src/bridge-router-react.tsx --format esm --dts --external vite,react,react-dom,react-router-dom --target node18 && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime-entry.mjs && node scripts/check-gzip.mjs && node scripts/check-manual-codes.mjs",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -131,13 +145,17 @@
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
     "vitest": "^3.1.0",
-    "vue": "^3.5.22"
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.4",
+    "react-router-dom": "^7.18.4"
   },
   "peerDependencies": {
     "vite": ">=5.1.0",
     "vue": ">=3.2.0",
     "react": ">=18.0.0 <20",
-    "react-dom": ">=18.0.0 <20"
+    "react-dom": ">=18.0.0 <20",
+    "vue-router": ">=4.1.0 <5",
+    "react-router-dom": ">=6.11.0 <8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -176,6 +194,12 @@
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "vue-router": {
+      "optional": true
+    },
+    "react-router-dom": {
       "optional": true
     }
   }

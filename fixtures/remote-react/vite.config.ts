@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 import { federation } from '@fulgurjs/federation'
 
 export default defineConfig({
+  // workspace link 开发态：插件 link 包与本项目各自带 pnpm 虚拟仓库，react-router-dom
+  // 存在两个物理副本 → Router context 断裂。alias 统一指向本项目副本（发布包消费时
+  // 可选 peer 直接解析消费者副本，无此问题）。
+  resolve: {
+    alias: [{ find: /^react-router-dom$/, replacement: new URL('./node_modules/react-router-dom/dist/index.mjs', import.meta.url).pathname }],
+  },
   plugins: [
     react(),
     federation({
@@ -29,6 +35,7 @@ export default defineConfig({
         './bridge': './src/bridge.tsx',
         './bridge-broken': './src/bridge-broken.tsx',
         './bridge-mount-fail': './src/bridge-mount-fail.tsx',
+        './bridge-routed': './src/bridge-routed.tsx',
       },
       setup: './src/fulgurjs/setup.ts',
       shared: {

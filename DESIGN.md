@@ -207,3 +207,7 @@ remote 样式改动立即生效；host 自身业务 HMR 不受影响。
 - M2（dev 闭环）验收加：副本三 dev server 实测
 - M3（shared 全语义）验收加：element-plus 双版本共存（bpm 2.9.1 vs lowcode 2.10.2）实测
 - M6 验收加：NGINX 测试站点 prod 全量 e2e 绿 + 后台接口经反代连通
+
+## 6.3 桥接 URL 同步（5.4.0）
+
+宿主 Router 是浏览器历史的唯一写入方；子应用运行受控 memory 路由。两者以「路由通道」相连：通道由桥接宿主按挂载代次创建（一个同步实例一条），随 mount 第三参数交给子应用，随 unmount/换代销毁。通道职责：位置三段（path/search/hash）的原样换算（前缀按段匹配、页面级登记互斥）、子应用导航请求的串行化与编号、宿主裁决仲裁（committed/cancelled/superseded）、有界重定向检测。宿主端口（Vue `createVueBridgeNavigation` / React `createReactBridgeNavigation`）只做 Router→端口的语义换算：Vue 直接复用 push/replace 的 NavigationFailure 作为真实取消；React data router 用 canNavigate 预判（与 useBlocker 同谓词）+ 树内 blocker 保护其他来源。KeepAlive 用通道的 active 开关暂停/恢复写入而非销毁。路由能力全部住在按需入口（`/bridge/router/*`），默认入口零路由库导入。

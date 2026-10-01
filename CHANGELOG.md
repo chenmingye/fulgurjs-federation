@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.4.0
+
+- **新增：跨框架桥接 URL 同步（`/bridge/router/*`）**——宿主 URL 表达子应用内部位置：首次深链直达（不闪默认页、不发错接口）、刷新/收藏/新窗口恢复、子应用 Link/RouterLink/router.push 与宿主菜单/前进后退全量同步、根重定向以 replace 规范化（不凭空制造历史）。架构：宿主 Router 是浏览器历史唯一写入方，子应用用受控 memory 路由（Vue `connectVueBridgeRouter` / React `createReactBridgeRouter`，Link/useNavigate/RouterLink 全兼容）；独立路由通道承载位置与仲裁（请求编号/代次隔离/外部作废/取消恢复），path/search/hash 三段原样保留（重复键/编码/中文/片段不二次转换），同实例路径变化**不重挂 root、不重建 store、不重载远程**。
+- **启用即校验，默认关闭**：`routing` prop（`{ basePath, navigation }`）显式开启；子应用 `defineBridgeApp(工厂, { routing: true })` 声明协议（工厂第二参数 `{ signal, routing }`，Vue 工厂支持 Promise 形态——初始 memory push 落定后必须再 `app.use(router)`，install 初始导航会覆盖深链位置，原型实证）。未声明协议而宿主启用 → `MFU-031`（不静默退回 memory）；basePath 非法/前缀冲突 → `MFU-030`；越界导航/非法 go → `MFU-032`；重定向环 → `MFU-033`（附目标链）。
+- **取消语义（真实框架行为）**：Vue Router 4 push/replace 落定 NavigationFailure 即真实取消（URL/历史/子应用位置保持确认态，不自动重试）；React Router 仅支持 data router（`createBrowserRouter/createHashRouter`），`canNavigate` 与树内 `useBlocker` 同谓词——RR 的 navigate 被 blocker 拦截时静默返回 void（dist 源码核实），故端口预判取消零副作用。RR `location.pathname` 含 basename，端口新增 `basename` 选项剥部署前缀（§2.3 分层，生产子目录部署实测抓出）。
+- **会话与生命周期**：换账号/登出作废旧通道（旧导航 cancelled、不写 URL、不复活子应用）；unmount 后迟到通知失效；KeepAlive 离页暂停写入（不抢占 URL、不销毁共享端口）；卸载失败容器封锁语义不变。前缀按路径段匹配并在页面级登记互斥。
+- **包接线**：新增 `./bridge/router/vue`、`./bridge/router/react` 按需入口（vue-router ≥4.1 / react-router-dom ≥6.11 为可选 peer）；默认 `/bridge`、`/runtime`、`/react` 零路由库导入（导入图门禁覆盖）；两个路由入口各 ≤4096B gzip 门禁；错误码 44 → 48（三方一致）。宿主两入口 gzip：bridge-host-vue 3103B / bridge-host-react 2575B（仍 ≤4096B）。
+- **质量门禁**：原型门禁 27/27（双向 + hash 变体，可控竞态断言）；单测 566 → 589（路由内核/双端适配/宿主 routing 集成 23 例）；e2e 新增 bridge-router 双向 dev 13 例 + 生产 U08（真实 nginx 回退深链刷新 + 资源 404 不被掩盖）；全量 e2e dev 43 + prod 28 + 桥接六项目 33 全绿。**已知开发态边界**：workspace link（pnpm 双虚拟仓库）下宿主/子各持一份 react-router-dom 物理副本会断 Router context——fixtures 以 `resolve.alias` 统一副本（README 8.8/8.3 说明；registry 正式包消费无此问题）。
+
 ## 5.3.3
 
 - **修复：loadShare × pinLoadedShare 并发窗口的单例双实例风险（F9）**——`loadShare` 设置 `entry.loaded` 后等待 `entry.get()` 期间，CJS 垫片的 `pinLoadedShare` 可同步写入本地实例；getter 完成后原实现直接覆盖 `entry.value`，同步 CJS 消费者与异步消费者各持一份实例。现在实行条目实例 first-wins（协商结果让位于先写入的 pin/fallback 实例，loadShare 返回条目当前 value）、条目级 in-flight get（并发 loadShare 共享同一次加载，getter 恰好调用一次）、getter 拒绝后回滚 `entry.loaded`（修复前死条目残留「已加载」标记会永久抢占单例的已加载优先）——失败窗口内已有 pin 时收敛到 pin 实例。8 个确定性回归（可控 Promise 门）覆盖挂起中 pin / pin 先行 / 并发去重 / 拒绝重试与状态恢复 / resolveShare 组合 / 多版本边界；单元 558 → 566。`runtime.js` gzip 9204B ≤ 9216B。

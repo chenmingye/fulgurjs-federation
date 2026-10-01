@@ -35,8 +35,15 @@ import {
   type BridgeApp,
 } from './bridge-core'
 import { bridgeLifecycleError } from './bridge-errors'
+import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
 
 type LoadRemoteFn = (spec: string, opts?: { retries?: number }) => Promise<any>
+
+/** routing prop 的绑定键：basePath + navigation 可用性（同键不重挂、不重复订阅） */
+function routingKey(routing: BridgeHostRouting | undefined): string | undefined {
+  if (!routing) return undefined
+  return routing.basePath + '|' + String(routing.navigation && typeof routing.navigation.navigate === 'function')
+}
 
 /** 渲染函数形态的错误占位：(error, retry) => ReactNode */
 export type BridgeErrorFallback = (error: unknown, retry: () => void) => ReactNode
@@ -112,11 +119,11 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
   return function createReactBridgeApp<P = Record<string, unknown>>(
     spec: string,
     options: ReactBridgeAppOptions = {},
-  ): ComponentType<{ appProps?: P; sessionKey?: string | null }> {
+  ): ComponentType<{ appProps?: P; sessionKey?: string | null; routing?: BridgeHostRouting }> {
     assertBridgeOptions(`createReactBridgeApp("${spec}")`, options)
     const displayName = 'FulgurjsBridge_' + spec.replace(/[^A-Za-z0-9_-]/g, '_')
 
-    function BridgeHost(props: { appProps?: P; sessionKey?: string | null }): ReactNode {
+    function BridgeHost(props: { appProps?: P; sessionKey?: string | null; routing?: BridgeHostRouting }): ReactNode {
       const [status, setStatus] = useState<BridgeStatus>('idle')
       const [error, setError] = useState<unknown>(undefined)
       const [attempt, setAttempt] = useState(0)
@@ -128,6 +135,9 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
       const acquiredRef = useRef<string | undefined>(undefined)
       /** unmount 抛错后封锁：容器清理状态不明，不得再启动新实例（BN09） */
       const blockedRef = useRef(false)
+      /** 当前代次的路由通道与作废信号（URL 同步启用时存在） */
+      const channelRef = useRef<RoutingChannel | undefined>(undefined)
+      const abortRef = useRef<AbortController | undefined>(undefined)
       // 最新 props 引用（挂载快照读这里；appProps 引用变化不进 effect 依赖 → 不重挂）
       const latest = useRef(props)
       latest.current = props
@@ -143,6 +153,12 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
           }
         }
 
+        const disposeChannel = (): void => {
+          channelRef.current?.dispose()
+          channelRef.current = undefined
+          abortRef.current?.abort()
+          abortRef.current = undefined
+        }
         const run = async (): Promise<void> => {
           if (!el) return
           const sk = latest.current.sessionKey
@@ -172,7 +188,18 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             const contract = assertBridgeContract(spec, mod)
             contractRef.current = contract
             // 3) 挂载（首次根提交语义由契约实现保证；appProps 挂载时浅拷贝快照）
-            await contract.mount(el, { ...(latest.current.appProps ?? {}) })
+            abortRef.current = new AbortController()
+            let mountOptions: { signal: AbortSignal; routing?: RoutingChannel } = { signal: abortRef.current.signal }
+            const routing = latest.current.routing
+            if (routing) {
+              // URL 同步（§4.1）：协议校验 → 建通道（前缀登记冲突 MFU-030；通道构造读取
+              // navigation 的最新位置，不用渲染期旧快照）→ 通道随第三参数交给子应用
+              assertBridgeRoutingProtocol(spec, contract)
+              if (generationRef.current !== myGen) return
+              channelRef.current = new RoutingChannel(`bridge-react:${spec}:${myGen}`, routing.basePath, routing.navigation, spec)
+              mountOptions = { signal: abortRef.current.signal, routing: channelRef.current }
+            }
+            await contract.mount(el, { ...(latest.current.appProps ?? {}) }, mountOptions)
             if (generationRef.current !== myGen) return
             setStatus('ready')
           } catch (e) {
@@ -184,10 +211,11 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         void run()
 
         return () => {
-          // cleanup = 作废代次 + 释放会话登记 + 同步卸载契约实例
+          // cleanup = 作废代次 + 释放会话登记 + 销毁路由通道 + 同步卸载契约实例
           // （StrictMode 双 effect、换会话、组件卸载共用同一条路径，§4.5）
           generationRef.current++
           release()
+          disposeChannel()
           const c = contractRef.current
           contractRef.current = undefined
           if (c && el) {
@@ -202,10 +230,11 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             }
           }
         }
-        // sessionKey 变化（换账号/登出/重登）与 attempt（重试）都重走加载生命周期；
-        // 同会话重渲染或只换 appProps 引用不重挂（§4.3）
+        // sessionKey 变化（换账号/登出/重登）、attempt（重试）与 routing 绑定键变化
+        // （启用/关闭/换前缀/换端口）都重走加载生命周期；同会话重渲染或只换 appProps
+        // 引用不重挂（§4.3）。routing 引用重建但键相同 → 不重挂、不重复订阅。
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [props.sessionKey, attempt])
+      }, [props.sessionKey, attempt, routingKey(latest.current.routing)])
 
       const retry = (): void => setAttempt((a) => a + 1)
 

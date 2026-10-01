@@ -14,13 +14,20 @@ import {
   invalidBridgeContractError,
   invalidSessionKeyError,
 } from './bridge-errors'
+import type { BridgeMountOptions, BridgeRoutingProtocol } from './bridge-router-core'
 
 /** 子应用桥接契约（远程 ./bridge 模块的默认导出；任务书 §3.2） */
 export interface BridgeApp {
   /** 首次根提交完成时才算挂载成功；同一容器未卸载前重复 mount 是契约违例 */
-  mount(el: HTMLElement, props?: Record<string, unknown>): void | Promise<void>
+  mount(el: HTMLElement, props?: Record<string, unknown>, options?: BridgeMountOptions): void | Promise<void>
   /** 同步使当前挂载代次失效并清理已创建的 root；未知容器为 no-op */
   unmount(el: HTMLElement): void
+  /**
+   * 路由协议声明（URL 同步）：defineBridgeApp(工厂, { routing: true }) 时写入
+   * { protocol: 1 }。宿主启用 routing 时必须存在且 protocol === 1（MFU-031），
+   * 不允许静默退回 memory 假装深链成功。
+   */
+  routing?: BridgeRoutingProtocol
 }
 
 /** 远程模块 → 契约校验（默认导出须含函数类型的 mount/unmount，否则 MFU-015） */

@@ -261,7 +261,7 @@ Type generation supports string or array `extends` (later entries override earli
 
 ### 8.7 Cross-framework bridge — `/bridge` (sub-app-level Vue↔React, 5.3.0+)
 
-**Scope**: whole-app mount/unmount embedding both ways — a Vue 3 host mounts a React 18/19 sub-app, and a React host mounts a Vue 3 sub-app. Component-level conversion, host↔sub-app URL sync, Angular, SSR/RSC, JS sandbox, CSS isolation are out of scope (§12).
+**Scope**: whole-app mount/unmount embedding both ways — a Vue 3 host mounts a React 18/19 sub-app, and a React host mounts a Vue 3 sub-app. Component-level conversion, Angular, SSR/RSC, JS sandbox, CSS isolation are out of scope (§12). Sub-app internal route ↔ browser URL sync is available since 5.4.0 (§8.8).
 
 #### Entries & import graph
 
@@ -337,6 +337,22 @@ const RemoteVueApp = createReactBridgeApp('bridge-vue-remote/bridge', { getConte
 - **Controlled `sessionKey`**: accepts `undefined` (no controlled validation) / `null` (logged out: unmount immediately, keep the container empty, stop loading) / non-empty string (login generation). Illegal values → `MFU-017`.
 - **Multi-instance**: several same-spec instances coexist (per-el keying); `AppContext` is a page-level singleton — all controlled instances on a page must share the same session (`MFU-017` otherwise). React StrictMode double-effect is safe. Vue `<KeepAlive>` deactivation is **not** an unmount. Late results from invalidated generations are dropped by generation guards; a remote `onSession` must honor the existing `signal.aborted` contract.
 
+### 8.8 Bridge URL sync — `/bridge/router/*` (sub-app internal routes ↔ browser URL, 5.4.0+)
+
+The bridge defaults to memory routing: internal navigation does not touch the browser URL and refresh cannot restore the sub-app's internal page. URL sync makes the **host URL express the sub-app's internal location** — deep links, refresh, bookmarks, back/forward and host-menu navigation all agree. It is opt-in; **default is off** (5.3.x behavior and legacy contracts unchanged).
+
+**Architecture**: the host router is the only writer of browser history; the sub-app uses a controlled memory router; both sides communicate over a dedicated routing channel (not appProps/Context); path/search/hash changes within an instance **do not remount the root, do not rebuild stores, do not reload the remote**.
+
+**Host (Vue Router 4, history or hash mode)**: declare a suffix route (`/approval/:pathMatch(.*)*` — without it detail navigation unmounts the sub-app), add real guards (`beforeEach` rejecting → the channel receives `cancelled`, URL/history/sub-app position unchanged), then `createVueBridgeNavigation(router, { routerBase })` and pass `routing={{ basePath: '/approval', navigation }}` to the bridge component.
+
+**Sub-app**: declare the protocol and wire a controlled router —
+Vue: `defineBridgeApp(async (props, ctx) => { const router = createRouter({ history: createMemoryHistory(), routes }); await connectVueBridgeRouter(ctx.routing!, router).ready; ... app.use(router); return app }, { routing: true })` (await ready BEFORE `app.use(router)` — the install-time initial navigation would otherwise override the deep-link location).
+React: `createReactBridgeRouter(ctx.routing!, routes).element` — `createMemoryRouter`-based; `Link`/`useNavigate` work unmodified.
+
+**Host (React Router)**: data routers only (`createBrowserRouter`/`createHashRouter` + `RouterProvider`); `createReactBridgeNavigation(router, { basename, canNavigate })`. Pass the same predicate to `canNavigate` and to an in-tree `useBlocker` — sub-app-originated navigations are cancelled by the port pre-check (zero URL/history side effects), menu/POP sources are blocked by the real blocker. Declarative `BrowserRouter` has no cancellation semantics and is not supported. Requires react-router ≥ 6.11.
+
+**Contract highlights**: `basePath` is a static absolute path from the host-router perspective (segment-matched; conflicting/overlapping prefixes rejected, `MFU-030`); location is compared and preserved as three raw strings (duplicate query keys, encoding, fragments survive without re-encoding); cancellation never auto-retries; session switch (`sessionKey→null`) invalidates the old channel — late navigations are rejected and never write the URL; KeepAlive-cached instances pause routing writes; enabling sync against a contract without `{ routing: true }` shows `MFU-031` instead of silently falling back to memory; escaping targets and illegal `go` arguments → `MFU-032`; redirect loops beyond 5 internal replaces → `MFU-033` with the chain attached. Router libraries are optional peers consumed only through the two opt-in entries (`/bridge/router/vue`, `/bridge/router/react`, each gated ≤ 4096B gzip); the default entries never load a router library. Not promised: SSR/RSC, cross-window, nested multi-level bridge routing proxies, TanStack Router and other libraries (extend via the `BridgeHostNavigation`/`BridgeChildRoute` ports).
+
 ## 9. Artifacts, endpoints & caching
 
 | Artifact | Cache policy |
@@ -355,7 +371,7 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 - `DEBUG=fulgurjs:*` — controlled pipeline diagnostics (off by default)
 - Runtime diagnostics are emitted in Chinese by design (language policy); codes are stable identifiers listed below
 
-## 11. Error codes (44)
+## 11. Error codes (48)
 
 | Segment | Code | Meaning |
 |---|---|---|
@@ -401,13 +417,17 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 | | `MFU-015` | bridge contract invalid (`./bridge` default export missing non-function mount/unmount; fix points to `defineBridgeApp`) |
 | | `MFU-016` | bridge preparation or lifecycle failure (`details.phase` = getContext/mount/unmount; cause keeps the sub-app's original error) |
 | | `MFU-017` | bridge session mismatch (controlled sessionKey vs AppContext / illegal value / page-level single-session conflict) |
+| MFU | `MFU-030` | Bridge URL-sync config invalid / prefix conflict (illegal basePath: empty, root, query/hash/wildcard; overlapping active prefixes) |
+| MFU | `MFU-031` | Bridge routing protocol missing / channel destroyed (sub-app not declared with `{ routing: true }`; disposed channel reused) |
+| MFU | `MFU-032` | Bridge illegal navigation (target escaping its own prefix, illegal `go` argument, request on a dead channel) |
+| MFU | `MFU-033` | Bridge routing sync failed (internal replace chain exceeds the bound of 5, chain attached; no silent fallback to memory) |
 | CC | `CC-001` | AppContext required key missing (got/expected/example) |
 | | `CC-002` | runtime singleton unavailable (standalone remote page) |
 
 ## 12. Boundaries (explicitly not supported)
 
 - Support covers **browser-client** federation for Vue 3 and React 18–19. Not supported: SSR, React Server Components, Next.js full-stack, React Native, Node-side remote loading. **Cross-framework boundary (5.3.0+)**: sub-app-level embedding is supported (§8.7 `/bridge`); direct component-level Vue↔React rendering in one tree is not (that is the product of framework-conversion libraries). Pure single-framework projects keep zero cross-dependency
-- **Bridge isolation boundary (declared honestly in §8.7)**: bridging isolates only the mount/unmount edge of the two component trees — no browser realm isolation. Remote global CSS, `body`/`html` styles, global variables, and DOM rendered outside the container via React Portal / Vue Teleport still affect the host; `unmount` cannot revoke CSS the browser already loaded. Sub-app internal errors do not bubble into host error boundaries (cross-root). Sub-apps use memory routing — v1 does **not** sync to the host URL (refreshing does not restore the sub-app's internal path)
+- **Bridge isolation boundary (declared honestly in §8.7)**: bridging isolates only the mount/unmount edge of the two component trees — no browser realm isolation. Remote global CSS, `body`/`html` styles, global variables, and DOM rendered outside the container via React Portal / Vue Teleport still affect the host; `unmount` cannot revoke CSS the browser already loaded. Sub-app internal errors do not bubble into host error boundaries (cross-root). Sub-app routing defaults to memory mode; explicit URL sync exists since 5.4.0 (§8.8) — when it is not enabled, refreshing does not restore the sub-app's internal path
 - React side does not promise component keep-alive (`keepAliveNames` is Vue-only); re-opened pages still reuse downloaded modules
 - Cross-origin Fast Refresh: remote React components update via the remote dev server's HMR push; after a cold start the first round often needs a host refresh — component-state retention across the federation boundary is not promised
 - Not compatible with originjs `virtual:__federation__` legacy imports

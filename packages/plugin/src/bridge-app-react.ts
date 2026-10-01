@@ -19,11 +19,25 @@
 import { Component, createElement, useEffect, type ReactElement, type ReactNode } from 'react'
 import type { BridgeApp } from './bridge-core'
 import { bridgeLifecycleError } from './bridge-errors'
+import type { BridgeChildRoute } from './bridge-router-core'
 
 export type { BridgeApp } from './bridge-core'
 
-/** React 子应用工厂：接收挂载时 props 快照，返回 ReactElement（路由等由调用方自行包裹） */
-export type ReactBridgeAppFactory = (props: Record<string, unknown>) => ReactElement
+/** 工厂第二参数：挂载生命周期与路由通道（URL 同步；不混入业务 props） */
+export interface ReactBridgeAppContext {
+  /** 会话代次信号（登出/换代即 aborted；异步写回前必须检查） */
+  signal?: AbortSignal
+  /** 路由通道（宿主启用 URL 同步时存在）；配 createReactBridgeRouter 使用 */
+  routing?: BridgeChildRoute
+}
+
+/** React 子应用工厂：接收挂载时 props 快照与生命周期上下文，返回 ReactElement */
+export type ReactBridgeAppFactory = (props: Record<string, unknown>, ctx?: ReactBridgeAppContext) => ReactElement
+
+export interface DefineReactBridgeAppOptions {
+  /** 声明路由协议（URL 同步）：契约写入 routing: { protocol: 1 }（缺失时宿主启用同步即 MFU-031） */
+  routing?: boolean
+}
 
 interface RootEntry {
   /** pending：react-dom/client 动态取得前（尚未创建 root；可被 unmount 直接作废） */
@@ -84,9 +98,10 @@ function CommitProbe({ children, onCommit }: { children?: ReactNode; onCommit: (
  * export default defineBridgeApp((props) => <MemoryRouter><App {...props} /></MemoryRouter>)
  * ```
  */
-export function defineBridgeApp(factory: ReactBridgeAppFactory): BridgeApp {
+export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineReactBridgeAppOptions = {}): BridgeApp {
   return {
-    mount(el: HTMLElement, props?: Record<string, unknown>): Promise<void> {
+    ...(options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
+    mount(el: HTMLElement, props?: Record<string, unknown>, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): Promise<void> {
       if (entriesByEl.has(el)) {
         throw bridgeLifecycleError('mount', 'bridge', '同一容器 el 已挂载本桥接应用（容器已被占用）。', {
           reason: 'container-occupied',
@@ -94,9 +109,10 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory): BridgeApp {
       }
       // 浅拷贝顶层字段（挂载时快照；嵌套对象/函数保留原引用，任务书 §4.2）
       const snapshot = { ...(props ?? {}) }
+      const ctx: ReactBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }
       let element: ReactElement
       try {
-        element = factory(snapshot)
+        element = factory(snapshot, ctx)
       } catch (e) {
         throw bridgeLifecycleError('mount', 'bridge', e instanceof Error ? e : String(e))
       }
