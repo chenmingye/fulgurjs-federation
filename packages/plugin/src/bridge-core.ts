@@ -96,12 +96,7 @@ export function resolveBridgeContext(
       throw bridgeLifecycleError('getContext', spec, e)
     }
     if (snapshot === null || typeof snapshot !== 'object' || typeof (snapshot as { then?: unknown }).then === 'function') {
-      throw bridgeLifecycleError(
-        'getContext',
-        spec,
-        `getContext 返回了${typeof (snapshot as { then?: unknown }).then === 'function' ? ' Promise/thenable' : '非对象值（' + typeof snapshot + '）'}；` +
-          '它必须是同步返回快照对象的纯 getter。',
-      )
+      throw bridgeLifecycleError('getContext', spec, describeContextValue(snapshot))
     }
     if (controlled !== undefined && snapshot.sessionKey !== controlled) {
       throw bridgeSessionMismatchError(spec, controlled, snapshot.sessionKey, { reason: 'getter-snapshot' })
@@ -128,6 +123,22 @@ export function resolveBridgeContext(
 function currentSessionKey(): string | undefined {
   const sk = ((globalThis as any).__FULGURJS_APP_CONFIG__ ?? {}).sessionKey
   return typeof sk === 'string' && sk !== '' ? sk : undefined
+}
+
+/** getContext 非法返回值的安全描述：诊断分支不得再次触发空值访问（null/undefined 读属性即 TypeError） */
+function describeContextValue(snapshot: unknown): string {
+  if (snapshot === null) {
+    return 'getContext 返回了 null。它必须是同步返回快照对象的纯 getter：返回值应为包含本次会话快照的对象' +
+      '（受控 sessionKey 时须含相同 sessionKey），不能返回 null。'
+  }
+  if (snapshot === undefined) {
+    return 'getContext 返回了 undefined。它必须是同步返回快照对象的纯 getter：返回值应为包含本次会话快照的对象，' +
+      '请检查 getter 是否漏写 return 或返回了未初始化的变量。'
+  }
+  if (typeof (snapshot as { then?: unknown }).then === 'function') {
+    return 'getContext 返回了 Promise/thenable。它必须是同步 getter，不得返回 Promise：异步获取用户资料请在宿主完成后再让桥接组件进入可挂载状态。'
+  }
+  return `getContext 返回了非对象值（${typeof snapshot}："${String(snapshot)}"）。它必须是同步返回快照对象的纯 getter，返回值应为对象而不是原始值。`
 }
 
 /** 受控 sessionKey 受控值合法性：只接受 undefined / null / 非空字符串（任务书 BN10） */

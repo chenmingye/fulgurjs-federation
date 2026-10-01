@@ -20,6 +20,8 @@ export interface ShareEntry {
   from: string
   eager: boolean
   loaded?: boolean
+  /** 首次 loadShare 成功后缓存的实例值；getLoadedShare 同步查询与 CJS 垫片依赖它 */
+  value?: any
 }
 
 export type ShareScope = Record<string, Record<string, ShareEntry>>
@@ -516,7 +518,24 @@ function createRuntime() {
       if (picked) entry = picked
     }
     entry.loaded = true
-    return entry.get()
+    const instance = await entry.get()
+    entry.value = instance
+    return instance
+  }
+
+  /**
+   * CJS 垫片专用：同步返回「已协商加载」的共享实例（无则 undefined，绝不发起加载）。
+   * 裁决与 loadShare 的 singleton 已加载优先一致——value 就绪（即 loadShare 已取到）的
+   * 版本中取最高。CJS 本体（react/react-dom）互引不能等待异步协商（rolldown 拒绝
+   * CJS require TLA 模块），只能在同步语义下读这份快照；未就绪时垫片直连本应用本体
+   * （与 provide/fallback 同一模块，构建期单份 → 实例恒同）。
+   */
+  function getLoadedShare(name: string, opts: LoadShareOptions = {}): any {
+    const shareKey = opts.shareKey || name
+    const byName = getScope(opts.shareScope || 'default')[shareKey] || {}
+    const ready = Object.keys(byName).filter((v) => byName[v].value !== undefined)
+    if (ready.length === 0) return undefined
+    return byName[ready.sort(compareVersions).pop()!].value
   }
 
   /** WP6：错误信息用的 URL 脱敏——去凭证（user:pass@）与 query/hash */
@@ -1012,6 +1031,7 @@ function createRuntime() {
     registerRemote,
     registerPlugins,
     loadShare,
+    getLoadedShare,
     loadRemote,
     getContainer,
     preloadRemote,
@@ -1056,6 +1076,8 @@ export const registerRemotes = runtime.registerRemotes
 export const registerRemote = runtime.registerRemote
 export const registerPlugins = runtime.registerPlugins
 export const loadShare = runtime.loadShare
+/** CJS 垫片专用同步查询（内部使用，不进公开入口壳清单） */
+export const getLoadedShare = runtime.getLoadedShare
 export const loadRemote = runtime.loadRemote
 export const getContainer = runtime.getContainer
 export const preloadRemote = runtime.preloadRemote

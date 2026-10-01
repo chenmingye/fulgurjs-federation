@@ -259,7 +259,7 @@ describe('Vue 宿主 createVueBridgeApp', () => {
     expect(fake.unmounts).toHaveLength(1)
   })
 
-  it('子应用 unmount 抛错：宿主不崩溃，报告 MFU-016（phase: unmount）并封锁容器（BN09）', async () => {
+  it('子应用 unmount 抛错：MFU-016 持久封锁容器——重试与换会话都不再挂载（BN09）', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     provideSession('A')
     const fake = fakeContractModule({
@@ -270,12 +270,47 @@ describe('Vue 宿主 createVueBridgeApp', () => {
     const Comp = createVueBridgeAppWithLoader(loadRemote)('r/bridge', {})
     const host = mountHost(Comp, { sessionKey: 'A', appProps: {} })
     await waitFor(() => expect(statusOf(host.root)).toBe('ready'))
-    // 会话切换触发 unmount → 抛错 → 宿主报错且不启动新实例
+    expect(fake.mounts).toHaveLength(1)
+    // A→B：契约 unmount 抛错 → 宿主报告 MFU-016（phase: unmount，含原始原因）且不启动新实例
+    provideSession('B')
+    await host.setProps({ sessionKey: 'B' })
+    await waitFor(() => expect(statusOf(host.root)).toBe('error'))
+    const errEl = host.root.querySelector('[data-fulgurjs-error]')
+    expect(errEl?.getAttribute('data-fulgurjs-error')).toBe('MFU-016')
+    expect(errEl?.textContent).toContain('unmount 阶段失败')
+    expect(errEl?.textContent).toContain('sub unmount boom')
+    expect(fake.mounts).toHaveLength(1)
+    // 封锁后：默认占位不提供「重试加载」（重挂不安全），只保留整页刷新恢复
+    expect(host.root.querySelector('[data-fulgurjs-retry]')).toBeNull()
+    expect(host.root.querySelector('[data-fulgurjs-reload]')).not.toBeNull()
+    // 换会话（B→null→B）不得绕过封锁：不重挂、不覆盖错误态
     await host.setProps({ sessionKey: null })
+    await host.setProps({ sessionKey: 'B' })
+    await new Promise((r) => setTimeout(r, 20))
     expect(statusOf(host.root)).toBe('error')
-    expect(host.root.querySelector('[data-fulgurjs-error]')?.getAttribute('data-fulgurjs-error')).toBe('MFU-016')
-    consoleError.mockRestore()
+    expect(fake.mounts).toHaveLength(1)
+    expect(fake.unmounts).toHaveLength(1)
+    // 卸载失败恰好报告一次；封锁后组件卸载不再重复报错
+    expect(consoleError).toHaveBeenCalledTimes(1)
     host.app.unmount()
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
+
+  it('正常卸载后换会话重挂仍可用（BN09 回归对照：封锁只针对 unmount 失败的容器）', async () => {
+    provideSession('A')
+    const fake = fakeContractModule({ tag: 'ok' })
+    const loadRemote = vi.fn(async () => fake.mod)
+    const Comp = createVueBridgeAppWithLoader(loadRemote)('r/bridge', {})
+    const host = mountHost(Comp, { sessionKey: 'A', appProps: {} })
+    await waitFor(() => expect(statusOf(host.root)).toBe('ready'))
+    provideSession('B')
+    await host.setProps({ sessionKey: 'B' })
+    await waitFor(() => expect(statusOf(host.root)).toBe('ready'))
+    expect(fake.mounts).toHaveLength(2)
+    expect(fake.unmounts).toHaveLength(1)
+    host.app.unmount()
+    expect(fake.unmounts).toHaveLength(2)
   })
 
   it('pending 时换会话：迟到的旧模块不调用 mount、不覆盖新代次（BN06/BN07）', async () => {
@@ -437,18 +472,39 @@ describe('React 宿主 createReactBridgeApp', () => {
     expect(fake.mounts).toHaveLength(1)
   })
 
-  it('子应用 unmount 抛错：宿主不崩溃，报告 MFU-016 并封锁容器（BN09）', async () => {
+  it('子应用 unmount 抛错：MFU-016 持久封锁容器——重试与换会话都不再挂载（BN09）', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     provideSession('A')
     const fake = fakeContractModule({ tag: 'v', onUnmount: () => { throw new Error('sub unmount boom') } })
     const loadRemote = vi.fn(async () => fake.mod)
     const Comp = createReactBridgeAppWithLoader(loadRemote)('r/bridge', {})
-    const { rerender } = render(createElement(Comp, { sessionKey: 'A', appProps: {} }))
+    const { rerender, unmount } = render(createElement(Comp, { sessionKey: 'A', appProps: {} }))
     await screen.findByTestId('content-v')
-    rerender(createElement(Comp, { sessionKey: null, appProps: {} }))
+    expect(fake.mounts).toHaveLength(1)
+    // A→B：契约 unmount 抛错 → MFU-016（phase: unmount，含原始原因）且不启动新实例
+    provideSession('B')
+    await act(async () => { rerender(createElement(Comp, { sessionKey: 'B', appProps: {} })) })
     await waitFor(() => {
       expect(document.querySelector('[data-fulgurjs-error="MFU-016"]')).not.toBeNull()
     })
+    const errEl = document.querySelector('[data-fulgurjs-error="MFU-016"]')
+    expect(errEl?.textContent).toContain('unmount 阶段失败')
+    expect(errEl?.textContent).toContain('sub unmount boom')
+    expect(fake.mounts).toHaveLength(1)
+    // 封锁后：默认占位不提供「重试加载」，只保留整页刷新恢复
+    expect(document.querySelector('[data-fulgurjs-retry]')).toBeNull()
+    expect(document.querySelector('[data-fulgurjs-reload]')).not.toBeNull()
+    // 换会话（B→null→B）不得绕过封锁：不重挂、不覆盖错误态
+    await act(async () => { rerender(createElement(Comp, { sessionKey: null, appProps: {} })) })
+    await act(async () => { rerender(createElement(Comp, { sessionKey: 'B', appProps: {} })) })
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    expect(document.querySelector('[data-fulgurjs-bridge-root]')?.getAttribute('data-fulgurjs-bridge-status')).toBe('error')
+    expect(fake.mounts).toHaveLength(1)
+    expect(fake.unmounts).toHaveLength(1)
+    // 卸载失败恰好报告一次
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    unmount()
+    expect(consoleError).toHaveBeenCalledTimes(1)
     consoleError.mockRestore()
   })
 

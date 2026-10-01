@@ -54,6 +54,31 @@ describe('runtime: 共享版本协商（webpack 语义对齐）', () => {
     expect(await rt.loadShare('x', { requiredVersion: false })).toEqual({ v: 1 })
   })
 
+  it('getLoadedShare：loadShare 前返回 undefined，成功后同步可取同一实例（CJS 垫片依赖，V8-FIX）', async () => {
+    rt.initSharing('default')
+    const instance = { v: 'loaded' }
+    rt.registerShare('default', 'react', '19.3.0', async () => instance, { from: 'host' })
+    // 未协商加载：同步查询必须返回 undefined（绝不发起加载）
+    expect(rt.getLoadedShare('react', { shareKey: 'react' })).toBeUndefined()
+    // loadShare 成功后：同一实例同步可取（CJS require 链的同步单例通道）
+    expect(await rt.loadShare('react', { shareKey: 'react' })).toBe(instance)
+    expect(rt.getLoadedShare('react', { shareKey: 'react' })).toBe(instance)
+  })
+
+  it('getLoadedShare：多版本就绪时取版本最高者；未就绪版本不参与（V8-FIX）', async () => {
+    rt.initSharing('default')
+    const lo = { v: '18.3.1' }
+    const hi = { v: '19.3.0' }
+    rt.registerShare('default', 'react', '18.3.1', async () => lo, { from: 'a' })
+    rt.registerShare('default', 'react', '19.3.0', async () => hi, { from: 'b' })
+    // 只加载低版本：同步快照返回低版本（已加载优先，不猜测未加载的高版本）
+    expect(await rt.loadShare('react', { shareKey: 'react', requiredVersion: '^18.0.0' })).toBe(lo)
+    expect(rt.getLoadedShare('react', { shareKey: 'react' })).toBe(lo)
+    // 高版本也加载后：快照切换为最高已加载版本（与 loadShare 的已加载优先裁决一致）
+    expect(await rt.loadShare('react', { shareKey: 'react' })).toBe(hi)
+    expect(rt.getLoadedShare('react', { shareKey: 'react' })).toBe(hi)
+  })
+
   it('B-8 singleton 冲突 → console.warn + 使用已注册唯一实例', async () => {
     rt.initSharing('default')
     rt.registerShare('default', 'vue', '3.4.0', async () => ({ v: 'only' }), { from: 'host' })

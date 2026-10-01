@@ -191,7 +191,7 @@ export const RESOLVED = {
   remoteEntry: 'virtual:fulgurjs-remote-entry',
   sharedFacade: (name: string) => `virtual:fulgurjs-shared:${name}`,
   sharedNsFacade: (name: string) => `virtual:fulgurjs-shared-ns:${name}`,
-  /** CJS require(<shared>) 垫片：与 sharedNsFacade 同体，仅 id 形态不同（保持 require 调用语义） */
+  /** CJS require(<shared>) 垫片：同步形态（getLoadedShare 快照 + 本体直连），保持 require 调用语义 */
   cjsNsFacade: (name: string) => `virtual:fulgurjs-cjs-ns:${name}`,
 }
 

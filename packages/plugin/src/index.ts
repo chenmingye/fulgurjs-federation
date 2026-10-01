@@ -42,6 +42,7 @@ import {
   genReactRefreshPublisherScript,
   genReactRefreshShim,
   genRemoteBindingFacade,
+  genCjsNsFacade,
   genSharedFacade,
   genSharedNsFacade,
   genProdRetryHelper,
@@ -120,6 +121,16 @@ function injectInitScript(html: string, scriptSrc: string): string {
  */
 const RUNTIME_CHUNK_NAME = 'fulgurjs-runtime'
 const REMOTE_FACADE_CHUNK_NAME = 'fulgurjs-remote-facades'
+/**
+ * V8-FIX（2026-10-01）：shared 本体闭包目录 → 门面同组归并。
+ * rolldown（vite 8）会把「loadShare fallback 的动态 import 目标」（shared 本体入口，如
+ * node_modules/vue/dist/vue.runtime.esm-bundler.js）拆成独立 chunk，并把入口壳的 re-export
+ * 绑定转发改道经门面 chunk（门面 chunk 里持有本体真身符号），构造出
+ * 「门面 chunk(TLA await loadShare) ↔ 本体 chunk」的 chunk 级 TLA 循环——浏览器按 ESM
+ * 规范死锁（页面空白、零报错、模块图 pending；vue-host 生产页实挂）。
+ * 本体闭包与门面同组后转发边消失（入口壳与真身同 chunk，符号直取）。
+ * vite5-7（rollup）本就把静态边闭包并进同 chunk，归组是显式化而非行为变更。
+ */
 function facadeChunkOf(id: string): string | null {
   const bare = id.split('?')[0]
   if (bare === 'virtual:fulgurjs-runtime' || bare === 'virtual:fulgurjs-runtime-proxy') {
@@ -495,6 +506,11 @@ export function federation(options: FederationOptions): Plugin[] {
             if (prev !== undefined) return prev
             const user = userFn3?.(id, meta)
             if (user !== undefined) return user
+            // V8-FIX：shared 本体闭包与门面同组（破 rolldown chunk 级 TLA 循环）；
+            // react-dom 本体属 react-dom 闭包 → 归 fulgurjs-shared-react-dom 组，
+            // 同时满足 5.3.0 的 react-dom chunk 隔离（不再落入独立入口 chunk）
+            const facade = facadeChunkOf(id)
+            if (facade) return facade
             return reactDomChunkOf(id)
           }
           extraBuild3.rollupOptions = { ...(extraBuild3.rollupOptions ?? {}), output: { manualChunks: combined } }
@@ -598,7 +614,10 @@ export function federation(options: FederationOptions): Plugin[] {
         return RESOLVED.sharedNsFacade(bareClean.slice(SHARED_NS_FACADE_PREFIX.length)) + query
       }
       if (bareClean.startsWith('virtual:fulgurjs-cjs-ns:')) {
-        return RESOLVED.sharedNsFacade(bareClean.slice('virtual:fulgurjs-cjs-ns:'.length)) + query
+        // CJS require(<shared>) 垫片：保持自身前缀——load 期为它生成同步形态垫片
+        // （V8-FIX 2026-10-01：rolldown 拒绝 CJS require TLA 模块，不能复用 TLA 的
+        // sharedNsFacade 同体），而非映射到 shared-ns。
+        return bareClean + query
       }
       if (bareClean.startsWith('virtual:fulgurjs-shared:')) {
         // 绑定门面（?f= 绑定签名）与命名空间门面共用前缀；query 透传
@@ -608,7 +627,7 @@ export function federation(options: FederationOptions): Plugin[] {
       return null
     },
 
-    load(id) {
+    async load(id) {
       if (id === '\0virtual:fulgurjs-react-refresh-shim') return genReactRefreshShim()
       const raw = id.startsWith('\0') ? id.slice(1) : id
       const q = raw.indexOf('?')
@@ -646,6 +665,32 @@ export function federation(options: FederationOptions): Plugin[] {
       }
       if (clean === 'virtual:fulgurjs-remote-entry' && state.normalized) {
         return genBuildRemoteEntry(state.normalized, state.exposeAbsPaths)
+      }
+      // CJS require(<shared>) 垫片：同步形态（V8-FIX 2026-10-01）。rolldown（vite 8）对
+      // CJS require 含 TLA 的 ESM 在构建期直接拒绝（REQUIRE_TLA），react/react-dom 本体
+      // （CJS）互引不能复用 TLA 的 sharedNsFacade 同体；先于 shared-ns 分支匹配。
+      // vite5-7 的 rollup commonjs 插件还会为「CJS require ESM 目标」生成
+      // <id>?commonjs-proxy 载体：其 load 早于该插件执行而落在本分支（id 去 query 后同前缀），
+      // 因此垫片内不能留裸包名 import——proxy 虚拟 id 上下文里 vite resolver 完成不了
+      // node 解析（实测 load-fallback ENOENT），本体必须在这里预先解析成绝对 id。
+      if (clean.startsWith('virtual:fulgurjs-cjs-ns:') && state.normalized) {
+        const body = clean.slice('virtual:fulgurjs-cjs-ns:'.length)
+        const item = state.normalized.shared.find((x) => x.shareKey === body)
+        if (!item || item.import === false) return null
+        const names = enumerateCjsExports(item.import, state.normalized.root)
+        if (item.shareKey === 'vue') {
+          for (const compat of ['isVue2', 'isVue3', 'Vue2', 'set', 'del']) {
+            if (!names.includes(compat)) names.push(compat)
+          }
+        }
+        let importTarget = item.import
+        try {
+          const resolvedImport = await (this as any).resolve?.(item.import, path.join(state.normalized.root, 'package.json'), { skipSelf: true })
+          if (resolvedImport?.id) importTarget = resolvedImport.id
+        } catch {
+          // 解析失败保留裸包名，行为与命名空间门面一致（root node_modules 兜底可解析）
+        }
+        return genCjsNsFacade(item, names, importTarget)
       }
       if (clean.startsWith(SHARED_NS_FACADE_PREFIX) && state.normalized) {
         const body = clean.slice(SHARED_NS_FACADE_PREFIX.length)
@@ -701,12 +746,18 @@ export function federation(options: FederationOptions): Plugin[] {
     async transform(code, id) {
       if (!state.normalized) return null
       const clean = id.split('?')[0]
-      // build：宿主入口模块顶部内联 init（先于一切应用代码注册 remotes/provides）。
-      // 不能用独立虚拟模块：rollup 会摇树剥离其顶层调用；入口自身的顶层调用永不被剥离
+      // build：宿主入口以静态 side-effect import 引入 init 模块（先于一切应用代码与
+      // shared 门面注册 remotes/provides）。V8-FIX（2026-10-01）：此前是「init 代码内联进
+      // 入口模块体」——入口模块体在其全部静态依赖（shared 门面，TLA）求值完才执行，而
+      // rolldown（vite 8）下 loadShare 的 fallback 是真 async chunk（rollup 对同 chunk 动态
+      // import 内联为 then），门面 TLA 在 init 前 await 该 async chunk → 页面死锁（零报错
+      // 空白，vite8 生产页实挂）。改为静态 import 后 init 求值先于门面组，scope 先注册，
+      // loadShare 恒走 get() 协商路径（get 的动态目标链无回边，实测全通）。
+      // 「rollup 会剥离独立 init 模块的顶层调用」由 side-effect import 语义 + 顶层显式
+      // 函数调用（非 PURE 注释）规避；e2e prod 套件全量守护该顺序。
       if (state.command === 'build' && state.entryAbsPaths.has(clean) && !state.entryInitInjected.has(clean)) {
         state.entryInitInjected.add(clean)
-        const initCode = genInitModule(state.normalized, state.command)
-        return { code: `${initCode}\n${code}`, map: null }
+        return { code: `import "virtual:fulgurjs-init";\n${code}`, map: null }
       }
 
       // node_modules 依赖是否进改写管线 = devSharedSelf || 纯 remote，与 dev post 阶段
@@ -799,9 +850,9 @@ export function federation(options: FederationOptions): Plugin[] {
         }
         state.manualChunkSpecsPending = undefined
       }
-      // D6：解析 shared 键本体闭包目录（仅 devSharedSelf 宿主）。闭包内模块对 shared 键的
-      // 导入跳过门面化（transform.ts inSharedClosure），斩断 fallback → 本体 chunk 的
-      // TLA 混合环（详见 transform.ts TransformContext.sharedClosureRoots 注释）。
+      // D6：解析 shared 键本体闭包目录。闭包内模块对 shared 键的导入跳过门面化
+      // （transform.ts inSharedClosure），斩断 fallback → 本体 chunk 的 TLA 混合环
+      // （详见 transform.ts TransformContext.sharedClosureRoots 注释）。
       if (n.remotes.length > 0 && n.devSharedSelf && state.sharedClosureRoots.length === 0) {
         const rootKeys = new Map<string, Set<string>>()
         const pkgRootOf = (file: string): string | null => {
@@ -1195,6 +1246,13 @@ export function federation(options: FederationOptions): Plugin[] {
           // react-refresh：注入 preamble（$RefreshReg$/$RefreshSig$）+ 发布页面级单例
           // （__FULGURJS_REACT_REFRESH__）——Vue 宿主页无本地 renderer，该副本即唯一实例；
           // React 宿主走上方常规分支，不受影响。纯 Vue 场景无 http(s) dev 远程，零注入。
+          // 5.3.1 补条件：宿主 shared 含 react/react-dom（即确有消费 React 模块的意图）才注入
+          // ——纯 Vue 宿主（remotes 全是 Vue 远程）注入只会让远程 origin 返回 404
+          // （Vue 远程无 plugin-react 中间件，每页一条 console error；host-vue fixtures 实测）。
+          const hostConsumesReact = state.normalized.shared.some(
+            (s) => s.shareKey === 'react' || s.shareKey === 'react-dom',
+          )
+          if (!hostConsumesReact) return html
           const remoteOrigin = state.normalized.remotes
             .map((r) => { try { return new URL(r.devEntry).origin } catch { return null } })
             .find((o) => o !== null && /^https?:/.test(o ?? ''))

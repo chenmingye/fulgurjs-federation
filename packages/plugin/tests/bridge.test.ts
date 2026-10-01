@@ -294,6 +294,36 @@ describe('resolveBridgeContext（会话代次校验）', () => {
     expect(JSON.stringify(g.__FULGURJS_APP_CONFIG__)).toBe(before)
   })
 
+  it('getContext 返回 null/undefined/原始值：MFU-016 phase getContext 且诊断含实际返回值，不抛 TypeError（BN08）', () => {
+    // 回归：null/undefined 曾在错误消息构造分支再次访问 .then 抛出普通 TypeError（错误码丢失）
+    for (const [returned, descFragment] of [
+      [null, 'null'],
+      [undefined, 'undefined'],
+      ['oops', '非对象值（string："oops"）'],
+      [true, '非对象值（boolean："true"）'],
+    ] as const) {
+      try {
+        resolveBridgeContext('r/bridge', 'A', (() => returned) as never)
+        expect.unreachable()
+      } catch (e) {
+        expect((e as TypeError).constructor.name, `返回 ${String(returned)} 不应抛 TypeError`).not.toBe('TypeError')
+        expect(codeOf(e), `返回 ${String(returned)} 应保持 MFU-016`).toBe('MFU-016')
+        expect((e as any).details.phase).toBe('getContext')
+        expect((e as Error).message).toContain(descFragment)
+        expect((e as Error).message).toContain('纯 getter')
+      }
+    }
+    // Promise/thenable：诊断明确指向同步 getter 要求
+    try {
+      resolveBridgeContext('r/bridge', 'A', (() => Promise.resolve({ sessionKey: 'A' })) as never)
+      expect.unreachable()
+    } catch (e) {
+      expect(codeOf(e)).toBe('MFU-016')
+      expect((e as any).details.phase).toBe('getContext')
+      expect((e as Error).message).toContain('Promise/thenable')
+    }
+  })
+
   it('无 getter 时校验现有 AppContext；不一致 → MFU-017', () => {
     expect(() => resolveBridgeContext('r/bridge', 'A', undefined)).toThrowError(/MFU-017/)
     provideAppContext({ sessionKey: 'A' })

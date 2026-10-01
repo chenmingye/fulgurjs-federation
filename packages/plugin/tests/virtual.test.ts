@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { genBindingFacade, genRemoteBindingFacade, genSharedFacade, genSharedNsFacade, genRuntimeProxyModule, genDevManifest, genInitModule } from '../src/virtual'
+import { genBindingFacade, genCjsNsFacade, genRemoteBindingFacade, genSharedFacade, genSharedNsFacade, genRuntimeProxyModule, genDevManifest, genInitModule } from '../src/virtual'
 import { scanExposeRequiredProps } from '../src/diagnostics'
 import { normalizeOptions } from '../src/options'
 
@@ -23,12 +23,13 @@ describe('W3/U-7: genSharedFacade 枚举式再导出', () => {
     '1bad',
   ]
 
-  it('provider 路径门面不含 export *（rolldown U-7 缺陷规避）', () => {
+  it('provider 路径门面含 facadeTag 标记（V8-FIX：本地导出阻断 rolldown 对纯透传门面的动态目标透传重定向）', () => {
     const code = genSharedFacade('element-plus', EP_EXPORTS)
-    expect(code).not.toContain('export *')
+    expect(code).toContain('export const __fulgurjs_facadeTag = 1;')
+    expect(code).not.toContain('await')
   })
 
-  it('全部合法命名导出逐一显式转发（loadShare 后命名导出非 undefined 的生成物前提）', () => {
+  it('全部合法命名导出逐一显式转发（loadShare 后命名导出非 undefined 的生成物前提；U-7 形态在预构建互操作下不可用 export * 替代）', () => {
     const code = genSharedFacade('element-plus', EP_EXPORTS)
     for (const name of ['ElButton', 'ElInput', 'provideGlobalConfig', 'ElLoading', 'zhCn']) {
       expect(code).toContain(`export const ${name} = __fulgurjs_facade[${JSON.stringify(name)}]`)
@@ -151,7 +152,7 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
     expect(code).toContain('export const ref = __fulgurjs_m.ref;')
   })
 
-  it('genBindingFacade 默认（非 dynamic）保持 2.0.0 静态形态（纯 remote 行为不变）', () => {
+  it('genBindingFacade 默认（非 dynamic）保持静态 runtime import + init 前置 await（V8-FIX 时序）', () => {
     const code = genBindingFacade(
       { shareScope: 'default', shareKey: 'vue', import: 'vue', requiredVersion: false, singleton: true, strictVersion: false, eager: false, version: '3.5.0', aliases: ['vue'], configKey: 'vue' } as never,
       ['ref'],
@@ -176,6 +177,23 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
     const code = genRemoteBindingFacade('remote-a/./Button', ['default'], true)
     expect(code).not.toMatch(/import\s*{[^}]*}\s*from\s*["']virtual:fulgurjs-runtime["']/)
     expect(code).toContain('await import("virtual:fulgurjs-runtime")')
+  })
+
+  it('genCjsNsFacade：同步形态（零 TLA）——getLoadedShare 快照优先 + 本体直连兜底（V8-FIX）', () => {
+    const code = genCjsNsFacade(
+      { shareScope: 'default', shareKey: 'react', import: 'react', requiredVersion: '^19.1.0', singleton: true, strictVersion: false, eager: false, version: '19.3.0', aliases: ['react'], configKey: 'react' } as never,
+      ['createElement', 'useState'],
+    )
+    // 零 TLA：rolldown 拒绝 CJS require 含顶层 await 的模块（REQUIRE_TLA）
+    expect(code).not.toContain('await')
+    // 同步快照 + 本体直连双通道
+    expect(code).toContain('import { getLoadedShare as __fulgurjs_gls, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";')
+    expect(code).toContain('import * as __fulgurjs_local from "react";')
+    expect(code).toContain('__fulgurjs_gls("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true }) ?? __fulgurjs_local;')
+    // default interop 与枚举式命名导出（与 sharedNsFacade 同口径）
+    expect(code).toContain('export default __fulgurjs_d;')
+    expect(code).toContain('export const createElement = __fulgurjs_d["createElement"];')
+    expect(code).toContain('export const useState = __fulgurjs_d["useState"];')
   })
 
   it('genSharedFacade（可枚举，dynamic）shared 本体走动态 import，不再静态依赖本体', () => {

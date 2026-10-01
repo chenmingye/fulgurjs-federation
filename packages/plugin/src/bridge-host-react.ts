@@ -73,7 +73,7 @@ const SECONDARY_BUTTON_STYLE = {
   fontSize: '13px', cursor: 'pointer',
 } as const
 
-function DefaultBridgeErrorView({ error, retry }: { error: unknown; retry: () => void }): ReactNode {
+function DefaultBridgeErrorView({ error, retry, blocked }: { error: unknown; retry: () => void; blocked?: boolean }): ReactNode {
   const err = error as (Error & { code?: string }) | undefined
   const code = err?.code ?? 'UNKNOWN'
   const message = err?.message ?? String(error ?? 'unknown error')
@@ -81,8 +81,12 @@ function DefaultBridgeErrorView({ error, retry }: { error: unknown; retry: () =>
     createElement('p', { key: 't', style: { margin: '0 0 4px', fontWeight: 600 } }, `桥接应用加载失败（错误码 ${code}）`),
     createElement('p', { key: 'm', style: MESSAGE_STYLE }, message),
     createElement('p', { key: 'n', style: { margin: '0 0 10px' } },
-      '「重试加载」在当前页面重建挂载；若浏览器已缓存失败的模块，请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。'),
-    createElement('button', { key: 'r', type: 'button', style: BUTTON_STYLE, 'data-fulgurjs-retry': '', onClick: retry }, '重试加载'),
+      blocked
+        ? '该容器已封锁（同页无法安全重挂），只能整页刷新恢复——点击「刷新页面重试」会重新加载页面（保留当前地址），未保存的页面状态会丢失。'
+        : '「重试加载」在当前页面重建挂载；若浏览器已缓存失败的模块，请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。'),
+    blocked
+      ? null
+      : createElement('button', { key: 'r', type: 'button', style: BUTTON_STYLE, 'data-fulgurjs-retry': '', onClick: retry }, '重试加载'),
     createElement('button', {
       key: 'rl', type: 'button', style: SECONDARY_BUTTON_STYLE, 'data-fulgurjs-reload': '',
       onClick: () => window.location.reload(),
@@ -94,10 +98,11 @@ function renderBridgeErrorNode(
   errorOpt: ReactNode | BridgeErrorFallback | undefined,
   error: unknown,
   retry: () => void,
+  blocked: boolean,
 ): ReactNode {
   if (typeof errorOpt === 'function') return errorOpt(error, retry)
   if (errorOpt !== undefined) return errorOpt
-  return createElement(DefaultBridgeErrorView, { error, retry })
+  return createElement(DefaultBridgeErrorView, { error, retry, blocked })
 }
 
 /**
@@ -209,7 +214,7 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         children.push(createElement(Fragment, { key: 'loading' }, options.fallback))
       }
       if (status === 'error') {
-        children.push(createElement(Fragment, { key: 'error' }, renderBridgeErrorNode(options.error, error, retry)))
+        children.push(createElement(Fragment, { key: 'error' }, renderBridgeErrorNode(options.error, error, retry, blockedRef.current)))
       }
       children.push(createElement('div', {
         key: 'bridge-root',

@@ -819,7 +819,7 @@ export default defineBridgeApp((props) => (
 契约语义（`BridgeApp` 接口，双方入口共享同一类型定义）：
 
 - `mount(el, props?): void | Promise<void>`——返回 `void` 表示首次根提交已同步完成（Vue 同步 mount）；返回 Promise 时宿主保持 pending 直到首次根提交后完成（React 由契约内建提交探针兑现，`root.render()` 返回**不**算成功）。首次提交前的失败必须抛错/拒绝（宿主转 `MFU-016`，`details.phase: 'mount'`）并清理已创建的 app/root。
-- `unmount(el): void`——同步使该容器代次失效并清理；未知容器为 no-op。pending 时卸载立即作废本轮代次，迟到的成功/失败不得复活 DOM、改写宿主状态或产生未处理拒绝。unmount 抛错由宿主捕获报 `MFU-016`（`phase: 'unmount'`），该容器清理状态不确定，不得直接在同一 el 上再挂新实例。
+- `unmount(el): void`——同步使该容器代次失效并清理；未知容器为 no-op。pending 时卸载立即作废本轮代次，迟到的成功/失败不得复活 DOM、改写宿主状态或产生未处理拒绝。unmount 抛错由宿主捕获报 `MFU-016`（`phase: 'unmount'`），该容器清理状态不确定，插件会**持久封锁该容器**：同页「重试加载」与换会话都不会在此容器重新挂载（默认占位随之移除「重试加载」按钮），只能整页刷新恢复；残留资源（事件订阅/定时器/全局副作用）请如实排查。
 - 契约实例**按容器 el 分键**：同一契约多处挂载互不干扰；同一容器未卸载再次 mount 拒绝（`MFU-016`，容器已被占用）且不覆盖原实例。
 - 首次根提交后的子应用内部错误由**子应用自己的错误边界**负责——宿主 ErrorBoundary/errorCaptured 捕不到跨 root 的渲染错误，插件不冒充兜底（§4.4 语义，README 不承诺「宿主兜底子应用一切错误」）。
 

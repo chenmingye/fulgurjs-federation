@@ -59,8 +59,9 @@ export function bridgeLifecycleError(
       '        ③ 修复后点击「重试加载」在同页重建挂载。',
     unmount:
       '修法: ① 根因来自子应用 unmount 实现（app.unmount/root.unmount 抛错）；\n' +
-      '        ② 该容器清理状态不确定——不要直接在同一 el 上启动新实例；\n' +
-      '        ③ 刷新页面可彻底清理，残留资源请如实排查（事件订阅/定时器/全局副作用）。',
+      '        ② 该容器清理状态不确定，插件已持久封锁该容器——同页「重试加载」与\n' +
+      '        换会话都不会在此容器重新挂载；\n' +
+      '        ③ 只能整页刷新恢复（「刷新页面重试」）；残留资源（事件订阅/定时器/全局副作用）请如实排查。',
   }
   return new FgError(
     BridgeErrorCodes.BRIDGE_LIFECYCLE_FAILED,

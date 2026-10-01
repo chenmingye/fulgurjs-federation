@@ -125,6 +125,8 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         /** 当前有效代次；作废即递增（迟到的加载/挂载结果一律丢弃） */
         let generation = 0
         let contract: BridgeApp | undefined
+        /** unmount 抛错后的持久封锁：容器清理状态不明，重试/换会话都不得在此容器再启动实例（BN09） */
+        let containerBlocked = false
         /** 当前代次已登记的受控会话（页面级单会话登记；换会话/卸载时释放） */
         let acquiredSession: string | undefined
 
@@ -137,6 +139,8 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
 
         /** 作废当前代次：失效迟到结果 + 同步卸载契约实例；unmount 抛错返回 false（清理状态不明） */
         const invalidate = (): boolean => {
+          // 已封锁容器：不再递增代次、不再触碰契约（保持 error 态，等待整页刷新恢复）
+          if (containerBlocked) return false
           generation++
           const el = container.value
           releaseAcquired()
@@ -146,9 +150,11 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             try {
               c.unmount(el)
             } catch (e) {
-              // MFU-016（phase: unmount）：宿主报告但不崩溃；容器清理状态不明，不得再启动新实例
+              // MFU-016（phase: unmount）：宿主报告但不崩溃；持久封锁该容器——
+              // 后续重试与 sessionKey 变化都不得在清理状态不明的 el 上重挂（BN09）
               const err = bridgeLifecycleError('unmount', spec, e instanceof Error ? e : String(e))
-              console.error('[fulgurjs] 桥接应用卸载失败：', err)
+              containerBlocked = true
+              console.error('[fulgurjs] 桥接应用卸载失败，该容器已封锁（同页只能刷新恢复）：', err)
               error.value = err
               status.value = 'error'
               return false
@@ -231,7 +237,8 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             if (options.errorComponent) {
               children.push(h(options.errorComponent, { key: 'error', error: err } as Record<string, unknown>))
             } else {
-              children.push(h(BridgeErrorPlaceholder, { key: 'error', error: err, retry } as never))
+              // 容器已封锁（unmount 抛错）：不提供「重试加载」——重挂不安全，只留整页刷新恢复（BN09）
+              children.push(h(BridgeErrorPlaceholder, { key: 'error', error: err, retry: containerBlocked ? undefined : retry } as never))
             }
           }
           children.push(h('div', {

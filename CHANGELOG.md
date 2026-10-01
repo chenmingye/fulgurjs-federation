@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.3.1
+
+- **修复：Vite 8（rolldown）下 React 联邦生产构建 REQUIRE_TLA 失败**——React 生态的本体为 CJS（`react-dom/cjs/*` 内部 `require("react")`），插件的 CJS require 重定向此前把目标指向与共享协商门面同体的垫片（`await loadShare(...)` 顶层 await 形态）；rolldown 按 Node 语义在构建期拒绝「CJS require 含顶层 await 的模块」（vite 5-7 的 rollup 无此限制，属存量兼容缺口，5.2.5 无桥接工程在 vite8 下同样复现）。现在 CJS 垫片改为**同步形态**：运行时新增 `getLoadedShare` 同步查询（loadShare 成功后缓存实例值，已协商加载的实例优先命中，跨端单例语义与 TLA 版 loadShare 对齐），未就绪时直连本应用本体（与 provide/fallback 同一模块，构建期单份 → 实例恒同）。vite 5.1.8/6.4.3/7.3.6/8.3.1 × {vue,react}×{host,remote} 十六个真实工程构建全部通过；`runtime.js` gzip 8812B（门禁 ≤9216B）。**已知边界（如实声明）**：vite 8.3.1 的桥接/React 生产**页面运行**在本轮仍无法通过挂载验收（rolldown 对「TLA 协商门面 × 动态目标透传重定向 × async chunk 强制拆分」的组合行为导致入口求值死锁，插件层六种分组/时序变体均无法完全规避；dev 全功能正常），归因为 rolldown-vite 上游行为，详见验收报告。
+- **修复：Vue 宿主桥接 unmount 失败后容器未持久封锁（BN09）**——`createVueBridgeApp` 的 `invalidate()` 在契约卸载抛错时仅返回 false，未封锁容器；点击「重试加载」或改变 `sessionKey` 会绕过封锁在清理状态不明的同一容器上重挂（mount 次数增加、状态转 ready）。现在与 React 宿主对齐引入持久封锁标志：封锁后重试与换会话都不再在此容器启动新实例，默认错误占位移除「重试加载」按钮（只保留「刷新页面重试」），`bridgeLifecycleError` 的 unmount 修法文案明确「插件已持久封锁该容器，只能整页刷新恢复」。新增回归：A→B unmount 抛错后 mount 次数恒定、封锁后占位无重试按钮、换会话不绕过封锁、正常卸载后重挂仍可用。
+- **修复：getContext 返回 null/undefined 时错误码丢失（BN08）**——`resolveBridgeContext` 已判定快照非法，但构造诊断消息时再次访问 `snapshot.then`，对 null/undefined 抛出普通 `TypeError`（`Cannot read properties of null (reading 'then')`），约定的 `MFU-016 phase: getContext` 丢失。现在诊断分支安全描述实际返回值（null/undefined/原始值/Promise/thenable 四类各有明确中文说明与修法），并新增四类返回值的回归断言（含"不抛 TypeError"）。
+- **修复：宿主未装 @vitejs/plugin-react 时被注入失效的 react-refresh 探针（5.2.0 起回归）**——dev 下 `transformIndexHtml` 的 publisher 注入条件只检查「remotes 中存在 http dev 远程」，纯 Vue 宿主（remotes 全是 Vue 远程）也会被注入 `import "http://<Vue 远程>/@react-refresh"`，而 Vue 远程无 plugin-react 中间件，每页一条 404 console error（host-vue fixtures 实测，破坏 B-16 等用例的零 console 断言）。现在注入前增加「宿主 shared 含 react/react-dom（确有消费 React 模块的意图）」判定；桥接宿主（shared 三键 singleton）不受影响。
+- **改善：loadShare 成功后缓存实例值（`ShareEntry.value`）**，供 CJS 垫片同步查询与未来同步消费通道使用；`getLoadedShare` 为内部 API，不进入公开入口导出面。
+- 新增回归测试 5 个（单测 535 → 540）；e2e dev 43 例 / prod 28 例全绿；MES 真实项目回归与 Vite 矩阵详见验收报告（`docs/跨框架桥接实施验收报告-20261001.md` 补录节）。
+
 ## 5.3.0
 
 - **新增：跨框架桥接 `/bridge` —— 子应用级 Vue↔React 双向互嵌**（README §8.2；实现合同见 `docs/跨框架桥接实施任务书-20260929.md`）
