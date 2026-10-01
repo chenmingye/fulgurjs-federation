@@ -1053,7 +1053,7 @@ export function federation(options: FederationOptions): Plugin[] {
           // 受保护模块由更高优先级的保护组先捕获，这里再挡一层防御性排除。
           userGroups.push({
             name: (id: string, ctx: { getModuleInfo: (id: string) => unknown }) =>
-              protectedChunk(id) || isOwnPackageModule(id) ? null : (manual(id, { getModuleInfo: ctx.getModuleInfo as never }) ?? null),
+              protectedChunk(id) || isOwnPackageModule(id) ? null : (manual(id, { getModuleInfo: ctx.getModuleInfo } as never) ?? null),
           })
         } else {
           // 对象形式：bare 包按包目录整目录捕获（含 pnpm 嵌套布局），相对/绝对 specifier 按
