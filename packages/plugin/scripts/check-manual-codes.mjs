@@ -16,12 +16,14 @@ const read = (p) => fs.readFileSync(p, 'utf8')
 const diag = read(path.join(pluginRoot, 'src/diagnostics.ts'))
 const runtime = read(path.join(pluginRoot, 'src/runtime/errors.ts'))
 const context = read(path.join(pluginRoot, 'src/context.ts'))
+const bridge = read(path.join(pluginRoot, 'src/bridge-errors.ts'))
 const readme = read(path.join(root, 'README.md'))
 
 // ① 源码定义（只扫码表所在文件——散落在注释里的历史码提及不构成定义）
 const defined = new Set()
 for (const m of runtime.matchAll(/'([A-Z]{2,4}-\d{3})'/g)) defined.add(m[1])
 for (const m of context.matchAll(/'([A-Z]{2,4}-\d{3})'/g)) defined.add(m[1])
+for (const m of bridge.matchAll(/'([A-Z]{2,4}-\d{3})'/g)) defined.add(m[1])
 
 // ② 登记表（权威清单；不写死段名，新增段自动纳入）
 const registered = new Set([...diag.matchAll(/code: '([A-Z]{2,4}-\d{3})'/g)].map((m) => m[1]))

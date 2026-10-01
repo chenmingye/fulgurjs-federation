@@ -103,6 +103,25 @@ export default defineConfig({
           stderr: serverStdio,
           timeout: 90_000,
         },
+        // 5.3.0 桥接 fixtures（Vue 宿主 × React 远程 5105 / React 宿主 × Vue 远程 5106）
+        {
+          command: 'pnpm dev',
+          cwd: '../fixtures/host-bridge-vue',
+          url: 'http://localhost:5105',
+          reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
+          timeout: 90_000,
+        },
+        {
+          command: 'pnpm dev',
+          cwd: '../fixtures/host-bridge-react',
+          url: 'http://localhost:5106',
+          reuseExistingServer: true,
+          stdout: serverStdio,
+          stderr: serverStdio,
+          timeout: 90_000,
+        },
       ],
   // 项目与文件一一对应（D06 §8.4 修正）：此前 /dev\.spec\.ts/ 这类子串正则同时命中
   // react-dev.spec.ts，Vue 项目重复执行 React 用例（CI 统计虚高、baseURL 也不对）。
@@ -136,6 +155,27 @@ export default defineConfig({
     {
       name: 'prod-react',
       testMatch: /(^|\/)react-prod\.spec\.ts$/,
+      use: { baseURL: `http://localhost:${readProdPort()}` },
+    },
+    // 5.3.0 桥接：dev/fault 双宿主 + prod
+    {
+      name: 'bridge-dev',
+      testMatch: /(^|\/)bridge-dev\.spec\.ts$/,
+      use: { baseURL: 'http://localhost:5105' },
+    },
+    {
+      name: 'bridge-fault',
+      testMatch: /(^|\/)bridge-fault\.spec\.ts$/,
+      use: { baseURL: 'http://localhost:5105' },
+    },
+    {
+      name: 'bridge-react-dev',
+      testMatch: /(^|\/)bridge-react-dev\.spec\.ts$/,
+      use: { baseURL: 'http://localhost:5106' },
+    },
+    {
+      name: 'bridge-prod',
+      testMatch: /(^|\/)bridge-prod\.spec\.ts$/,
       use: { baseURL: `http://localhost:${readProdPort()}` },
     },
   ],

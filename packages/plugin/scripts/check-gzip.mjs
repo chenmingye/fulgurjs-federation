@@ -44,3 +44,23 @@ if (fs.existsSync(reactAdapter)) {
   }
   console.log(`[check-gzip] react-adapter.js gzip ${raGz.length}B ≤ ${REACT_ADAPTER_LIMIT}B ✓（raw ${raRaw.length}B）`)
 }
+
+// 桥接宿主适配器预算（5.3.0，任务书 D4：桥接宿主入口 gzip 目标 ≤ 4096B，框架外置、zlib level 9）。
+// 推荐入口 /bridge/vue、/bridge/react 是再导出壳（≤ 数百字节），真实逻辑在两个宿主适配器——
+// 门禁直接测适配器文件，避免"只测空壳"；聚合入口 /bridge 仅多一行再导出，不另设门禁。
+const BRIDGE_HOST_LIMIT = 4096
+for (const name of ['bridge-host-vue.js', 'bridge-host-react.js']) {
+  const file = path.join(dist, name)
+  if (!fs.existsSync(file)) {
+    console.error(`[check-gzip] dist/${name} 不存在——build 脚本未产出桥接宿主适配器`)
+    process.exit(1)
+  }
+  const raw = fs.readFileSync(file)
+  const gz = zlib.gzipSync(raw, { level: 9 })
+  if (gz.length > BRIDGE_HOST_LIMIT) {
+    console.error(`[check-gzip] 超限：${name} gzip=${gz.length}B > 阈值 ${BRIDGE_HOST_LIMIT}B（raw ${raw.length}B）`)
+    console.error('修法：核查是否引入了桥接逻辑增量；确属必要增长时，同步上调 BRIDGE_HOST_LIMIT 并在 CHANGELOG 说明测量口径')
+    process.exit(1)
+  }
+  console.log(`[check-gzip] ${name} gzip ${gz.length}B ≤ ${BRIDGE_HOST_LIMIT}B ✓（raw ${raw.length}B）`)
+}

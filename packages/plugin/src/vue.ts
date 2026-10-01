@@ -17,10 +17,14 @@
  */
 import { loadRemote } from './runtime/index'
 import { createRemoteComponent, createHostPages as createHostPagesWithLoader } from './vue-adapter'
+import { defineBridgeApp as defineVueBridgeApp } from './bridge-app-vue'
 
 export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage } from './vue-adapter'
+export type { BridgeApp, VueBridgeAppFactory } from './bridge-app-vue'
 export const remoteComponent = createRemoteComponent(loadRemote)
 /** 宿主页面适配器（绑定本包运行时的 loadRemote；选项与返回值类型见 vue-adapter） */
 export function createHostPages(options: Parameters<typeof createHostPagesWithLoader>[0]) {
   return createHostPagesWithLoader(options, loadRemote)
 }
+/** Vue 子应用桥接契约（defineBridgeApp；远程 ./bridge 模块默认导出，任务书 §3.3） */
+export const defineBridgeApp = defineVueBridgeApp

@@ -25,6 +25,10 @@ export default defineConfig({
         './utils': './src/utils.ts',
         './race-a': './src/exposes/race-a.ts',
         './race-b': './src/exposes/race-b.ts',
+        // 5.3.0 桥接：React 子应用契约 + 故障注入 expose（BN01/BN02）
+        './bridge': './src/bridge.tsx',
+        './bridge-broken': './src/bridge-broken.tsx',
+        './bridge-mount-fail': './src/bridge-mount-fail.tsx',
       },
       setup: './src/fulgurjs/setup.ts',
       shared: {

@@ -20,6 +20,20 @@ cd examples/react/remote && npm install && npm run dev   # terminal 1: react-rem
 cd examples/react/host   && npm install && npm run dev   # terminal 2: react-host,   http://localhost:5204
 ```
 
+## Cross-framework bridge (Vue host 5314 × React remote 5303; React host 5304 × Vue remote 5313)
+
+Full walkthrough: **[bridge/README.md](./bridge/README.md)** (Chinese).
+
+```bash
+# Vue host × React sub-app
+cd examples/bridge/react-remote && npm install && npm run dev   # 5303
+cd examples/bridge/vue-host     && npm install && npm run dev   # 5314
+
+# React host × Vue sub-app
+cd examples/bridge/vue-remote   && npm install && npm run dev   # 5313
+cd examples/bridge/react-host   && npm install && npm run dev   # 5304
+```
+
 ## What each pair demonstrates
 
 - A clickable remote counter component (local state lives inside the remote component; operated on the host page)
@@ -34,6 +48,12 @@ cd examples/react/host   && npm install && npm run dev   # terminal 2: react-hos
 ```text
 examples/
 ├── README.md / README.en.md   # this entry (CN/EN)
+├── bridge/                    # Cross-framework bridge (sub-app-level mount/unmount, §8.2)
+│   ├── README.md
+│   ├── vue-host/              # Vue host × React sub-app (5314)
+│   ├── react-remote/          # React sub-app (5303)
+│   ├── react-host/            # React host × Vue sub-app (5304)
+│   └── vue-remote/            # Vue sub-app (5313)
 ├── vue/
 │   ├── README.md              # guide for the Vue pair
 │   ├── host/                  # Vue host (vue-host, 5214)

@@ -14,9 +14,10 @@ export { provideAppContext, getAppContext, requireAppContext, clearAppContext } 
 export type { AppContext } from './context'
 export { definePages, validatePages } from './pages'
 export type { PageRouteLike, PagesOptions, PageViolation, RemoteSchemaEntry } from './pages'
-export { remoteComponent, createHostPages } from './vue'
+export { remoteComponent, createHostPages, defineBridgeApp } from './vue'
 export type {
   RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage,
+  BridgeApp, VueBridgeAppFactory,
 } from './vue'
 import type { RemoteSchemaEntry } from './pages'
 export type RemoteSchema = Record<string, RemoteSchemaEntry>

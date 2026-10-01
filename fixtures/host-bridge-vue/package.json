@@ -1,0 +1,27 @@
+{
+  "name": "fulgurjs-fixture-host-bridge-vue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5105 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --port 5105 --strictPort"
+  },
+  "dependencies": {
+    "@fulgurjs/federation": "link:../../packages/plugin",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-vue": "^5.2.0",
+    "vite": "^6.3.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

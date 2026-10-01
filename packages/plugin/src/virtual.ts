@@ -370,6 +370,9 @@ export function genReactRefreshShim(): string {
     `export const createSignatureFunctionForTransform = __fulgurjs_rr.createSignatureFunctionForTransform;`,
     `export const registerExportsForReactRefresh = __fulgurjs_rr.registerExportsForReactRefresh;`,
     `export const validateRefreshBoundaryAndEnqueueUpdate = __fulgurjs_rr.validateRefreshBoundaryAndEnqueueUpdate;`,
+    // plugin-react ≥5 的转换产物经 getRefreshReg(文件路径) 取每文件注册器——必须转发，
+    // 缺失时宿主自身 JSX 文件报 "RefreshRuntime.getRefreshReg is not a function"（桥接轮实测）
+    `export const getRefreshReg = __fulgurjs_rr.getRefreshReg;`,
     `export const __hmr_import = __fulgurjs_rr.__hmr_import;`,
     `export default __fulgurjs_rr.default ?? { injectIntoGlobalHook: __fulgurjs_rr.injectIntoGlobalHook };`,
     ``,
@@ -545,8 +548,8 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
 /**
  * 开发态 expose 的内部代理门面。应用代码仍写物理入口（/runtime 或 /react），transform 后指向此模块。
  * 适配器接收代理 loadRemote（页面级单例），不导入第二份内核。
- * framework 决定接入的适配层：vue → remoteComponent/createHostPages（defineAsyncComponent 形态），
- * react → remoteComponent/useLoadRemote/RemoteErrorBoundary/createReactHostPages。
+ * framework 决定接入的适配层：vue → remoteComponent/createHostPages/defineBridgeApp（Vue 子应用桥接），
+ * react → remoteComponent/useLoadRemote/RemoteErrorBoundary/createReactHostPages/defineBridgeApp。
  */
 export function genApiFacade(framework: 'vue' | 'react' = 'vue'): string {
   const head = [
@@ -561,17 +564,43 @@ export function genApiFacade(framework: 'vue' | 'react' = 'vue'): string {
   ]
   const vueBody = [
     "import { createRemoteComponent, createHostPages as __fulgurjs_chp } from '@fulgurjs/federation/internal/vue-adapter.js';",
+    "import { defineBridgeApp } from '@fulgurjs/federation/internal/bridge-app-vue.js';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     'export const createHostPages = (options) => __fulgurjs_chp(options, __fulgurjs_loadRemote);',
+    'export { defineBridgeApp };',
   ]
   const reactBody = [
     "import { createRemoteComponent, createUseLoadRemote, RemoteErrorBoundary, createReactHostPages as __fulgurjs_rhp } from '@fulgurjs/federation/internal/react-adapter.js';",
+    "import { defineBridgeApp } from '@fulgurjs/federation/internal/bridge-app-react.js';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     'export const useLoadRemote = createUseLoadRemote(__fulgurjs_loadRemote);',
     'export { RemoteErrorBoundary };',
     'export const createReactHostPages = (options) => __fulgurjs_rhp(options, __fulgurjs_loadRemote);',
+    'export { defineBridgeApp };',
   ]
   return [...head, ...(framework === 'react' ? reactBody : vueBody), ''].join('\n')
+}
+
+/**
+ * 开发态桥接宿主门面（/bridge、/bridge/vue、/bridge/react 的 expose 目标专用——
+ * 宿主页非 expose 目标时导入保持原 specifier，直接消费 node_modules 的 dist 壳）。
+ * framework 决定绑定哪个宿主适配器；聚合入口绑定两个（加载代价见 §3.1，推荐分离入口）。
+ */
+export function genBridgeFacade(framework: 'vue' | 'react' | 'both' = 'both'): string {
+  const head = [
+    "export { provideAppContext, getAppContext, requireAppContext, clearAppContext } from '@fulgurjs/federation/internal/context.js';",
+    "import { loadRemote as __fulgurjs_loadRemote } from 'virtual:fulgurjs-runtime-proxy';",
+  ]
+  const vueBody = [
+    "import { createVueBridgeApp as __fulgurjs_cvb } from '@fulgurjs/federation/internal/bridge-host-vue.js';",
+    'export const createVueBridgeApp = __fulgurjs_cvb(__fulgurjs_loadRemote);',
+  ]
+  const reactBody = [
+    "import { createReactBridgeApp as __fulgurjs_crb } from '@fulgurjs/federation/internal/bridge-host-react.js';",
+    'export const createReactBridgeApp = __fulgurjs_crb(__fulgurjs_loadRemote);',
+  ]
+  const body = framework === 'vue' ? vueBody : framework === 'react' ? reactBody : [...vueBody, ...reactBody]
+  return [...head, ...body, ''].join('\n')
 }
 
 /** dev manifest（remote 端中间件动态返回；契约见 manifest.ts，消费端经 parseManifest 校验） */

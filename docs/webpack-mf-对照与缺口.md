@@ -34,4 +34,4 @@
 - webpack `remotes: 'app2@http://.../remoteEntry.js'` → `remotes: { app2: 'http://.../dist' }`（去 manifest/entry 后缀，dev/prod 自动拼）
 - `exposes` 相同；`shared` 相同字段；`eager` 相同
 - `loadRemote('app2/./Button')` → `loadRemote('app2/./Button')`（runtime API 同名）
-- iframe/qiankun 微前端 → exposes 页面 + 宿主路由表（见 testbed 迁移案例）
+- iframe/qiankun 微前端 → exposes 页面 + 宿主路由表（见 testbed 迁移案例）；**子应用级跨框架嵌入已支持（5.3.0 `/bridge`，任务书对齐 Module Federation Bridge 的产品范围、API 为本插件自定契约）**——Vue 宿主嵌 React 子应用 / React 宿主嵌 Vue 子应用，`defineBridgeApp` + `createVueBridgeApp`/`createReactBridgeApp`，受控会话与首提交语义见 README §8.2；组件级混渲染仍不支持（webpack MF 同样不支持）

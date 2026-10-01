@@ -87,6 +87,20 @@ http {
       try_files $uri $uri/ /host-react/index.html;
     }
 
+    # 桥接宿主 host-bridge-vue（Vue 宿主 × React 桥接子应用，子路径部署）
+    location /host-bridge-vue/ {
+      alias "__PROD_DIST__/host-bridge-vue/";
+      index index.html;
+      try_files $uri $uri/ /host-bridge-vue/index.html;
+    }
+
+    # 桥接宿主 host-bridge-react（React 宿主 × Vue 桥接子应用，子路径部署）
+    location /host-bridge-react/ {
+      alias "__PROD_DIST__/host-bridge-react/";
+      index index.html;
+      try_files $uri $uri/ /host-bridge-react/index.html;
+    }
+
     # 宿主应用（根路径）
     location / {
       root "__PROD_DIST__";

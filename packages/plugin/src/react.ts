@@ -21,9 +21,12 @@ import {
   createReactHostPages as createReactHostPagesWithLoader,
   createUseLoadRemote,
 } from './react-adapter'
+import { defineBridgeApp as defineReactBridgeApp } from './bridge-app-react'
 export { RemoteErrorBoundary }
 export const remoteComponent = createRemoteComponent(loadRemote)
 export const useLoadRemote = createUseLoadRemote(loadRemote)
+/** React 子应用桥接契约（defineBridgeApp；远程 ./bridge 模块默认导出，任务书 §3.3） */
+export const defineBridgeApp = defineReactBridgeApp
 /** 宿主页面适配器（绑定本包运行时的 loadRemote；选项与返回值类型见 react-adapter） */
 export function createReactHostPages(options: Parameters<typeof createReactHostPagesWithLoader>[0]) {
   return createReactHostPagesWithLoader(options, loadRemote)
@@ -34,6 +37,7 @@ export type {
   RemoteErrorBoundaryProps,
   ReactHostPagesOptions, ReactHostPages, ResolvedHostPage,
 } from './react-adapter'
+export type { BridgeApp, ReactBridgeAppFactory } from './bridge-app-react'
 import type { RemoteSchemaEntry } from './pages'
 export type RemoteSchema = Record<string, RemoteSchemaEntry>
 /** 无插件转换的场景（构建、Node 导入）如实返回空清单。 */

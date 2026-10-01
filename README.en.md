@@ -40,7 +40,7 @@
 - **Vue direct rendering** — `remoteComponent('remote/X')` on the runtime entry: `defineAsyncComponent + loadRemote` wrapper with explicit error placeholder; runtime core stays framework-free
 - **Full React support (browser)** — dedicated `@fulgurjs/federation/react` entry: `remoteComponent`, `useLoadRemote`, `RemoteErrorBoundary`, `createReactHostPages`; shared `react`/`react-dom` singletons with hooks/StrictMode/Context verified single-instance; mounted components follow `sessionKey` changes without remounting; pure-React projects install zero Vue, pure-Vue projects install zero React
 - **CSP friendly** — no `eval` / `new Function` anywhere in loading paths
-- **Error-code system (41 codes)** — CFG / DEV / BLD / MFU / CC segments, drift-checked against the code registry (see §11)
+- **Error-code system (44 codes)** — CFG / DEV / BLD / MFU / CC segments, drift-checked against the code registry (see §11)
 
 ## 3. Installation & requirements
 
@@ -257,6 +257,84 @@ Type generation supports string or array `extends` (later entries override earli
 - `dts: false` stops generation without deleting existing output; `dts.dir` relocates; `mode: 'shim'` gives loose IDE-clean placeholders
 - Precise track requires the host and remote to share a filesystem (same-machine dev); verified bounds: React 18.0.0–19.x with matching @types
 
+### 8.7 Cross-framework bridge — `/bridge` (sub-app-level Vue↔React, 5.3.0+)
+
+**Scope**: whole-app mount/unmount embedding both ways — a Vue 3 host mounts a React 18/19 sub-app, and a React host mounts a Vue 3 sub-app. Component-level conversion, host↔sub-app URL sync, Angular, SSR/RSC, JS sandbox, CSS isolation are out of scope (§12).
+
+#### Entries & import graph
+
+```text
+build        @fulgurjs/federation              -> the Vite plugin (unchanged)
+Vue sub-app  @fulgurjs/federation/runtime      -> defineBridgeApp (zero React)
+React sub-app @fulgurjs/federation/react       -> defineBridgeApp (zero Vue; react-dom/client loads at mount time)
+bridge host  @fulgurjs/federation/bridge/vue    -> createVueBridgeApp (recommended for Vue hosts; zero React)
+             @fulgurjs/federation/bridge/react  -> createReactBridgeApp (recommended for React hosts; zero Vue)
+             @fulgurjs/federation/bridge        -> aggregate (kept for compatibility; dev native ESM executes both host adapters)
+```
+
+**The split entries are the recommended usage**: a Vue host that only uses `createVueBridgeApp` never executes the React host adapter — in dev native ESM and in the production bundle (asserted by e2e request graphs). The aggregate `/bridge` tree-shakes in production but has no such guarantee in dev.
+
+**Dual-framework install contract (required)**: the bridge host installs `vue` + `react` + `react-dom` and configures all three as `singleton: true` in `shared`. Sub-apps install and share only their own framework. Pure single-framework projects are unaffected. Missing singletons is a usage violation — the plugin runs the negotiation mechanism honestly (double-instance symptoms such as Invalid hook call are documented, not intercepted).
+
+#### Sub-app side: `defineBridgeApp` (`/runtime` and `/react`, same name)
+
+The remote's `./bridge` expose module **default-exports** the contract object; the plugin validates that `mount`/`unmount` are functions (`MFU-015` otherwise).
+
+```ts
+// Vue sub-app src/bridge.ts
+import { createApp } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+export default defineBridgeApp((props) => {
+  const app = createApp(App, props)
+  app.use(createRouter({ history: createMemoryHistory(), routes }))
+  return app
+})
+```
+
+```tsx
+// React sub-app src/bridge.tsx
+import { MemoryRouter } from 'react-router-dom'
+import { defineBridgeApp } from '@fulgurjs/federation/react'
+export default defineBridgeApp((props) => <MemoryRouter><App {...props} /></MemoryRouter>)
+```
+
+Contract semantics (`BridgeApp`):
+- `mount(el, props?): void | Promise<void>` — returning `void` means the first root commit completed synchronously (Vue); a Promise keeps the host pending until the first root commit completes (React uses a built-in commit probe; `root.render()` returning does **not** count as success). Failure before the first commit must throw/reject (host turns it into `MFU-016`, `details.phase: 'mount'`) after cleaning up any created root.
+- `unmount(el): void` — synchronously invalidates the current generation for that container and cleans up; unknown containers are a no-op. Unmounting while pending immediately invalidates the in-flight generation: late results must not revive DOM, overwrite host state, or produce unhandled rejections. An `unmount` throw is reported as `MFU-016` (`phase: 'unmount'`); the container's cleanup state is uncertain and must not be reused for a new root directly.
+- Contract instances are keyed **per container element**; double-mount on the same container is rejected (`MFU-016`).
+- Errors inside the sub-app after the first commit belong to **the sub-app's own error boundary** — host boundaries cannot catch cross-root render errors.
+
+#### Host side: `createVueBridgeApp` / `createReactBridgeApp`
+
+```ts
+// Vue host
+import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+const RemoteReactApp = createVueBridgeApp('bridge-react-remote/bridge', {
+  retries: 1,
+  getContext: () => getLatestHostContext(), // your own synchronous pure getter
+})
+// <RemoteReactApp :session-key="loginKey" :app-props="{ userId, onReady }" />
+```
+
+```tsx
+// React host
+import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+const RemoteVueApp = createReactBridgeApp('bridge-vue-remote/bridge', { getContext: () => getLatestHostContext() })
+// <RemoteVueApp sessionKey={loginKey} appProps={{ userId, onReady }} />
+```
+
+| Item | `createVueBridgeApp` | `createReactBridgeApp` |
+|---|---|---|
+| Factory options | `loadingComponent?` `errorComponent?` (receives `error`; full takeover) `retries?` (0–10) `timeout?` `getContext?` | `fallback?` `error?` (node or `(error, retry) => ReactNode`) `retries?` `timeout?` `getContext?` |
+| Component props | `appProps: P` + `sessionKey?: string \| null` (control prop, never mixed into business props) | same |
+| Error placeholder | Chinese diagnostic (code + root cause + fix) with retry / full-reload buttons | same |
+
+- **`appProps` snapshot**: shallow-copied top-level fields at mount time; nested objects, reactive stores and functions keep their original references. Later top-level replacements are not tracked (use `:key` / React `key` to remount). Cross-root inheritance (Vue provide/inject, Pinia, React Context, routers) does not happen — pass what is needed explicitly.
+- **`getContext`**: a synchronous, side-effect-free getter called before each actual load (first load, retry, session switch). Non-object/thenable returns → `MFU-016` (`phase: 'getContext'`). The bridge validates the snapshot's `sessionKey` against the controlled value (`MFU-017` on mismatch, without writing global state), then writes `provideAppContext` itself. On generation change the bridge clears the previous account context first (zero residue).
+- **Controlled `sessionKey`**: accepts `undefined` (no controlled validation) / `null` (logged out: unmount immediately, keep the container empty, stop loading) / non-empty string (login generation). Illegal values → `MFU-017`.
+- **Multi-instance**: several same-spec instances coexist (per-el keying); `AppContext` is a page-level singleton — all controlled instances on a page must share the same session (`MFU-017` otherwise). React StrictMode double-effect is safe. Vue `<KeepAlive>` deactivation is **not** an unmount. Late results from invalidated generations are dropped by generation guards; a remote `onSession` must honor the existing `signal.aborted` contract.
+
 ## 9. Artifacts, endpoints & caching
 
 | Artifact | Cache policy |
@@ -275,7 +353,7 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 - `DEBUG=fulgurjs:*` — controlled pipeline diagnostics (off by default)
 - Runtime diagnostics are emitted in Chinese by design (language policy); codes are stable identifiers listed below
 
-## 11. Error codes (41)
+## 11. Error codes (44)
 
 | Segment | Code | Meaning |
 |---|---|---|
@@ -318,12 +396,16 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 | | `MFU-012` | setup/onSession threw (retryable; only the failed stage resets) |
 | | `MFU-013` | onSession declared but host sessionKey missing |
 | | `MFU-014` | setup/onSession synchronously re-loading the same remote (deadlock guard) |
+| | `MFU-015` | bridge contract invalid (`./bridge` default export missing non-function mount/unmount; fix points to `defineBridgeApp`) |
+| | `MFU-016` | bridge preparation or lifecycle failure (`details.phase` = getContext/mount/unmount; cause keeps the sub-app's original error) |
+| | `MFU-017` | bridge session mismatch (controlled sessionKey vs AppContext / illegal value / page-level single-session conflict) |
 | CC | `CC-001` | AppContext required key missing (got/expected/example) |
 | | `CC-002` | runtime singleton unavailable (standalone remote page) |
 
 ## 12. Boundaries (explicitly not supported)
 
-- Support covers **browser-client** federation for Vue 3 and React 18–19. Not supported: SSR, React Server Components, Next.js full-stack, React Native, Node-side remote loading, direct Vue↔React component rendering in one tree, JS sandbox, CSS isolation
+- Support covers **browser-client** federation for Vue 3 and React 18–19. Not supported: SSR, React Server Components, Next.js full-stack, React Native, Node-side remote loading. **Cross-framework boundary (5.3.0+)**: sub-app-level embedding is supported (§8.7 `/bridge`); direct component-level Vue↔React rendering in one tree is not (that is the product of framework-conversion libraries). Pure single-framework projects keep zero cross-dependency
+- **Bridge isolation boundary (declared honestly in §8.7)**: bridging isolates only the mount/unmount edge of the two component trees — no browser realm isolation. Remote global CSS, `body`/`html` styles, global variables, and DOM rendered outside the container via React Portal / Vue Teleport still affect the host; `unmount` cannot revoke CSS the browser already loaded. Sub-app internal errors do not bubble into host error boundaries (cross-root). Sub-apps use memory routing — v1 does **not** sync to the host URL (refreshing does not restore the sub-app's internal path)
 - React side does not promise component keep-alive (`keepAliveNames` is Vue-only); re-opened pages still reuse downloaded modules
 - Cross-origin Fast Refresh: remote React components update via the remote dev server's HMR push; after a cold start the first round often needs a host refresh — component-state retention across the federation boundary is not promised
 - Not compatible with originjs `virtual:__federation__` legacy imports
@@ -335,7 +417,7 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 - [webpack MF comparison & gaps (Chinese)](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md)
 - [Sandbox boundary audit (Chinese)](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/沙箱边界审计.md)
 - [`DESIGN.md`](https://github.com/chenmingye/fulgurjs-federation/blob/master/DESIGN.md) — architecture and alignment tables
-- Examples: [`examples/vue/{host,remote}`](./examples) + [`examples/react/{host,remote}`](./examples) — four complete copy-and-run projects, registry-installable (see the examples entry page)
+- Examples: [`examples/vue/{host,remote}`](./examples) + [`examples/react/{host,remote}`](./examples) + [`examples/bridge/*`](./examples) — copy-and-run projects, registry-installable (see the examples entry page)
 
 ## 14. Development & testing
 

@@ -65,6 +65,9 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-012', stage: 'MFU', title: 'setup/onSession 执行抛错（仅清失败阶段缓存，可重试）' },
   { code: 'MFU-013', stage: 'MFU', title: '远程声明 onSession 但宿主 AppContext 缺 sessionKey（登录代次）' },
   { code: 'MFU-014', stage: 'MFU', title: 'setup/onSession 同步段内递归 loadRemote 同一远程（自等待死锁防线）' },
+  { code: 'MFU-015', stage: 'MFU', title: '桥接契约非法（./bridge 默认导出缺 mount/unmount 或非函数；定义于 bridge-errors.ts）' },
+  { code: 'MFU-016', stage: 'MFU', title: '桥接准备或生命周期失败（details.phase 区分 getContext/mount/unmount；定义于 bridge-errors.ts）' },
+  { code: 'MFU-017', stage: 'MFU', title: '桥接会话参数与 AppContext 不一致（受控 sessionKey 矛盾/非法值/页面级单会话冲突；定义于 bridge-errors.ts）' },
   // ── CC 跨应用上下文（定义于 context.ts，此处登记供手册一致性校验） ──
   { code: 'CC-001', stage: 'CC', title: 'AppContext 必需字段缺失（修法指向宿主桥 provideAppContext）' },
   { code: 'CC-002', stage: 'CC', title: '运行时单例不可用（独立直开远程页，须经宿主联邦加载）' },

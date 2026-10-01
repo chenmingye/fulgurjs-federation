@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.3.0
+
+- **新增：跨框架桥接 `/bridge` —— 子应用级 Vue↔React 双向互嵌**（README §8.2；实现合同见 `docs/跨框架桥接实施任务书-20260929.md`）
+  - 子应用侧：`defineBridgeApp`（`/runtime` 与 `/react` 同名双导出）——工厂接收 props 快照、返回装配完整的 VueApp / ReactElement，契约负责按容器跟踪、挂载/卸载与清理；React 侧用提交探针兑现「首次根提交完成才算挂载成功」，`react-dom/client` 在实际 mount 时才动态加载。
+  - 宿主侧：`createVueBridgeApp` / `createReactBridgeApp`（`/bridge/vue`、`/bridge/react` 分离推荐入口 + `/bridge` 聚合兼容入口）——受控 `sessionKey` 会话代次、`getContext` 同步快照校验（拒绝 thenable/非对象，`MFU-016 phase: getContext`）、`appProps` 挂载时浅拷贝快照（嵌套对象/函数保留原引用）、默认中文错误占位（「重试加载 / 刷新页面重试」）。
+  - 会话语义：页面级单会话登记（同页多实例单会话约束，冲突 `MFU-017`）；换账号/登出（`sessionKey → null`）立即作废旧代次并卸载；换代先 `clearAppContext` 保证零旧账号残留；已进入 `loadRemote` 的工作不冒充取消——迟到结果按代次丢弃，远程 `onSession` 遵守既有 `signal.aborted` 契约。
+  - 错误码：`MFU-015`（桥接契约非法）/ `MFU-016`（桥接准备或生命周期失败，`details.phase` 区分 getContext/mount/unmount）/ `MFU-017`（会话参数与 AppContext 不一致），码表三方一致校验扩展至 `bridge-errors.ts`。
+  - 新增错误码共 3 个（总表 41 → 44）；README 中英双语 §8.2/§12、DESIGN §6.2、webpack MF 对照与迁移指南同步。
+  - 隔离边界如实声明：桥接只隔离两棵组件树的挂卸边界——无 realm/CSS 隔离、子应用内部错误不冒泡宿主边界、子应用 memory 路由不与宿主 URL 同步；组件级混渲染继续不支持。
+  - 使用合同：桥接宿主必须同时安装 vue + react + react-dom 并将 shared 三键全部 singleton；纯 Vue / 纯 React 项目零对方依赖不受影响。
+  - 修复：dev 跨源场景 react-refresh shim 的自引用顶层 await 死锁（无 @vitejs/plugin-react 的宿主消费 React 远程时页面永久挂起；shim 自身不再参与导入改写）；为无 plugin-react preamble 的宿主注入首个 http(s) dev 远程 origin 的 react-refresh preamble + 页面级单例发布。
+  - 新增错误码后 gzip 门禁同步：`bridge-host-vue.js` / `bridge-host-react.js` 各 ≤ 4096B（zlib level9，框架外置）；`runtime.js` ≤ 9216B、`react-adapter.js` ≤ 4096B 维持不变（本轮内核零改动）。
+  - 示例：`examples/bridge/{vue-host,react-host,vue-remote,react-remote}` 四个独立工程（registry 正式包消费，双向各一对）。
+
 ## 5.2.5
 
 - **修复：远程示例（examples/{vue,react}/remote）子路径生产部署的 modulepreload 404**——Vite 的 preload helper 会把依赖链接转成**根绝对路径**（`"/"+dep`），remote 以默认 base `/` 构建时，modulepreload 会打到宿主站点的根 `/assets/`（SPA fallback 回 HTML → MIME 错误）。`vite.config.ts` 现按 `command === 'build'` 自动切换 `base` 为 `/vue-remote/`、`/react-remote/`（dev 不受影响）；两份 README 的部署说明同步订正（不再声称"相对路径天然适配子路径"）。运行时代码无变更。

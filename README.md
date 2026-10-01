@@ -39,8 +39,9 @@
 - **跨应用传值与方法引用**：`@fulgurjs/federation/runtime` 导出 `provideAppContext` / `getAppContext` / `requireAppContext` / `clearAppContext`（缺键 `CC-001` 三段式、独立直开远程页 `CC-002` 显式）。宿主桥写入页面级单例（user/getToken/store/hostApp/locale/sessionKey/events 标准字段 + 项目扩展位），远程 setup/onSession 显式校验消费；方法引用两条通道 = context 携带函数引用（热路径直调）+ exposes 方法模块 `loadRemote('remote/api')`（低频重逻辑）。数据语义 = 传输层快照 + 函数引用，非响应式（与乾坤 props 同语义；"实时"靠函数引用拉取 / 宿主 pinia 共享承担，同页换账号由 onSession 会话同步承担，不依赖页面刷新）
 - **Vue 直渲染**：`remoteComponent('remote/X')`（`@fulgurjs/federation/runtime` 导出）——`defineAsyncComponent + loadRemote` 的标准封装，加载失败显式错误占位（错误码+根因+修法+**重试加载/刷新页面重试**），runtime.js 零框架依赖零体积增量
 - **React 完整支持（浏览器端）**：`@fulgurjs/federation/react` 独立入口——`remoteComponent`（含 Suspense 占位/错误占位/**重试加载+刷新页面重试**，不用 React.lazy 的失败缓存陷阱）、`useLoadRemote`（代次守卫的模块 hook）、`RemoteErrorBoundary`（页面级兜底）、`createReactHostPages`（与 Vue 同源页面表与 R1–R5 校验）；共享 `react`/`react-dom` singleton 协商，Hooks/StrictMode/Context 跨端同实例（dev 预构建外部化 + prod CJS 垫片自动处理 `react/jsx-runtime`、`react-dom/client` 子路径）；纯 React 项目零 Vue 依赖、纯 Vue 项目零 React 依赖
+- **跨框架桥接（子应用级，5.3.0 起）**：Vue 3 宿主嵌入 React 18/19 子应用、React 宿主嵌入 Vue 子应用——子应用以 `defineBridgeApp` 导出 `mount/unmount` 契约，宿主用 `createVueBridgeApp` / `createReactBridgeApp`（`/bridge` 入口，推荐 `/bridge/vue`、`/bridge/react` 分离入口）像普通组件一样挂载；受控 `sessionKey` 会话代次、`appProps` 快照 + 函数引用、首次根提交语义、加载/挂载失败占位与恢复、同页多实例与 StrictMode 安全内置；双框架 shared singleton 配方强制（纯项目零对方依赖不受影响）
 - **CSP 友好**：原生 ESM 加载路径全程无 `eval` / `new Function`，可在严格 CSP（无 `unsafe-eval`）下运行
-- **全链路错误码体系（41 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §6 码表防漂移校验
+- **全链路错误码体系（44 码）**：CFG/DEV/BLD/MFU/CC 五段 + 手册 §6 码表防漂移校验
 
 ## 安装
 
@@ -134,6 +135,10 @@ import fulgurjsConfig from './fulgurjs.config'
 - **路径 ①：暴露并加载普通模块**——任何 Vue 组件或 TS/JS 函数模块，跨应用共享。不需要桥、不需要页面表、不需要任何初始化协议。
 - **路径 ②：宿主多页面接入**——宿主有一批路由要映射到远程页面。用 `createHostPages` 一份页面表解决 URL 解析/组件缓存/骨架屏/错误占位/保活名称。
 - **路径 ③：远程业务页需要宿主环境**——远程页面依赖全局组件注册、用户/权限/字典等启动期初始化。用 `setup`/`onSession` 声明式初始化 + `AppContext` 传值。
+
+### 跨框架桥接（第 4 条路径：Vue 宿主嵌 React 子应用 / React 宿主嵌 Vue 子应用）
+
+需要**整站级**跨框架嵌入（子应用自带路由与状态、整站挂载/卸载）时，用 `/bridge` 入口——完整 API 见 [§8.2](#82-跨框架桥接-api--bridge)，最小示例见 `examples/bridge/`（Vue 宿主×React 远程、React 宿主×Vue 远程双向各一对）。组件级混渲染（Vue 模板里直接渲染 React 组件）**不支持**，那是框架桥接库的产品。
 
 ### 路径 ①：暴露并加载普通模块（无 setup、无桥、无页面表）
 
@@ -607,7 +612,7 @@ CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ re
 | `fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<路径\|URL>]... [--require-verified]` | 页面契约核对：宿主页面表（`hostPages` 具名导出）↔ 远程 manifest exposes。manifest 来源优先级 **`--manifest`（可多次、文件路径或 URL） > `--site`/消费方 prod 地址推导**（显式来源失败不回退、无本地 dist 兜底），输出每个 remote 的实际命中来源（防止旧本地 dist 冒充线上核对）。报告未知 remote、映射到未消费远程、缺失 expose、路由冲突（R1–R5）；**确定性错误退出码 1**，远程不可达报「无法验证」，`--require-verified` 时无法验证也非零（CI 严格模式，避免 0 条核对显示通过）。`--json` 供 CI |
 | `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
-### 6. 错误码总表（41 个）
+### 6. 错误码总表（44 个）
 
 | 段 | 码 | 含义 |
 |---|---|---|
@@ -650,6 +655,9 @@ CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ re
 | | `MFU-012` | setup/onSession 执行抛错（该次 loadRemote 拒绝；仅清失败阶段缓存，可直接重试，已成功的阶段不重复） |
 | | `MFU-013` | 远程声明 onSession 但宿主 AppContext 缺 sessionKey（登录代次；禁止用 token 充当） |
 | | `MFU-014` | setup/onSession 同步段内递归 loadRemote 同一远程（自等待死锁防线） |
+| | `MFU-015` | 桥接契约非法（`./bridge` 默认导出缺 mount/unmount 或非函数；修法指向 defineBridgeApp） |
+| | `MFU-016` | 桥接准备或生命周期失败（`details.phase` 区分 getContext/mount/unmount；根因含子应用原始错误） |
+| | `MFU-017` | 桥接会话参数与 AppContext 不一致（受控 sessionKey 与全局会话矛盾、非法值（空串/数字）、页面级单会话冲突） |
 | CC 跨应用上下文 | `CC-001` | AppContext 必需字段缺失（三段式：got/expected/example，修法指向宿主桥 `provideAppContext`） |
 | | `CC-002` | 运行时单例不可用（独立直开远程页；修法 = 经宿主联邦加载，时序契约 bridge → 远程 setup → 页面模块） |
 
@@ -749,6 +757,119 @@ const { data, error, loading, reload } = useLoadRemote<Utils>('remote-react/util
 `@fulgurjs/federation/react` 的 `.tsx`/`.ts` expose 与 Vue 共用同一套 dev 类型生成（目录、`dts:false`、`dts.dir`、setup 过滤、`devFsRoot:false` 降级全部一致），并新增**双轨**形态：零配置时生成可解析的宽松声明（导出为 `any`）；在宿主**应用 TS 上下文**（`tsconfig.json` 本身、其 `extends` 链，或其 `references` 指向且 include 覆盖应用源码/类型输出目录的子项目配置；独立的 `tsconfig.test.json`、只含 vite.config 的 `tsconfig.node.json` 等无关上下文不参与判定）配置一段 `"paths": { "<remote>/*": ["<types目录>/<remote>.d/*"] }` 后，同形态导入即解析到转发模块获得**源码级类型**（props/函数签名精确，错误 props/参数编译失败）——应用上下文配置了 paths 的远程会自动跳过同名宽松声明避免遮蔽，启用说明见生成目录内 `_paths.d.ts`。
 
 类型生成支持字符串或数组 `extends`（后项覆盖前项）、指向目录的 `references`，并按声明文件目录解析继承路径。`baseUrl` 与 `paths` 独立继承。多个实际应用上下文的远程 `paths` 接管不一致时，会保留默认宽松声明并给出中文提示；需要精确类型时请统一这些应用配置。生命周期错误 `MFU-012` 的 `cause` 保留 setup/onSession 抛出的原始异常。
+
+### 8.2 跨框架桥接 API — `/bridge`（子应用级 Vue↔React 互嵌，5.3.0 起）
+
+**产品范围**：整站挂载/卸载的双向嵌入——Vue 3 宿主嵌 React 18/19 子应用、React 18/19 宿主嵌 Vue 3 子应用。组件级互转、宿主与子应用 URL 同步、Angular、SSR/RSC、JS 沙箱、CSS 隔离不在支持面（见 §12）。
+
+#### 入口与导入图
+
+```text
+构建期        @fulgurjs/federation            -> 插件（不变）
+Vue 子应用    @fulgurjs/federation/runtime    -> defineBridgeApp（零 React）
+React 子应用  @fulgurjs/federation/react      -> defineBridgeApp（零 Vue；react-dom/client 实际 mount 时才加载）
+桥接宿主      @fulgurjs/federation/bridge/vue    -> createVueBridgeApp（推荐：Vue 宿主，零 React）
+              @fulgurjs/federation/bridge/react  -> createReactBridgeApp（推荐：React 宿主，零 Vue）
+              @fulgurjs/federation/bridge        -> 聚合入口（兼容保留；dev 原生 ESM 会同时执行两个宿主适配器）
+```
+
+**推荐用法是分离入口**：只用 `createVueBridgeApp` 的宿主页在 dev 首屏与生产产物中都不执行 React 宿主适配器，反之亦然（e2e 断言请求图）。聚合 `/bridge` 在生产可摇树、在 dev 无摇树保证——文档与示例默认分离入口。
+
+**双框架安装合同（必须）**：桥接宿主同时安装 `vue` + `react` + `react-dom`，shared 三键全部 `singleton: true`：
+
+```ts
+// 桥接宿主 fulgurjs.config.ts
+shared: {
+  vue: { singleton: true },
+  react: { singleton: true },
+  'react-dom': { singleton: true },
+}
+```
+
+子应用只装并共享自己的框架（Vue 子应用：`vue`；React 子应用：`react` + `react-dom`）。纯 Vue / 纯 React 项目的零对方依赖承诺不受影响。共享子路径（`react/jsx-runtime`、`react/jsx-dev-runtime`、`react-dom/client`）由 shared 机制协商单实例；宿主侧另需为 `react`、`react-dom` 配置 shared（子路径协商依赖父键）。缺 singleton 的真实症状（Invalid hook call、双实例）见 §6 错误码表 `MFU-010` 与避坑指南——插件按协商机制如实运行，不拦截配置违例。
+
+#### 子应用侧：`defineBridgeApp`（`/runtime` 与 `/react` 同名双导出）
+
+远程 expose `./bridge` 的模块**默认导出**契约对象；插件校验 `mount`/`unmount` 均为函数，否则 `MFU-015`：
+
+```ts
+// Vue 子应用 src/bridge.ts —— fulgurjs.config exposes: { './bridge': './src/bridge.ts' }
+import { createApp } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import App from './App.vue'
+
+export default defineBridgeApp((props) => {
+  const app = createApp(App, props)
+  app.use(createRouter({ history: createMemoryHistory(), routes }))
+  return app   // 返回装配完整的 VueApp；mount/unmount 由契约负责
+})
+```
+
+```tsx
+// React 子应用 src/bridge.tsx
+import { MemoryRouter } from 'react-router-dom'
+import { defineBridgeApp } from '@fulgurjs/federation/react'
+
+export default defineBridgeApp((props) => (
+  <MemoryRouter><App {...props} /></MemoryRouter>
+))
+```
+
+契约语义（`BridgeApp` 接口，双方入口共享同一类型定义）：
+
+- `mount(el, props?): void | Promise<void>`——返回 `void` 表示首次根提交已同步完成（Vue 同步 mount）；返回 Promise 时宿主保持 pending 直到首次根提交后完成（React 由契约内建提交探针兑现，`root.render()` 返回**不**算成功）。首次提交前的失败必须抛错/拒绝（宿主转 `MFU-016`，`details.phase: 'mount'`）并清理已创建的 app/root。
+- `unmount(el): void`——同步使该容器代次失效并清理；未知容器为 no-op。pending 时卸载立即作废本轮代次，迟到的成功/失败不得复活 DOM、改写宿主状态或产生未处理拒绝。unmount 抛错由宿主捕获报 `MFU-016`（`phase: 'unmount'`），该容器清理状态不确定，不得直接在同一 el 上再挂新实例。
+- 契约实例**按容器 el 分键**：同一契约多处挂载互不干扰；同一容器未卸载再次 mount 拒绝（`MFU-016`，容器已被占用）且不覆盖原实例。
+- 首次根提交后的子应用内部错误由**子应用自己的错误边界**负责——宿主 ErrorBoundary/errorCaptured 捕不到跨 root 的渲染错误，插件不冒充兜底（§4.4 语义，README 不承诺「宿主兜底子应用一切错误」）。
+
+#### 宿主侧工厂（`/bridge/vue` 与 `/bridge/react`）
+
+```ts
+// Vue 宿主
+import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { getLatestHostContext } from './host-context'   // 宿主自有的同步纯 getter
+
+const RemoteReactApp = createVueBridgeApp('bridge-react-remote/bridge', {
+  retries: 1,
+  getContext: () => getLatestHostContext(),
+})
+// 模板：<RemoteReactApp :session-key="loginKey" :app-props="{ userId, onReady }" />
+```
+
+```tsx
+// React 宿主
+import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+const RemoteVueApp = createReactBridgeApp('bridge-vue-remote/bridge', {
+  getContext: () => getLatestHostContext(),
+})
+// JSX：<RemoteVueApp sessionKey={loginKey} appProps={{ userId, onReady }} />
+```
+
+| 项 | `createVueBridgeApp`（Vue 宿主） | `createReactBridgeApp`（React 宿主） |
+|---|---|---|
+| 工厂选项 | `loadingComponent?` `errorComponent?`（收到 `error` prop，完全接管） `retries?`（0–10 整数） `timeout?`（正有限 ms） `getContext?` | `fallback?`（pending 占位） `error?`（节点或 `(error, retry) => ReactNode`） `retries?` `timeout?` `getContext?` |
+| 返回组件 props | `appProps: P`（业务数据）+ `sessionKey?: string \| null`（控制参数，不混入业务 props） | 同左，`ComponentType<{ appProps: P; sessionKey?: string \| null }>` |
+| 泛型 | `createVueBridgeApp<P>(spec, options?)`，P 只约束 `appProps` | 同左 |
+| spec | 完整 `<remote>/<expose>`，与 `remoteComponent` 同一解析规则；无 remotePrefixes/schema/deriveSpec | 同左 |
+| 默认错误占位 | 中文诊断（错误码+根因+修法）+「重试加载 / 刷新页面重试」 | 同左 |
+
+- **`appProps` 快照语义**：挂载时浅拷贝顶层字段传入，嵌套对象/响应式 store/函数保留原引用；之后的顶层替换**不追踪、不重渲染子应用**，需要重置用 `:key`/key 重建。宿主新闭包不会自动传给子应用——实时读取宿主状态请传稳定回调（内部读 ref/store）或主动重挂。跨 root 不继承宿主 provide/inject、Pinia、React Context 或路由——需要的数据经 `appProps`、AppContext、共享实例或子应用自装。
+- **`getContext`**：无副作用的**同步** getter，在首次、重试及换会话的实际加载前调用；返回快照对象（拒绝 Promise/thenable 与非对象——`MFU-016`，`phase: 'getContext'`）。桥接层先校验快照 `sessionKey` 与受控值一致（不一致 `MFU-017`，且不写全局），**校验通过后由桥接层调用 `provideAppContext`**——getter 本身不写全局。未提供 getter 时校验现有 `AppContext.sessionKey` 必须与受控值一致。换代时桥接层先 `clearAppContext()` 清旧账号独有字段再写新快照，保证零旧账号残留。
+- **`sessionKey` 受控语义**：只接受 `undefined`（不启用受控会话）/`null`（登出态：立即卸载、保持空容器、不再 loadRemote）/非空字符串（登录代次）。空字符串、数字等非法值按 `MFU-017` 拒绝挂载。
+
+| 触发 | 行为 |
+|---|---|
+| 首次渲染，`sessionKey` 非空字符串 | getContext（若提供）→ 校验快照/现有 context → 桥接层 provideAppContext → loadRemote → 契约校验 → `contract.mount(el, appProps 快照)`；远程 onSession 用同一代次 |
+| 首次渲染，`sessionKey` 省略 | 不启用受控校验；仍可提供快照或复用现有 AppContext；远程声明 onSession 时按 runtime 既有规则（无 sessionKey → `MFU-013`） |
+| `sessionKey` A→B | 推荐宿主先置 null 等卸载、`clearAppContext()` 后再更新；直接 A→B 时包装组件先作废并卸载 A、确认完成后才写 B 的 context 并挂载 |
+| `sessionKey` → `null` | 立即作废旧加载并卸载；保持空容器不再请求；宿主随后 `clearAppContext()` 并移除/禁用缓存的私有页面 |
+| 同会话重渲染 / 只换 `appProps` 引用 | 不重挂、不重复 loadRemote；业务数据仍是上次挂载快照 |
+| 点错误占位「重试加载」 | 同页重建尝试（成功模块走运行时缓存；失败入口按现有机制换 URL 重取） |
+
+- **多实例与页面级单会话**：同页多个同 spec 实例并存合法（契约按 el 分键）；`AppContext` 是页面级单例——同页所有受控桥接实例必须同一会话，后挂实例与活跃实例代次不一致按 `MFU-017` 拒绝（不让两实例互相覆盖身份）。不承诺同页同时承载两个账号。
+- **DOM 所有权**：包装组件只创建并保持稳定的空挂载容器；pending/error 占位是它的兄弟节点，宿主重渲染不 patch 子应用 root 内部。React 宿主 StrictMode 双 effect（mount→cleanup→mount）安全。Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态；需要离页即销毁就别缓存该页，登出流程应同时移除缓存的私有页面。
+- **旧请求不冒充取消**：已进入 `loadRemote` 的工作不因桥接层作废而被取消——迟到的旧结果按代次丢弃（不 mount、不覆盖、无未处理拒绝）；远程 `onSession` 必须遵守既有 `signal.aborted` 契约（异步等待后、写私有状态前检查信号）。
 
 ### 9. `AppContext` — 跨应用传值与方法引用（`@fulgurjs/federation/runtime`）
 
@@ -1108,7 +1229,8 @@ const Panel = await loadRemote('shop/Panel', {
 
 ## 边界（明确不支持）
 
-- Vue 3 与 React 18–19 的**浏览器客户端**联邦为支持面；不支持 SSR / React Server Components / Next.js 全栈 / React Native / Node 服务端加载远程 / Vue 与 React 组件直接混渲染（同一页面同时用两套框架渲染组件树）。两框架各自纯项目互不引入对方；跨框架消费**纯 TS 模块**（如 Vue 宿主加载 React 远程的 utils）可用
+- Vue 3 与 React 18–19 的**浏览器客户端**联邦为支持面；不支持 SSR / React Server Components / Next.js 全栈 / React Native / Node 服务端加载远程。**跨框架边界（5.3.0 起）**：子应用级互嵌**已支持**（§8.2 `/bridge`）；**组件级混渲染**（Vue 模板直接渲染 React 组件或反之）不支持——那是 veaury 类框架桥接库的产品。两框架各自纯项目互不引入对方；跨框架消费**纯 TS 模块**（如 Vue 宿主加载 React 远程的 utils）可用
+- **桥接的隔离边界（§8.2 如实声明）**：桥接只隔离两棵组件树的挂卸边界，不提供浏览器 realm 隔离——远程全局 CSS、`body`/`html` 样式、全局变量、经 React Portal / Vue Teleport 渲染到容器外的 DOM 仍影响宿主，`unmount` 不承诺撤销浏览器已加载的共享 CSS（样式命名空间与全局副作用清理是接入方责任）。子应用内部错误不冒泡进宿主错误边界（跨 root）；子应用路由用 memory 路由，v1 **不与宿主 URL 同步**（刷新不恢复子应用内部路径，不计为深链）
 - React 侧不承诺组件保活：`createReactHostPages` 不提供 `keepAliveNames`（Vue 的 KeepAlive 专属）；页面表里的 `keepAlive` 字段在 React 侧只作普通扩展位。重复打开已下载页面的模块复用照常
 - 跨源 Fast Refresh（5.2.0 修复）：远程 React 组件修改（文本/样式/Hooks 结构不变的兼容改动）自动热更新到正在显示的宿主页面并保留组件本地状态，普通 TS 模块修改自动传播到引用它的组件边界——零手动刷新（插件保证全页单一 react-refresh 实例）。React Refresh 不兼容的导出/Hooks 结构变化、Vite 要求 full-reload 的改动按框架标准重新挂载/整页刷新；不承诺任意改动保活
 - 不兼容 originjs 的 `virtual:__federation__` 旧写法

@@ -10,7 +10,8 @@
   "dependencies": {
     "@fulgurjs/federation": "link:../../packages/plugin",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-router-dom": "^7.6.0"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

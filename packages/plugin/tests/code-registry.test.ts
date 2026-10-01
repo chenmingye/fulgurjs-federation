@@ -37,6 +37,7 @@ function mirrorFixtureToTmp() {
   mirror(scriptRel)
   mirror('src/context.ts')
   mirror('src/runtime/errors.ts')
+  mirror('src/bridge-errors.ts')
   fs.copyFileSync(path.join(repoRoot, 'README.md'), path.join(dir, 'README.md'))
   return {
     dir,

@@ -20,6 +20,20 @@ cd examples/react/remote && npm install && npm run dev   # 终端 1：react-remo
 cd examples/react/host   && npm install && npm run dev   # 终端 2：react-host，http://localhost:5204
 ```
 
+## 跨框架桥接（Vue 宿主 5314 × React 远程 5303；React 宿主 5304 × Vue 远程 5313）
+
+完整操作步骤见 **[bridge/README.md](./bridge/README.md)**。
+
+```bash
+# Vue 宿主 × React 子应用：终端 1 起子应用，终端 2 起宿主
+cd examples/bridge/react-remote && npm install && npm run dev   # 5303
+cd examples/bridge/vue-host     && npm install && npm run dev   # 5314
+
+# React 宿主 × Vue 子应用
+cd examples/bridge/vue-remote   && npm install && npm run dev   # 5313
+cd examples/bridge/react-host   && npm install && npm run dev   # 5304
+```
+
 ## 每对示例演示什么
 
 - 远程可点击计数组件（本地状态在远程组件内，宿主页面直接操作）
@@ -34,6 +48,12 @@ cd examples/react/host   && npm install && npm run dev   # 终端 2：react-host
 ```text
 examples/
 ├── README.md / README.en.md   # 本入口（中/英）
+├── bridge/                    # 跨框架桥接（子应用级挂载/卸载，§8.2）
+│   ├── README.md              # 双向组合说明
+│   ├── vue-host/              # Vue 宿主 × React 子应用（5314）
+│   ├── react-remote/          # React 子应用（5303）
+│   ├── react-host/            # React 宿主 × Vue 子应用（5304）
+│   └── vue-remote/            # Vue 子应用（5313）
 ├── vue/
 │   ├── README.md              # Vue 一对示例的组合说明
 │   ├── host/                  # Vue 宿主（vue-host，5214）

@@ -170,6 +170,13 @@ remote 样式改动立即生效；host 自身业务 HMR 不受影响。
 - 失败恢复：runtime `importEntry`（entryFailCounts）+ dev 容器 loader（字面量主路径 + `@vite-ignore` 重试分支；字面量保证与 vite importAnalysis 重写形态一致，拼接表达式会经 injectQuery 产生 `?import` 变体 URL 与内部静态 import 形成双模块实例）+ prod remoteEntry 产物后处理（`__fgR` 包装）三处统一「失败后重试变更 URL（fulgurjs_retry=N）穿透浏览器 module map 失败缓存」。
 - 开发类型双轨：零配置 ambient（带体 any，可解析；简写 ambient 会 shadow paths 命中的转发文件，TS2439/TS2709 语言限制见 dts.ts 注释）+ 精确轨 `remote.d/` 目录 .ts 转发模块（export *）配 tsconfig paths；宿主配了 paths 的远程自动跳过同名 ambient。
 
+## 6.2 跨框架桥接入口（5.3.0 /bridge）
+
+- 新增源文件：`bridge-errors.ts`（MFU-015/016/017 码表）→ `bridge-core.ts`（契约校验/页面级会话登记/上下文代次校验/timeout，框架无关、零 vue/react 导入）→ `bridge-app-vue.ts` + `bridge-app-react.ts`（子应用侧 defineBridgeApp；React 侧 react-dom/client 在 mount 时动态 import，首提交门控 = FirstCommitGate + CommitProbe）→ `bridge-host-vue.ts` + `bridge-host-react.ts`（宿主工厂，注入 loadRemote，多根 fragment 保稳定挂载容器 + 兄弟节点占位）→ `bridge.ts` / `bridge-vue.ts` / `bridge-react.ts`（三个入口源，dist JS 壳由 gen-runtime-entry.mjs 生成）。
+- dist 壳矩阵：`/runtime` 与 `/react` 各加 `defineBridgeApp` 再导出（零对向框架）；`/bridge/vue`、`/bridge/react` 为分离推荐入口（各自只绑一个宿主适配器）；`/bridge` 为聚合兼容入口。dev 门面：`genApiFacade` 双面各加 defineBridgeApp；新增 `genBridgeFacade(framework)` 三个虚拟模块（仅 expose 目标改写走门面，宿主页直接消费 node_modules dist 壳）。
+- 会话语义：页面级桥接会话登记（acquire/release，冲突 MFU-017）先于任何全局写入；`resolveBridgeContext` 校验 getter 快照（形态/thenable/会话一致）→ 通过后才 provideAppContext；换代先 clearAppContext（零旧账号残留）。宿主组件按受控 sessionKey 驱动代次状态机（gen 计数丢弃迟到结果）。
+- 守护：`bridge.test.ts` + `bridge-host.test.ts`（jsdom 真实挂载）+ runtime-entry-graph / client-types 批准清单扩充（bridge 三入口零对向框架、bridge-app-react 无静态 react-dom/client）+ gzip 门禁（bridge-host-vue/react ≤ 4096B）。
+
 ## 7. 文档交付物
 
 **唯一权威文档 = 仓库根 `README.md`**（随 npm 包发布，GitHub 与 npm 双端可读）；迁移路径见 `docs/迁移指南.md`。内容组织：

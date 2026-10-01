@@ -40,19 +40,26 @@ function splitNamedImportBindings(inner: string): string[] {
   return parts.filter(Boolean)
 }
 
-/** 浏览器公开入口 → expose 目标的内部代理门面（dev 转换用；见 virtual.ts genApiFacade） */
+/** 浏览器公开入口 → expose 目标的内部代理门面（dev 转换用；见 virtual.ts genApiFacade/genBridgeFacade） */
 const ENTRY_FACADES: Record<string, string> = {
   '@fulgurjs/federation/runtime': 'virtual:fulgurjs-api-facade',
   '@fulgurjs/federation/react': 'virtual:fulgurjs-api-facade-react',
+  '@fulgurjs/federation/bridge': 'virtual:fulgurjs-api-facade-bridge',
+  '@fulgurjs/federation/bridge/vue': 'virtual:fulgurjs-api-facade-bridge-vue',
+  '@fulgurjs/federation/bridge/react': 'virtual:fulgurjs-api-facade-bridge-react',
 }
 
 /**
  * 开发态将公开入口的静态 schema 绑定拆出，并让 expose 使用页面级代理。
- * 覆盖两个浏览器入口（/runtime 与 /react）：remoteSchema 绑定拆到虚拟 schema 模块，
+ * 覆盖浏览器入口（/runtime、/react 与 /bridge 三族）：remoteSchema 绑定拆到虚拟 schema 模块，
  * expose 目标整条导入改写到对应框架门面；宿主端导入保持原 specifier（node_modules 包）。
  */
 export async function rewriteRuntimeEntryImports(code: string, exposeTarget: boolean): Promise<string | null> {
-  if (!code.includes('@fulgurjs/federation/runtime') && !code.includes('@fulgurjs/federation/react')) return null
+  if (
+    !code.includes('@fulgurjs/federation/runtime') &&
+    !code.includes('@fulgurjs/federation/react') &&
+    !code.includes('@fulgurjs/federation/bridge')
+  ) return null
   await ensureLexer()
   const [imports] = parse(code)
   const out = new MagicString(code)

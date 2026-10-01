@@ -30,6 +30,7 @@ import {
 } from './transform'
 import {
   genApiFacade,
+  genBridgeFacade,
   genBindingFacade,
   genRuntimeProxyModule,
   genBuildRemoteEntry,
@@ -44,6 +45,7 @@ import {
   genSharedFacade,
   genSharedNsFacade,
   genProdRetryHelper,
+  REACT_REFRESH_GLOBAL_KEY,
   REACT_REFRESH_SHIM_URL,
   type ManifestExposeEntry,
 } from './virtual'
@@ -456,6 +458,49 @@ export function federation(options: FederationOptions): Plugin[] {
         }
       }
 
+      // 5.3.0：远程（exposes>0）build 的 react-dom chunk 隔离。桥接契约在 mount 时动态
+      // import('react-dom/client')；rollup 可能把该动态目标与独立入口（main 静态 import
+      // react-dom/client）合并进同一个 chunk——经容器加载 expose 会连带执行独立入口的
+      // createRoot(document.getElementById(...)) → React #299（容器不存在，桥接轮实测）。
+      // 把 react-dom 包隔离进专属 chunk，动态导入目标不再落在独立入口 chunk 上。
+      // 与上方宿主隔离组合（宿主规则优先）；用户 manualChunks 优先于本规则（用户把
+      // react-dom 显式分组进独立组同样达成隔离）。
+      if (normalized.exposes.length > 0) {
+        const userOutput3 = userConfig.build?.rollupOptions?.output as
+          | { manualChunks?: unknown }
+          | Array<{ manualChunks?: unknown }>
+          | undefined
+        const reactDomChunkOf = (id: string): string | undefined =>
+          /[\\/]node_modules[\\/]react-dom[\\/]/.test(id.split('?')[0]) ? 'fulgurjs-remote-react-dom' : undefined
+        if (Array.isArray(userOutput3)) {
+          console.warn(
+            formatFulgurjsDiagnostic({
+              code: 'BLD-006',
+              symptom: 'build.rollupOptions.output 是数组，fulgurjs 无法自动注入远程 react-dom chunk 隔离',
+              cause: 'expose 内动态 import("react-dom/client") 的目标可能被合并进独立入口 chunk，容器加载 expose 时连带执行入口引导代码（React #299：目标容器不存在）',
+              fix: "在每个 output 项的 manualChunks 最前面加分支：if (/[/\\\\]node_modules[/\\\\]react-dom[/\\\\]/.test(id)) return 'fulgurjs-remote-react-dom'",
+            }),
+          )
+        } else {
+          const extraBuild3 = ((extra as any).build ??= {})
+          const previousOutput = (extraBuild3.rollupOptions as { output?: { manualChunks?: unknown } } | undefined)?.output
+          const previousMc = previousOutput?.manualChunks as ((id: string, meta: unknown) => string | undefined) | undefined
+          const userManualChunks3 = userOutput3?.manualChunks
+          const userFn3 =
+            typeof userManualChunks3 === 'function'
+              ? (userManualChunks3 as (id: string, meta: unknown) => string | undefined)
+              : undefined
+          const combined = (id: string, meta: unknown): string | undefined => {
+            const prev = previousMc?.(id, meta)
+            if (prev !== undefined) return prev
+            const user = userFn3?.(id, meta)
+            if (user !== undefined) return user
+            return reactDomChunkOf(id)
+          }
+          extraBuild3.rollupOptions = { ...(extraBuild3.rollupOptions ?? {}), output: { manualChunks: combined } }
+        }
+      }
+
       for (const w of normalized.warnings) console.warn(`[fulgurjs] ${w}`)
       return extra
     },
@@ -538,6 +583,9 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade-react') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api-facade-bridge') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api-facade-bridge-vue') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api-facade-bridge-react') return bareClean
       if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
       // D3：react-refresh 单例 shim（dev）。注册为可解析模块——改写后的根相对导入在
@@ -578,6 +626,15 @@ export function federation(options: FederationOptions): Plugin[] {
       }
       if (clean === 'virtual:fulgurjs-api-facade-react' && state.command === 'serve') {
         return genApiFacade('react')
+      }
+      if (clean === 'virtual:fulgurjs-api-facade-bridge' && state.command === 'serve') {
+        return genBridgeFacade('both')
+      }
+      if (clean === 'virtual:fulgurjs-api-facade-bridge-vue' && state.command === 'serve') {
+        return genBridgeFacade('vue')
+      }
+      if (clean === 'virtual:fulgurjs-api-facade-bridge-react' && state.command === 'serve') {
+        return genBridgeFacade('react')
       }
       if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）
@@ -1131,7 +1188,24 @@ export function federation(options: FederationOptions): Plugin[] {
       order: 'post',
       handler(html) {
         if (state.command !== 'serve' || !state.normalized) return html
-        if (!html.includes('/@react-refresh')) return html
+        if (!html.includes('/@react-refresh')) {
+          // 5.3.0 桥接：宿主未装 @vitejs/plugin-react（如 Vue 宿主消费 React 桥接远程）时，
+          // 远程 React 模块的 HMR 尾部硬检查 window.$RefreshReg$，未注入 preamble 直接拒绝
+          // 求值（"can't detect preamble"）。此处从第一个 http(s) dev 远程的 origin 引入
+          // react-refresh：注入 preamble（$RefreshReg$/$RefreshSig$）+ 发布页面级单例
+          // （__FULGURJS_REACT_REFRESH__）——Vue 宿主页无本地 renderer，该副本即唯一实例；
+          // React 宿主走上方常规分支，不受影响。纯 Vue 场景无 http(s) dev 远程，零注入。
+          const remoteOrigin = state.normalized.remotes
+            .map((r) => { try { return new URL(r.devEntry).origin } catch { return null } })
+            .find((o) => o !== null && /^https?:/.test(o ?? ''))
+          if (!remoteOrigin) return html
+          return (
+            `<script type="module">import * as __fulgurjs_rr from ${JSON.stringify(`${remoteOrigin}/@react-refresh`)};` +
+            `try { __fulgurjs_rr.default?.injectIntoGlobalHook?.(window); } catch {}` +
+            'window.$RefreshReg$ = () => {};window.$RefreshSig$ = () => (type) => type;' +
+            `(globalThis).${REACT_REFRESH_GLOBAL_KEY} ??= __fulgurjs_rr;</script>` + html
+          )
+        }
         const lastRef = html.lastIndexOf('/@react-refresh')
         const scriptEnd = html.indexOf('</script>', lastRef)
         if (scriptEnd === -1) return html
@@ -1158,7 +1232,12 @@ export function federation(options: FederationOptions): Plugin[] {
       if (state.command !== 'serve' || !state.normalized) return null
       const clean = id.split('?')[0]
       let rewritten = code
-      if (code.includes('"/@react-refresh"')) {
+      // shim 自身不得参与改写：shim 的 fallback import("/@react-refresh") 若被改成
+      // import(shim) 即自引用 + 顶层 await 死锁（5.3.0 桥接轮实测：无 plugin-react 的
+      // Vue 宿主消费 React 远程时页面永久挂起）。未改写的 shim 回退远程 origin 的
+      // /@react-refresh 真身——Vue 宿主页无本地 renderer，远程副本即唯一实例，语义正确；
+      // React 宿主页仍由 publisher 先发布宿主副本，shim 优先读全局单例（D3 行为不变）。
+      if (clean !== '\0virtual:fulgurjs-react-refresh-shim' && code.includes('"/@react-refresh"')) {
         rewritten = rewritten
           .split('from "/@react-refresh"')
           .join(`from "${REACT_REFRESH_SHIM_URL}"`)
