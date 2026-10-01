@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.3.3
+
+- **修复：loadShare × pinLoadedShare 并发窗口的单例双实例风险（F9）**——`loadShare` 设置 `entry.loaded` 后等待 `entry.get()` 期间，CJS 垫片的 `pinLoadedShare` 可同步写入本地实例；getter 完成后原实现直接覆盖 `entry.value`，同步 CJS 消费者与异步消费者各持一份实例。现在实行条目实例 first-wins（协商结果让位于先写入的 pin/fallback 实例，loadShare 返回条目当前 value）、条目级 in-flight get（并发 loadShare 共享同一次加载，getter 恰好调用一次）、getter 拒绝后回滚 `entry.loaded`（修复前死条目残留「已加载」标记会永久抢占单例的已加载优先）——失败窗口内已有 pin 时收敛到 pin 实例。8 个确定性回归（可控 Promise 门）覆盖挂起中 pin / pin 先行 / 并发去重 / 拒绝重试与状态恢复 / resolveShare 组合 / 多版本边界；单元 558 → 566。`runtime.js` gzip 9204B ≤ 9216B。
+- **结论修正（Vite 8 与 dev 冷启动）**：Vite 8（rolldown）dev / 生产构建 / 生产页面挂载自本版起均有完整验收证据（双向桥接 11 步交互矩阵 176/176，5.3.2 时期的「生产页面 BLOCKED（上游）」已在独立验收轮定位为插件层四个缺陷并全部修复）。dev 冷启动依赖预构建窗口（DEV-010）如实声明为使用边界：首轮 30~60s 内首开可能出现瞬时 504/请求挂起并由 vite reload 自愈，自动化验收请先按文档预热。
+- 插件分组的 Vite 8 方案（原生 codeSplitting 保护组 + 共享提供/协商/垫片/运行时分层）与共享选择共用、CJS 垫片同步形态、宿主提供闭包不改写等修复随本版一并正式发布（前两轮候选 rc.1/rc.2 的完整门禁见验收报告 §9/§10）。
+
 ## 5.3.2
 
 - **修正：回滚 5.3.1 中「宿主入口 init 注入改为 `import "virtual:fulgurjs-init"`」的实验性变更**——该变更本意是修复 vite 8 生产运行死锁（未成功，vite 8 运行期仍单列 rolldown 上游 BLOCKED），但在大型宿主（jeecg 系，vite 6）生产实测存在破坏地图渲染的风险面。5.3.2 恢复 5.3.0 的「init 代码内联入口模块」形态（原始注释「rollup 会摇树剥离独立模块的顶层调用」仍然成立），其余 5.3.1 修复（同步 CJS-NS 垫片 / BN09 容器封锁 / BN08 getContext 诊断 / publisher 守卫）全部保留。单元 540/540、e2e dev 43 + prod 28 复验通过。

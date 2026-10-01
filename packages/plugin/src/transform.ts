@@ -156,6 +156,7 @@ export function serializeShareCallForFacade(item: NormalizedShared, fallbackUrl?
   if (item.requiredVersion !== false) opts.push(`requiredVersion: ${JSON.stringify(item.requiredVersion)}`)
   if (item.singleton) opts.push('singleton: true')
   if (item.strictVersion) opts.push('strictVersion: true')
+  opts.push(`localVersion: ${JSON.stringify(item.version)}`)
   if (item.import !== false) {
     const facadeUrl = fallbackUrl ?? SHARED_FACADE_PREFIX + item.shareKey
     opts.push(`fallback: () => import(${JSON.stringify(facadeUrl)})`)
@@ -170,6 +171,7 @@ function serializeShareCall(item: NormalizedShared, devUrls?: TransformContext['
   if (item.requiredVersion !== false) opts.push(`requiredVersion: ${JSON.stringify(item.requiredVersion)}`)
   if (item.singleton) opts.push('singleton: true')
   if (item.strictVersion) opts.push('strictVersion: true')
+  opts.push(`localVersion: ${JSON.stringify(item.version)}`)
   if (item.import !== false) {
     const facadeUrl = devUrls ? devUrls.namespaceFacade(item.shareKey) : SHARED_FACADE_PREFIX + item.shareKey
     opts.push(`fallback: () => import(${JSON.stringify(facadeUrl)})`)
@@ -271,6 +273,10 @@ function inSharedClosure(
 
 export function isTransformableId(id: string, allowNodeModules = false): boolean {
   const clean = id.split('?')[0]
+  // 插件自身的虚拟模块（门面/垫片/运行时）不参与改写：相对路径 share 键带 .ts/.js
+  // 扩展时（virtual:fulgurjs-shared:./src/x.ts），虚拟 id 会通过下方扩展名检查——
+  // 门面内的 `export * from '<相对 share>'` 即被自家 transform 拒绝（20261001 实测）。
+  if (clean.startsWith('virtual:fulgurjs-')) return false
   if (!JS_EXT_RE.test(clean) && !clean.endsWith('.vue')) return false
   if (clean.includes('node_modules') && !allowNodeModules) return false
   return true
@@ -317,12 +323,21 @@ export function getFacadeEntry(id: string) {
 /** 绑定门面虚拟 id：共享键 + 短签名（消费方 import 语句直接指向它） */
 function canonicalBindings(bindings: string[]): string[] {
   const names = new Set<string>()
+  let hasDefault = false
   for (const bRaw of bindings) {
-    if (bRaw === 'default') continue
+    if (bRaw === 'default') {
+      hasDefault = true
+      continue
+    }
     const asMatch = bRaw.match(/^(.*?)\s+as\s+(.+)$/)
     names.add((asMatch ? asMatch[1] : bRaw).trim())
   }
-  return [...names].sort()
+  if (names.size > 0) return [...names].sort()
+  // 纯 default（import X from / export { default as X } from）：必须保留非空签名——
+  // 空签名会退化为无 ?f= 的本地 provider 门面（直连本应用副本、绕过 loadShare 协商），
+  // 远程消费方即出现单例双实例（20261001 补修轮实测发现）。genBindingFacade 对 default
+  // 绑定仅产出 export default（unwrap 转发），命名绑定为空不影响其他消费方复用同门面。
+  return hasDefault ? ['default'] : []
 }
 
 function bindingFacadeId(item: NormalizedShared, bindings: string[]): string {
@@ -359,7 +374,11 @@ export async function transformModule(
   ctx: TransformContext,
 ): Promise<TransformResult | null> {
   const { options } = ctx
-  const clean = id.split('?')[0]
+  const clean = id.split('?')[0].replace(/^\0/, '')
+  // 插件生成的虚拟模块（pre/post 两个钩子都会到达这里）一律不改写：相对路径 share 键
+  // 带 .ts/.js 扩展时虚拟 id 能通过扩展名检查（含 \0 前缀形态），门面内的 export *
+  // 即被自家 transform 拒绝
+  if (clean.startsWith('virtual:fulgurjs-')) return null
   if (options.shared.length === 0 && options.remotes.length === 0) return null
 
   // 快速预检：源码必须包含某个 shared 键或 remote 键，否则跳过（性能）
@@ -374,8 +393,9 @@ export async function transformModule(
   // 这里把 require("vue") 重写为 require("virtual:fulgurjs-cjs-ns:vue")——保持 require 调用
   // 形态，commonjs 插件才会继续转换本模块（ESM import 前置会把文件变成 mixed 而被跳过，
   // module.exports 语义即断裂），并对垫片虚拟模块做 CJS→ESM interop。
+  // 宿主的本地提供闭包保持原生 require，避免本体绕回协商链；纯 remote 仍需协商。
   // 仅 build 启用；dev 的 CJS 依赖走 optimizeDeps 预构建（fulgurjs:optimize-shared-external）。
-  if (ctx.cjsRequireRewrite && /require\s*\(\s*["']/.test(code)) {
+  if (ctx.cjsRequireRewrite && !inSharedClosure(clean, ctx.sharedClosureRoots) && /require\s*\(\s*["']/.test(code)) {
     const sharedByAlias = new Map<string, NormalizedShared>()
     for (const s of options.shared) {
       if (s.import === false) continue

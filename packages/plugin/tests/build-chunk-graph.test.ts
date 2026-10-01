@@ -259,7 +259,7 @@ describe.each(['rollup', 'rolldown'] as const)('WP2: chunk 图不变量（engine
     )
     for (const c of chunks) {
       if (!/"vue",\s*\{[^}]*shareKey:/.test(c.code)) continue
-      const bad = c.imports.filter((f) => !runtimeNames.has(f) && !localVueNames.has(f) && !/^(fulgurjs-|virtual_fulgurjs-)/.test(f))
+      const bad = c.imports.filter((f) => !runtimeNames.has(f) && !localVueNames.has(f) && !/(^|[/\\])(fulgurjs-|virtual_fulgurjs-)/.test(f))
       // 本体 chunk 本身可能含 provide 侧代码（virtual:fulgurjs-shared:vue 门面被内联）——
       // 内联进本体 chunk 时它静态 import vue 属 provide 语义，排除本体 chunk 自身
       if (localVueNames.has(c.fileName)) continue

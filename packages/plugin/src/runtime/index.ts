@@ -22,6 +22,8 @@ export interface ShareEntry {
   loaded?: boolean
   /** 首次 loadShare 成功后缓存的实例值；getLoadedShare 同步查询与 CJS 垫片依赖它 */
   value?: any
+  /** 进行中的 get()：并发 loadShare 共享同一次加载，落定后清除（失败后允许重新加载） */
+  pendingGet?: Promise<any>
 }
 
 export type ShareScope = Record<string, Record<string, ShareEntry>>
@@ -71,6 +73,8 @@ export interface LoadShareOptions {
   shareScope?: string
   /** 本地副本兜底（webpack shared.import） */
   fallback?: () => Promise<any>
+  /** 内部：本地副本的版本号（fallback 回写共享作用域与 CJS 垫片 pin 使用；不参与快照键） */
+  localVersion?: string
 }
 
 export interface RuntimePlugin {
@@ -170,6 +174,12 @@ function createRuntime() {
   const plugins: RuntimePlugin[] = []
   /** 同一版本组合只告警一次，避免多个页面重复导入共享依赖时刷屏。 */
   const reportedSingletonSkews = new Set<string>()
+  // 同步查询不能执行异步 resolveShare；只复用相同消费条件下成功协商的结果。
+  const resolvedShareSnapshots = new Map<string, ShareEntry>()
+  const shareRequestKey = (name: string, opts: LoadShareOptions) => JSON.stringify([
+    opts.shareScope || 'default', opts.shareKey || name, opts.requiredVersion ?? null,
+    !!opts.singleton, !!opts.strictVersion,
+  ])
   const loadedModules = new Map<string, Promise<any>>()
   const remoteManifests = new Map<string, Promise<any | undefined>>()
   const stylesheetLoads = new WeakMap<HTMLLinkElement, Promise<void>>()
@@ -435,15 +445,17 @@ function createRuntime() {
 
   function registerPlugins(list: RuntimePlugin[]): void {
     plugins.push(...list)
+    resolvedShareSnapshots.clear()
     applyPlugins()
   }
 
-  async function loadShare(name: string, opts: LoadShareOptions = {}): Promise<any> {
+  function selectShareEntry(name: string, opts: LoadShareOptions, readyOnly = false): ShareEntry | undefined {
     const scopeName = opts.shareScope || 'default'
     const shareKey = opts.shareKey || name
     const scope = getScope(scopeName)
     const byName = scope[shareKey] || {}
-    const versions = Object.keys(byName)
+    const versions = Object.keys(byName).filter((v) => !readyOnly || opts.singleton || byName[v].value !== undefined)
+    if (readyOnly && versions.length === 0) return undefined
     const req = opts.requiredVersion
 
     const satisfying = versions.filter(
@@ -495,47 +507,150 @@ function createRuntime() {
           emitError({ remote: shareKey, error: err })
           throw err
         }
-        if (opts.fallback) return opts.fallback()
-        const err = new FgError(
-          ErrorCodes.SHARE_NOT_AVAILABLE,
-          `现象：无法加载共享依赖 "${shareKey}"。\n原因：作用域 "${scopeName}" 中没有符合 ${req ?? '任意版本'} 要求的版本，且未配置本地副本。\n修法：在宿主或远程注册该依赖，或为 shared 配置可用的本地副本。`,
-          { shareKey, requiredVersion: req },
-        )
-        emitError({ remote: shareKey, error: err })
-        throw err
+        return undefined
       }
     }
 
-    let entry: ShareEntry = byName[pick!]
+    return byName[pick!]
+  }
+
+  /**
+   * 门面 fallback 的实例回写（20261001 补修轮）：生产构建中入口的静态 import（门面 TLA）
+   * 先于入口体内联 init 求值，宿主自己的门面协商发生在空作用域上、只能 fallback 本地
+   * 副本——若不回写，该实例对作用域不可见：远程的 CJS 垫片会 miss 并 pin 另一份本地
+   * 副本，宿主树（早期 fallback 实例）与远程消费（pin 的实例）即单例双实例
+   * （react-host 生产实测 useContext/useEffect 读到 null dispatcher）。
+   * 回写规则：作用域已有同键版本表时按相同消费条件回填未就绪条目（版本一致才回填）；
+   * 完全空表（init 尚未注册）时新建 loaded 条目——后续 init 的同版本 registerShare 被
+   * first-wins 跳过，远程协商与同步查询都命中这份本地副本。
+   */
+  function registerFallbackInstance(name: string, opts: LoadShareOptions, instance: unknown): void {
+    const localVersion = opts.localVersion
+    if (!localVersion || instance === undefined) return
+    const scopeName = opts.shareScope || 'default'
+    const key = opts.shareKey || name
+    const scope = getScope(scopeName)
+    const byName = Object.hasOwn(scope, key) ? (scope[key] as Record<string, ShareEntry>) : undefined
+    if (byName && Object.keys(byName).length > 0) {
+      try {
+        const pick = selectShareEntry(name, opts)
+        if (pick && pick.value === undefined && pick.version === localVersion) {
+          pick.value = instance
+          pick.loaded = true
+        }
+      } catch {
+        /* strictVersion 拒绝等：回写不改变错误语义 */
+      }
+      return
+    }
+    registerShare(scopeName, key, localVersion, () => Promise.resolve(instance), {
+      from: 'fulgurjs:local-fallback',
+      loaded: true,
+    })
+    const fresh = (scope[key] as Record<string, ShareEntry>)?.[localVersion]
+    if (fresh) fresh.value = instance
+  }
+
+  async function loadShare(name: string, opts: LoadShareOptions = {}): Promise<any> {
+    const scopeName = opts.shareScope || 'default'
+    const shareKey = opts.shareKey || name
+    const byName = getScope(scopeName)[shareKey] || {}
+    let entry = selectShareEntry(name, opts)
+    if (!entry) {
+      if (opts.fallback) {
+        const instance = await opts.fallback()
+        registerFallbackInstance(name, opts, instance)
+        return instance
+      }
+      const err = new FgError(
+        ErrorCodes.SHARE_NOT_AVAILABLE,
+        `现象：无法加载共享依赖 "${shareKey}"。\n原因：作用域 "${scopeName}" 中没有符合 ${opts.requiredVersion ?? '任意版本'} 要求的版本，且未配置本地副本。\n修法：在宿主或远程注册该依赖，或为 shared 配置可用的本地副本。`,
+        { shareKey, requiredVersion: opts.requiredVersion },
+      )
+      emitError({ remote: shareKey, error: err })
+      throw err
+    }
     if (hooks.resolveShare) {
       const picked = await hooks.resolveShare({
         shareKey,
         shareScope: scopeName,
-        requiredVersion: req,
+        requiredVersion: opts.requiredVersion,
         picked: entry,
         available: Object.values(byName),
       })
       if (picked) entry = picked
     }
+    // value 已就绪（含 CJS 垫片 pin 的本地副本与先完成的协商）：直接复用，不再重复
+    // get()——保证任何消费者都不会绕过已确定的实例拿到第二份。
+    if (entry.value !== undefined) {
+      resolvedShareSnapshots.set(shareRequestKey(name, opts), entry)
+      return entry.value
+    }
     entry.loaded = true
-    const instance = await entry.get()
-    entry.value = instance
-    return instance
+    // 并发的 loadShare 共享同一次 get()（条目级 in-flight）：重复触发加载可能产生
+    // 第二份实例并浪费请求；落定后清除 pendingGet，失败可重新加载。
+    if (!entry.pendingGet) {
+      try {
+        entry.pendingGet = entry.get()
+      } catch (e) {
+        entry.pendingGet = Promise.reject(e)
+      }
+    }
+    const pending = entry.pendingGet
+    let instance: any
+    try {
+      instance = await pending
+    } catch (e) {
+      // getter 失败：若等待期间 CJS 垫片已 pin 本地实例，收敛到它（它已是同步消费者
+      // 手中的事实实例）；否则回滚 loaded，后续 loadShare 可重新加载。
+      if (entry.value !== undefined) {
+        resolvedShareSnapshots.set(shareRequestKey(name, opts), entry)
+        return entry.value
+      }
+      entry.loaded = false
+      throw e
+    } finally {
+      if (entry.pendingGet === pending) entry.pendingGet = undefined
+    }
+    // 实例所有权 first-wins：await 期间 pinLoadedShare 可能已把本地副本登记为该条目
+    // 的实例（同步 CJS 消费者已持有它）。协商结果不得覆盖——否则同步与异步消费者各持
+    // 一份实例（单例双实例）。让位于先写入者，全体消费者收敛同一实例。
+    if (entry.value === undefined) entry.value = instance
+    resolvedShareSnapshots.set(shareRequestKey(name, opts), entry)
+    return entry.value
   }
 
   /**
-   * CJS 垫片专用：同步返回「已协商加载」的共享实例（无则 undefined，绝不发起加载）。
-   * 裁决与 loadShare 的 singleton 已加载优先一致——value 就绪（即 loadShare 已取到）的
-   * 版本中取最高。CJS 本体（react/react-dom）互引不能等待异步协商（rolldown 拒绝
-   * CJS require TLA 模块），只能在同步语义下读这份快照；未就绪时垫片直连本应用本体
-   * （与 provide/fallback 同一模块，构建期单份 → 实例恒同）。
+   * CJS 垫片同步查询，不发起加载。非单例按版本范围筛选已就绪实例；
+   * 单例复用 loadShare 的已加载优先、版本告警与 strictVersion 规则。
+   * 自定义 resolveShare 只能复用同一消费条件下的成功结果，不能同步猜测异步 hook。
    */
   function getLoadedShare(name: string, opts: LoadShareOptions = {}): any {
-    const shareKey = opts.shareKey || name
-    const byName = getScope(opts.shareScope || 'default')[shareKey] || {}
-    const ready = Object.keys(byName).filter((v) => byName[v].value !== undefined)
-    if (ready.length === 0) return undefined
-    return byName[ready.sort(compareVersions).pop()!].value
+    if (hooks.resolveShare) return resolvedShareSnapshots.get(shareRequestKey(name, opts))?.value
+    return selectShareEntry(name, opts, true)?.value
+  }
+
+  /**
+   * CJS 垫片未命中同步快照时的登记（20261001 补修轮）：把本地副本登记为「将被选中」的
+   * 共享条目实例。场景：jsx-runtime 等深路径把 provider chunk（内含垫片）拖进消费方静态
+   * 依赖链，垫片先于 TLA 协商门面求值——若不登记，垫片冻结本地副本而后续协商选中另一份
+   * 注册实例，即单例双实例（react 组件与 react-dom 分属两份 React，useEffect 读到 null
+   * dispatcher，vite5-7 生产实测）。登记后 loadShare 的 value 快路径与 singleton 已加载
+   * 优先都收敛到同一份，与求值顺序解耦。
+   * 守卫：仅当选中条目尚未就绪（不抢占已加载实例=「不擅自换实例」语义）且条目版本与
+   * 本地副本一致（不掩盖版本冲突=strictVersion/告警语义不受影响）时登记。
+   */
+  function pinLoadedShare(name: string, opts: LoadShareOptions, localVersion: string, instance: unknown): void {
+    if (instance === undefined) return
+    let entry: ShareEntry | undefined
+    try {
+      entry = selectShareEntry(name, opts)
+    } catch {
+      return // strictVersion 拒绝等：同步登记不改变错误语义
+    }
+    if (!entry || entry.value !== undefined || entry.version !== localVersion) return
+    entry.value = instance
+    entry.loaded = true
   }
 
   /** WP6：错误信息用的 URL 脱敏——去凭证（user:pass@）与 query/hash */
@@ -1032,6 +1147,7 @@ function createRuntime() {
     registerPlugins,
     loadShare,
     getLoadedShare,
+    pinLoadedShare,
     loadRemote,
     getContainer,
     preloadRemote,
@@ -1078,6 +1194,7 @@ export const registerPlugins = runtime.registerPlugins
 export const loadShare = runtime.loadShare
 /** CJS 垫片专用同步查询（内部使用，不进公开入口壳清单） */
 export const getLoadedShare = runtime.getLoadedShare
+export const pinLoadedShare = runtime.pinLoadedShare
 export const loadRemote = runtime.loadRemote
 export const getContainer = runtime.getContainer
 export const preloadRemote = runtime.preloadRemote

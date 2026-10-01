@@ -73,8 +73,18 @@ test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
     await expect(page.getByTestId('slot-b').getByTestId('vue-check-b')).toHaveText(/vue:3\.4\.38/)
     await expect(page.getByTestId('slot-card').getByTestId('remote-card')).toBeVisible()
     await shot(page, 'prod-multi-dual-version-shared-singleton')
-    const vueChunks = scriptUrls.filter((u) => /vue[-.][\w-]*\.js/.test(u) && !/vue34|remote-b/.test(u))
+    // 网络级单例证明：只数 vue 本体 chunk（rollup 以入口模块命名，如 runtime-dom.esm-bundler /
+    // vue.runtime.esm-bundler）。fulgurjs-*/virtual_fulgurjs-* 是插件协商/提供机构 chunk
+    // （门面、provider 壳、preload-helper），不是 vue 运行时副本（20261001 补修轮修正口径）。
+    const vueChunks = scriptUrls.filter(
+      (u) => /vue[-.][\w-]*\.js/.test(u) && !/vue34|remote-b/.test(u) && !/[\\/]fulgurjs-[a-z-]*vue/.test(u),
+    )
     expect(new Set(vueChunks).size).toBeLessThanOrEqual(1)
+    // vue 本体（3.5 线）恰一份：host 与 remote-a 的协商必须收敛到同一物理 chunk
+    const vueRuntimeCopies = new Set(
+      scriptUrls.filter((u) => /(runtime-dom|vue\.runtime)\.esm-bundler/.test(u)),
+    )
+    expect(vueRuntimeCopies.size).toBeLessThanOrEqual(1)
   })
 
   test('B-17 prod CSS 提取与注入（expose chunk 的 css 自动加载）', async ({ page }) => {

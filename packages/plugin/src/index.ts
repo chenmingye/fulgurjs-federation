@@ -130,9 +130,19 @@ const REMOTE_FACADE_CHUNK_NAME = 'fulgurjs-remote-facades'
  * 规范死锁（页面空白、零报错、模块图 pending；vue-host 生产页实挂）。
  * 本体闭包与门面同组后转发边消失（入口壳与真身同 chunk，符号直取）。
  * vite5-7（rollup）本就把静态边闭包并进同 chunk，归组是显式化而非行为变更。
+ *
+ * 20261001 补修轮追加两条（实测死锁修法）：
+ * 1) preload-helper 独立成组：vite 的 __vitePreload 助手被 remoteEntry 与 TLA 协商门面
+ *    共同静态依赖，rollup 会把它并入门面 chunk——remoteEntry 为取助手对门面形成静态边，
+ *    门面顶层 await loadShare 又要等 remoteEntry 自己的 init() 注册共享作用域 →
+ *    入口级 TLA 死环（MFU-003 于模块求值期抛出；5.3.2 起 remote-b 双版本场景实测）。
+ *    manualChunks 归组不排斥共享模块，故助手必须显式独立成组。
+ * 2) provider 门面（无 ?f=）与消费协商门面（?f=）分开成组：provider 加载不再连带触发
+ *    另一消费条件的 loadShare，同步壳与 TLA 门面不混排（与 Vite 8 分组对齐）。
  */
 function facadeChunkOf(id: string): string | null {
-  const bare = id.split('?')[0]
+  if (id.includes('preload-helper')) return 'fulgurjs-preload-helper'
+  const bare = id.replace(/^\0/, '').split('?')[0]
   if (bare === 'virtual:fulgurjs-runtime' || bare === 'virtual:fulgurjs-runtime-proxy') {
     return RUNTIME_CHUNK_NAME
   }
@@ -143,17 +153,45 @@ function facadeChunkOf(id: string): string | null {
       const remoteName = body.slice('__remote__/'.length).split('/')[0] || 'unknown'
       return REMOTE_FACADE_CHUNK_NAME + '-' + remoteName.replace(/[^A-Za-z0-9_-]/g, '_')
     }
+    const keyName = (key: string) => key.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown'
     const shareKey = body.split('?')[0]
-    return 'fulgurjs-shared-' + (shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
+    if (id.includes('?f=')) return 'fulgurjs-shared-' + keyName(shareKey)
+    return 'fulgurjs-provider-' + keyName(shareKey)
   }
   if (bare.startsWith('virtual:fulgurjs-shared-ns:') || bare.startsWith('virtual:fulgurjs-cjs-ns:')) {
     const prefix = bare.startsWith('virtual:fulgurjs-shared-ns:')
       ? 'virtual:fulgurjs-shared-ns:'
       : 'virtual:fulgurjs-cjs-ns:'
     const shareKey = bare.slice(prefix.length)
-    return 'fulgurjs-shared-' + (shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
+    const keyName = shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown'
+    // CJS 垫片与物理包同组（fulgurjs-provider-<key>）：react-dom 等 CJS 本体内部存在
+    // require(<自身包>) 自引用（react-dom-client.production.js 实测），改写后「本体 →
+    // 垫片 → 本体」跨 chunk 即 TDZ（rollup const 级 interop：Cannot access '_' before
+    // initialization）。同 chunk 后自引用经提升安全解析。
+    if (bare.startsWith('virtual:fulgurjs-cjs-ns:')) return 'fulgurjs-provider-' + keyName
+    return 'fulgurjs-shared-' + keyName
   }
   return null
+}
+
+/**
+ * 插件自身包内的模块（adapters/bridge-host 等）豁免用户 manualChunks 分组：
+ * 它们静态 import 协商门面（TLA），若被用户组捕获、而该组又包含 shared 物理包
+ * （vendor 全量 node_modules 是常见形态），即构成「门面(TLA) →[动态] provider →
+ * [静态] vendor →[静态] 门面」的混合环，页面零报错死锁（20261001 mc-fn 场景实测）。
+ * 豁免后交给 rollup 自动分块（与无用户分组时的基线形态一致：随最大消费方合并）。
+ */
+function isOwnPackageModule(id: string): boolean {
+  return id.includes('/node_modules/@fulgurjs/federation/')
+}
+
+/** 物理提供包目录 → provider 组（整包与 provider 门面/CJS 垫片同 chunk；TDZ/自引用安全） */
+function providerChunkOf(id: string, roots: Array<{ root: string; shareKey: string }>): string | undefined {
+  if (roots.length === 0) return undefined
+  const clean = id.replace(/^\0/, '').split('?')[0]
+  const provider = roots.find((p) => clean.startsWith(p.root))
+  if (!provider) return undefined
+  return 'fulgurjs-provider-' + (provider.shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
 }
 
 export function federation(options: FederationOptions): Plugin[] {
@@ -176,11 +214,17 @@ export function federation(options: FederationOptions): Plugin[] {
     /** D6：门面形态。dynamic = devSharedSelf 宿主（build）专用：门面对运行时/本体全动态依赖
      * （配合 manualChunks 包装注入与闭包静态化）。static = 其余一切场景，产物与 2.0.0 一致。 */
     facadeDynamic: boolean
+    /** Vite 8（rolldown）生产构建：使用原生 codeSplitting 分组隔离提供/协商/CJS 模块 */
+    rolldownBuild: boolean
+    /** Vite 8：本地提供包的物理目录（providerRoots 归组用，buildStart 填充） */
+    providerRoots: Array<{ root: string; shareKey: string }>
     /** WP1：已被本插件改写过的模块 id（含 query 与 clean 两种形态）。这些模块后续再出现
      * 裸 shared specifier = 后置插件（auto-import 等）注入，由 resolveId 期兜底改道。 */
     transformedModules: Set<string>
   } = {
     command: 'serve',
+    rolldownBuild: false,
+    providerRoots: [],
     base: '/',
     exposeAbsPaths: {},
     exposeFiles: {},
@@ -206,6 +250,8 @@ export function federation(options: FederationOptions): Plugin[] {
       const root = path.resolve(userConfig.root ?? process.cwd())
       const normalized = normalizeOptions(options, root, env.command)
       state.normalized = normalized
+      // Vite 8（rolldown）生产构建：启用原生 codeSplitting 保护组（outputOptions 钩子）
+      state.rolldownBuild = env.command === 'build' && Number((readInstalledVersion(root, 'vite') ?? '0').split('.')[0]) >= 8
 
       const extra: Record<string, unknown> = {}
       // 不干预 optimizeDeps 的 include/exclude：大型工程的预构建分组被额外 include 改动后，
@@ -381,6 +427,7 @@ export function federation(options: FederationOptions): Plugin[] {
               const wrapped = (id: string, meta: unknown) => {
                 const facade = facadeChunkOf(id)
                 if (facade) return facade
+                if (isOwnPackageModule(id)) return undefined
                 return userFn(id, meta as never)
               }
               const extraBuild = ((extra as any).build ??= {})
@@ -394,6 +441,7 @@ export function federation(options: FederationOptions): Plugin[] {
               const wrapped = (id: string): string | undefined => {
                 const facade = facadeChunkOf(id)
                 if (facade) return facade
+                if (isOwnPackageModule(id)) return undefined
                 return state.manualChunkGroups.get(id.split('?')[0]) ?? state.manualChunkGroups.get(id)
               }
               const extraBuild = ((extra as any).build ??= {})
@@ -420,7 +468,8 @@ export function federation(options: FederationOptions): Plugin[] {
           (id: string, meta: unknown) => {
             const facade = facadeChunkOf(id)
             if (facade) return facade
-            return userFn?.(id, meta)
+            if (isOwnPackageModule(id)) return undefined
+            return providerChunkOf(id, state.providerRoots) ?? userFn?.(id, meta)
           }
         const extraBuild = ((extra as any).build ??= {})
         if (Array.isArray(userOutput)) {
@@ -458,6 +507,7 @@ export function federation(options: FederationOptions): Plugin[] {
                 manualChunks: (id: string, meta: unknown) => {
                   const facade = facadeChunkOf(id)
                   if (facade) return facade
+                  if (isOwnPackageModule(id)) return undefined
                   return groupOf(id)
                 },
               },
@@ -482,7 +532,7 @@ export function federation(options: FederationOptions): Plugin[] {
           | Array<{ manualChunks?: unknown }>
           | undefined
         const reactDomChunkOf = (id: string): string | undefined =>
-          /[\\/]node_modules[\\/]react-dom[\\/]/.test(id.split('?')[0]) ? 'fulgurjs-remote-react-dom' : undefined
+          /[\\/]node_modules[\\/]react-dom[\\/]/.test(id.split('?')[0]) ? 'fulgurjs-provider-react-dom' : undefined
         if (Array.isArray(userOutput3)) {
           console.warn(
             formatFulgurjsDiagnostic({
@@ -502,6 +552,7 @@ export function federation(options: FederationOptions): Plugin[] {
               ? (userManualChunks3 as (id: string, meta: unknown) => string | undefined)
               : undefined
           const combined = (id: string, meta: unknown): string | undefined => {
+            if (isOwnPackageModule(id)) return facadeChunkOf(id) ?? reactDomChunkOf(id) ?? undefined
             const prev = previousMc?.(id, meta)
             if (prev !== undefined) return prev
             const user = userFn3?.(id, meta)
@@ -509,6 +560,8 @@ export function federation(options: FederationOptions): Plugin[] {
             // V8-FIX：shared 本体闭包与门面同组（破 rolldown chunk 级 TLA 循环）；
             // react-dom 本体属 react-dom 闭包 → 归 fulgurjs-shared-react-dom 组，
             // 同时满足 5.3.0 的 react-dom chunk 隔离（不再落入独立入口 chunk）
+            const provider = providerChunkOf(id, state.providerRoots)
+            if (provider) return provider
             const facade = facadeChunkOf(id)
             if (facade) return facade
             return reactDomChunkOf(id)
@@ -556,6 +609,19 @@ export function federation(options: FederationOptions): Plugin[] {
     },
 
     resolveId(source, importer) {
+      // 相对路径 share 键的门面虚拟模块（virtual:fulgurjs-shared:./src/x.ts）内部
+      // import 的相对 spec 无法以虚拟 id 为基准解析——统一按应用根解析（provider 门面
+      // 与消费门面共用此规则；5.3.2 及之前该场景在 rollup 解析期直接失败，20261001 修复）
+      if (
+        state.normalized &&
+        importer &&
+        (importer.includes('virtual:fulgurjs-shared:') || importer.includes('virtual:fulgurjs-shared-ns:')) &&
+        /^\.\.?\//.test(source) &&
+        !source.startsWith('virtual:fulgurjs-')
+      ) {
+        const resolved = path.resolve(state.normalized.root, source)
+        return resolved + (source.match(/\?[^/]*$/)?.[0] ?? '')
+      }
       // 兼容三种形态：裸 specifier / __x00__ URL 编码（dev 生成代码被 importAnalysis 再解析）/ \0 历史形态；query 原样保留
       let s = source
       if (s.startsWith('/@id/')) s = s.slice(5)
@@ -717,7 +783,7 @@ export function federation(options: FederationOptions): Plugin[] {
           const item = state.normalized.shared.find((x) => x.shareKey === body)
           if (item && item.import !== false) {
             const names = /^(\.|\/)/.test(item.import) ? [] : enumerateCjsExports(item.import, state.normalized.root)
-            return genSharedFacade(item.import, names, state.facadeDynamic)
+            return genSharedFacade(item.import, names, state.facadeDynamic && !state.rolldownBuild)
           }
           return null
         }
@@ -735,6 +801,7 @@ export function federation(options: FederationOptions): Plugin[] {
           ...(item.requiredVersion !== false ? ['requiredVersion: ' + JSON.stringify(item.requiredVersion)] : []),
           ...(item.singleton ? ['singleton: true'] : []),
           ...(item.strictVersion ? ['strictVersion: true'] : []),
+          'localVersion: ' + JSON.stringify(item.version),
           'fallback: () => import(' + JSON.stringify(item.import) + ')',
         ]
         const call = '__fulgurjs_loadShare(' + JSON.stringify(item.shareKey) + ', { ' + opts.join(', ') + ' })'
@@ -823,6 +890,26 @@ export function federation(options: FederationOptions): Plugin[] {
     async buildStart() {
       if (state.command !== 'build' || !state.normalized) return
       const n = state.normalized
+      // 收集本地提供包的物理目录（Vite 8 的 outputOptions 保护组与 rollup 侧 manualChunks
+      // 包装共用）：整包目录与 provider 门面/CJS 垫片同 chunk——包内自引用（react-dom 的
+      // require("react-dom")）不跨 chunk，杜绝 rollup const 级 interop 的 TDZ；jsx-runtime
+      // 等兄弟入口会把垫片拖进消费方静态链（早于 TLA 门面求值），该场景由运行时
+      // pinLoadedShare 收敛实例（见 runtime/index.ts），不依赖 chunk 顺序。
+      state.providerRoots = []
+      {
+        for (const item of n.shared) {
+          if (item.import === false) continue
+          const resolved = await this.resolve(item.import, path.join(n.root, 'index.html'))
+          const file = resolved?.id.replace(/^\0/, '').split('?')[0]
+          if (!file) continue
+          const marker = '/node_modules/'
+          const pos = file.lastIndexOf(marker)
+          if (pos === -1) continue
+          const parts = file.slice(pos + marker.length).split('/')
+          const pkg = parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+          state.providerRoots.push({ root: file.slice(0, pos + marker.length) + pkg + '/', shareKey: item.shareKey })
+        }
+      }
       // D6：对象形式 manualChunks 的 specifier → 模块 id 解析（此阶段 rollup 上下文可用，
       // 走完整解析管线含 alias；归组期调用包装函数时查表）。解析失败的 specifier 丢组并
       // 显式告警——行为降级可见，不静默。
@@ -921,6 +1008,81 @@ export function federation(options: FederationOptions): Plugin[] {
           preserveSignature: 'allow-extension',
         })
       }
+    },
+
+    outputOptions(output) {
+      if (!state.rolldownBuild) return null
+      // 不把 await loadShare 的消费门面和它动态加载的提供模块放进同一 chunk。
+      // Rolldown 的递归捕获会重新合并这两类模块，故保护组只捕获明确命中的模块。
+      const protectedChunk = (id: string): string | undefined => {
+        if (id.includes('preload-helper')) return 'fulgurjs-preload-helper'
+        // 插件自身包模块（适配器等，静态 import TLA 门面）单独成组：不被用户
+        // codeSplitting/advancedChunks 组捕获，避免与 shared 物理包同组构成混合环
+        if (isOwnPackageModule(id)) return 'fulgurjs-internal'
+        const clean = id.replace(/^\0/, '').split('?')[0]
+        const keyName = (key: string) => key.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown'
+        if (clean.startsWith(SHARED_FACADE_PREFIX) && !id.includes('?f=')) {
+          return 'fulgurjs-provider-' + keyName(clean.slice(SHARED_FACADE_PREFIX.length))
+        }
+        if (clean.startsWith('virtual:fulgurjs-cjs-ns:')) {
+          return 'fulgurjs-cjs-' + keyName(clean.slice('virtual:fulgurjs-cjs-ns:'.length))
+        }
+        const provider = state.providerRoots.find((p) => clean.startsWith(p.root))
+        if (provider) return 'fulgurjs-provider-' + keyName(provider.shareKey)
+        return facadeChunkOf(id) ?? undefined
+      }
+      // 保留用户的 codeSplitting / advancedChunks 与 manualChunks 配置。
+      const native = output as typeof output & {
+        codeSplitting?: boolean | { groups?: Array<{ priority?: number; [key: string]: unknown }>; [key: string]: unknown }
+        advancedChunks?: { groups?: Array<{ priority?: number; [key: string]: unknown }>; [key: string]: unknown }
+        strictExecutionOrder?: boolean
+      }
+      if (native.codeSplitting === false || output.inlineDynamicImports || output.preserveModules) {
+        this.error('[fulgurjs] Vite 8 联邦构建需要独立的共享提供模块与协商模块。请移除 codeSplitting: false、inlineDynamicImports: true 或 preserveModules: true 后重建。')
+      }
+      const splitting = typeof native.codeSplitting === 'object' ? native.codeSplitting : native.advancedChunks ?? {}
+      const groups = splitting.groups ?? []
+      const userGroups: Array<Record<string, unknown>> = [...groups]
+      // rolldown 原生规则：codeSplitting 与 manualChunks 并存时忽略 manualChunks——这里
+      // 主动把 manualChunks 迁入同一分组表（同 rolldown 自身对单独 manualChunks 的迁移形态：
+      // name(id, ctx) 透传 ctx.getModuleInfo），语义不丢失。
+      if (output.manualChunks && !splitting.groups) {
+        const manual = output.manualChunks
+        if (typeof manual === 'function') {
+          // name 返回 null/undefined = 本组不捕获该模块，等价 rollup manualChunks 返回 void；
+          // 受保护模块由更高优先级的保护组先捕获，这里再挡一层防御性排除。
+          userGroups.push({
+            name: (id: string, ctx: { getModuleInfo: (id: string) => unknown }) =>
+              protectedChunk(id) || isOwnPackageModule(id) ? null : (manual(id, { getModuleInfo: ctx.getModuleInfo as never }) ?? null),
+          })
+        } else {
+          // 对象形式：bare 包按包目录整目录捕获（含 pnpm 嵌套布局），相对/绝对 specifier 按
+          // 精确 id 匹配（rollup 对象形式的 specifier 走完整解析，此处为保守近似）
+          for (const [name, specs] of Object.entries(manual as Record<string, string[]>)) {
+            userGroups.push({
+              name,
+              test: (id: string) => !protectedChunk(id) && !isOwnPackageModule(id) && specs.some((spec) =>
+                id.includes('/node_modules/' + spec + '/') || id === spec,
+              ),
+            })
+          }
+        }
+      }
+      const priority = Math.max(0, ...groups.map((g) => g.priority ?? 0)) + 1
+      return {
+        ...output,
+        manualChunks: undefined,
+        advancedChunks: undefined,
+        strictExecutionOrder: true,
+        codeSplitting: {
+          ...splitting,
+          groups: [{
+            name: (id: string) => protectedChunk(id)!, test: (id: string) => protectedChunk(id) !== undefined,
+            priority, minSize: 0, minShareCount: 1, maxSize: Infinity,
+            includeDependenciesRecursively: false,
+          }, ...userGroups],
+        },
+      } as typeof output
     },
 
     generateBundle: {

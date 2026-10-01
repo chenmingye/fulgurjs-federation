@@ -125,11 +125,11 @@ export function genSharedNsFacade(
  * rolldown（vite 8）对 CJS require 含顶层 await 的 ESM 模块按 Node 语义在构建期直接拒绝
  * （REQUIRE_TLA），react/react-dom 本体（CJS）互引在生产构建即失败。同步形态：
  * - 优先 getLoadedShare 同步取「已协商加载」的实例：宿主先加载时命中宿主实例，
- *   跨端单例语义与 TLA 版 loadShare 对齐；
+ *   按版本范围、singleton 与 strictVersion 选择已就绪实例；自定义 hook 复用成功快照；
  * - 未就绪时直连本应用本体：与 provide/fallback 的 genSharedFacade 是同一模块
- *   （构建期单份 → 实例恒同；协商稍后完成时 loadShare 返回的也是这一份）。
+ *   同步 require 不能等待协商；多版本与自定义 hook 下必须另行验收本地 fallback 的实例身份。
  * 本体随垫片静态入图，但垫片只被本应用 CJS 本体链 require——协商命中宿主时该链
- * 不被加载，不产生双实例。导出面枚举与 sharedNsFacade 相同。
+ * 的加载关系仍需以最终 chunk 图及运行时实例身份核对。导出面枚举与 sharedNsFacade 相同。
  */
 export function genCjsNsFacade(item: NormalizedShared, exportNames: string[], importTarget?: string): string {
   const opts: string[] = [
@@ -137,13 +137,19 @@ export function genCjsNsFacade(item: NormalizedShared, exportNames: string[], im
     `shareKey: ${JSON.stringify(item.shareKey)}`,
     ...(item.requiredVersion !== false ? [`requiredVersion: ${JSON.stringify(item.requiredVersion)}`] : []),
     ...(item.singleton ? ['singleton: true'] : []),
+    ...(item.strictVersion ? ['strictVersion: true'] : []),
   ]
   const lines: string[] = [
-    `import { getLoadedShare as __fulgurjs_gls, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    `import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
     // importTarget 为 load 期解析出的绝对 id（proxy 虚拟 id 上下文里裸包名无法 node 解析）；
     // 兜底保留裸包名（与命名空间门面同语义，无 proxy 载体时可解析）
     `import * as __fulgurjs_local from ${JSON.stringify(importTarget ?? item.import)};`,
-    `const __fulgurjs_m = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }) ?? __fulgurjs_local;`,
+    `const __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} });`,
+    // 未命中同步快照：把本地副本登记为将选中的共享条目（版本一致且条目未就绪时生效），
+    // 使先于 TLA 门面求值的垫片（jsx-runtime 拖入 provider chunk 的场景）与后续协商
+    // 收敛到同一份实例，杜绝单例双实例。
+    `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
+    `const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;`,
     `const __fulgurjs_d = __fulgurjsU(__fulgurjs_m);`,
     `export default __fulgurjs_d;`,
   ]

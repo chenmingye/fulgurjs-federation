@@ -32,7 +32,10 @@ describe('5.2.1: 宿主运行时/门面 chunk 隔离', () => {
     const fn = extra.build.rollupOptions.output.manualChunks
     expect(typeof fn).toBe('function')
     expect(fn('virtual:fulgurjs-runtime')).toBe('fulgurjs-runtime')
-    expect(fn('virtual:fulgurjs-shared:vue')).toMatch(/^fulgurjs-shared-/)
+    // provider 门面（无 ?f=）与消费协商门面（?f=）分组分离；preload-helper 独立成组
+    expect(fn('virtual:fulgurjs-shared:vue')).toBe('fulgurjs-provider-vue')
+    expect(fn('virtual:fulgurjs-shared:vue?f=abc123')).toBe('fulgurjs-shared-vue')
+    expect(fn('/x/vite/preload-helper.js')).toBe('fulgurjs-preload-helper')
     expect(fn('/x/src/main.ts')).toBeUndefined()
   })
 

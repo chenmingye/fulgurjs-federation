@@ -51,6 +51,8 @@ pnpm add -D @fulgurjs/federation
 
 要求：Vite ≥ 5.1（实测至 8.x）、Node ≥ 18、Vue 3 和/或 React 18–19（均为可选 peer——按所用框架安装）、浏览器 Chrome 108+（TLA 原生支持）。
 
+> Vite 8（rolldown）：5.3.3 起 dev 与生产构建、生产页面挂载均已通过完整验收（双向桥接 11 步交互矩阵，见验收报告）。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。
+
 ## 快速开始（React 应用）
 
 React 宿主与远程使用同一套「每应用两份文件」的配置形态，唯一区别是浏览器导入点：`@fulgurjs/federation/react`（同时提供通用运行时 API 与 React 适配 API，纯 React 项目不需要安装 Vue）。

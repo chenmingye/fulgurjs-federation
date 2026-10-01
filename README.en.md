@@ -48,10 +48,12 @@
 pnpm add -D @fulgurjs/federation
 ```
 
-- Vite ≥ 5.1 (tested through 8.x; Vite 8 uses the rolldown dep-optimizer path automatically)
+- Vite ≥ 5.1 (tested through 8.x)
 - Node ≥ 18
 - Vue ≥ 3.2.0 and/or React `>=18.0.0 <20` — all three are **optional peers**; install only the framework you use
 - Chrome 108+ (native top-level await)
+
+> Vite 8 (rolldown): as of 5.3.3, dev, production builds and production page mounting all pass full acceptance (bidirectional bridge 11-step interaction matrix, see the acceptance report). The first page open on a cold dev cache still falls inside the dependency pre-bundling window (DEV-010; it self-recovers via reload). Warm up before acceptance runs or manual judgement, as documented.
 
 `@fulgurjs/federation/runtime` and `@fulgurjs/federation/react` are **ESM-only** browser entries (no `require()`). The build-time main entry supports both ESM and CJS.
 

@@ -186,10 +186,12 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
     )
     // 零 TLA：rolldown 拒绝 CJS require 含顶层 await 的模块（REQUIRE_TLA）
     expect(code).not.toContain('await')
-    // 同步快照 + 本体直连双通道
-    expect(code).toContain('import { getLoadedShare as __fulgurjs_gls, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";')
+    // 同步快照 + 未命中登记本地副本（pin：与 TLA 门面收敛同实例）+ 本体直连三通道
+    expect(code).toContain('import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";')
     expect(code).toContain('import * as __fulgurjs_local from "react";')
-    expect(code).toContain('__fulgurjs_gls("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true }) ?? __fulgurjs_local;')
+    expect(code).toContain('const __fulgurjs_snap = __fulgurjs_gls("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true });')
+    expect(code).toContain('if (__fulgurjs_snap === undefined) __fulgurjs_pin("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true }, "19.3.0", __fulgurjs_local);')
+    expect(code).toContain('const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;')
     // default interop 与枚举式命名导出（与 sharedNsFacade 同口径）
     expect(code).toContain('export default __fulgurjs_d;')
     expect(code).toContain('export const createElement = __fulgurjs_d["createElement"];')
