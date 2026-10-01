@@ -746,18 +746,14 @@ export function federation(options: FederationOptions): Plugin[] {
     async transform(code, id) {
       if (!state.normalized) return null
       const clean = id.split('?')[0]
-      // build：宿主入口以静态 side-effect import 引入 init 模块（先于一切应用代码与
-      // shared 门面注册 remotes/provides）。V8-FIX（2026-10-01）：此前是「init 代码内联进
-      // 入口模块体」——入口模块体在其全部静态依赖（shared 门面，TLA）求值完才执行，而
-      // rolldown（vite 8）下 loadShare 的 fallback 是真 async chunk（rollup 对同 chunk 动态
-      // import 内联为 then），门面 TLA 在 init 前 await 该 async chunk → 页面死锁（零报错
-      // 空白，vite8 生产页实挂）。改为静态 import 后 init 求值先于门面组，scope 先注册，
-      // loadShare 恒走 get() 协商路径（get 的动态目标链无回边，实测全通）。
-      // 「rollup 会剥离独立 init 模块的顶层调用」由 side-effect import 语义 + 顶层显式
-      // 函数调用（非 PURE 注释）规避；e2e prod 套件全量守护该顺序。
+      // build：宿主入口模块顶部内联 init（先于一切应用代码注册 remotes/provides）。
+      // 不能用独立虚拟模块：rollup 会摇树剥离其顶层调用；入口自身的顶层调用永不被剥离。
+      // （V8 试图改为 side-effect import 的实验在 vite6 admin 生产实测破地图渲染——
+      // 内容区空白，已回滚；vite8 运行期死锁单列 rolldown 上游 BLOCKED，不以此换回退。）
       if (state.command === 'build' && state.entryAbsPaths.has(clean) && !state.entryInitInjected.has(clean)) {
         state.entryInitInjected.add(clean)
-        return { code: `import "virtual:fulgurjs-init";\n${code}`, map: null }
+        const initCode = genInitModule(state.normalized, state.command)
+        return { code: `${initCode}\n${code}`, map: null }
       }
 
       // node_modules 依赖是否进改写管线 = devSharedSelf || 纯 remote，与 dev post 阶段

@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.3.2
+
+- **修正：回滚 5.3.1 中「宿主入口 init 注入改为 `import "virtual:fulgurjs-init"`」的实验性变更**——该变更本意是修复 vite 8 生产运行死锁（未成功，vite 8 运行期仍单列 rolldown 上游 BLOCKED），但在大型宿主（jeecg 系，vite 6）生产实测存在破坏地图渲染的风险面。5.3.2 恢复 5.3.0 的「init 代码内联入口模块」形态（原始注释「rollup 会摇树剥离独立模块的顶层调用」仍然成立），其余 5.3.1 修复（同步 CJS-NS 垫片 / BN09 容器封锁 / BN08 getContext 诊断 / publisher 守卫）全部保留。单元 540/540、e2e dev 43 + prod 28 复验通过。
+
 ## 5.3.1
 
 - **修复：Vite 8（rolldown）下 React 联邦生产构建 REQUIRE_TLA 失败**——React 生态的本体为 CJS（`react-dom/cjs/*` 内部 `require("react")`），插件的 CJS require 重定向此前把目标指向与共享协商门面同体的垫片（`await loadShare(...)` 顶层 await 形态）；rolldown 按 Node 语义在构建期拒绝「CJS require 含顶层 await 的模块」（vite 5-7 的 rollup 无此限制，属存量兼容缺口，5.2.5 无桥接工程在 vite8 下同样复现）。现在 CJS 垫片改为**同步形态**：运行时新增 `getLoadedShare` 同步查询（loadShare 成功后缓存实例值，已协商加载的实例优先命中，跨端单例语义与 TLA 版 loadShare 对齐），未就绪时直连本应用本体（与 provide/fallback 同一模块，构建期单份 → 实例恒同）。vite 5.1.8/6.4.3/7.3.6/8.3.1 × {vue,react}×{host,remote} 十六个真实工程构建全部通过；`runtime.js` gzip 8812B（门禁 ≤9216B）。**已知边界（如实声明）**：vite 8.3.1 的桥接/React 生产**页面运行**在本轮仍无法通过挂载验收（rolldown 对「TLA 协商门面 × 动态目标透传重定向 × async chunk 强制拆分」的组合行为导致入口求值死锁，插件层六种分组/时序变体均无法完全规避；dev 全功能正常），归因为 rolldown-vite 上游行为，详见验收报告。
