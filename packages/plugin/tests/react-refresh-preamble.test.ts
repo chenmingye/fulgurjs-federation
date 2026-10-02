@@ -25,4 +25,31 @@ describe('跨框架 React refresh preamble', () => {
       }
     } finally { await server.close() }
   })
+
+  it('多远程宿主（5.4.2 回归）：标志同步先设 + 动态 import 容错，错源远程不阻塞 preamble', async () => {
+    const server = await createServer({
+      configFile: false,
+      root: path.resolve(import.meta.dirname, '../../../fixtures/host-bridge-vue'),
+      // 首个远程是 Vue 远程（6199，无 /@react-refresh），第二个才是 React 远程（6299）
+      plugins: [federation({
+        name: 'preamble-multi-remote-test',
+        remotes: { 'vue-remote': { dev: 'http://localhost:6199' }, 'react-remote': { dev: 'http://localhost:6299' } },
+        shared: { vue: { singleton: true }, react: { singleton: true }, 'react-dom': { singleton: true } },
+      })],
+      server: { middlewareMode: true },
+      optimizeDeps: { noDiscovery: true },
+    })
+    try {
+      const html = await server.transformIndexHtml('/', '<!doctype html><html><head></head><body></body></html>')
+      // 标志与注册器必须是同步语句（不依赖任何 import 的求值结果）
+      const flagIdx = html.indexOf('window.__vite_plugin_react_preamble_installed__ = true')
+      expect(flagIdx).toBeGreaterThan(-1)
+      const scriptStart = html.lastIndexOf('<script', flagIdx)
+      const scriptSlice = html.slice(scriptStart, flagIdx)
+      expect(scriptSlice).not.toMatch(/\bimport\s+\*\s+as\s/)
+      // 取真身用动态 import 且整体 try/catch（错源静默跳过）
+      expect(html).toContain('await import("http://localhost:6199/@react-refresh")')
+      expect(html).toMatch(/\}\s*catch\s*\{\s*\}\s*\}\)\(\);/)
+    } finally { await server.close() }
+  })
 })

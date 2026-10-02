@@ -1,0 +1,15 @@
+{
+  "name": "fulgurjs-demo-pages-cli-negative",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "@fulgurjs/federation": "5.4.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,422 @@
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env app-b/.env
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env	2026-10-02 19:48:21
++++ app-b/.env	2026-10-02 20:23:54
+@@ -1,11 +1,11 @@
+ # port
+-VITE_PORT = 3100
++VITE_PORT = 5372
+ 
+ #  网站标题
+-VITE_GLOB_APP_TITLE = JeecgBoot 企业级低代码平台
++VITE_GLOB_APP_TITLE = JeecgBoot-Fed-B 企业级低代码平台
+ 
+ # 简称，此变量只能是字符/下划线
+-VITE_GLOB_APP_SHORT_NAME = JeecgBoot_Pro
++VITE_GLOB_APP_SHORT_NAME = JeecgBoot_Fed_B
+ 
+ # 单点登录服务端地址
+ VITE_GLOB_APP_CAS_BASE_URL=http://cas.test.com:8443/cas
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development app-b/.env.development
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development	2026-10-02 19:48:21
++++ app-b/.env.development	2026-10-02 21:25:28
+@@ -6,13 +6,13 @@
+ 
+ 
+ # 跨域代理，您可以配置多个 ,请注意，没有换行符
+-VITE_PROXY = [["/jeecgboot","http://localhost:8080/jeecg-boot"],["/upload","http://localhost:3300/upload"]]
++VITE_PROXY = [["/jeecgboot-b","http://localhost:5380/jeecg-boot-b"]]
+ 
+ #后台接口全路径地址(必填)
+ VITE_GLOB_DOMAIN_URL=http://localhost:8080/jeecg-boot
+ 
+ #后台接口父地址(必填)
+-VITE_GLOB_API_URL=/jeecgboot
++VITE_GLOB_API_URL=/jeecgboot-b
+ 
+ # 接口前缀
+ VITE_GLOB_API_URL_PREFIX=
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production app-b/.env.production
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production	2026-10-02 22:15:11
++++ app-b/.env.production	2026-10-02 22:55:34
+@@ -2,7 +2,7 @@
+ VITE_USE_MOCK = false
+ 
+ # 发布路径
+-VITE_PUBLIC_PATH = /
++VITE_PUBLIC_PATH = /jeecg-b/
+ 
+ # 是否启用gzip或brotli压缩
+ # 选项值: gzip | brotli | none
+@@ -13,7 +13,7 @@
+ VITE_BUILD_COMPRESS_DELETE_ORIGIN_FILE = false
+ 
+ #后台接口父地址(必填)
+-VITE_GLOB_API_URL=/jeecgboot
++VITE_GLOB_API_URL=/jeecgboot-b
+ 
+ #后台接口全路径地址(必填)
+ VITE_GLOB_DOMAIN_URL=http://127.0.0.1:8080/jeecg-boot
+@@ -36,4 +36,5 @@
+ # icon组件的iconify图标库使用在线还是本地。可选属性：online, local
+ VITE_GLOB_ICONIFY_USE_TYPE=local
+ 
++# 联邦演示：关闭 PWA（SW 拦截子应用资源请求）
+ VITE_USE_PWA = false
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts app-b/build/vite/plugin/index.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts	2026-10-02 19:48:21
++++ app-b/build/vite/plugin/index.ts	2026-10-02 21:58:18
+@@ -144,7 +144,8 @@
+     vitePlugins.push(configCompressPlugin(VITE_BUILD_COMPRESS, VITE_BUILD_COMPRESS_DELETE_ORIGIN_FILE));
+ 
+     // vite-plugin-pwa (PWA 插件注册)
+-    if (!isElectron) {
++    // 联邦演示：Service Worker 会拦截子应用资源请求干扰桥接，默认关闭（VITE_USE_PWA=true 可恢复）
++    if (!isElectron && !viteEnv.VITE_USE_PWA) {
+       vitePlugins.push(configPwaPlugin(isBuild));
+     }
+   }
+Only in app-b: fulgurjs.config.ts
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts app-b/mock/sys/menu.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts	2026-10-02 19:48:21
++++ app-b/mock/sys/menu.ts	2026-10-02 20:23:31
+@@ -236,6 +236,38 @@
+   ],
+ };
+ 
++// 【联邦演示】fulgurjs-federation 桥接页面（Jeecg-B → React-C 三层链路中间层）
++// catch-all 子路由保证内层（React-C）路由变化时视图不重挂
++const fedRoute = {
++  path: '/fed',
++  name: 'FedDemo',
++  component: 'LAYOUT',
++  redirect: '/fed/inner',
++  meta: {
++    icon: 'ant-design:cluster-outlined',
++    title: '联邦演示（fulgurjs）',
++  },
++  children: [
++    {
++      path: 'inner',
++      name: 'FedInnerReact',
++      component: '/fed/InnerReactDemo',
++      meta: {
++        title: '嵌入 React-C（三层嵌套）',
++        icon: 'ant-design:code-outlined',
++      },
++      children: [
++        {
++          path: ':pathMatch(.*)*',
++          name: 'FedInnerReactAny',
++          component: '/fed/InnerReactDemo',
++          meta: { title: '', hideMenu: true, hideBreadcrumb: true },
++        },
++      ],
++    },
++  ],
++};
++
+ export default [
+   {
+     url: `${baseUrl}/sys/permission/getUserPermissionByToken`,
+@@ -255,11 +287,11 @@
+       switch (id) {
+         case '1':
+           dashboardRoute.redirect = dashboardRoute.path + '/' + dashboardRoute.children[0].path;
+-          menu = [dashboardRoute, authRoute, levelRoute, sysRoute, linkRoute];
++          menu = [dashboardRoute, authRoute, levelRoute, sysRoute, linkRoute, fedRoute];
+           break;
+         case '2':
+           dashboardRoute.redirect = dashboardRoute.path + '/' + dashboardRoute.children[1].path;
+-          menu = [dashboardRoute, authRoute, levelRoute, linkRoute];
++          menu = [dashboardRoute, authRoute, levelRoute, linkRoute, fedRoute];
+           break;
+         default:
+           menu = [];
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json app-b/package.json
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json	2026-10-02 20:15:39
++++ app-b/package.json	2026-10-02 22:50:10
+@@ -23,20 +23,23 @@
+     "husky:install": "husky install"
+   },
+   "dependencies": {
+-    "@jeecg/aiflow": "3.9.5-beta",
+-    "@iconify/iconify": "^3.1.1",
+     "@ant-design/colors": "^7.2.1",
+     "@ant-design/icons-vue": "^7.0.1",
+-    "@vue/shared": "^3.5.39",
+-    "@vueuse/core": "^10.11.1",
+-    "@tinymce/tinymce-vue": "4.0.7",
++    "@fulgurjs/federation": "5.4.1",
++    "@iconify/iconify": "^3.1.1",
++    "@jeecg/aiflow": "3.9.5-beta",
+     "@logicflow/core": "^2.2.4",
+     "@logicflow/extension": "^2.3.0",
+     "@logicflow/vue-node-registry": "^1.2.4",
++    "@onlyoffice/document-editor-vue": "^1.6.1",
++    "@tinymce/tinymce-vue": "4.0.7",
++    "@traptitech/markdown-it-katex": "^3.6.0",
++    "@vant/area-data": "^1.5.2",
++    "@vue/shared": "^3.5.39",
++    "@vueuse/core": "^10.11.1",
+     "@zxcvbn-ts/core": "^3.0.4",
+     "ant-design-vue": "^4.2.6",
+     "axios": "^1.18.1",
+-    "@vant/area-data": "^1.5.2",
+     "clipboard": "^2.0.11",
+     "codemirror": "^5.65.21",
+     "cron-parser": "^4.9.0",
+@@ -47,23 +50,26 @@
+     "echarts": "^5.6.0",
+     "emoji-mart-vue-fast": "^15.0.5",
+     "enquire.js": "^2.1.6",
++    "event-source-polyfill": "^1.0.31",
++    "highlight.js": "^11.11.1",
+     "intro.js": "^7.2.0",
+     "lodash-es": "^4.18.1",
+     "lodash.get": "^4.4.2",
++    "lunar-javascript": "^1.7.7",
+     "markdown-it": "^14.3.0",
+     "markdown-it-link-attributes": "^4.0.1",
+-    "event-source-polyfill": "^1.0.31",
+-    "highlight.js": "^11.11.1",
+-    "@traptitech/markdown-it-katex": "^3.6.0",
+     "md5": "^2.3.0",
+     "mockjs": "^1.1.0",
+     "nprogress": "^0.2.0",
+     "path-to-regexp": "^6.3.0",
++    "perfect-scrollbar": "^1.5.6",
+     "pinia": "^3.0.4",
+-    "print-js": "^1.6.0",
+     "pinyin-pro": "^3.28.1",
+-    "qs": "^6.15.3",
++    "print-js": "^1.6.0",
+     "qrcode": "^1.5.4",
++    "qs": "^6.15.3",
++    "react": "19.3.0",
++    "react-dom": "19.3.0",
+     "resize-observer-polyfill": "^1.5.1",
+     "showdown": "^2.1.0",
+     "sortablejs": "^1.15.7",
+@@ -71,31 +77,27 @@
+     "tinymce": "6.6.2",
+     "vditor": "^3.11.2",
+     "vue": "^3.5.39",
++    "vue-color": "^3.3.3",
+     "vue-cropper": "^0.6.5",
+     "vue-cropperjs": "^5.0.0",
++    "vue-grid-layout-v3": "^3.1.2",
+     "vue-i18n": "^9.14.5",
+     "vue-infinite-scroll": "^2.0.2",
+     "vue-print-nb-jeecg": "^1.0.13",
+     "vue-router": "^5.1.0",
+     "vue-types": "^5.1.3",
+     "vuedraggable": "^4.1.0",
+-    "vxe-table": "4.13.31",
+     "vxe-pc-ui": "4.6.12",
++    "vxe-table": "4.13.31",
+     "vxe-table-plugin-antd": "4.0.8",
+     "xe-utils": "3.5.26",
+-    "xss": "^1.0.15",
+-    "@onlyoffice/document-editor-vue": "^1.6.1",
+-    "vue-grid-layout-v3": "^3.1.2",
+-    "lunar-javascript": "^1.7.7",
+-    "perfect-scrollbar": "^1.5.6",
+-    "vue-color": "^3.3.3"
++    "xss": "^1.0.15"
+   },
+   "devDependencies": {
+     "@commitlint/cli": "^18.6.1",
+     "@commitlint/config-conventional": "^18.6.3",
+     "@iconify/json": "^2.2.498",
+     "@purge-icons/generated": "^0.10.0",
+-    "unplugin-icons": "^0.22.0",
+     "@types/codemirror": "^5.60.17",
+     "@types/crypto-js": "^4.2.2",
+     "@types/fs-extra": "^11.0.4",
+@@ -106,9 +108,9 @@
+     "@types/mockjs": "^1.0.10",
+     "@types/node": "^20.19.43",
+     "@types/nprogress": "^0.2.3",
++    "@types/pinyin": "^2.10.2",
+     "@types/qrcode": "^1.5.6",
+     "@types/qs": "^6.15.1",
+-    "@types/pinyin": "^2.10.2",
+     "@types/showdown": "^2.0.6",
+     "@types/sortablejs": "^1.15.9",
+     "@typescript-eslint/eslint-plugin": "^6.21.0",
+@@ -118,11 +120,13 @@
+     "@vue/compiler-sfc": "^3.5.39",
+     "@vue/test-utils": "^2.4.11",
+     "autoprefixer": "^10.5.2",
++    "big.js": "^6.2.2",
+     "commitizen": "^4.3.2",
+     "conventional-changelog-cli": "^4.1.0",
+     "cross-env": "^7.0.3",
+     "cz-git": "^1.13.1",
+     "czg": "^1.13.1",
++    "dingtalk-jsapi": "^3.2.9",
+     "dotenv": "^16.6.1",
+     "eslint": "^8.57.1",
+     "eslint-config-prettier": "^9.1.2",
+@@ -155,11 +159,14 @@
+     "stylelint-config-recommended-vue": "^1.6.1",
+     "stylelint-config-standard": "^36.0.1",
+     "stylelint-order": "^6.0.4",
++    "tinycolor2": "1.6.0",
+     "ts-jest": "^29.4.11",
+     "ts-node": "^10.9.2",
+     "typescript": "^5.9.3",
++    "unocss": "^66.7.5",
++    "unplugin-icons": "^0.22.0",
+     "unplugin-vue-components": "~0.24.1",
+-    "vite": "^8.1.4",
++    "vite": "^6.4.3",
+     "vite-plugin-compression": "^0.5.1",
+     "vite-plugin-html": "^3.2.2",
+     "vite-plugin-mkcert": "^1.17.12",
+@@ -167,17 +174,13 @@
+     "vite-plugin-optimize-persist": "^0.1.2",
+     "vite-plugin-package-config": "^0.1.1",
+     "vite-plugin-purge-icons": "^0.10.0",
+-    "vite-plugin-svg-icons": "^2.0.1",
+     "vite-plugin-pwa": "^1.3.0",
+-    "workbox-window": "^7.4.1",
+     "vite-plugin-qiankun": "^1.0.15",
++    "vite-plugin-svg-icons": "^2.0.1",
+     "vite-plugin-vue-setup-extend-plus": "^0.1.0",
+-    "unocss": "^66.7.5",
+     "vue-eslint-parser": "^9.4.3",
+     "vue-tsc": "^1.8.27",
+-    "dingtalk-jsapi": "^3.2.9",
+-    "big.js": "^6.2.2",
+-    "tinycolor2": "1.6.0"
++    "workbox-window": "^7.4.1"
+   },
+   "repository": {
+     "type": "git",
+Only in app-b/src: fulgurjs
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/index.ts app-b/src/router/index.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/index.ts	2026-10-02 19:48:21
++++ app-b/src/router/index.ts	2026-10-02 20:10:25
+@@ -1,4 +1,4 @@
+-import type { RouteRecordRaw } from 'vue-router';
++import type { RouteRecordRaw, RouterHistory } from 'vue-router';
+ import type { App } from 'vue';
+ 
+ import { $electron } from "@/electron";
+@@ -31,8 +31,9 @@
+ 
+ /**
+  * 创建路由实例
++ * @param opts 联邦桥接专用：可传入 memory history 覆盖（桥接工厂用），普通启动不传
+  */
+-export function createRouter() {
++export function createRouter(opts?: { history?: RouterHistory }) {
+   let router = createVueRouter({
+       routes: basicRoutes as unknown as RouteRecordRaw[],
+       strict: true,
+@@ -40,6 +41,7 @@
+     },
+     // 如果是 Electron 环境，则使用 hash 路由
+     $electron.isElectron(),
++    opts?.history,
+   )
+ 
+   // TODO 【QQYUN-4517】【表单设计器】记录分享路由守卫测试
+@@ -49,6 +51,8 @@
+     //console.warn('to', to);
+     //console.groupEnd();
+   });
++
++  return router
+ }
+ 
+ // reset router
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/router.ts app-b/src/router/router.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/router.ts	2026-10-02 19:48:21
++++ app-b/src/router/router.ts	2026-10-02 20:10:18
+@@ -16,10 +16,11 @@
+  * 创建路由
+  * @param options 参数
+  * @param useHashHistory 是否使用 hash 路由，true使用，false不使用hash路由
++ * @param historyOverride 联邦桥接专用：显式传入 RouterHistory（如 createMemoryHistory）时优先生效
+  */
+-export function createRouter(options: Partial<RouterOptions>, useHashHistory = false) {
++export function createRouter(options: Partial<RouterOptions>, useHashHistory = false, historyOverride?: RouterHistory) {
+   const createFn = useHashHistory ? createWebHashHistory : createWebHistory;
+-  webHistory = createFn(import.meta.env.VITE_PUBLIC_PATH);
++  webHistory = historyOverride ?? createFn(import.meta.env.VITE_PUBLIC_PATH);
+   // app router
+   let router = createVueRouter({
+     history: webHistory,
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/store/index.ts app-b/src/store/index.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/store/index.ts	2026-10-02 19:48:21
++++ app-b/src/store/index.ts	2026-10-02 20:10:29
+@@ -13,6 +13,13 @@
+   app.use(store);
+ }
+ 
++/**
++ * 联邦桥接专用：创建独立 Pinia 实例（桥接工厂给子应用实例用，普通启动不受影响）
++ */
++export function createAppStore(): Pinia {
++  return createPinia();
++}
++
+ // 销毁store
+ export function destroyStore() {
+   store = null;
+Only in app-b/src/views: fed
+diff --color -r -u --exclude=node_modules --exclude=dist --exclude=.git --exclude=pnpm-lock.yaml --exclude=package-lock.json --exclude=pnpm-workspace.yaml upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts app-b/vite.config.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts	2026-10-02 19:48:21
++++ app-b/vite.config.ts	2026-10-02 22:50:06
+@@ -8,6 +8,8 @@
+ import { wrapperEnv } from './build/utils';
+ import { createVitePlugins } from './build/vite/plugin';
+ import { OUTPUT_DIR } from './build/constant';
++import { federation } from '@fulgurjs/federation';
++import fulgurjsConfig from './fulgurjs.config';
+ 
+ function pathResolve(dir: string) {
+   return resolve(process.cwd(), '.', dir);
+@@ -45,7 +47,8 @@
+   console.debug('[init] Vite Proxy Config: ', VITE_PROXY);
+ 
+   return {
+-    base: isQiankunMicro ? VITE_GLOB_QIANKUN_MICRO_APP_ENTRY : VITE_PUBLIC_PATH,
++    // 联邦演示：生产构建固定 /jeecg-b/ 子路径（dev 不受影响），供宿主以子目录部署消费
++    base: isBuild ? '/jeecg-b/' : (isQiankunMicro ? VITE_GLOB_QIANKUN_MICRO_APP_ENTRY : VITE_PUBLIC_PATH),
+     root,
+     resolve: {
+       alias: [
+@@ -110,10 +113,8 @@
+       // update-end--author:liaozhiyang---date:20260306---for:【QQYUN-14801】vite启动的时候，预构建一些入口页面，访问时快一些
+     },
+     build: {
+-      // Vite 8 默认使用 Oxc minifier；'esbuild' 已 deprecated。
+-      // 这里保留 minify=true 显式启用，并对 console/debugger 做 drop。
+-      minify: true,
+-      target: 'es2015',
++      minify: 'esbuild',
++      target: 'es2022',
+       cssTarget: 'chrome80',
+       outDir: OUTPUT_DIR,
+       rollupOptions: {
+@@ -175,16 +176,9 @@
+     },
+ 
+     // The vite plugin used by the project. The quantity is large, so it is separately extracted and managed
+-    plugins: await createVitePlugins(viteEnv, isBuild, isQiankunMicro),
++    plugins: [...(await createVitePlugins(viteEnv, isBuild, isQiankunMicro)), federation(fulgurjsConfig)],
+ 
+     optimizeDeps: {
+-      // Vite 8 uses Rolldown for dep optimization; esbuildOptions is deprecated.
+-      // See https://rolldown.rs/ for the rolldownOptions shape.
+-      rolldownOptions: {
+-        transform: {
+-          target: 'es2020',
+-        },
+-      },
+       // @iconify/iconify: The dependency is dynamically and virtually loaded by @purge-icons/generated, so it needs to be specified explicitly
+       // vite8 显式预构建路由独有的重量级依赖，避免首次打开对应路由时因运行时才发现依赖而产生大量瀑布式请求
+       include: [

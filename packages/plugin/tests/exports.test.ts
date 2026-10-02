@@ -83,3 +83,17 @@ describe('历史破坏性收敛：旧公开入口已删除', () => {
     expect(() => req.resolve('@fulgurjs/federation/config')).toThrow()
   })
 })
+
+describe('路由入口导出面（5.4.2 补）', () => {
+  it('bridge/router/vue 与 bridge/router/react 均导出 BridgeHostRouting 类型（README §8.3 routing prop 写法可编译）', async () => {
+    const vueEntry = await import('../src/bridge-router-vue')
+    const reactEntry = await import('../src/bridge-router-react')
+    // 类型导出在运行时不可值断言；用源码文本断言 re-export 语句存在（导出面守卫）
+    const vueSrc = fs.readFileSync(path.join(pkgRoot, 'src/bridge-router-vue.ts'), 'utf8')
+    const reactSrc = fs.readFileSync(path.join(pkgRoot, 'src/bridge-router-react.tsx'), 'utf8')
+    expect(vueSrc).toMatch(/export type \{ BridgeHostRouting \}/)
+    expect(reactSrc).toMatch(/export type \{ BridgeHostRouting \}/)
+    void vueEntry
+    void reactEntry
+  })
+})

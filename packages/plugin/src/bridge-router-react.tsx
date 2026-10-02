@@ -2,8 +2,11 @@
 import type { ReactElement } from 'react'
 import { createElement } from 'react'
 import { RouterProvider, createMemoryRouter, type RouteObject } from 'react-router-dom'
-import { sameLocation, type BridgeChildRoute, type BridgeHostNavigation, type BridgeLocation } from './bridge-router-core'
+import { sameLocation, type BridgeChildRoute, type BridgeHostNavigation, type BridgeLocation, type BridgeHostRouting } from './bridge-router-core'
 import { connectChildNavigation } from './bridge-router-sync'
+
+/** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
+export type { BridgeHostRouting }
 
 export type ReactBridgeCancelPolicy = (next: BridgeLocation) => boolean
 export interface ReactDataRouterLike {

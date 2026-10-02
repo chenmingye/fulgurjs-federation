@@ -875,6 +875,8 @@ export function federation(options: FederationOptions): Plugin[] {
     transformIndexHtml: {
       order: 'pre',
       handler(html) {
+        console.error('[fulgurjs:probe] transformIndexHtml pre invoked, len=' + html.length)
+        debugLog('init-entry', { stage: 'html-hook', command: state.command, normalized: !!state.normalized, hasModuleScript: /type=["']module["']/.test(html) })
         if (!state.normalized) return html
         if (state.command === 'serve') {
           // 不带 base：vite dev 的 html 处理会统一解析并补 base（自带 base 会被二次前缀）
@@ -890,6 +892,7 @@ export function federation(options: FederationOptions): Plugin[] {
           const abs = path.resolve(state.normalized.root, src.startsWith('/') ? src.slice(1) : src)
           state.entryAbsPaths.add(abs)
         }
+        debugLog('init-entry', { stage: 'capture', count: state.entryAbsPaths.size, entries: [...state.entryAbsPaths].map((p) => redactModulePath(p, state.normalized!.root)) })
         return html
       },
     },
@@ -1439,12 +1442,19 @@ export function federation(options: FederationOptions): Plugin[] {
             .map((r) => { try { return new URL(r.devEntry).origin } catch { return null } })
             .find((o) => o !== null && /^https?:/.test(o ?? ''))
           if (!remoteOrigin) return html
+          // 5.4.2 修复（多远程宿主）：首个 http 远程未必是 React 远程（如 Vue 宿主同时挂
+          // Vue 子应用与 React 子应用），静态 import 错源会以 MIME 错误告吹、标志也无法设置，
+          // 真正消费 React 的远程因此拒绝求值（"can't detect preamble"）。改为：标志与注册器
+          // 先同步设置（preamble 语义只要求这两个钩子存在），再用动态 import 容错取真身——
+          // 错源远程静默跳过（零 console 噪声），正确实例由远程模块的 shim 自举兜底
+          // （genReactRefreshShim）或本脚本命中 React 远程 origin 时直接发布。
           return (
-            `<script type="module">import * as __fulgurjs_rr from ${JSON.stringify(`${remoteOrigin}/@react-refresh`)};` +
-            `try { __fulgurjs_rr.default?.injectIntoGlobalHook?.(window); } catch {}` +
-            // plugin-react 4（Vite 5/6）还检查此标志；新版本同样可以安全接受。
+            `<script type="module">` +
             'window.$RefreshReg$ = () => {};window.$RefreshSig$ = () => (type) => type;window.__vite_plugin_react_preamble_installed__ = true;' +
-            `(globalThis).${REACT_REFRESH_GLOBAL_KEY} ??= __fulgurjs_rr;</script>` + html
+            `(async () => { try { const __fulgurjs_rr = await import(${JSON.stringify(`${remoteOrigin}/@react-refresh`)});` +
+            `try { __fulgurjs_rr.default?.injectIntoGlobalHook?.(window); } catch {}` +
+            `(globalThis).${REACT_REFRESH_GLOBAL_KEY} ??= __fulgurjs_rr; } catch {} })();` +
+            `</script>` + html
           )
         }
         const lastRef = html.lastIndexOf('/@react-refresh')

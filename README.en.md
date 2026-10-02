@@ -53,7 +53,7 @@ pnpm add -D @fulgurjs/federation
 - Vue ≥ 3.2.0 and/or React `>=18.0.0 <20` — all three are **optional peers**; install only the framework you use
 - Chrome 108+ (native top-level await)
 
-> Vite 8 (rolldown): as of 5.3.3, dev, production builds and production page mounting all pass full acceptance (bidirectional bridge 11-step interaction matrix, see the acceptance report). The first page open on a cold dev cache still falls inside the dependency pre-bundling window (DEV-010; it self-recovers via reload). Warm up before acceptance runs or manual judgement, as documented.
+> Vite 8 (rolldown): as of 5.3.3, dev, production builds and production page mounting all pass full acceptance (bidirectional bridge 11-step interaction matrix, see the acceptance report). **5.4.2 boundary note**: in production builds of large apps (e.g. JeecgBoot v3.9.5), the plugin's TLA share facades joining chunk merging can trigger a rolldown codegen bug that merges the app's own async initialization into a sync lazy init and drops the `async` marker (`SyntaxError: Unexpected reserved word`; minify/target/manualChunks variants and a bare-baseline comparison have ruled out other variables) — build such apps for production with Vite 5–7; dev is unaffected. The first page open on a cold dev cache still falls inside the dependency pre-bundling window (DEV-010; it self-recovers via reload). Warm up before acceptance runs or manual judgement, as documented.
 
 `@fulgurjs/federation/runtime` and `@fulgurjs/federation/react` are **ESM-only** browser entries (no `require()`). The build-time main entry supports both ESM and CJS.
 

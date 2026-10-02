@@ -415,8 +415,17 @@ export function genReactRefreshShim(): string {
   const g = `(globalThis).${REACT_REFRESH_GLOBAL_KEY}`
   return [
     `let __fulgurjs_rr = ${g};`,
+    // 5.4.2 修复（多远程宿主）：宿主页的发布脚本可能指向非 React 远程（错源静默失败），
+    // 且其兜底标志可能尚未就绪。shim 是 React 模块的必经入口，在此自举 preamble——
+    // 先补 $RefreshReg$/$RefreshSig$ 与标志（plugin-react 4/5 硬检查），再委托真身。
+    `if (!window.__vite_plugin_react_preamble_installed__) {`,
+    `  window.$RefreshReg$ ??= () => {};`,
+    `  window.$RefreshSig$ ??= (type) => type;`,
+    `  window.__vite_plugin_react_preamble_installed__ = true;`,
+    `}`,
     `if (!__fulgurjs_rr) {`,
     `  __fulgurjs_rr = await import("/@react-refresh");`,
+    `  try { __fulgurjs_rr.default?.injectIntoGlobalHook?.(window); } catch {}`,
     `  ${g} = __fulgurjs_rr;`,
     `}`,
     `export const register = __fulgurjs_rr.register;`,

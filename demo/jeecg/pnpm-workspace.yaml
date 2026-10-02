@@ -1,0 +1,10 @@
+packages:
+  - '.'
+# Jeecg 基线依赖的构建脚本对演示无用（esbuild ≥0.14 用 optional 平台包分发二进制，
+# core-js 仅资助提示，logicflow/scarf 为遥测）。pnpm 12 用 allowBuilds 映射形态放行以通过门禁。
+allowBuilds:
+  '@logicflow/core': true
+  '@scarf/scarf': true
+  core-js: true
+  esbuild: true
+  vue-demi: true

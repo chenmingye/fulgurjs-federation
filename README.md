@@ -51,7 +51,7 @@ pnpm add -D @fulgurjs/federation
 
 要求：Vite ≥ 5.1（实测至 8.x）、Node ≥ 18、Vue 3 和/或 React 18–19（均为可选 peer——按所用框架安装）、浏览器 Chrome 108+（TLA 原生支持）。
 
-> Vite 8（rolldown）：5.3.3 起 dev 与生产构建、生产页面挂载均已通过完整验收（双向桥接 11 步交互矩阵，见验收报告）。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。
+> Vite 8（rolldown）：5.3.3 起 dev 与生产构建、生产页面挂载均已通过完整验收（双向桥接 11 步交互矩阵，见验收报告）。**5.4.2 补充边界**：大型应用（如 JeecgBoot v3.9.5）生产构建下，插件的 TLA 共享门面参与 chunk 合并时可触发 rolldown 将应用 async 初始化语句合并丢 `async` 标记（`SyntaxError: Unexpected reserved word`，minify/target/manualChunks 变体与裸基线对照已排除其他变量）——此类应用生产构建请用 Vite 5–7，开发态不受影响。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。
 
 ## 快速开始（React 应用）
 

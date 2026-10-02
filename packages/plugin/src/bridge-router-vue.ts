@@ -1,8 +1,11 @@
 /** Vue Router 4 的宿主导航端口与子应用 memory router 接线（按需入口）。 */
 import { type Router, type NavigationFailure } from 'vue-router'
-import type { BridgeChildRoute, BridgeHostNavigation, BridgeLocation } from './bridge-router-core'
+import type { BridgeChildRoute, BridgeHostNavigation, BridgeLocation, BridgeHostRouting } from './bridge-router-core'
 import { connectChildNavigation } from './bridge-router-sync'
 import { routingSyncError } from './bridge-errors'
+
+/** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
+export type { BridgeHostRouting }
 
 export interface VueBridgeNavigationOptions {
   /** 保留配置兼容；Vue Router fullPath 已剥离 history base，不再二次剥离。 */

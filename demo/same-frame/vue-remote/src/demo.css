@@ -1,0 +1,154 @@
+/**
+ * 子应用样式（.sfc- 前缀命名空间）：随 expose 依赖图加载。
+ * 前缀刻意与宿主（.sfh-）区分——联邦同 realm 共存，远程全局 CSS 会影响宿主，
+ * 类名命名空间是本 demo 的边界治理手段（README「桥接的隔离边界」）。
+ */
+.sfc-child-app {
+  border: 2px solid #42b883;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: sans-serif;
+  background: #f6fbf9;
+}
+
+.sfc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 10px;
+}
+
+.sfc-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #42b883;
+  background: #fff;
+  color: #2f7d5f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sfc-badge-child {
+  background: #42b883;
+  border-color: #42b883;
+  color: #fff;
+  font-weight: 600;
+}
+
+.sfc-badge-session {
+  border-color: #b3a2ea;
+  color: #6b4fbb;
+}
+
+.sfc-child-label {
+  margin: 0 0 8px;
+  color: #2f7d5f;
+  font-size: 13px;
+}
+
+.sfc-page {
+  background: #fff;
+  border: 1px solid #d9efe6;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.sfc-page h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #2f7d5f;
+}
+
+.sfc-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.sfc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.sfc-table th,
+.sfc-table td {
+  border: 1px solid #e3f0ea;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.sfc-table a {
+  color: #2f7d5f;
+}
+
+.sfc-pager {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.sfc-field {
+  display: block;
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.sfc-field input,
+.sfc-field select,
+.sfc-toolbar input,
+.sfc-toolbar select {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid #b9d9cb;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.sfc-btn-primary {
+  background: #42b883;
+  border: 1px solid #42b883;
+  color: #fff;
+  border-radius: 4px;
+  padding: 3px 14px;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+.sfc-link {
+  margin-left: 10px;
+  font-size: 13px;
+  color: #2f7d5f;
+}
+
+.sfc-summary {
+  border: 1px dashed #42b883;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: sans-serif;
+  font-size: 13px;
+  background: #fff;
+}
+
+.sfc-summary-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: #2f7d5f;
+}
+
+.sfc-summary-line {
+  margin: 0 0 8px;
+}
+
+.sfc-summary-note {
+  margin-left: 10px;
+  color: #7a8b83;
+  font-size: 12px;
+}

@@ -1,0 +1,33 @@
+:root {
+  --bg: #0f1117; --panel: #171a23; --panel2: #1d212d; --line: #2a2f3d;
+  --text: #e6e9f0; --muted: #8b93a7; --accent: #4f8cff; --ok: #34c98e; --bad: #ff6b6b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font-size: 20px; }
+h1 .muted { font-weight: 400; font-size: 16px; }
+.muted { color: var(--muted); }
+.header-actions { display: flex; gap: 12px; align-items: center; }
+.header-actions a { color: var(--accent); text-decoration: none; }
+button { background: var(--accent); border: 0; color: #fff; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+button.ghost { background: var(--panel2); border: 1px solid var(--line); }
+button:disabled { opacity: .5; cursor: default; }
+.columns-nav { padding: 12px 28px; display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); }
+.columns-nav a { color: var(--accent); text-decoration: none; background: var(--panel); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; }
+main { padding: 20px 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; scroll-margin-top: 20px; }
+.card h2 { margin: 0 0 4px; font-size: 16px; }
+.card .desc { color: var(--muted); margin: 4px 0 10px; }
+.card .source { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.apps { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.app { display: flex; align-items: center; gap: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: none; }
+.dot.up { background: var(--ok); }
+.app a { color: var(--text); text-decoration: none; font-family: ui-monospace, monospace; font-size: 13px; }
+.app a:hover { color: var(--accent); }
+.badge { margin-left: auto; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.card-actions { display: flex; gap: 8px; margin-top: 6px; }
+footer { padding: 16px 28px; border-top: 1px solid var(--line); font-size: 12px; }
+code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+.status-ok { color: var(--ok); } .status-bad { color: var(--bad); }
