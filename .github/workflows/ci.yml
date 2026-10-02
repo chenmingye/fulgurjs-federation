@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vite: [6.4.3, 7.3.6, 8.3.0]
+        vite: [6.4.3, 7.3.6, 8.3.1]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,38 +69,22 @@ jobs:
       - name: Install fixtures + e2e
         env:
           VITE_VERSION: ${{ matrix.vite }}
-        run: |
-          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto fixtures/remote-react fixtures/host-react; do
-            pnpm --dir "$app" install --no-frozen-lockfile
-            pnpm --dir "$app" add -D "vite@${VITE_VERSION}"
-          done
-          pnpm --dir e2e install --no-frozen-lockfile
+        run: bash e2e/scripts/ci-install-fixtures.sh
         # fixtures 以 link: 协议依赖本地插件，npm 不支持该协议（EUNSUPPORTEDPROTOCOL）→ 必须 pnpm
       - name: Playwright chromium
         run: pnpm --dir e2e exec playwright install --with-deps chromium
-      - name: e2e（dev + fault 套件，含 React）
-        run: |
-          # 预起三个 fixture dev server：Playwright 的 reuseExistingServer 会复用现成服务，
-          # 因而不接管其生命周期——它自己启的服务在 Linux runner 上收尾杀不净（进程树残留），
-          # teardown 会一直等到 global timeout（2026-09-22 实测：12/12 全过后 "Timed out waiting
-          # 600s for the teardown"，日志尾部还列出 sh/node/esbuild 孤儿）。输出落文件避免占住步骤 stdout。
-          pnpm --dir fixtures/remote-a exec vite --port 5101 --strictPort >/tmp/remote-a.log 2>&1 &
-          pnpm --dir fixtures/remote-b exec vite --port 5102 --strictPort >/tmp/remote-b.log 2>&1 &
-          pnpm --dir fixtures/remote-auto exec vite --port 5111 --strictPort >/tmp/remote-auto.log 2>&1 &
-          pnpm --dir fixtures/host-auto exec vite --port 5110 --strictPort >/tmp/host-auto.log 2>&1 &
-          pnpm --dir fixtures/host-vue exec vite --port 5100 --strictPort >/tmp/host-vue.log 2>&1 &
-          pnpm --dir fixtures/remote-react exec vite --port 5103 --strictPort >/tmp/remote-react.log 2>&1 &
-          pnpm --dir fixtures/host-react exec vite --port 5104 --strictPort >/tmp/host-react.log 2>&1 &
-          for u in http://localhost:5101/@fulgurjs-manifest.json http://localhost:5102/@fulgurjs-manifest.json http://localhost:5111/@fulgurjs-manifest.json http://localhost:5110 http://localhost:5100 http://localhost:5103/@fulgurjs-manifest.json http://localhost:5104; do
-            for i in $(seq 1 60); do curl -sf --max-time 2 "$u" >/dev/null && break; sleep 1; done
-            curl -sf --max-time 2 "$u" >/dev/null || { echo "dev server 未就绪：$u"; tail -30 /tmp/*.log; exit 1; }
-          done
-          set +e
-          pnpm --dir e2e exec playwright test --project=dev --project=fault --project=react-dev --project=react-fault --global-timeout=600000
-          code=$?
-          pkill -f 'vite --port 510' || true   # 收尾（失败路径也要执行，避免留下占端口的孤儿）
-          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -n 40 /tmp/remote-a.log /tmp/remote-b.log /tmp/remote-auto.log /tmp/host-auto.log /tmp/host-vue.log /tmp/remote-react.log /tmp/host-react.log
-          exit $code
+      - name: e2e（dev + fault + bridge + router）
+        run: bash e2e/scripts/ci-dev.sh
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-vite-${{ matrix.vite }}
+          path: |
+            e2e/artifacts
+            docs/playwright-report
+            /tmp/fulgurjs-ci-dev
+
 
 
   # WP3：Vite 5.1 最低支持线定时兼容（peer 声明 >=5.1.0；@vitejs/plugin-vue@5 与 Vite5 peer 匹配）
@@ -121,34 +105,24 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
-      - name: Install fixtures（Vite 5.1.4 + 匹配 plugin-vue）
-        run: |
-          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto fixtures/remote-react fixtures/host-react; do
-            pnpm --dir "$app" install --no-frozen-lockfile
-            pnpm --dir "$app" add -D "vite@5.1.4" "@vitejs/plugin-vue@^5.2.0"
-          done
-          pnpm --dir e2e install --no-frozen-lockfile
+      - name: Install fixtures（Vite 5.1 + 匹配 Vue/React 插件）
+        env:
+          VITE_VERSION: 5.1.8
+        run: bash e2e/scripts/ci-install-fixtures.sh
       - name: Playwright chromium
         run: pnpm --dir e2e exec playwright install --with-deps chromium
-      - name: e2e（dev + fault + react，Vite 5.1.4）
-        run: |
-          pnpm --dir fixtures/remote-a exec vite --port 5101 --strictPort >/tmp/remote-a.log 2>&1 &
-          pnpm --dir fixtures/remote-b exec vite --port 5102 --strictPort >/tmp/remote-b.log 2>&1 &
-          pnpm --dir fixtures/remote-auto exec vite --port 5111 --strictPort >/tmp/remote-auto.log 2>&1 &
-          pnpm --dir fixtures/host-auto exec vite --port 5110 --strictPort >/tmp/host-auto.log 2>&1 &
-          pnpm --dir fixtures/host-vue exec vite --port 5100 --strictPort >/tmp/host-vue.log 2>&1 &
-          pnpm --dir fixtures/remote-react exec vite --port 5103 --strictPort >/tmp/remote-react.log 2>&1 &
-          pnpm --dir fixtures/host-react exec vite --port 5104 --strictPort >/tmp/host-react.log 2>&1 &
-          for u in http://localhost:5101/@fulgurjs-manifest.json http://localhost:5102/@fulgurjs-manifest.json http://localhost:5111/@fulgurjs-manifest.json http://localhost:5110 http://localhost:5100 http://localhost:5103/@fulgurjs-manifest.json http://localhost:5104; do
-            for i in $(seq 1 60); do curl -sf --max-time 2 "$u" >/dev/null && break; sleep 1; done
-            curl -sf --max-time 2 "$u" >/dev/null || { echo "dev server 未就绪：$u"; tail -30 /tmp/*.log; exit 1; }
-          done
-          set +e
-          pnpm --dir e2e exec playwright test --project=dev --project=fault --project=react-dev --project=react-fault --global-timeout=600000
-          code=$?
-          pkill -f 'vite --port 51' || true
-          [ $code -ne 0 ] && echo "--- 失败时的 dev server 日志 ---" && tail -n 40 /tmp/remote-a.log /tmp/remote-b.log /tmp/remote-auto.log /tmp/host-auto.log /tmp/host-vue.log /tmp/remote-react.log /tmp/host-react.log
-          exit $code
+      - name: e2e（dev + fault + bridge + router，Vite 5.1）
+        run: bash e2e/scripts/ci-dev.sh
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-vite5
+          path: |
+            e2e/artifacts
+            docs/playwright-report
+            /tmp/fulgurjs-ci-dev
+
 
   # WP3：prod e2e（构建全部 fixtures + 隔离 NGINX，prod-setup.sh 全程 mktemp/动态端口/--stop 自清理）
   prod-e2e:
@@ -171,11 +145,7 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
       - name: Install fixtures + e2e
-        run: |
-          for app in fixtures/host-vue fixtures/remote-a fixtures/remote-b fixtures/remote-auto fixtures/host-auto; do
-            pnpm --dir "$app" install --no-frozen-lockfile
-          done
-          pnpm --dir e2e install --no-frozen-lockfile
+        run: bash e2e/scripts/ci-install-fixtures.sh
       - name: Playwright chromium
         run: pnpm --dir e2e exec playwright install --with-deps chromium
       - name: prod 构建 + 隔离 NGINX 启动
@@ -183,7 +153,7 @@ jobs:
       - name: e2e（prod 套件）
         run: |
           set +e
-          SKIP_DEV_SERVERS=1 pnpm --dir e2e exec playwright test --project=prod --project=prod-react --global-timeout=600000
+          SKIP_DEV_SERVERS=1 pnpm --dir e2e exec playwright test --project=prod --project=prod-react --project=bridge-prod --global-timeout=600000
           code=$?
           if [ $code -ne 0 ]; then
             echo "--- 失败时的 NGINX/环境上下文 ---"
@@ -191,8 +161,19 @@ jobs:
             T=$(python3 -c "import json;print(json.load(open('e2e/.prod-nginx.json'))['tmpDir'])" 2>/dev/null || true)
             [ -n "$T" ] && tail -30 "$T/error.log" 2>/dev/null || true
           fi
-          bash e2e/scripts/prod-setup.sh --stop
           exit $code
+      - name: Stop isolated NGINX
+        if: always()
+        run: bash e2e/scripts/prod-setup.sh --stop
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-browser
+          path: |
+            e2e/artifacts
+            docs/playwright-report
+
 
   # WP3：npm tarball consumer smoke（发布产物可解析/可构建/可 dev，不依赖 link:）
   tarball:
