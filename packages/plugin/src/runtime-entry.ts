@@ -1,8 +1,9 @@
 /** 浏览器应用唯一公开入口。 */
 export {
   initSharing, registerShare, registerRemotes, registerRemote, registerPlugins,
-  loadShare, loadRemote, getContainer, preloadRemote, parseSpec,
-  getRuntime, shareScopeMap, unwrapDefault, version,
+  loadShare, loadRemote, getLoadedShare, pinLoadedShare, getContainer,
+  preloadRemote, parseSpec, getRuntime, shareScopeMap, unwrapDefault, version,
+  clearSessionState,
 } from './runtime/index'
 export type {
   ShareEntry, ShareScope, ShareScopeMap, RemoteConfig, RemoteInput,

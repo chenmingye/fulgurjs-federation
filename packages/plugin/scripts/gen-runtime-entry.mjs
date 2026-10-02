@@ -18,7 +18,7 @@ fs.writeFileSync(path.join(dist, 'vue.js'), [
   '',
 ].join('\n'))
 fs.writeFileSync(path.join(dist, 'runtime-entry.js'), [
-  'export { initSharing, registerShare, registerRemotes, registerRemote, registerPlugins, loadShare, loadRemote, getContainer, preloadRemote, parseSpec, getRuntime, shareScopeMap, unwrapDefault, version, clearSessionState } from "./runtime.js";',
+  'export { initSharing, registerShare, registerRemotes, registerRemote, registerPlugins, loadShare, loadRemote, getLoadedShare, pinLoadedShare, getContainer, preloadRemote, parseSpec, getRuntime, shareScopeMap, unwrapDefault, version, clearSessionState } from "./runtime.js";',
   'export { provideAppContext, getAppContext, requireAppContext, clearAppContext } from "./context.js";',
   'export { definePages, validatePages } from "./pages.js";',
   'export { remoteComponent, createHostPages, defineBridgeApp } from "./vue.js";',
@@ -29,7 +29,7 @@ fs.writeFileSync(path.join(dist, 'runtime-entry.js'), [
 // 但组件适配面换为 React，且不带 Vue 适配导出）。类型面 = src/react.ts（tsup 产 dist/react.d.ts）。
 // defineBridgeApp 来自 bridge-app-react（react-dom/client 在实际 mount 时动态取得，零 Vue）。
 fs.writeFileSync(path.join(dist, 'react.js'), [
-  'export { initSharing, registerShare, registerRemotes, registerRemote, registerPlugins, loadShare, loadRemote, getContainer, preloadRemote, parseSpec, getRuntime, shareScopeMap, unwrapDefault, version } from "./runtime.js";',
+  'export { initSharing, registerShare, registerRemotes, registerRemote, registerPlugins, loadShare, loadRemote, getLoadedShare, pinLoadedShare, getContainer, preloadRemote, parseSpec, getRuntime, shareScopeMap, unwrapDefault, version, clearSessionState } from "./runtime.js";',
   'export { provideAppContext, getAppContext, requireAppContext, clearAppContext } from "./context.js";',
   'export { definePages, validatePages } from "./pages.js";',
   'import { loadRemote } from "./runtime.js";',

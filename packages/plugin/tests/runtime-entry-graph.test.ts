@@ -14,10 +14,10 @@ describe('/runtime 发布物', () => {
     const mod = await import(pathToFileURL(entry).href)
     expect(Object.keys(mod).sort()).toEqual([
       'initSharing', 'registerShare', 'registerRemotes', 'registerRemote', 'registerPlugins',
-      'loadShare', 'loadRemote', 'getContainer', 'preloadRemote', 'parseSpec',
-      'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
-      'provideAppContext', 'getAppContext', 'requireAppContext', 'clearAppContext',
+      'loadShare', 'loadRemote', 'getLoadedShare', 'pinLoadedShare', 'getContainer',
+      'preloadRemote', 'parseSpec', 'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
       'clearSessionState',
+      'provideAppContext', 'getAppContext', 'requireAppContext', 'clearAppContext',
       'definePages', 'validatePages', 'remoteComponent', 'createHostPages', 'defineBridgeApp', 'remoteSchema',
     ].sort())
     expect(mod.remoteSchema).toEqual({})
@@ -53,8 +53,9 @@ describe('/react 发布物', () => {
     const mod = await import(pathToFileURL(entry).href)
     expect(Object.keys(mod).sort()).toEqual([
       'initSharing', 'registerShare', 'registerRemotes', 'registerRemote', 'registerPlugins',
-      'loadShare', 'loadRemote', 'getContainer', 'preloadRemote', 'parseSpec',
-      'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
+      'loadShare', 'loadRemote', 'getLoadedShare', 'pinLoadedShare', 'getContainer',
+      'preloadRemote', 'parseSpec', 'getRuntime', 'shareScopeMap', 'unwrapDefault', 'version',
+      'clearSessionState',
       'provideAppContext', 'getAppContext', 'requireAppContext', 'clearAppContext',
       'definePages', 'validatePages', 'remoteComponent', 'useLoadRemote',
       'RemoteErrorBoundary', 'createReactHostPages', 'defineBridgeApp', 'remoteSchema',

@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.5.1
+
+- **修复：`getLoadedShare` / `pinLoadedShare` / `clearSessionState` 在 `/runtime` 与 `/react` 入口的类型与生成链缺口**——三个函数在内核（`dist/runtime.js`）实际导出且生成脚本向 `runtime-entry.js` 注入了 `clearSessionState`，但 `src/runtime-entry.ts` / `src/react.ts` 源码导出面未包含（发布包 d.ts 因此缺失，TS 消费者不可导入；`getLoadedShare`/`pinLoadedShare` 的 JS 入口导出也缺失）。现统一：源码、d.ts、生成脚本（`gen-runtime-entry.mjs`）三处一致，React 入口补齐同面；导出面守卫测试（`tests/runtime-entry-graph.test.ts`）批准清单同步。包内 `demo` 场景（`demo/shared` 卡片⑫）以真调用覆盖：getLoadedShare 与 loadShare 结果对象严格相等、pinLoadedShare 收敛、clearSessionState 后新代次 onSession 重跑。
+
 ## 5.5.0
 
 - **修复：Vite 8（rolldown）大型应用生产构建失败（V8-ASYNC-FIX）**——插件 TLA 协商门面使消费方模块的 chunk 内惰性初始化包装异步化后，与用户代码既有循环依赖相遇（JeecgBoot 实测：electron 工具模块 ⇄ 路由模块），rolldown 1.1.5 为循环另一侧生成的包装漏标 `async`（`e((()=>{await …}))` / `__esmMin((() => { await …` 两种形态），产物出现「await 位于非 async 函数」——esbuild 转译期报 `"await" can only be used inside an "async" function`，浏览器侧为 `SyntaxError: Unexpected reserved word`（5.4.x 时代曾被迫切 Vite 6 构建规避）。修复：插件在 `renderChunk`（order: pre，抢在 vite:esbuild-transpile 校验前）做检测与补标——esbuild 语法校验确证破损才修复，按 rolldown 包装签名补 `async`（即 rolldown 本应生成的代码，运行时助手对 Promise 包装本有支持），必要时 AST 定位兜底；修复后复验必须通过。正常产物零改动零解析成本；rollup（Vite 5/6/7）零触发。回归 `tests/async-mark-repair.test.ts`；Jeecg A/B（1920/1924 chunks）Vite 8.1.4 生产构建产物全部语法合法。**语义说明**：补标后的包装与 rolldown 在循环场景的既有输出一致（调用方同步调用返回 Promise 不等待，与 rolldown 自身对异步循环的处理相同），不改变任何调用点。
