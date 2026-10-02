@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 5.4.1
 
 - 修复 URL 同步两端适配器将 replace 误报为 push、子应用 go/back/forward 未委托宿主历史，以及连续导航被丢弃的问题。
 - React 宿主等待真实 blocker 的 reset/proceed 与提交位置；canNavigate 改为可选预判。Vue 初始 ready 和导航执行异常不再吞掉，MFU-033 保留 cause，队列失败后可继续导航。
