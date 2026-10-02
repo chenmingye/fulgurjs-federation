@@ -4,7 +4,7 @@
     <ul class="selfcheck-list">
       <li>容器名：<b>sh-remote-b</b>（dev 端口 5345）</li>
       <li>声明依赖：nanostores <b>0.6.0</b>（旧版本，专用于演示版本协商）、vue ^3.5.13</li>
-      <li>exposes：./RemoteCounter</li>
+      <li>exposes：./RemoteCounter、./info</li>
       <li>独立运行时使用本应用自己的 nanostores 0.6.0 副本；被宿主消费时 singleton 协商实际命中宿主提供的 0.11.4</li>
     </ul>
     <RemoteCounter />

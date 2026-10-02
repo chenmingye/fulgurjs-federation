@@ -875,8 +875,6 @@ export function federation(options: FederationOptions): Plugin[] {
     transformIndexHtml: {
       order: 'pre',
       handler(html) {
-        console.error('[fulgurjs:probe] transformIndexHtml pre invoked, len=' + html.length)
-        debugLog('init-entry', { stage: 'html-hook', command: state.command, normalized: !!state.normalized, hasModuleScript: /type=["']module["']/.test(html) })
         if (!state.normalized) return html
         if (state.command === 'serve') {
           // 不带 base：vite dev 的 html 处理会统一解析并补 base（自带 base 会被二次前缀）

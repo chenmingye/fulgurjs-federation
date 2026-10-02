@@ -12,6 +12,7 @@ export default {
   filename: 'fulgurjs-remoteEntry.js',
   exposes: {
     './RemoteCounter': './src/exposes/RemoteCounter.vue',
+    './info': './src/exposes/info.ts',
   },
   shared: {
     vue: { singleton: true },
