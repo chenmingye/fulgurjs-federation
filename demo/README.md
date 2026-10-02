@@ -1,6 +1,6 @@
 # Demo 展示中心
 
-`@fulgurjs/federation` 全量真实示例与展示中心。**所有工程均从 npm registry 安装正式包**（不用 workspace link），依赖版本在各自 `package.json` 锁定（当前统一 `5.5.1` + lockfile）。
+`@fulgurjs/federation` 全量真实示例与展示中心。**所有工程均从 npm registry 安装正式包**（不用 workspace link），依赖版本在各自 `package.json` 锁定（当前统一 `5.5.2` + lockfile）。
 
 ## 从 GitHub 下载后运行（git clone 与 ZIP 均适用）
 

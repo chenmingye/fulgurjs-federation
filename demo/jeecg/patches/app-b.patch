@@ -170,7 +170,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
            menu = [];
 diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json app-b/package.json
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json	2026-10-02 20:15:39
-+++ app-b/package.json	2026-10-03 03:19:35
++++ app-b/package.json	2026-10-03 04:43:11
 @@ -23,20 +23,23 @@
      "husky:install": "husky install"
    },
@@ -182,7 +182,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 -    "@vue/shared": "^3.5.39",
 -    "@vueuse/core": "^10.11.1",
 -    "@tinymce/tinymce-vue": "4.0.7",
-+    "@fulgurjs/federation": "5.5.1",
++    "@fulgurjs/federation": "5.5.2",
 +    "@iconify/iconify": "^3.1.1",
 +    "@jeecg/aiflow": "3.9.5-beta",
      "@logicflow/core": "^2.2.4",
@@ -306,7 +306,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +    "unplugin-icons": "^0.22.0",
      "unplugin-vue-components": "~0.24.1",
 -    "vite": "^8.1.4",
-+    "vite": "8.1.4",
++    "vite": "6.4.3",
      "vite-plugin-compression": "^0.5.1",
      "vite-plugin-html": "^3.2.2",
      "vite-plugin-mkcert": "^1.17.12",
@@ -332,13 +332,13 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
      "type": "git",
 diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml app-b/pnpm-workspace.yaml
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml	2026-10-02 20:19:23
-+++ app-b/pnpm-workspace.yaml	2026-10-03 03:20:29
++++ app-b/pnpm-workspace.yaml	2026-10-03 03:56:41
 @@ -6,3 +6,5 @@
    core-js: true
    esbuild: true
    vue-demi: true
 +minimumReleaseAgeExclude:
-+  - '@fulgurjs/federation@5.4.1 || 5.4.2 || 5.4.3 || 5.5.0 || 5.5.1'
++  - '@fulgurjs/federation@5.4.1 || 5.4.2 || 5.4.3 || 5.5.0 || 5.5.1 || 5.5.2'
 diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/bridge.ts app-b/src/fulgurjs/bridge.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/bridge.ts	1970-01-01 08:00:00
 +++ app-b/src/fulgurjs/bridge.ts	2026-10-02 21:01:35

@@ -25,7 +25,7 @@
   "dependencies": {
     "@ant-design/colors": "^7.2.1",
     "@ant-design/icons-vue": "^7.0.1",
-    "@fulgurjs/federation": "5.5.1",
+    "@fulgurjs/federation": "5.5.2",
     "@iconify/iconify": "^3.1.1",
     "@jeecg/aiflow": "3.9.5-beta",
     "@logicflow/core": "^2.2.4",
@@ -166,7 +166,7 @@
     "unocss": "^66.7.5",
     "unplugin-icons": "^0.22.0",
     "unplugin-vue-components": "~0.24.1",
-    "vite": "8.1.4",
+    "vite": "6.4.3",
     "vite-plugin-compression": "^0.5.1",
     "vite-plugin-html": "^3.2.2",
     "vite-plugin-mkcert": "^1.17.12",

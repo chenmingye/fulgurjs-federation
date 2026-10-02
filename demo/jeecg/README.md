@@ -11,9 +11,9 @@
 | 上游 | https://github.com/jeecgboot/JeecgBoot （MIT） |
 | tag | `v3.9.5`（获取时最新 semver tag，2026-10-02 核实） |
 | commit | `e3b9dc0aefe1943d9772b026f64ed671a7c82802`（fetch 脚本校验） |
-| 前端目录 | `jeecgboot-vue3/`（vue 3.5 / vue-router 5 / pinia 3 / vite 8.1.4 / antd 4） |
+| 前端目录 | `jeecgboot-vue3/`（vue 3.5 / vue-router 5 / pinia 3 / antd 4；演示实例 vite 锁 6.4.3，见下方说明） |
 | 上游许可证 | MIT 原文随实例源码保留（上游文件未删改）；对上游的全部改动见 `patches/app-{a,b}.patch`（可审查的完整 diff） |
-| 插件版本 | 四工程统一 `@fulgurjs/federation` 精确 `5.5.1`（npm registry 安装） |
+| 插件版本 | 四工程统一 `@fulgurjs/federation` 精确 `5.5.2`（npm registry 安装） |
 
 ## 快速开始（clone / ZIP 后直接跑）
 
@@ -43,7 +43,7 @@ cd demo/jeecg/react-host && npm ci && npm run dev   # 5374
 
 ```bash
 # A/B 生产构建（vite 8.1.4；产物经语法校验 1920/1924 chunks 全部合法）
-cd demo/jeecg/app-a && pnpm build    # base=/jeecg-a/
+cd demo/jeecg/app-a && pnpm build    # base=/jeecg-a/（vite 6.4.3 生产路径）
 cd demo/jeecg/app-b && pnpm build    # base=/jeecg-b/
 cd demo/jeecg/react-c && npm run build
 cd demo/jeecg/react-host && npm run build
@@ -84,7 +84,7 @@ for inst in app-a app-b; do
   patch -p1 --directory=$inst < patches/${inst}.patch
 done
 
-# ④ 匹配锁文件安装（补丁含 package.json：@fulgurjs/federation 精确 5.5.1 + vite 8.1.4）
+# ④ 匹配锁文件安装（补丁含 package.json：@fulgurjs/federation 精确 5.5.2 + vite 8.1.4）
 for inst in app-a app-b; do
   (cd $inst && pnpm install --registry=https://registry.npmmirror.com)
 done
@@ -102,7 +102,7 @@ done
 | `src/fulgurjs/bridge.ts`（B）/ `fulgurjs.config.ts` | defineBridgeApp 契约 + 联邦配置（B 另含嵌入 C 的视图 `src/views/fed/InnerReactDemo.vue`） |
 | `src/views/fed/*.vue`（A） | 宿主桥接视图（会话切换/卸载重挂/URL 同步观测） |
 | `mock/sys/menu.ts`：联邦演示菜单（A/B 结构不同，catch-all 子路由防内层导航重挂） | 演示入口 |
-| `vite.config.ts` + `build/vite/plugin/index.ts`：接入 `federation(fulgurjsConfig)`；生产 base `/jeecg-a/`、`/jeecg-b/` | 联邦构建 |
+| `vite.config.ts` + `build/vite/plugin/index.ts`：接入 `federation(fulgurjsConfig)`；生产 base `/jeecg-a/`、`/jeecg-b/`；vite 锁 6.4.3 | 联邦构建 |
 
 react-c / react-host 为全新独立工程（非上游改造），源码即全部。
 
@@ -116,4 +116,4 @@ react-c / react-host 为全新独立工程（非上游改造），源码即全�
 
 - 无 JS 沙箱/CSS 隔离：B 的样式与全局副作用与宿主同域（fulgurjs 桥接边界即挂载容器）；B 作为子应用时桥接工厂将 vben 布局 `fixed` 关闭以避免 fixed 定位逃逸容器（`src/fulgurjs/bridge.ts` 内 setProjectConfig）。
 - 官方前端的部分页面依赖真实后端数据（如在线表单、报表），演示只保证「联邦演示」菜单与仪表盘/账户列表可用；点击其他业务页面得到的是数据服务 404 诊断（这是如实暴露，不是故障）。
-- vite 8 生产构建的运行行为以 5.5.x 生产验收轮实测为准（rolldown 漏标 async 的构建缺陷已随插件 5.5.0 修复，A/B 产物全部语法合法）。
+- **vite 版本说明（如实声明）**：插件 5.5.0 已修复 rolldown 漏标 async 导致的 vite8 生产**构建失败**（A/B 产物 1920/1924 chunks 全部语法合法，vite 8.1.4/8.3.2 双版本验证）；但 jeecg 规模 Vue 应用在 vite8（rolldown 1.1.5/1.2.12 实测）生产**页面**仍存在启动挂起（零报错、全部资源与模块初始化完成、应用引导未执行——组合缺陷，插件 5.5.x 未解，开发态不受影响，小形态应用 vite8 生产基本可用）。因此演示实例生产路径锁 **vite 6.4.3**（vite 5–7 为插件验证过的生产区间），开发态可用上游基线版本。

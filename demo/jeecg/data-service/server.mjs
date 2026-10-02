@@ -118,6 +118,10 @@ const implementedEndpoints = [
   'GET  /jeecg-boot/sys/logout',
   'GET  /jeecg-boot/sys/randomImage/*（1x1 透明 PNG）',
   'GET  /jeecg-boot/sys/dict/*（显式空实现：演示页面不消费字典数据）',
+  'GET  /jeecg-boot/sys/annountCement/getUnreadMessageCount（显式空实现：公告未读数=0）',
+  'GET  /jeecg-boot/sys/user/verifyIzDefaultPwd（显式空实现：非默认密码）',
+  'GET  /jeecg-boot/sys/loginfo（显式空实现：登录日志空列表）',
+  'GET  /jeecg-boot/sys/visitInfo（显式空实现：访问统计空列表）',
   'GET  /jeecg-boot/system/getAccountList（分页账户演示集）',
   'GET  /jeecg-boot/fed/orders/list（联邦订单演示集：筛选/分页）',
   'POST /jeecg-boot/fed/orders/save（编辑保存演示）',
@@ -216,6 +220,11 @@ const server = http.createServer(async (req, res) => {
   if (path.startsWith('/jeecg-boot/sys/dict/')) {
     return send(ok([]))
   }
+  // 官方前端 UI 探测端点：显式空实现（非演示必需数据；列入 /_endpoints 如实声明）
+  if (path === '/jeecg-boot/sys/annountCement/getUnreadMessageCount') return send(ok(0))
+  if (path === '/jeecg-boot/sys/user/verifyIzDefaultPwd') return send(ok(false))
+  if (path === '/jeecg-boot/sys/loginfo') return send(ok(pageOf([], q.page, q.pageSize)))
+  if (path === '/jeecg-boot/sys/visitInfo') return send(ok(pageOf([], q.page, q.pageSize)))
   if (path === '/health') {
     return send(ok({ service: 'jeecg-fed-demo-data', port: PORT, orders: fedOrders.length, accounts: accounts.length }))
   }

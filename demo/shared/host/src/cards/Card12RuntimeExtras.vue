@@ -69,10 +69,10 @@ interface SetupLogEntry { phase: string; sessionKey?: string; at: string }
 async function runRegisterRemotes(): Promise<void> {
   busy.value = true
   try {
-    registerRemotes([{ name: 'sh-remote-b-dyn', entry: 'http://localhost:5345/@fulgurjs-entry.js', timeout: 8000, retries: 1 }])
-    const mod = (await loadRemote('sh-remote-b-dyn/store')) as { increment?: () => number }
-    const value = typeof mod?.increment === 'function' ? mod.increment() : JSON.stringify(mod)?.slice(0, 60)
-    say('ok', `registerRemotes 注册 sh-remote-b-dyn → loadRemote('sh-remote-b-dyn/store') 走通：${String(value)}`)
+    registerRemotes([{ name: 'sh-remote-b', entry: 'http://localhost:5345/@fulgurjs-entry.js', timeout: 8000, retries: 1 }])
+    const mod = (await loadRemote('sh-remote-b/info')) as { name?: string; version?: string }
+    const value = typeof mod === 'object' ? JSON.stringify(mod).slice(0, 60) : String(mod)
+    say('ok', `registerRemotes 批量注册/刷新 sh-remote-b → loadRemote('sh-remote-b/info') 走通：${String(value)}`)
   } catch (e) {
     say('err', `registerRemotes/loadRemote 失败：${e instanceof Error ? e.message : String(e)}`)
   } finally {
@@ -84,7 +84,8 @@ async function runLoadedShare(): Promise<void> {
   busy.value = true
   try {
     const viaLoad = await loadShare('nanostores')
-    const snapshot = getLoadedShare('nanostores', { shareScope: 'default', shareKey: 'nanostores', requiredVersion: false, singleton: true })
+    // opts 缺省（与 loadShare('nanostores') 同口径）——memo 键含 requiredVersion 的 ?? null 归一
+    const snapshot = getLoadedShare('nanostores')
     const same = viaLoad === snapshot
     say(same ? 'ok' : 'err', `getLoadedShare 同步快照 === loadShare 结果：${same ? '严格相等 ✓（对象身份证据）' : '不一致 ✗'}`)
   } catch (e) {
