@@ -6,16 +6,16 @@
  *
  * 契约语义（§3.2）：
  * - 契约实例按容器 el 分键（WeakMap）：同一契约多处挂载互不干扰；
- * - 同一容器未卸载再次 mount → MFU-016（phase: mount，容器已被占用）且不覆盖原实例；
+ * - 同一容器未卸载再次 mount → 拒绝（容器占用，原始错误原样抛出）且不覆盖原实例；
  * - Vue 的 app.mount 同步完成首次渲染，mount 成功即返回 void（首次根提交语义由 Vue 保证）；
  * - mount 抛错时清理已创建的 app（best-effort unmount），不留半挂状态；
- * - unmount 未知容器为 no-op；unmount 抛错包装为 MFU-016（phase: unmount）由宿主捕获。
+ * - unmount 未知容器为 no-op；mount/unmount 的原始错误**原样抛出**——MFU-016 包装
+ *   （真实 spec + phase + cause）由宿主适配器在生命周期边界统一完成（见 bridgeHostError）。
  *
  * 本文件零 React：/runtime 导入图隔离由 tests/runtime-entry-graph.test.ts 守护。
  */
 import type { App as VueApp } from 'vue'
 import type { BridgeApp } from './bridge-core'
-import { bridgeLifecycleError } from './bridge-errors'
 import type { BridgeChildRoute } from './bridge-router-core'
 
 export type { BridgeApp } from './bridge-core'
@@ -84,7 +84,7 @@ export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVue
       } catch {
         /* 清理失败以原始错误为准 */
       }
-      throw bridgeLifecycleError('mount', 'bridge', e instanceof Error ? e : String(e))
+      throw e
     }
     appsByEl.set(el, app)
     void mountOptions
@@ -96,9 +96,7 @@ export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVue
     // 则结果丢弃不落挂（迟到初始化不得复活，BN06 同源语义）。
     mount(el: HTMLElement, props?: Record<string, unknown>, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): void | Promise<void> {
       if (appsByEl.has(el)) {
-        throw bridgeLifecycleError('mount', 'bridge', '同一容器 el 已挂载本桥接应用（容器已被占用）。', {
-          reason: 'container-occupied',
-        })
+        throw new Error('同一容器 el 已挂载本桥接应用（容器已被占用）。同一容器未卸载前重复 mount 是契约违例——先 unmount 再 mount。')
       }
       // 浅拷贝顶层字段（挂载时快照；嵌套对象/函数保留原引用，任务书 §4.2）
       const snapshot = { ...(props ?? {}) }
@@ -118,7 +116,7 @@ export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVue
             (e: unknown) => {
               if (entriesAborted(el)) return
               appsByEl.delete(el)
-              throw bridgeLifecycleError('mount', 'bridge', e instanceof Error ? e : String(e))
+              throw e
             },
           )
         }
@@ -132,7 +130,7 @@ export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVue
             /* 清理失败以原始错误为准 */
           }
         }
-        throw bridgeLifecycleError('mount', 'bridge', e instanceof Error ? e : String(e))
+        throw e
       }
       attach(el, app, mountOptions)
     },
@@ -144,7 +142,7 @@ export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVue
       try {
         app.unmount()
       } catch (e) {
-        throw bridgeLifecycleError('unmount', 'bridge', e instanceof Error ? e : String(e))
+        throw e instanceof Error ? e : new Error(String(e))
       }
     },
   }

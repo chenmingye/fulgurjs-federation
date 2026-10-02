@@ -674,6 +674,9 @@ function createRuntime() {
 
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+  /** Promise 远程名称不匹配告警去重：同一（配置名↔自报名）对只告警一次（重试/恢复不重复刷屏） */
+  const nameMismatchWarned = new Set<string>()
+
   function validateContainerInterface(container: any, remote: RemoteInternal): void {
     if (!container || typeof container.get !== 'function') {
       throw new Error(
@@ -684,7 +687,11 @@ function createRuntime() {
     if (container.name && remote.name && container.name !== remote.name) {
       const msg = `远程入口自报名称 "${container.name}" 与宿主配置名称 "${remote.name}" 不一致。请统一两侧 federation({ name }) 与 remotes 的名称。`
       if (remote.promise) {
-        console.warn(`[fulgurjs] ${msg} 当前是动态 Promise 远程，继续加载。`)
+        const key = `${remote.name}↔${container.name}`
+        if (!nameMismatchWarned.has(key)) {
+          nameMismatchWarned.add(key)
+          console.warn(`[fulgurjs] ${msg} 当前是动态 Promise 远程，继续加载。`)
+        }
       } else {
         throw Object.assign(new Error(msg), { code: ErrorCodes.REMOTE_NAME_MISMATCH })
       }

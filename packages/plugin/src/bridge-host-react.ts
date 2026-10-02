@@ -34,7 +34,7 @@ import {
   withBridgeTimeout,
   type BridgeApp,
 } from './bridge-core'
-import { bridgeLifecycleError } from './bridge-errors'
+import { bridgeHostError } from './bridge-errors'
 import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
 
 type LoadRemoteFn = (spec: string, opts?: { retries?: number }) => Promise<any>
@@ -199,7 +199,13 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
               channelRef.current = new RoutingChannel(`bridge-react:${spec}:${myGen}`, routing.basePath, routing.navigation, spec)
               mountOptions = { signal: abortRef.current.signal, routing: channelRef.current }
             }
-            await contract.mount(el, { ...(latest.current.appProps ?? {}) }, mountOptions)
+            // mount 边界单点包装（5.5.0）：子应用契约原样抛出的原始错误 → MFU-016（真实
+            // spec + phase + cause）；其余校验/加载错误已是 FgError 诊断，保持原语义
+            try {
+              await contract.mount(el, { ...(latest.current.appProps ?? {}) }, mountOptions)
+            } catch (mountError) {
+              throw bridgeHostError('mount', spec, mountError)
+            }
             if (generationRef.current !== myGen) return
             setStatus('ready')
           } catch (e) {
@@ -222,7 +228,9 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             try {
               c.unmount(el)
             } catch (e) {
-              const err = bridgeLifecycleError('unmount', spec, e instanceof Error ? e : String(e))
+              // MFU-016（phase: unmount，单点包装，5.5.0）：已是插件诊断的错误原样保留，
+              // 不再出现 spec 占位 'bridge' 或 cause 双重包装
+              const err = bridgeHostError('unmount', spec, e)
               console.error('[fulgurjs] 桥接应用卸载失败：', err)
               blockedRef.current = true
               setError(err)

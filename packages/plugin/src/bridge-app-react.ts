@@ -18,7 +18,6 @@
  */
 import { Component, createElement, useEffect, type ReactElement, type ReactNode } from 'react'
 import type { BridgeApp } from './bridge-core'
-import { bridgeLifecycleError } from './bridge-errors'
 import type { BridgeChildRoute } from './bridge-router-core'
 
 export type { BridgeApp } from './bridge-core'
@@ -103,9 +102,7 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineR
     ...(options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
     mount(el: HTMLElement, props?: Record<string, unknown>, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): Promise<void> {
       if (entriesByEl.has(el)) {
-        throw bridgeLifecycleError('mount', 'bridge', '同一容器 el 已挂载本桥接应用（容器已被占用）。', {
-          reason: 'container-occupied',
-        })
+        throw new Error('同一容器 el 已挂载本桥接应用（容器已被占用）。同一容器未卸载前重复 mount 是契约违例——先 unmount 再 mount。')
       }
       // 浅拷贝顶层字段（挂载时快照；嵌套对象/函数保留原引用，任务书 §4.2）
       const snapshot = { ...(props ?? {}) }
@@ -114,13 +111,12 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineR
       try {
         element = factory(snapshot, ctx)
       } catch (e) {
-        throw bridgeLifecycleError('mount', 'bridge', e instanceof Error ? e : String(e))
+        throw e instanceof Error ? e : new Error(String(e))
       }
       if (element === null || typeof element !== 'object') {
-        throw bridgeLifecycleError(
-          'mount',
-          'bridge',
-          `defineBridgeApp 工厂返回值不是 ReactElement（当前 ${element === null ? 'null' : typeof element}）。`,
+        throw new Error(
+          `defineBridgeApp 工厂返回值不是 ReactElement（当前 ${element === null ? 'null' : typeof element}）。` +
+            '工厂必须返回 ReactElement（JSX/ createElement 的返回值）。',
         )
       }
 
@@ -143,7 +139,7 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineR
           const onError = (e: unknown): void => {
             if (settled) return
             settled = true
-            reject(bridgeLifecycleError('mount', 'bridge', e instanceof Error ? e : String(e)))
+            reject(e instanceof Error ? e : new Error(String(e)))
           }
           const onCommit = (): void => {
             if (settled) return
@@ -193,7 +189,7 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineR
       try {
         entry.root.unmount()
       } catch (e) {
-        throw bridgeLifecycleError('unmount', 'bridge', e instanceof Error ? e : String(e))
+        throw e instanceof Error ? e : new Error(String(e))
       }
     },
   }

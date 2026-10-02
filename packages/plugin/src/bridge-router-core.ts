@@ -40,6 +40,12 @@ export interface BridgeHostNavigation {
 
 /** 子应用路由通道（桥接宿主按挂载代次创建，随 mount 第三参数交给子应用） */
 export interface BridgeChildRoute {
+  /**
+   * 远程 spec（宿主创建通道时标注，如 "remote-b/bridge"）；子应用路由接线
+   * （connectVueBridgeRouter/createReactBridgeRouter）的诊断错误用它定位真实远程，
+   * 缺省（纯 memory 小部件自建通道）回退 'child-router'。
+   */
+  readonly spec?: string
   getLocation(): BridgeLocation
   subscribe(listener: (location: BridgeLocation) => void): () => void
   navigate(target: BridgeLocation, action: 'push' | 'replace'): Promise<BridgeNavigationResult>
@@ -160,7 +166,8 @@ export function assertBridgeRoutingProtocol(spec: string, contract: unknown): vo
 export class RoutingChannel implements BridgeChildRoute {
   readonly id: string
   readonly basePath: string
-  private readonly spec: string
+  /** 远程 spec（诊断错误定位真实远程用；随通道暴露给子应用路由接线） */
+  readonly spec: string
   private readonly host: BridgeHostNavigation
   private readonly listeners = new Set<(loc: BridgeLocation) => void>()
   private current: BridgeLocation

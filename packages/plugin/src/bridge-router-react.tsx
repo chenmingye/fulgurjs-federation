@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 import { createElement } from 'react'
 import { RouterProvider, createMemoryRouter, type RouteObject } from 'react-router-dom'
 import { sameLocation, type BridgeChildRoute, type BridgeHostNavigation, type BridgeLocation, type BridgeHostRouting } from './bridge-router-core'
-import { connectChildNavigation } from './bridge-router-sync'
+import { collapseConsecutiveReports, connectChildNavigation } from './bridge-router-sync'
 
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
 export type { BridgeHostRouting }
@@ -110,7 +110,7 @@ export function createReactBridgeRouter(routing: BridgeChildRoute, routes: Route
   const sync = connectChildNavigation(routing, async (loc) => {
     const cur = router.state.location
     if (!sameLocation(cur, loc)) await navigate(loc.pathname + loc.search + loc.hash, { replace: true })
-  }, (error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error))
+  }, collapseConsecutiveReports((error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error)))
   router.navigate = ((to: Parameters<typeof router.navigate>[0], options?: Parameters<typeof router.navigate>[1]) => {
     if (typeof to === 'number') { if (!disposed) routing.go(to); return Promise.resolve() }
     const task = sync.enqueue(async () => {
@@ -118,7 +118,7 @@ export function createReactBridgeRouter(routing: BridgeChildRoute, routes: Route
       const l = router.state.location
       return { pathname: l.pathname, search: l.search, hash: l.hash }
     }, options?.replace ? 'replace' : 'push').then(() => {})
-    void task.catch((error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error))
+    void task.catch(collapseConsecutiveReports((error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error)))
     return task
   }) as typeof router.navigate
   // 初始 loader 重定向使用 replace 同步；普通 Router 状态更新不再误报为 push。

@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "5.4.3",
+  "version": "5.5.0",
   "type": "module",
   "description": "Vite Module Federation with full Webpack MF parity. Dev & production, no compromise.",
   "license": "MIT",
@@ -154,7 +154,7 @@
     "vue": ">=3.2.0",
     "react": ">=18.0.0 <20",
     "react-dom": ">=18.0.0 <20",
-    "vue-router": ">=4.1.0 <5",
+    "vue-router": ">=4.1.0 <6",
     "react-router-dom": ">=6.11.0 <8"
   },
   "pnpm": {

@@ -1,7 +1,7 @@
-/** Vue Router 4 的宿主导航端口与子应用 memory router 接线（按需入口）。 */
-import { type Router, type NavigationFailure } from 'vue-router'
+/** Vue Router 4/5 的宿主导航端口与子应用 memory router 接线（按需入口）。 */
+import { isNavigationFailure, NavigationFailureType, type Router, type NavigationFailure } from 'vue-router'
 import type { BridgeChildRoute, BridgeHostNavigation, BridgeLocation, BridgeHostRouting } from './bridge-router-core'
-import { connectChildNavigation } from './bridge-router-sync'
+import { collapseConsecutiveReports, connectChildNavigation } from './bridge-router-sync'
 import { routingSyncError } from './bridge-errors'
 
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
@@ -45,6 +45,8 @@ export interface VueBridgeRouterConnection {
 
 /** 接线限子应用自己的 memory router；dispose 恢复原始导航方法。 */
 export function connectVueBridgeRouter(routing: BridgeChildRoute, router: Router, options: { signal?: AbortSignal } = {}): VueBridgeRouterConnection {
+  // 诊断 spec：宿主创建通道时携带真实远程名（RoutingChannel.spec）；自建通道缺省回退
+  const spec = routing.spec ?? 'vue-router'
   const push = router.push
   const replace = router.replace
   const go = router.go
@@ -56,10 +58,17 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: Router
     const path = loc.pathname + loc.search + loc.hash
     if (router.currentRoute.value.fullPath !== path) {
       const failure = await replace.call(router, path)
-      if (failure && router.currentRoute.value.fullPath !== path) throw routingSyncError('vue-router', '子应用守卫拒绝应用宿主确认的位置；请在宿主侧设置取消守卫。', [])
+      if (failure && router.currentRoute.value.fullPath !== path) {
+        // cancelled：子应用自己的新导航取代了本次广播应用——子应用自洽（通道稍后广播权威
+        // 位置），属正常取消而非失步，不报 MFU-033（宿主守卫回滚期的连续广播曾产生重复的
+        // 误导性同步失败诊断）。
+        if (isNavigationFailure(failure, NavigationFailureType.cancelled)) return
+        // 目标位置入诊断：不同目标的失步事件文本不同，连续同文折叠不会误吞不同失败
+        throw routingSyncError(spec, `子应用守卫拒绝应用宿主确认的位置（目标 ${path}）；请在宿主侧设置取消守卫。`, [])
+      }
     }
   }
-  const sync = connectChildNavigation(routing, (loc) => ready.then(() => apply(loc)), report)
+  const sync = connectChildNavigation(routing, (loc) => ready.then(() => apply(loc)), collapseConsecutiveReports(report))
   const init = routing.getLocation()
   const ready: Promise<void> = push.call(router, init.pathname + init.search + init.hash).then(async (failure) => {
     if (disposed) return
@@ -67,14 +76,14 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: Router
       await apply(routing.getLocation())
       return
     }
-    if (failure) throw routingSyncError('vue-router', '子应用初始路由被守卫取消。', [])
+    if (failure) throw routingSyncError(spec, '子应用初始路由被守卫取消。', [])
     const target = locationFromPath(router.currentRoute.value.fullPath)
     if (router.currentRoute.value.fullPath !== init.pathname + init.search + init.hash) {
       await routing.navigate(target, 'replace')
       await apply(routing.getLocation())
     }
   }).catch((cause) => {
-    throw routingSyncError('vue-router', `初始路由准备失败：${cause instanceof Error ? cause.message : String(cause)}`, [], cause)
+    throw routingSyncError(spec, `初始路由准备失败：${cause instanceof Error ? cause.message : String(cause)}`, [], cause)
   })
   const intercept = (native: Router['push'], action: 'push' | 'replace'): Router['push'] => (to) => {
     const task = (async () => {

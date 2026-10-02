@@ -1,7 +1,7 @@
 // @vitest-environment node
 /** URL 同步补修：真实 Router 的历史动作、取消、并发与错误语义。 */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter, isNavigationFailure } from 'vue-router'
+import { createMemoryHistory, createRouter, isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { createMemoryRouter, redirect } from 'react-router-dom'
 import { RoutingChannel, normalizeBasePath, type BridgeLocation, type BridgeHostNavigation } from '../src/bridge-router-core'
 import { createVueBridgeNavigation, connectVueBridgeRouter } from '../src/bridge-router-vue'
@@ -223,4 +223,56 @@ describe('URL 同步回归', () => {
     expect(router.state.location.pathname).toBe('/approval/list')
   })
 
+})
+
+// ── MFU-033 降噪（5.5.0）：cancelled 分类 + 连续同文折叠 ──────────────────────────
+
+describe('URL 同步诊断降噪（MFU-033）', () => {
+  it('cancelled（子应用新导航取代广播应用）不报 MFU-033；aborted（守卫真拒绝）报一次', async () => {
+    const h = host()
+    const router = vue()
+    // 造一个真实 cancelled failure（并发导航取代）
+    const scratch = vue()
+    const p1 = scratch.push('/x'); const p2 = scratch.push('/y')
+    const cancelledFailure = await p1
+    await p2
+    expect(isNavigationFailure(cancelledFailure, NavigationFailureType.cancelled)).toBe(true)
+    // apply 走的 replace（connect 时捕获的原始方法）第一次返回 cancelled
+    const originalReplace = router.replace.bind(router)
+    let stubCalls = 0
+    router.replace = (async (...args: Parameters<typeof originalReplace>) => {
+      if (stubCalls++ === 0) return cancelledFailure
+      return originalReplace(...args)
+    }) as typeof router.replace
+    const conn = connectVueBridgeRouter(h.channel, router)
+    cleanups.push(conn.dispose)
+    await conn.ready
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a.map(String).join(' ')) })
+    h.broadcast(loc('/approval/other')) // replace → cancelled：正常取消，不报错
+    await Promise.resolve(); await new Promise((r) => setTimeout(r, 20))
+    expect(errors.join('\n')).not.toContain('MFU-033')
+    spy.mockRestore()
+  })
+
+  it('守卫真拒绝（aborted + 位置失步）报 MFU-033；同一错误连续两次只保留首条', async () => {
+    const h = host()
+    const router = vue()
+    const conn = connectVueBridgeRouter(h.channel, router)
+    cleanups.push(conn.dispose)
+    await conn.ready
+    router.beforeEach(() => false) // 守卫在 ready 后挂：只拦截后续广播应用，不破坏初始导航
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a.map(String).join(' ')) })
+    h.broadcast(loc('/approval/blocked-1'))
+    await new Promise((r) => setTimeout(r, 20))
+    h.broadcast(loc('/approval/blocked-1')) // 同一位置再次广播 → 同文错误被折叠
+    await new Promise((r) => setTimeout(r, 20))
+    h.broadcast(loc('/approval/blocked-2')) // 不同失败事件：必须保留
+    await new Promise((r) => setTimeout(r, 20))
+    spy.mockRestore()
+    const mfu033 = errors.filter((e) => e.includes('MFU-033'))
+    expect(mfu033.length).toBe(2) // blocked-1 一条（折叠同文）+ blocked-2 一条
+    expect(mfu033[0]).toContain('remote/bridge')
+  })
 })

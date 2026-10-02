@@ -11,6 +11,7 @@ import { act } from '@testing-library/react'
 import { defineBridgeApp as defineVueBridgeApp, type VueBridgeAppFactory } from '../src/bridge-app-vue'
 import { defineBridgeApp as defineReactBridgeApp, type ReactBridgeAppFactory } from '../src/bridge-app-react'
 import { assertBridgeContract, resolveBridgeContext } from '../src/bridge-core'
+import { bridgeHostError } from '../src/bridge-errors'
 import { provideAppContext, clearAppContext } from '../src/context'
 
 const g = globalThis as any
@@ -105,10 +106,20 @@ describe('defineBridgeApp（Vue /runtime 形态）', () => {
     expect(el.querySelector('[data-testid="vue-bridge-content"]')).toBeNull()
   })
 
-  it('同一容器重复 mount 拒绝（MFU-016）且不覆盖原实例（BN03）', () => {
+  it('同一容器重复 mount 拒绝（原始错误原样抛出，宿主侧 bridgeHostError 转 MFU-016）且不覆盖原实例（BN03）', () => {
     const { raw } = makeVueContract({ mounted: [], unmounted: [] })
     raw.mount(el, { label: 'A' })
-    expect(() => raw.mount(el, { label: 'B' })).toThrowError(/MFU-016/)
+    expect(() => raw.mount(el, { label: 'B' })).toThrowError(/容器已被占用/)
+    try {
+      raw.mount(el, { label: 'B' })
+      expect.unreachable()
+    } catch (e) {
+      // 5.5.0 起子应用适配器原样抛出；宿主在 mount 边界统一包装为 MFU-016（真实 spec）
+      const wrapped = bridgeHostError('mount', 'remote-demo/bridge', e)
+      expect(codeOf(wrapped)).toBe('MFU-016')
+      expect((wrapped as any).details.spec).toBe('remote-demo/bridge')
+      expect(String(wrapped.message)).toContain('remote-demo/bridge')
+    }
     // 原实例未被覆盖
     expect(el.querySelector('[data-testid="vue-bridge-content"]')?.textContent).toContain('vue:A')
     raw.unmount(el)
@@ -127,18 +138,21 @@ describe('defineBridgeApp（Vue /runtime 形态）', () => {
     el2.remove()
   })
 
-  it('工厂抛错 → MFU-016（phase: mount），无半挂残留', () => {
+  it('工厂抛错 → 原始错误原样抛出，宿主侧包装为 MFU-016（phase: mount，真实 spec）；无半挂残留', () => {
     const contract = defineVueBridgeApp(() => {
       throw new Error('factory boom')
     })
-    expect(() => contract.mount(el)).toThrowError(/MFU-016/)
+    expect(() => contract.mount(el)).toThrowError('factory boom')
     try {
       contract.mount(el)
       expect.unreachable()
     } catch (e) {
-      expect(codeOf(e)).toBe('MFU-016')
-      expect((e as any).details.phase).toBe('mount')
-      expect((e as Error).message).toContain('factory boom')
+      expect(codeOf(e)).toBe('')
+      const wrapped = bridgeHostError('mount', 'remote-demo/bridge', e)
+      expect(codeOf(wrapped)).toBe('MFU-016')
+      expect((wrapped as any).details.phase).toBe('mount')
+      expect((wrapped as any).details.spec).toBe('remote-demo/bridge')
+      expect((wrapped as Error).message).toContain('factory boom')
     }
     // 失败后容器未被占用：可重新 mount
     const ok = defineVueBridgeApp((props) => createApp(defineComponent({ setup: () => () => h('i', String(props.n ?? 0)) })))
@@ -147,12 +161,12 @@ describe('defineBridgeApp（Vue /runtime 形态）', () => {
     ok.unmount(el)
   })
 
-  it('未知容器 unmount 为 no-op；unmount 抛错包装为 MFU-016（phase: unmount，BN09）', () => {
+  it('未知容器 unmount 为 no-op；unmount 抛错原样抛出，宿主侧包装为 MFU-016（phase: unmount，BN09）', () => {
     const { raw } = makeVueContract({ mounted: [], unmounted: [] })
     expect(() => raw.unmount(document.createElement('div'))).not.toThrow()
     raw.mount(el)
     raw.unmount(el)
-    // app.unmount 抛错 → 包装为 MFU-016（phase: unmount）
+    // app.unmount 抛错 → 原始错误原样抛出；宿主侧单点包装为 MFU-016（真实 spec + cause）
     const throwing = defineVueBridgeApp(() => ({
       mount: (target: HTMLElement) => { target.appendChild(document.createElement('i')) },
       unmount: () => { throw new Error('unmount boom') },
@@ -162,9 +176,15 @@ describe('defineBridgeApp（Vue /runtime 形态）', () => {
       throwing.unmount(el)
       expect.unreachable()
     } catch (e) {
-      expect(codeOf(e)).toBe('MFU-016')
-      expect((e as any).details.phase).toBe('unmount')
+      expect(codeOf(e)).toBe('')
       expect((e as Error).message).toContain('unmount boom')
+      const wrapped = bridgeHostError('unmount', 'remote-demo/bridge', e)
+      expect(codeOf(wrapped)).toBe('MFU-016')
+      expect((wrapped as any).details.phase).toBe('unmount')
+      expect((wrapped as any).details.spec).toBe('remote-demo/bridge')
+      expect(String((wrapped as any).details.cause)).toContain('unmount boom')
+      // 单点包装：已是插件诊断的错误原样保留（cause 不再被二次包装）
+      expect(bridgeHostError('unmount', 'remote-demo/bridge', wrapped)).toBe(wrapped)
     }
   })
 })
@@ -204,14 +224,14 @@ describe('defineBridgeApp（React /react 形态）', () => {
     expect(el.querySelector('[data-testid="react-bridge-content"]')).toBeNull()
   })
 
-  it('工厂同步抛错 → mount 同步抛 MFU-016，无半挂残留，重试可用（BN02 之一）', async () => {
+  it('工厂同步抛错 → mount 同步抛原始错误（宿主侧包装为 MFU-016），无半挂残留，重试可用（BN02 之一）', async () => {
     let shouldFail = true
     const contract = defineReactBridgeApp(() => {
       if (shouldFail) throw new Error('first render boom')
       return makeReactElement({}, 'ok')
     })
-    // 工厂在 mount 调用内同步求值 → 同步抛出（宿主捕获转占位）
-    expect(() => contract.mount(el)).toThrowError(/MFU-016/)
+    // 工厂在 mount 调用内同步求值 → 同步抛出（宿主在 mount 边界转占位诊断）
+    expect(() => contract.mount(el)).toThrowError('first render boom')
     expect(el.querySelector('[data-testid="react-bridge-content"]')).toBeNull()
     // 失败后容器未被占用：可重新 mount
     shouldFail = false
@@ -227,7 +247,7 @@ describe('defineBridgeApp（React /react 形态）', () => {
       }
     }
     const contract = defineReactBridgeApp(() => createElement(Boom))
-    await expect(contract.mount(el)).rejects.toMatchObject({ code: 'MFU-016' })
+    await expect(contract.mount(el)).rejects.toThrowError('render-time boom')
     expect(el.querySelector('[data-testid="react-bridge-content"]')).toBeNull()
     // 清理后可重试
     const ok = defineReactBridgeApp(() => makeReactElement({}, 'ok'))
@@ -236,10 +256,10 @@ describe('defineBridgeApp（React /react 形态）', () => {
     ok.unmount(el)
   })
 
-  it('同一容器重复 mount 同步拒绝（MFU-016），原实例不受影响（BN03）', async () => {
+  it('同一容器重复 mount 同步拒绝（原始错误，宿主侧转 MFU-016），原实例不受影响（BN03）', async () => {
     const contract = defineReactBridgeApp((props) => makeReactElement(props, 'x'))
     const p = contract.mount(el, { label: 'A' })
-    expect(() => contract.mount(el)).toThrowError(/MFU-016/)
+    expect(() => contract.mount(el)).toThrowError(/容器已被占用/)
     await p
     expect(el.querySelector('[data-testid="react-bridge-content"]')?.textContent).toContain('react:A')
     contract.unmount(el)

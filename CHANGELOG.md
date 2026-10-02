@@ -1,5 +1,25 @@
 # Changelog
 
+## 5.5.0
+
+- **修复：Vite 8（rolldown）大型应用生产构建失败（V8-ASYNC-FIX）**——插件 TLA 协商门面使消费方模块的 chunk 内惰性初始化包装异步化后，与用户代码既有循环依赖相遇（JeecgBoot 实测：electron 工具模块 ⇄ 路由模块），rolldown 1.1.5 为循环另一侧生成的包装漏标 `async`（`e((()=>{await …}))` / `__esmMin((() => { await …` 两种形态），产物出现「await 位于非 async 函数」——esbuild 转译期报 `"await" can only be used inside an "async" function`，浏览器侧为 `SyntaxError: Unexpected reserved word`（5.4.x 时代曾被迫切 Vite 6 构建规避）。修复：插件在 `renderChunk`（order: pre，抢在 vite:esbuild-transpile 校验前）做检测与补标——esbuild 语法校验确证破损才修复，按 rolldown 包装签名补 `async`（即 rolldown 本应生成的代码，运行时助手对 Promise 包装本有支持），必要时 AST 定位兜底；修复后复验必须通过。正常产物零改动零解析成本；rollup（Vite 5/6/7）零触发。回归 `tests/async-mark-repair.test.ts`；Jeecg A/B（1920/1924 chunks）Vite 8.1.4 生产构建产物全部语法合法。**语义说明**：补标后的包装与 rolldown 在循环场景的既有输出一致（调用方同步调用返回 Promise 不等待，与 rolldown 自身对异步循环的处理相同），不改变任何调用点。
+- **修复：桥接诊断三项（MFU-033 降噪 / spec 失真 / cause 双重包装）**
+  - MFU-033 双诊断：宿主守卫（React `useBlocker`）回滚期的连续广播竞态曾产生重复的「子应用守卫拒绝应用宿主确认的位置」误导诊断。现在 `cancelled` 类失败（子应用自己的新导航取代广播应用，子应用自洽）按正常取消处理不再报 MFU-033；真实失步（`aborted` 等）仍报且诊断文本携带目标位置；连续完全相同的错误折叠为首条（不同失败事件永不合并）。
+  - 桥接错误 spec 真实化：`defineBridgeApp`（Vue/React 子应用适配器）不再以占位 spec `'bridge'` 预包装 MFU-016——mount/unmount 的原始错误原样抛出，由宿主适配器在生命周期边界**单点包装**（`bridgeHostError`：真实 spec + phase + 原始 cause，只包装一次；已是插件诊断的错误原样保留）。子应用路由接线（`connectVueBridgeRouter` 等）的同步失败诊断 spec 也从硬编码 `'vue-router'`/`'child-router'` 改为通道携带的真实远程名（`RoutingChannel.spec` 公开，`BridgeChildRoute.spec?`）。
+- **支持：Vue Router 5（peer `>=4.1.0 <6`）**——审查插件消费面（`Router`/`currentRoute.fullPath`/`push/replace/go`/`beforeResolve/beforeEach/afterEach`/`isNavigationFailure`/`NavigationFailureType`，枚举值 4/8/16 两版一致）后正式支持；vue-router 5.1.0 下路由/桥接全套单测 87/87 通过，JeecgBoot（vue-router ^5.1.0）dev+生产全链浏览器验收通过。
+- 修复：Promise 远程名称不一致告警在重试/恢复链路重复刷屏——同一（配置名↔自报名）对只告警一次。
+- 质量门禁：单测 615 → 623（async 补标 6 + MFU-033 降噪 2）；e2e dev 43/43、prod 28/28 全绿；两套类型（tsconfig + 最新 TS 口径）0 错误；gzip / 错误码 48 三方一致门禁通过。
+
+## 5.4.3
+
+- 修复：移除 5.4.2 误带入 `transformIndexHtml` 的一条无条件调试输出（`console.error` 探针在发布前漏删，污染使用方终端）。运行时与 5.4.2 一致，5.4.2 使用方请直接升级。
+
+## 5.4.2
+
+- 修复：多远程宿主 react-refresh preamble 错源（MFU-001 "can't detect preamble"）——Vue 宿主同时挂 Vue 子应用与 React 子应用时，发布脚本静态 import「首个 http dev 远程」的 `/@react-refresh`（错源 MIME 失败 → 标志未设）。修复：标志同步先设 + 动态 import 容错 + shim 自举兜底（`src/index.ts`、`src/virtual.ts` genReactRefreshShim）。
+- 修复：`BridgeHostRouting` 类型未从 `/bridge/router/vue`、`/bridge/router/react` 导出（README §8.3 与发布包 d.ts 不符）。
+- 新增导出面守卫用例（`tests/exports.test.ts`）。
+
 ## 5.4.1
 
 - 修复 URL 同步两端适配器将 replace 误报为 push、子应用 go/back/forward 未委托宿主历史，以及连续导航被丢弃的问题。

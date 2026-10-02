@@ -55,6 +55,7 @@ import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, genRemoteSchema
 import { formatFulgurjsDiagnostic, debugLog, redactModulePath } from './diagnostics'
 import { corsHeadersFor, isNonLoopbackHost } from './dev-cors'
 import { syncViteCacheMarker } from './vite-cache'
+import { repairRolldownAsyncMarks } from './async-mark-repair'
 
 // 运行时代码由构建脚本生成（src/runtime-code.gen.ts），内联进插件产物，无文件定位问题
 import runtimeCode from './runtime-code.gen'
@@ -1108,6 +1109,21 @@ export function federation(options: FederationOptions): Plugin[] {
           }, ...userGroups],
         },
       } as typeof output
+    },
+
+    // V8-ASYNC-FIX：rolldown（vite 8）在「TLA 协商门面 × 用户代码循环依赖」形态下，
+    // 会给循环另一侧的惰性初始化包装漏标 async（await 落在非异步函数 → esbuild 转译/
+    // 浏览器解析直接失败，JeecgBoot 实测）。必须在 vite:esbuild-transpile（renderChunk
+    // 同名钩子）之前抢修，故 order:'pre'。详见 async-mark-repair.ts。
+    renderChunk: {
+      order: 'pre',
+      handler(code, chunk) {
+        if (!state.rolldownBuild || state.command !== 'build') return null
+        const result = repairRolldownAsyncMarks(code, (input) => this.parse(input), chunk.fileName)
+        if (!result) return null
+        debugLog('v8-async-fix', { stage: 'renderChunk', file: chunk.fileName, repaired: result.repaired })
+        return result.code
+      },
     },
 
     generateBundle: {

@@ -81,6 +81,18 @@ export function bridgeLifecycleError(
   )
 }
 
+/**
+ * 宿主适配器的 MFU-016 单点包装（5.5.0 起）：
+ * 子应用适配器（defineBridgeApp）原样抛出 mount/unmount 的原始错误——此前子侧预包装
+ * spec 只能是占位 'bridge'，宿主再包一次造成「spec 失真 + cause 双重包装」的误导诊断。
+ * 宿主在生命周期边界统一包装：真实 spec + phase + 原始 cause 只包装一次；
+ * 已是本插件诊断（FgError）的错误原样保留，不重复包装。
+ */
+export function bridgeHostError(phase: BridgePhase, spec: string, cause: unknown): FgError {
+  if (cause instanceof FgError) return cause
+  return bridgeLifecycleError(phase, spec, cause instanceof Error ? cause : String(cause))
+}
+
 /** MFU-017：受控 sessionKey 与当前 AppContext / 活跃桥接会话不一致 */
 export function bridgeSessionMismatchError(
   spec: string,

@@ -25,7 +25,7 @@ import {
   withBridgeTimeout,
   type BridgeApp,
 } from './bridge-core'
-import { bridgeLifecycleError } from './bridge-errors'
+import { bridgeHostError } from './bridge-errors'
 import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
 
 type LoadRemoteFn = (spec: string, opts?: { retries?: number }) => Promise<any>
@@ -169,9 +169,9 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
             try {
               c.unmount(el)
             } catch (e) {
-              // MFU-016（phase: unmount）：宿主报告但不崩溃；持久封锁该容器——
+              // MFU-016（phase: unmount，单点包装）：宿主报告但不崩溃；持久封锁该容器——
               // 后续重试与 sessionKey 变化都不得在清理状态不明的 el 上重挂（BN09）
-              const err = bridgeLifecycleError('unmount', spec, e instanceof Error ? e : String(e))
+              const err = bridgeHostError('unmount', spec, e)
               containerBlocked = true
               console.error('[fulgurjs] 桥接应用卸载失败，该容器已封锁（同页只能刷新恢复）：', err)
               error.value = err
@@ -226,15 +226,20 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
               mountOptions = { signal: genAbort.signal, routing: channel }
               void latestLoc
             }
-            await contract.mount(el, { ...(appPropsSource ?? {}) }, mountOptions)
+            // mount 边界单点包装（5.5.0）：子应用契约原样抛出的原始错误 → MFU-016（真实
+            // spec + phase + cause）；其余校验/加载错误已是 FgError 诊断，保持原语义
+            try {
+              await contract.mount(el, { ...(appPropsSource ?? {}) }, mountOptions)
+            } catch (e) {
+              throw bridgeHostError('mount', spec, e)
+            }
             if (myGeneration !== generation) return
             status.value = 'ready'
           } catch (e) {
             if (myGeneration !== generation) return
             error.value = e
             status.value = 'error'
-          }
-        }
+          }        }
 
         const start = (): void => {
           const ok = invalidate()
