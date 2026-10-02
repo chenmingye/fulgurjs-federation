@@ -36,12 +36,12 @@ test.describe('bridge-router B：React 宿主 × Vue 子', () => {
     await expect(page.locator('[data-testid="routed-vue-page"]')).toHaveText(/vue-routed:\/list/)
   })
 
-  test('U11 真实取消（canNavigate 预判 + 树内 blocker 双源）', async ({ page }) => {
+  test('U11 真实取消（树内 blocker 真正取消）', async ({ page }) => {
     await gotoRouted(page, REACT_HOST)
     await expect(page.locator('[data-testid="routed-vue-page"]')).toHaveText(/vue-routed:\/list/, { timeout: 20000 })
     const url0 = page.url()
     const h0 = await page.evaluate(() => history.length)
-    // 子应用发起 → 端口预判取消
+    // 子应用发起 → 树内 blocker reset 取消
     await page.locator('[data-testid="routed-vue-link-secret"]').click()
     await page.waitForTimeout(600)
     expect(page.url()).toBe(url0)
@@ -59,4 +59,31 @@ test.describe('bridge-router B：React 宿主 × Vue 子', () => {
     await gotoRouted(page, '/approval/list?routed=1&spec=bridge')
     await expect(page.locator('[data-fulgurjs-error="MFU-031"]')).toBeVisible({ timeout: 20000 })
   })
+})
+
+
+test('U04/U13：replace 不增历史，连续请求全部落定，子应用 back 走宿主历史', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto('/approval/list?routed=1')
+  const child = page.getByTestId('routed-vue-page')
+  await expect(child).toHaveText(/vue-routed:\/list/, { timeout: 20000 })
+  const before = await page.evaluate(() => history.length)
+  await page.evaluate(async () => {
+    const router = (globalThis as any).__ROUTED_VUE_ROUTER__
+    await router.push('/detail/111')
+    await router.replace('/detail/222')
+  })
+  await expect(child).toHaveText(/\/detail\/222/)
+  expect(await page.evaluate(() => history.length)).toBe(before + 1)
+  await page.evaluate(async () => {
+    const router = (globalThis as any).__ROUTED_VUE_ROUTER__
+    await Promise.all([333, 444, 555].map((id) => router.push('/detail/' + id)))
+  })
+  await expect(child).toHaveText(/\/detail\/555/)
+  expect(await page.evaluate(() => history.length)).toBe(before + 4)
+  await page.evaluate(() => (globalThis as any).__ROUTED_VUE_ROUTER__.back())
+  await expect(child).toHaveText(/\/detail\/444/)
+  expect(page.url()).toContain('/approval/detail/444')
+  expect(errors).toEqual([])
 })

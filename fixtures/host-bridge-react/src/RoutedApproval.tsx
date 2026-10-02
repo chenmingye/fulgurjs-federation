@@ -1,7 +1,6 @@
 /**
  * RoutedApproval：URL 同步路由页（React 宿主 × Vue 子应用，?routed=1 驱动）。
- * - 端口 = createReactBridgeNavigation(router, { canNavigate })；canNavigate 与树内
- *   useBlocker 共用同一谓词（单一事实源：子应用请求端口预判取消，菜单/POP 走树内真实拦截）；
+ * - 端口 = createReactBridgeNavigation(router, { canNavigate })；最终结果观察树内 useBlocker 的 reset/proceed，不依赖取消预判；
  * - basePath=/approval；?routed-delay=1 → 400ms pending（U12）；?spec=bridge → MFU-031（U17）。
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react'
@@ -17,7 +16,11 @@ const routedOn = params.get('routed') === '1'
 const specName = params.get('spec') === 'bridge' ? 'bridge' : 'bridge-routed'
 
 /** 取消策略（与 useBlocker 共用）：/approval/secret 一律拒绝 */
-const isBlocked = (pathname: string): boolean => pathname.startsWith('/approval/secret')
+const routerBase = import.meta.env.BASE_URL.replace(/\/$/, '')
+const isBlocked = (pathname: string): boolean => {
+  const logical = routerBase && pathname.startsWith(routerBase + '/') ? pathname.slice(routerBase.length) : pathname
+  return logical.startsWith('/approval/secret')
+}
 
 /** data router 最小结构面（避免耦合 RR 内部类型路径） */
 interface DataRouterLike {
@@ -30,7 +33,6 @@ interface DataRouterLike {
 export function registerRouting(router: DataRouterLike, basename?: string): void {
   const navigation = createReactBridgeNavigation(router, {
     basename,
-    canNavigate: (n) => !isBlocked(n.pathname),
   })
   ;(globalThis as any).__ROUTED_ROUTING__ = { basePath: '/approval', navigation } satisfies BridgeHostRouting
 }

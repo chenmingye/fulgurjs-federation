@@ -268,6 +268,14 @@ describe('runtime: 同步共享查询（getLoadedShare 补修回归）', () => {
     expect(rt.getLoadedShare('react', { shareKey: 'react', requiredVersion: '19.3.0', singleton: true })).toBe(localRemoteCopy)
   })
 
+  it('pinLoadedShare：入口 init 前的空作用域登记，后续 provider 保留同一实例', async () => {
+    const early = { v: 'early-react' }
+    rt.pinLoadedShare('react', { singleton: true, requiredVersion: '18.3.1' }, '18.3.1', early)
+    rt.registerShare('default', 'react', '18.3.1', async () => ({ v: 'remote-react' }), { from: 'remote' })
+    expect(await rt.loadShare('react', { singleton: true, requiredVersion: '18.3.1' })).toBe(early)
+    expect(rt.getLoadedShare('react', { singleton: true })).toBe(early)
+  })
+
   it('pinLoadedShare：版本不一致不登记（不掩盖版本冲突）；实例已就绪不抢占', async () => {
     rt.initSharing('default')
     const hostInstance = { v: 'host-18' }
@@ -491,7 +499,7 @@ describe('CJS 垫片与改写路径（生成物与 transform 行为）', () => {
     expect(code2).not.toContain('strictVersion')
   })
 
-  it('宿主 shared 提供闭包内的 CJS require 保持原生引用（不再改写到协商垫片）', async () => {
+  it('宿主提供闭包只豁免自引用，跨共享键的 CJS require 仍需协商', async () => {
     const n = normalizeOptions(
       {
         name: 'host',
@@ -504,13 +512,17 @@ describe('CJS 垫片与改写路径（生成物与 transform 行为）', () => {
     )
     const closureRoots = [{ root: '/proj/node_modules/react-dom/', keys: new Set(['react-dom']) }]
     const cjs = `module.exports = function(e){return e(require("react"))}`
-    // 闭包内：require 保持原生
+    // react-dom 闭包内对 react 的跨键依赖必须协商
     const inside = await transformModule(cjs, '/proj/node_modules/react-dom/index.js', {
       options: n, rewriteShared: true, allowNodeModules: true, cjsRequireRewrite: true,
       sharedClosureRoots: closureRoots,
     })
-    // 闭包内唯一候选（require 重写）被跳过 → 无改动 → null（require 保持原生即原码）
-    expect(inside).toBeNull()
+    expect(inside?.code).toContain('require("virtual:fulgurjs-cjs-ns:react")')
+    const self = await transformModule('module.exports = require("react-dom")', '/proj/node_modules/react-dom/client.js', {
+      options: n, rewriteShared: true, allowNodeModules: true, cjsRequireRewrite: true,
+      sharedClosureRoots: closureRoots,
+    })
+    expect(self).toBeNull()
     // 闭包外（纯远程身份）：require 走同步协商垫片
     const outside = await transformModule(cjs, '/proj/node_modules/other-pkg/index.js', {
       options: n, rewriteShared: true, allowNodeModules: true, cjsRequireRewrite: true,

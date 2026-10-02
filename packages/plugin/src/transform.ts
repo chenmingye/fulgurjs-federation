@@ -393,9 +393,10 @@ export async function transformModule(
   // 这里把 require("vue") 重写为 require("virtual:fulgurjs-cjs-ns:vue")——保持 require 调用
   // 形态，commonjs 插件才会继续转换本模块（ESM import 前置会把文件变成 mixed 而被跳过，
   // module.exports 语义即断裂），并对垫片虚拟模块做 CJS→ESM interop。
-  // 宿主的本地提供闭包保持原生 require，避免本体绕回协商链；纯 remote 仍需协商。
+  // 提供闭包的自引用保持原生 require；跨共享键（react-dom → react）仍走同步垫片，
+  // 否则宿主 renderer 固定本地 React，而组件可能协商到远程 React，破坏单例身份。
   // 仅 build 启用；dev 的 CJS 依赖走 optimizeDeps 预构建（fulgurjs:optimize-shared-external）。
-  if (ctx.cjsRequireRewrite && !inSharedClosure(clean, ctx.sharedClosureRoots) && /require\s*\(\s*["']/.test(code)) {
+  if (ctx.cjsRequireRewrite && /require\s*\(\s*["']/.test(code)) {
     const sharedByAlias = new Map<string, NormalizedShared>()
     for (const s of options.shared) {
       if (s.import === false) continue
@@ -403,6 +404,7 @@ export async function transformModule(
     }
     let cjsEdited = false
     for (const [alias, item] of sharedByAlias) {
+      if (ctx.sharedClosureRoots?.some((root) => clean.startsWith(root.root) && root.keys.has(item.shareKey))) continue
       const re = new RegExp(`require\\((["'])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1\\)`, 'g')
       if (!re.test(code)) continue
       code = code.replace(re, `require(${JSON.stringify(`virtual:fulgurjs-cjs-ns:${item.shareKey}`)})`)

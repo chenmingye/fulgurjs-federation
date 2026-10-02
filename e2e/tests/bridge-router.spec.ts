@@ -120,3 +120,30 @@ test.describe('bridge-router A：Vue 宿主 × React 子', () => {
     await expect(page.locator('[data-testid="host-title"]')).toBeVisible({ timeout: 20000 })
   })
 })
+
+
+test('U04/U13：replace 不增历史，连续请求全部落定，子应用 back 走宿主历史', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto('/approval/list?routed=1')
+  const child = page.getByTestId('routed-react-page')
+  await expect(child).toHaveText(/react-routed:\/list/, { timeout: 20000 })
+  const before = await page.evaluate(() => history.length)
+  await page.evaluate(async () => {
+    const router = (globalThis as any).__ROUTED_REACT_ROUTER__
+    await router.navigate('/detail/111')
+    await router.navigate('/detail/222', { replace: true })
+  })
+  await expect(child).toHaveText(/\/detail\/222/)
+  expect(await page.evaluate(() => history.length)).toBe(before + 1)
+  await page.evaluate(async () => {
+    const router = (globalThis as any).__ROUTED_REACT_ROUTER__
+    await Promise.all([333, 444, 555].map((id) => router.navigate('/detail/' + id)))
+  })
+  await expect(child).toHaveText(/\/detail\/555/)
+  expect(await page.evaluate(() => history.length)).toBe(before + 4)
+  await page.evaluate(() => (globalThis as any).__ROUTED_REACT_ROUTER__.navigate(-1))
+  await expect(child).toHaveText(/\/detail\/444/)
+  expect(page.url()).toContain('/approval/detail/444')
+  expect(errors).toEqual([])
+})

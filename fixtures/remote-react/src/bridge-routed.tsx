@@ -48,6 +48,7 @@ export default defineBridgeApp((_props, ctx) => {
     { path: '/', element: <List /> },
     { path: '/detail/:id', element: <Detail /> },
     { path: '/secret', element: <Secret /> },
-  ])
+  ], { signal: ctx.signal })
+  ;(globalThis as any).__ROUTED_REACT_ROUTER__ = (conn.element.props as any).router
   return conn.element
 }, { routing: true })

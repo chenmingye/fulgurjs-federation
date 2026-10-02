@@ -144,10 +144,11 @@ export function routingNavigationError(spec: string, reason: string): FgError {
 }
 
 /** MFU-033：路由准备/同步失败（重定向循环等；不伪装成功也不静默回退 memory） */
-export function routingSyncError(spec: string, reason: string, chain: string[]): FgError {
+export function routingSyncError(spec: string, reason: string, chain: string[], cause?: unknown): FgError {
   return new FgError(
     BridgeErrorCodes.ROUTING_SYNC_FAILED,
-    `现象：桥接应用 "${spec}" 的 URL 同步在重定向链上超出上限（${chain.length} 次）。\n原因：${reason}\n修法：检查子应用路由的重定向规则是否互相成环；同步重定向使用 replace 且不得对同一位置重复发起。目标链：${chain.join(' → ')}。`,
+    `现象：桥接应用 "${spec}" 的 URL 同步失败。\n原因：${reason}\n修法：检查路由守卫、加载器与导航异常；重定向链不应成环。目标链：${chain.join(' → ')}。`,
     { spec, chain: [...chain] },
+    { cause },
   )
 }

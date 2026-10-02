@@ -653,7 +653,9 @@ export function federation(options: FederationOptions): Plugin[] {
           (state.transformedModules.has(importer) || state.transformedModules.has(impClean))
         ) {
           const hit = state.normalized.shared.find((sh) => sh.aliases.includes(bareClean))
-          if (hit) {
+          const providerSelf = hit && state.normalized.remotes.length > 0 &&
+            state.providerRoots.some((provider) => impClean.startsWith(provider.root) && provider.shareKey === hit.shareKey)
+          if (hit && !providerSelf) {
             return RESOLVED.sharedNsFacade(hit.shareKey) + query
           }
         }
@@ -815,8 +817,7 @@ export function federation(options: FederationOptions): Plugin[] {
       const clean = id.split('?')[0]
       // build：宿主入口模块顶部内联 init（先于一切应用代码注册 remotes/provides）。
       // 不能用独立虚拟模块：rollup 会摇树剥离其顶层调用；入口自身的顶层调用永不被剥离。
-      // （V8 试图改为 side-effect import 的实验在 vite6 admin 生产实测破地图渲染——
-      // 内容区空白，已回滚；vite8 运行期死锁单列 rolldown 上游 BLOCKED，不以此换回退。）
+      // 曾尝试 side-effect import，后续恢复内联；新版本构建支持以实际矩阵为准。
       if (state.command === 'build' && state.entryAbsPaths.has(clean) && !state.entryInitInjected.has(clean)) {
         state.entryInitInjected.add(clean)
         const initCode = genInitModule(state.normalized, state.command)
@@ -831,7 +832,13 @@ export function federation(options: FederationOptions): Plugin[] {
       // devSharedSelf 所以通，两处语义必须一致。
       const isPureRemoteBuild =
         state.normalized.exposes.length > 0 && state.normalized.remotes.length === 0
-      const allowNodeModules = state.normalized.devSharedSelf || isPureRemoteBuild
+      const providerCjs = state.command === 'build' && /require\s*\(\s*["']/.test(code) &&
+        state.providerRoots.some((provider) => clean.startsWith(provider.root))
+      // 纯宿主仍不改写依赖的 ESM/TLA 链；提供包跨键的同步 require 单独放行。
+      const allowNodeModules = state.normalized.devSharedSelf || isPureRemoteBuild || providerCjs
+      const cjsClosureRoots = state.sharedClosureRoots.length > 0 || isPureRemoteBuild
+        ? state.sharedClosureRoots
+        : state.providerRoots.map((provider) => ({ root: provider.root, keys: new Set([provider.shareKey]) }))
 
       if (/\.vue(\?|$)/.test(id)) {
         // prod 构建时 vue 插件将 script 拆为 ?vue&type=script 子请求（源码 import 仍是 bare）：
@@ -844,7 +851,7 @@ export function federation(options: FederationOptions): Plugin[] {
             rewriteShared: true,
             allowNodeModules,
             cjsRequireRewrite: true,
-            sharedClosureRoots: state.sharedClosureRoots,
+            sharedClosureRoots: cjsClosureRoots,
           })
         }
         return null
@@ -861,7 +868,7 @@ export function federation(options: FederationOptions): Plugin[] {
         rewriteShared: state.command === 'build' || state.normalized.devSharedSelf,
         allowNodeModules,
         cjsRequireRewrite: state.command === 'build',
-        sharedClosureRoots: state.sharedClosureRoots,
+        sharedClosureRoots: cjsClosureRoots,
       })
     },
 
@@ -896,6 +903,20 @@ export function federation(options: FederationOptions): Plugin[] {
       // 等兄弟入口会把垫片拖进消费方静态链（早于 TLA 门面求值），该场景由运行时
       // pinLoadedShare 收敛实例（见 runtime/index.ts），不依赖 chunk 顺序。
       state.providerRoots = []
+      // commonjs 的 resolve 可能提前 load/transform 本体；在首个异步 resolve 前登记包根，
+      // 否则 react-dom 首次变换时尚未登记自身，跨键 require 会永久漏过改写。
+      const providerRequire = createRequire(path.join(n.root, 'package.json'))
+      for (const item of n.shared) {
+        if (item.import === false) continue
+        try {
+          const file = providerRequire.resolve(item.import).replace(/\\/g, '/')
+          const pos = file.lastIndexOf('/node_modules/')
+          if (pos < 0) continue
+          const parts = file.slice(pos + '/node_modules/'.length).split('/')
+          const pkg = parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+          state.providerRoots.push({ root: file.slice(0, pos + '/node_modules/'.length) + pkg + '/', shareKey: item.shareKey })
+        } catch { /* 别名/相对源码由后续 Vite resolve 补齐。 */ }
+      }
       {
         for (const item of n.shared) {
           if (item.import === false) continue
@@ -907,7 +928,10 @@ export function federation(options: FederationOptions): Plugin[] {
           if (pos === -1) continue
           const parts = file.slice(pos + marker.length).split('/')
           const pkg = parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
-          state.providerRoots.push({ root: file.slice(0, pos + marker.length) + pkg + '/', shareKey: item.shareKey })
+          const root = file.slice(0, pos + marker.length) + pkg + '/'
+          if (!state.providerRoots.some((provider) => provider.root === root && provider.shareKey === item.shareKey)) {
+            state.providerRoots.push({ root, shareKey: item.shareKey })
+          }
         }
       }
       // D6：对象形式 manualChunks 的 specifier → 模块 id 解析（此阶段 rollup 上下文可用，
@@ -1418,7 +1442,8 @@ export function federation(options: FederationOptions): Plugin[] {
           return (
             `<script type="module">import * as __fulgurjs_rr from ${JSON.stringify(`${remoteOrigin}/@react-refresh`)};` +
             `try { __fulgurjs_rr.default?.injectIntoGlobalHook?.(window); } catch {}` +
-            'window.$RefreshReg$ = () => {};window.$RefreshSig$ = () => (type) => type;' +
+            // plugin-react 4（Vite 5/6）还检查此标志；新版本同样可以安全接受。
+            'window.$RefreshReg$ = () => {};window.$RefreshSig$ = () => (type) => type;window.__vite_plugin_react_preamble_installed__ = true;' +
             `(globalThis).${REACT_REFRESH_GLOBAL_KEY} ??= __fulgurjs_rr;</script>` + html
           )
         }

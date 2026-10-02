@@ -641,16 +641,9 @@ function createRuntime() {
    * 本地副本一致（不掩盖版本冲突=strictVersion/告警语义不受影响）时登记。
    */
   function pinLoadedShare(name: string, opts: LoadShareOptions, localVersion: string, instance: unknown): void {
-    if (instance === undefined) return
-    let entry: ShareEntry | undefined
-    try {
-      entry = selectShareEntry(name, opts)
-    } catch {
-      return // strictVersion 拒绝等：同步登记不改变错误语义
-    }
-    if (!entry || entry.value !== undefined || entry.version !== localVersion) return
-    entry.value = instance
-    entry.loaded = true
+    // provider 闭包可能早于入口 init 求值：空作用域也登记同步副本，
+    // 与异步 fallback 使用同一 first-wins/版本守卫，后续 provider 不得替换它。
+    registerFallbackInstance(name, { ...opts, localVersion }, instance)
   }
 
   /** WP6：错误信息用的 URL 脱敏——去凭证（user:pass@）与 query/hash */

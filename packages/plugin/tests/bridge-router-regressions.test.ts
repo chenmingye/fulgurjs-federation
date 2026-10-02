@@ -1,0 +1,226 @@
+// @vitest-environment node
+/** URL 同步补修：真实 Router 的历史动作、取消、并发与错误语义。 */
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter, isNavigationFailure } from 'vue-router'
+import { createMemoryRouter, redirect } from 'react-router-dom'
+import { RoutingChannel, normalizeBasePath, type BridgeLocation, type BridgeHostNavigation } from '../src/bridge-router-core'
+import { createVueBridgeNavigation, connectVueBridgeRouter } from '../src/bridge-router-vue'
+import { createReactBridgeNavigation, createReactBridgeRouter } from '../src/bridge-router-react'
+const loc = (pathname: string): BridgeLocation => ({ pathname, search: '', hash: '' })
+const cleanups: (() => void)[] = []
+afterEach(() => { cleanups.splice(0).reverse().forEach((fn) => fn()) })
+function host() {
+  let current = loc('/approval/list')
+  const listeners = new Set<(l: BridgeLocation) => void>()
+  const requests: { pathname: string; action: string }[] = []
+  const broadcast = (l: BridgeLocation) => { current = l; listeners.forEach((fn) => fn(l)) }
+  const port: BridgeHostNavigation = {
+    getLocation: () => current,
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    async navigate(target, action) { requests.push({ pathname: target.pathname, action }); broadcast(target); return { status: 'committed', location: current } },
+    go: vi.fn(),
+  }
+  const channel = new RoutingChannel('test', '/approval', port, 'remote/bridge')
+  cleanups.push(() => channel.dispose())
+  return { port, channel, broadcast, requests }
+}
+const vue = () => createRouter({ history: createMemoryHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }] })
+function reactChild(channel: RoutingChannel) {
+  const conn = createReactBridgeRouter(channel, [{ path: '*', element: null }])
+  cleanups.push(conn.dispose)
+  return (conn.element.props as { router: ReturnType<typeof createMemoryRouter> }).router
+}
+
+describe('URL 同步回归', () => {
+  it.each(['vue', 'react'])('%s：push/replace 保留动作，go/back/forward 委托宿主', async (framework) => {
+    const h = host()
+    if (framework === 'vue') {
+      const router = vue(); const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose)
+      await conn.ready
+      await router.push('/one'); await router.push({ path: '/two', replace: true })
+      router.back(); router.forward(); router.go(-2)
+    } else {
+      const router = reactChild(h.channel)
+      await router.navigate('/one'); await router.navigate('/two', { replace: true })
+      await router.navigate(-1); await router.navigate(1); await router.navigate(-2)
+    }
+    expect(h.requests).toEqual([{ pathname: '/approval/one', action: 'push' }, { pathname: '/approval/two', action: 'replace' }])
+    expect(h.port.go).toHaveBeenNthCalledWith(1, -1)
+    expect(h.port.go).toHaveBeenNthCalledWith(2, 1)
+    expect(h.port.go).toHaveBeenNthCalledWith(3, -2)
+  })
+
+  it('U13：内核三次重叠请求全部串行落定，只有一个在飞请求', async () => {
+    const h = host(); const native = h.port.navigate
+    const gates: (() => void)[] = []
+    let active = 0; let max = 0
+    h.port.navigate = async (target, action) => {
+      active++; max = Math.max(max, active)
+      await new Promise<void>((r) => gates.push(r))
+      const result = await native(target, action); active--; return result
+    }
+    const tasks = ['/one', '/two', '/three'].map((path) => h.channel.navigate(loc(path), 'push'))
+    for (let i = 0; i < 3; i++) { await vi.waitFor(() => expect(gates).toHaveLength(i + 1)); gates[i]() }
+    expect((await Promise.all(tasks)).map((r) => r.status)).toEqual(['committed', 'committed', 'committed'])
+    expect(max).toBe(1); expect(h.channel.getLocation()).toEqual(loc('/three'))
+  })
+
+  it.each(['vue', 'react'])('U13 %s：快速连续本地导航没有丢失', async (framework) => {
+    const h = host()
+    let navigate: (path: string) => Promise<unknown>
+    if (framework === 'vue') {
+      const router = vue(); const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose); await conn.ready
+      navigate = (path) => router.push(path)
+    } else { const router = reactChild(h.channel); navigate = (path) => router.navigate(path) }
+    await Promise.all(['/one', '/two', '/three'].map(navigate))
+    expect(h.requests.map((r) => r.pathname)).toEqual(['/approval/one', '/approval/two', '/approval/three'])
+    expect(h.channel.getLocation()).toEqual(loc('/three'))
+  })
+
+  it('外部离页作废在飞及排队请求，旧通道不能把宿主拉回来', async () => {
+    const h = host()
+    let release!: () => void
+    h.port.navigate = async (target, _action, context) => {
+      await new Promise<void>((r) => { release = r })
+      if (!context?.signal?.aborted) h.broadcast(target)
+      return { status: 'committed', location: h.port.getLocation() }
+    }
+    const first = h.channel.navigate(loc('/one'), 'push')
+    const next = h.channel.navigate(loc('/two'), 'push')
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    h.broadcast(loc('/other')); release()
+    expect((await first).status).toBe('cancelled'); expect((await next).status).toBe('cancelled')
+    expect((await h.channel.navigate(loc('/three'), 'push')).status).toBe('cancelled')
+    expect(h.port.getLocation()).toEqual(loc('/other'))
+  })
+
+  it('异常以 MFU-033 + cause 拒绝，后续队列仍能恢复', async () => {
+    const h = host(); const native = h.port.navigate; const cause = new Error('loader failed')
+    h.port.navigate = async () => { throw cause }
+    await expect(h.channel.navigate(loc('/one'), 'push')).rejects.toMatchObject({ code: 'MFU-033', cause })
+    h.port.navigate = native
+    expect((await h.channel.navigate(loc('/two'), 'push')).status).toBe('committed')
+  })
+
+  it('Vue 初始守卫异常拒绝 ready；宿主守卫异常没有伪装取消', async () => {
+    const h = host(); const router = vue(); const cause = new Error('guard failed')
+    router.onError(() => {}); router.beforeEach(() => { throw cause })
+    const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose)
+    await expect(conn.ready).rejects.toMatchObject({ code: 'MFU-033', cause })
+    const hostRouter = vue(); hostRouter.onError(() => {}); hostRouter.beforeEach(() => { throw cause })
+    await expect(createVueBridgeNavigation(hostRouter).navigate(loc('/two'), 'push')).rejects.toBe(cause)
+  })
+
+  it('Vue 取消返回真实 NavigationFailure，后续 replace 可恢复', async () => {
+    const h = host(); const router = vue(); const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose); await conn.ready
+    const native = h.port.navigate
+    h.port.navigate = async () => ({ status: 'cancelled', location: h.port.getLocation() })
+    expect(isNavigationFailure(await router.push('/denied'))).toBe(true)
+    expect(router.currentRoute.value.fullPath).toBe('/list')
+    h.port.navigate = native; await router.replace('/allowed')
+    expect(h.channel.getLocation()).toEqual(loc('/allowed'))
+  })
+
+  it('Vue history base 不会二次剥离逻辑 pathname', async () => {
+    const router = createRouter({ history: createMemoryHistory('/app/'), routes: [{ path: '/:pathMatch(.*)*', component: {} }] })
+    await router.push('/app/detail')
+    expect(createVueBridgeNavigation(router, { routerBase: '/app' }).getLocation()).toEqual(loc('/app/detail'))
+  })
+
+  it.each(['reset', 'proceed'])('React 真实 blocker %s：等待真实裁决，无 canNavigate 预判', async (decision) => {
+    const router = createMemoryRouter([{ path: '*', element: null }], { initialEntries: ['/approval/list'] }); cleanups.push(() => router.dispose())
+    router.getBlocker('guard', () => true)
+    let settled = false
+    const task = createReactBridgeNavigation(router).navigate(loc('/approval/two'), 'push').then((r) => { settled = true; return r })
+    await vi.waitFor(() => expect(router.state.blockers.get('guard')?.state).toBe('blocked'))
+    expect(settled).toBe(false); expect(router.state.location.pathname).toBe('/approval/list')
+    const blocker = router.state.blockers.get('guard')!
+    if (blocker.state === 'blocked') { if (decision === 'reset') blocker.reset(); else blocker.proceed() }
+    expect((await task).status).toBe(decision === 'reset' ? 'cancelled' : 'committed')
+    expect(router.state.location.pathname).toBe(decision === 'reset' ? '/approval/list' : '/approval/two')
+  })
+
+  it('React blocker 中卸载会取消并清掉 blocker，无永久挂起', async () => {
+    const router = createMemoryRouter([{ path: '*', element: null }], { initialEntries: ['/approval/list'] }); cleanups.push(() => router.dispose())
+    router.getBlocker('guard', () => true)
+    const abort = new AbortController()
+    const task = createReactBridgeNavigation(router).navigate(loc('/approval/two'), 'push', { signal: abort.signal })
+    await vi.waitFor(() => expect(router.state.blockers.get('guard')?.state).toBe('blocked'))
+    abort.abort()
+    expect((await task).status).toBe('cancelled'); expect(router.state.blockers.get('guard')?.state).toBe('unblocked')
+  })
+
+  it('React basename 按段剥离；原生 navigate 自动附加 base', async () => {
+    const router = createMemoryRouter([{ path: '*', element: null }], { basename: '/app', initialEntries: ['/app/approval/list'] }); cleanups.push(() => router.dispose())
+    const port = createReactBridgeNavigation(router, { basename: '/app' })
+    expect(port.getLocation()).toEqual(loc('/approval/list'))
+    await port.navigate(loc('/approval/two'), 'replace')
+    expect(router.state.location.pathname).toBe('/app/approval/two')
+  })
+
+  it('React 初始 loader 重定向 replace 同步宿主', async () => {
+    const h = host()
+    const conn = createReactBridgeRouter(h.channel, [{ path: '/list', loader: () => redirect('/detail/1') }, { path: '*', element: null }]); cleanups.push(conn.dispose)
+    await vi.waitFor(() => expect(h.requests).toEqual([{ pathname: '/approval/detail/1', action: 'replace' }]))
+  })
+
+  it('拒绝等价根前缀及编码逃逸目标，不破坏合法编码 query', async () => {
+    for (const base of ['//', '/a//b', '/a/..', '/a/%2e%2e', '/a\\b']) expect(() => normalizeBasePath(base, 'remote')).toThrow(/MFU-030/)
+    const h = host()
+    for (const path of ['/%2e%2e/x', '/%2Fother', '/a\\b', '/a?outside', '//other']) await expect(h.channel.navigate(loc(path), 'push')).rejects.toThrow(/MFU-032/)
+    await h.channel.navigate({ pathname: '/ok', search: '?q=%2F&x=1&x=2', hash: '#f' }, 'push')
+    expect(h.channel.getLocation().search).toBe('?q=%2F&x=1&x=2')
+  })
+
+  it('Vue ready 等待期间宿主换路径，最新位置胜出，不回写初始路径', async () => {
+    const h = host(); const router = vue()
+    let release!: () => void
+    const remove = router.beforeEach(() => new Promise<void>((r) => { release = r; remove() }))
+    const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose)
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    h.broadcast(loc('/approval/detail/9')); release()
+    await conn.ready
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/detail/9'))
+    expect(h.requests).toEqual([])
+  })
+
+  it.each(['vue', 'react'])('%s：mount signal 作废后不再写宿主', async (framework) => {
+    const h = host(); const abort = new AbortController()
+    if (framework === 'vue') {
+      const router = vue(); const conn = connectVueBridgeRouter(h.channel, router, { signal: abort.signal }); cleanups.push(conn.dispose)
+      await conn.ready; abort.abort(); await router.push('/late')
+    } else {
+      const conn = createReactBridgeRouter(h.channel, [{ path: '*', element: null }], { signal: abort.signal }); cleanups.push(conn.dispose)
+      const router = (conn.element.props as { router: ReturnType<typeof createMemoryRouter> }).router
+      abort.abort(); await router.navigate('/late')
+    }
+    expect(h.requests).toEqual([])
+  })
+
+
+  it('React 异步 loader 中作废：迟到结果不能提交原目标', async () => {
+    let release!: () => void
+    const router = createMemoryRouter([
+      { path: '/approval/list', element: null },
+      { path: '/approval/detail', loader: () => new Promise<void>((r) => { release = r }), element: null },
+    ], { initialEntries: ['/approval/list'] }); cleanups.push(() => router.dispose())
+    const abort = new AbortController()
+    const task = createReactBridgeNavigation(router).navigate(loc('/approval/detail'), 'push', { signal: abort.signal })
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    abort.abort(); expect((await task).status).toBe('cancelled'); release()
+    await vi.waitFor(() => expect(router.state.navigation.state).toBe('idle'))
+    expect(router.state.location.pathname).toBe('/approval/list')
+  })
+
+
+  it('React 请求入队后立即作废，原生 navigate 尚未开始时禁止执行', async () => {
+    const router = createMemoryRouter([{ path: '*', element: null }], { initialEntries: ['/approval/list'] }); cleanups.push(() => router.dispose())
+    const abort = new AbortController()
+    const task = createReactBridgeNavigation(router).navigate(loc('/approval/two'), 'push', { signal: abort.signal })
+    abort.abort()
+    expect((await task).status).toBe('cancelled')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(router.state.location.pathname).toBe('/approval/list')
+  })
+
+})

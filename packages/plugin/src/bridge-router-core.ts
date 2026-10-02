@@ -34,7 +34,7 @@ export type BridgeNavigationResult =
 export interface BridgeHostNavigation {
   getLocation(): BridgeLocation
   subscribe(listener: (location: BridgeLocation) => void): () => void
-  navigate(target: BridgeLocation, action: 'push' | 'replace'): Promise<BridgeNavigationResult>
+  navigate(target: BridgeLocation, action: 'push' | 'replace', options?: { signal?: AbortSignal }): Promise<BridgeNavigationResult>
   go(delta: number): void
 }
 
@@ -74,10 +74,11 @@ const MAX_GO_DELTA = 50
 export function normalizeBasePath(basePath: string, spec: string): string {
   const bad = (reason: string): Error => routingConfigError(spec, reason)
   if (typeof basePath !== 'string' || basePath === '') throw bad('basePath 不能为空。')
-  if (basePath === '/') throw bad('basePath 不能是根 "/"——根路径属于宿主自身页面，请为同步实例分配独立前缀。')
+  if (/^\/+$/u.test(basePath)) throw bad('basePath 不能是根 "/"——根路径属于宿主自身页面，请为同步实例分配独立前缀。')
   if (!basePath.startsWith('/')) throw bad(`basePath 必须以 "/" 开头：当前为 "${basePath}"。`)
   if (/[?#]/.test(basePath) || basePath.includes('://')) throw bad(`basePath 不能包含 query/hash/协议：当前为 "${basePath}"。`)
   if (basePath.includes('*') || basePath.includes(':')) throw bad(`basePath 不接受通配符或参数模板：当前为 "${basePath}"。请使用静态绝对路径。`)
+  if (/\\|\/\/|%(?:2e|2f|5c)/i.test(basePath) || basePath.split('/').some((part) => part === '.' || part === '..')) throw bad('basePath 不能包含空路径段、转义分隔符或相对路径段。')
   return basePath.endsWith('/') ? basePath.slice(0, -1) : basePath
 }
 
@@ -113,7 +114,8 @@ export function sameLocation(a: BridgeLocation, b: BridgeLocation): boolean {
 
 /** 子应用目标越界守卫（MFU-032）：pathname 不得含 \0、.. 段；换算后必须仍命中前缀 */
 export function assertChildTargetInScope(target: BridgeLocation, basePath: string, spec: string): void {
-  if (target.pathname.includes('\0') || target.pathname.split('/').includes('..')) {
+  if (!target || typeof target.pathname !== 'string' || typeof target.search !== 'string' || typeof target.hash !== 'string' || (target.search !== '' && !target.search.startsWith('?')) || (target.hash !== '' && !target.hash.startsWith('#'))) throw routingNavigationError(spec, '导航目标必须提供 pathname、search、hash 三段，search/hash 应为空或以 ?/# 开头。')
+  if (/[\x00-\x20\\?#]|%(?:2e|2f|5c)/i.test(target.pathname) || target.pathname.includes('//') || target.pathname.split('/').some((part) => part === '.' || part === '..')) {
     throw routingNavigationError(spec, `导航目标试图逃逸自身前缀：pathname "${target.pathname}"。跨前缀导航请通过宿主菜单等宿主能力完成。`)
   }
   const host = toHostLocation(target, basePath, spec)
@@ -164,7 +166,9 @@ export class RoutingChannel implements BridgeChildRoute {
   private current: BridgeLocation
   private lastConfirmed: BridgeLocation
   private seq = 0
-  private inflight: { seq: number; target: BridgeLocation; resolve: (r: BridgeNavigationResult) => void } | null = null
+  private inflight: { seq: number; target: BridgeLocation; resolve: (r: BridgeNavigationResult) => void; abort: AbortController } | null = null
+  private queue: Promise<unknown> | undefined
+  private generation = 0
   private disposed = false
   private active = true
   private readonly releasePrefix: () => void
@@ -180,7 +184,8 @@ export class RoutingChannel implements BridgeChildRoute {
     this.spec = spec
     this.basePath = normalizeBasePath(basePath, spec)
     this.host = host
-    this.current = toChildLocation(host.getLocation(), this.basePath)
+    const initial = host.getLocation()
+    this.current = matchesBasePath(initial.pathname, this.basePath) ? toChildLocation(initial, this.basePath) : { pathname: '/', search: '', hash: '' }
     this.lastConfirmed = { ...this.current }
     this.releasePrefix = acquireRoutingPrefix(this.basePath, spec)
     this.unsubHost = host.subscribe((loc) => this.handleHostLocation(loc))
@@ -201,6 +206,7 @@ export class RoutingChannel implements BridgeChildRoute {
     if (this.disposed) return
     // 未命中自身前缀：不抢占 URL、不回推默认路径（宿主决定卸载/离页）
     if (!matchesBasePath(hostLoc.pathname, this.basePath)) {
+      this.cancelPending()
       this.onEvent?.({ type: 'prefix-miss', pathname: hostLoc.pathname })
       return
     }
@@ -211,24 +217,22 @@ export class RoutingChannel implements BridgeChildRoute {
     }
     const child = toChildLocation(hostLoc, this.basePath)
     if (this.inflight && sameLocation(child, this.inflight.target)) {
-      const { seq, resolve } = this.inflight
-      this.inflight = null
+      const { seq } = this.inflight
       this.lastConfirmed = child
       this.emit(child)
       this.onEvent?.({ type: 'request-confirmed', seq })
-      resolve({ status: 'committed', location: { ...child } })
       return
     }
     if (this.inflight) {
       // 外部导航（宿主菜单/地址栏/POP/另一实例）：作废在飞请求，广播权威位置
-      const { seq, resolve } = this.inflight
-      this.inflight = null
+      const seq = this.inflight.seq
       this.lastConfirmed = child
+      this.cancelPending()
       this.emit(child)
       this.onEvent?.({ type: 'request-superseded', seq })
-      resolve({ status: 'cancelled', location: { ...child } })
       return
     }
+    if (!sameLocation(child, this.lastConfirmed)) this.generation++
     this.lastConfirmed = child
     this.emit(child)
     this.onEvent?.({ type: 'host-broadcast' })
@@ -248,8 +252,31 @@ export class RoutingChannel implements BridgeChildRoute {
     }
   }
 
-  async navigate(target: BridgeLocation, action: 'push' | 'replace'): Promise<BridgeNavigationResult> {
-    if (this.disposed || !this.active) {
+  private cancelPending(): void {
+    this.generation++
+    const pending = this.inflight
+    this.inflight = null
+    if (pending) {
+      pending.abort.abort()
+      pending.resolve({ status: 'cancelled', location: { ...this.lastConfirmed } })
+    }
+  }
+
+  navigate(target: BridgeLocation, action: 'push' | 'replace'): Promise<BridgeNavigationResult> {
+    const generation = this.generation
+    const snapshot = { ...target }
+    const run = () => generation !== this.generation
+      ? Promise.resolve({ status: 'cancelled' as const, location: { ...this.lastConfirmed } })
+      : this.performNavigation(snapshot, action)
+    const task = this.queue ? this.queue.then(run) : run()
+    const tail = task.then(() => {}, () => {})
+    this.queue = tail
+    void tail.then(() => { if (this.queue === tail) this.queue = undefined })
+    return task
+  }
+
+  private async performNavigation(target: BridgeLocation, action: 'push' | 'replace'): Promise<BridgeNavigationResult> {
+    if (this.disposed || !this.active || !matchesBasePath(this.host.getLocation().pathname, this.basePath)) {
       // 失效通道/暂停实例：拒绝写入，不改 URL（§4.3）
       this.onEvent?.({ type: this.disposed ? 'rejected-disposed' : 'rejected-inactive' })
       return { status: 'cancelled', location: { ...this.lastConfirmed } }
@@ -274,30 +301,12 @@ export class RoutingChannel implements BridgeChildRoute {
       this.redirectChain = []
       throw routingSyncError(this.spec, '同一通道的连续 replace 重定向超过上限（疑似子应用路由互相成环）。', chain)
     }
-    // 串行：同实例在飞请求落定后再发（真实时序：排队方承担排队结果）
-    if (this.inflight) {
-      const prev = this.inflight
-      await new Promise<void>((resolve) => {
-        const timer = setInterval(() => {
-          if (this.inflight !== prev) {
-            clearInterval(timer)
-            resolve()
-          }
-        }, 0)
-      })
-      if (this.disposed || !this.active) {
-        return { status: 'cancelled', location: { ...this.lastConfirmed } }
-      }
-      if (sameLocation(target, this.lastConfirmed)) {
-        return { status: 'committed', location: { ...this.lastConfirmed } }
-      }
-    }
     const seq = ++this.seq
     this.onEvent?.({ type: 'request-start', seq, target: { ...target }, action })
-    return new Promise<BridgeNavigationResult>((resolve) => {
-      this.inflight = { seq, target: { ...target }, resolve }
-      this.host
-        .navigate(toHostLocation(target, this.basePath, this.spec), action)
+    return new Promise<BridgeNavigationResult>((resolve, reject) => {
+      const abort = new AbortController()
+      this.inflight = { seq, target: { ...target }, resolve, abort }
+      Promise.resolve().then(() => abort.signal.aborted ? { status: 'cancelled' as const, location: this.host.getLocation() } : this.host.navigate(toHostLocation(target, this.basePath, this.spec), action, { signal: abort.signal }))
         .then((result) => {
           if (!this.inflight || this.inflight.seq !== seq) return // 广播路径已仲裁
           if (this.disposed || !this.active) {
@@ -306,7 +315,7 @@ export class RoutingChannel implements BridgeChildRoute {
             return
           }
           this.inflight = null
-          if (result.status === 'committed') {
+          if (result.status === 'committed' && matchesBasePath(result.location.pathname, this.basePath)) {
             const child = toChildLocation(result.location, this.basePath)
             this.lastConfirmed = child
             this.emit(child)
@@ -316,17 +325,17 @@ export class RoutingChannel implements BridgeChildRoute {
           }
           this.onEvent?.({ type: 'host-verdict', seq, status: result.status })
           resolve(
-            result.status === 'committed'
+            result.status === 'committed' && matchesBasePath(result.location.pathname, this.basePath)
               ? { status: 'committed', location: { ...this.lastConfirmed } }
               : { status: 'cancelled', location: { ...this.lastConfirmed } },
           )
         })
-        .catch(() => {
+        .catch((cause) => {
           if (this.inflight?.seq === seq) {
             this.inflight = null
             this.onEvent?.({ type: 'host-error', seq })
             this.emit({ ...this.lastConfirmed })
-            resolve({ status: 'cancelled', location: { ...this.lastConfirmed } })
+            reject(routingSyncError(this.spec, `宿主导航执行失败：${cause instanceof Error ? cause.message : String(cause)}`, [], cause))
           }
         })
     })
@@ -334,7 +343,7 @@ export class RoutingChannel implements BridgeChildRoute {
 
   /** 委托宿主历史（有限整数）；不创建第二条独立历史 */
   go(delta: number): void {
-    if (this.disposed || !this.active) return
+    if (this.disposed || !this.active || !matchesBasePath(this.host.getLocation().pathname, this.basePath)) return
     if (typeof delta !== 'number' || !Number.isInteger(delta) || Math.abs(delta) > MAX_GO_DELTA) {
       throw routingNavigationError(this.spec, `go 参数必须是有限整数（|delta| ≤ ${MAX_GO_DELTA}）：当前为 ${String(delta)}。`)
     }
@@ -344,6 +353,7 @@ export class RoutingChannel implements BridgeChildRoute {
   /** KeepAlive deactivate：暂停广播与写入；通道与订阅保留（activate 后 resync） */
   setActive(active: boolean): void {
     if (this.disposed) return
+    if (!active) this.cancelPending()
     this.active = active
     this.onEvent?.({ type: active ? 'resumed' : 'paused' })
     if (active) this.handleHostLocation(this.host.getLocation())
@@ -356,11 +366,7 @@ export class RoutingChannel implements BridgeChildRoute {
     if (this.redirectTimer) clearTimeout(this.redirectTimer)
     this.unsubHost()
     this.releasePrefix()
-    if (this.inflight) {
-      const { resolve } = this.inflight
-      this.inflight = null
-      resolve({ status: 'cancelled', location: { ...this.lastConfirmed } })
-    }
+    this.cancelPending()
     this.listeners.clear()
     this.onEvent?.({ type: 'disposed' })
   }

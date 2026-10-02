@@ -55,7 +55,7 @@ export default defineBridgeApp(async (props, ctx) => {
       { path: '/secret', component: Secret },
     ],
   })
-  const conn = connectVueBridgeRouter(ctx.routing, router)
+  const conn = connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })
   await conn.ready
   const app = createApp({ setup: () => () => h(RouterView) }, props as Record<string, unknown>)
   app.use(router)

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- 修复 URL 同步两端适配器将 replace 误报为 push、子应用 go/back/forward 未委托宿主历史，以及连续导航被丢弃的问题。
+- React 宿主等待真实 blocker 的 reset/proceed 与提交位置；canNavigate 改为可选预判。Vue 初始 ready 和导航执行异常不再吞掉，MFU-033 保留 cause，队列失败后可继续导航。
+- 修复 Vite 5/6 配套 plugin-react 4 的跨框架 dev preamble 标志缺失，避免 Vue 宿主加载 React 远程失败；子目录部署示例的 blocker 按逻辑路径判断。
+- 修复 React 18 + RR6 生产渲染的跨共享键 CJS 双实例：提供闭包只豁免自引用，react-dom → react 走同步协商；入口 init 前的同步副本复用现有 fallback 回写规则登记，避免 renderer 与组件使用不同 React。
+- 通道离页、暂停与卸载会作废在飞和排队请求；自定义宿主 navigate 可接收 AbortSignal；子应用接线可传 ctx.signal 自动清理。Vue history base 不再二次剥离；前缀与目标拒绝编码逃逸。
+
 ## 5.4.0
 
 - **新增：跨框架桥接 URL 同步（`/bridge/router/*`）**——宿主 URL 表达子应用内部位置：首次深链直达（不闪默认页、不发错接口）、刷新/收藏/新窗口恢复、子应用 Link/RouterLink/router.push 与宿主菜单/前进后退全量同步、根重定向以 replace 规范化（不凭空制造历史）。架构：宿主 Router 是浏览器历史唯一写入方，子应用用受控 memory 路由（Vue `connectVueBridgeRouter` / React `createReactBridgeRouter`，Link/useNavigate/RouterLink 全兼容）；独立路由通道承载位置与仲裁（请求编号/代次隔离/外部作废/取消恢复），path/search/hash 三段原样保留（重复键/编码/中文/片段不二次转换），同实例路径变化**不重挂 root、不重建 store、不重载远程**。

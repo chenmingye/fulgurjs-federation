@@ -663,7 +663,7 @@ CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ re
 | | `MFU-030` | 桥接路由同步配置/前缀冲突（basePath 非法：空/根/带 query·hash·通配、同页重叠前缀登记） |
 | | `MFU-031` | 桥接路由协议缺失/通道失效（子应用未以 `{ routing: true }` 声明协议、通道销毁后复用） |
 | | `MFU-032` | 桥接非法导航（子应用导航目标越界自身前缀、`go` 参数非法、失效通道的请求被拒绝） |
-| | `MFU-033` | 桥接路由同步失败（重定向链超出上限，附目标链；不静默回退 memory） |
+| | `MFU-033` | 桥接路由准备/同步失败（重定向超限或导航异常，附目标链/cause；不静默回退 memory） |
 | CC 跨应用上下文 | `CC-001` | AppContext 必需字段缺失（三段式：got/expected/example，修法指向宿主桥 `provideAppContext`） |
 | | `CC-002` | 运行时单例不可用（独立直开远程页；修法 = 经宿主联邦加载，时序契约 bridge → 远程 setup → 页面模块） |
 
@@ -903,7 +903,7 @@ router.beforeEach((to) => (to.path.startsWith('/approval/secret') ? false : unde
 <script setup lang="ts">
 import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
 import { createVueBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/bridge/router/vue'
-const navigation = createVueBridgeNavigation(router) // routerBase 用于 createWebHistory(base) 场景
+const navigation = createVueBridgeNavigation(router) // Vue Router fullPath 已是逻辑路径，无需传部署 base
 const routing: BridgeHostRouting = { basePath: '/approval', navigation }
 const RemoteApp = createVueBridgeApp('remote/bridge-routed', { /* 同 8.2 */ })
 </script>
@@ -920,11 +920,12 @@ import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import { defineBridgeApp } from '@fulgurjs/federation/runtime'
 import { connectVueBridgeRouter } from '@fulgurjs/federation/bridge/router/vue'
 export default defineBridgeApp(async (props, ctx) => {
+  if (!ctx?.routing) throw new Error('本契约需要宿主启用 URL 同步')
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/list', component: List },
     { path: '/detail/:id', component: Detail },
   ] })
-  await connectVueBridgeRouter(ctx.routing!, router).ready // 初始 push 落定后再 install（顺序不能反）
+  await connectVueBridgeRouter(ctx.routing!, router, { signal: ctx.signal }).ready // 初始 push 落定后再 install（顺序不能反）
   const app = createApp({ setup: () => () => h(RouterView) }, props)
   app.use(router)
   return app
@@ -934,21 +935,25 @@ export default defineBridgeApp(async (props, ctx) => {
 ```tsx
 // bridge.tsx（React 子应用）：createReactBridgeRouter 返回 RouterProvider 元素
 import { createReactBridgeRouter } from '@fulgurjs/federation/bridge/router/react'
-export default defineBridgeApp((_props, ctx) =>
-  createReactBridgeRouter(ctx.routing!, [
+import { defineBridgeApp } from '@fulgurjs/federation/react'
+export default defineBridgeApp((_props, ctx) => {
+  if (!ctx?.routing) throw new Error('本契约需要宿主启用 URL 同步')
+  return createReactBridgeRouter(ctx.routing, [
     { path: '/list', element: <List /> },
     { path: '/detail/:id', element: <Detail /> },
-  ]).element, { routing: true })
+  ], { signal: ctx.signal }).element
+}, { routing: true })
 ```
 
-宿主端 React Router 仅支持 **data router 模式**（`createBrowserRouter` / `createHashRouter` + `RouterProvider`）：`createReactBridgeNavigation(router, { basename, canNavigate })`。`canNavigate` 与树内 `useBlocker` 传同一谓词——子应用发起的导航被拒绝时由端口预判返回 cancelled（URL/历史零副作用），菜单/POP 等其他来源由 useBlocker 真实拦截。declarative 模式（BrowserRouter）无取消语义，不支持。React Router 要求 ≥ 6.11（createMemoryRouter）。
+宿主端 React Router 仅支持 **data router 模式**（`createBrowserRouter` / `createHashRouter` + `RouterProvider`）：`createReactBridgeNavigation(router, { basename, canNavigate })`。`canNavigate` 可选，仅作提前拒绝；端口观察真实 `useBlocker` 状态，等待 `reset()` 返回 cancelled、`proceed()` 后实际位置提交返回 committed，不能只凭 navigate 的 Promise 落定判成功。declarative 模式（BrowserRouter）无取消语义，不支持。React Router 要求 ≥ 6.11（createMemoryRouter）。
 
 **③ 行为契约与边界**：
 
 - **basePath**：宿主路由视角的静态绝对路径（拒绝空/根/带 query·hash·通配符，`MFU-030`）；按路径段匹配（`/approval` 命中 `/approval/detail/1`，不命中 `/approval-old`）；同页各同步实例前缀不得相同或重叠。`/approval` 对应子应用 `/`；根重定向由子应用路由定义、以 replace 规范化（不凭空多一条历史）。
-- **Vite base 与路由分层**：部署在 `/erp/` 时 Vite base/宿主 Router base 是 `/erp/`，bridge basePath 仍是 `/approval`（Vue 传 `routerBase`、React 传 `basename`）；适配器输出的逻辑路径不含部署前缀，不会拼出 `/erp/erp/...`。子目录部署 + hash 模式内层片段见 e2e fixtures（`fixtures/host-bridge-*/`，可运行参考实现）。
+- **Vite base 与路由分层**：部署在 `/erp/` 时 Vite base/宿主 Router base 是 `/erp/`，bridge basePath 仍是 `/approval`（Vue Router 已自动剥离 history base，React 端口传 `basename`）；适配器输出的逻辑路径不含部署前缀，不会拼出 `/erp/erp/...`。子目录部署 + hash 模式内层片段见 e2e fixtures（`fixtures/host-bridge-*/`，可运行参考实现）。
 - **位置三段全等**：search/hash 原样保留（重复 query 键、编码、中文、片段不二次 decode/encode）；仅参数变化也同步，且不重挂。
-- **取消语义**：Vue Router 4 的 push/replace 落定 `NavigationFailure` 即真实取消；React Router data router 用 canNavigate 预判（与 useBlocker 同谓词）+ 树内 blocker。取消后 URL、历史、子应用位置保持最后确认状态，**绝不自动重试**（`router.push` 的函数返回不冒充提交成功）。
+- **取消语义**：Vue Router 4 的 push/replace 落定 `NavigationFailure` 即真实取消；React Router data router 等待真实 blocker 的取消/放行，`canNavigate` 仅为可选提前拒绝。取消后 URL、历史、子应用位置保持最后确认状态，**绝不自动重试**（`router.push` 的函数返回不冒充提交成功）。
+- **导航与错误**：子应用 push/replace 保留原动作，go/back/forward 委托宿主历史；连续请求串行落定，外部导航作废旧的在飞与排队请求。守卫/加载器/端口执行异常拒绝 Promise（MFU-033，保留 cause），不会伪装 cancelled。两端子路由接线的第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用连接的 `dispose()`。自定义 `BridgeHostNavigation.navigate(target, action, { signal })` 应在异步提交前复核可选 signal，已 aborted 时禁止迟到写入。
 - **会话与生命周期**：换账号/登出（`sessionKey→null`）作废旧通道——旧通道的导航一律 cancelled、不写 URL、不复活子应用；unmount 后迟到通知失效（通道销毁，再订阅得 `MFU-031`）。KeepAlive 缓存离页的实例暂停路由写入（不抢占 URL、不销毁通道，激活重同步）。同一容器 unmount 抛错的持久封锁（BN09）不因路由绕过。
 - **协议校验**：宿主启用 routing 而子应用未声明 `{ routing: true }`（契约 `routing: { protocol: 1 }`）→ `MFU-031` 占位，**不静默退回 memory 假装深链成功**。
 - **非法导航与循环**：目标越界自身前缀（`../`、跨前缀）、非法 `go` 参数 → `MFU-032`；连续内部 replace 超过 5 次（重定向环）→ `MFU-033`（附目标链，不静默回入口）。

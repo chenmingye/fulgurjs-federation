@@ -145,7 +145,7 @@ export function genCjsNsFacade(item: NormalizedShared, exportNames: string[], im
     // 兜底保留裸包名（与命名空间门面同语义，无 proxy 载体时可解析）
     `import * as __fulgurjs_local from ${JSON.stringify(importTarget ?? item.import)};`,
     `const __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} });`,
-    // 未命中同步快照：把本地副本登记为将选中的共享条目（版本一致且条目未就绪时生效），
+    // 未命中同步快照：空作用域登记本地副本，已有条目仅在版本一致且未就绪时回填，
     // 使先于 TLA 门面求值的垫片（jsx-runtime 拖入 provider chunk 的场景）与后续协商
     // 收敛到同一份实例，杜绝单例双实例。
     `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
