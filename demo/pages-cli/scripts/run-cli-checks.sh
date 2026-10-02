@@ -8,10 +8,12 @@
 #   2) 本脚本【不启动】任何 dev server：
 #      - 远程 dev server 未启动时，第 4 步预期输出「无法验证」（详见该步注释的退出码语义），
 #        第 5 步 doctor 输出「不可达」类 FAIL——这正是部署面体检的诚实结论；
-#      - 若你已先起 dev server（node demo/pages-cli/remote && host 的 npm run dev），4/5 步会输出
+#      - 若你已先起 dev server（remote/ 与 host/ 分别 npm run dev），4/5 步会输出
 #        真实探针结果（含 per-origin 的 PASS 采样）。
 # 退出码：0 = 全部断言符合预期（信息性 FAIL 不影响，见各步注释）；非 0 = 有断言未达预期。
-set -euo pipefail
+# set -uo pipefail（不带 -e）：CLI 各步的「预期失败采样」（check-pages 无法验证、doctor FAIL）
+# 本身是非零退出——不中断脚本，由各步注释说明语义后 continue；断言失败才 exit 1。
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEMO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -24,13 +26,11 @@ exec > >(tee "${LOG_FILE}") 2>&1
 step() { printf '\n========== %s ==========\n' "$*"; }
 
 LAST_RC=0
-run_cmd() { # 当前目录执行，捕获合并输出并打印；不因非零退出码中断（断言由 expect_* 负责）
+run_cmd() { # 当前目录执行，捕获合并输出并打印；非零退出码不中断（断言由 expect_* 负责）
   printf '\n$ %s\n' "$*"
   local out rc
-  set +e
   out="$("$@" 2>&1)"
   rc=$?
-  set -e
   [ -n "${out}" ] && printf '%s\n' "${out}"
   LAST_RC=${rc}
   return 0
@@ -41,10 +41,8 @@ run_cmd_in() { # run_cmd_in <dir> <cmd...>
   shift
   printf '\n$ (cd %s && %s)\n' "${dir}" "$*"
   local out rc
-  set +e
   out="$(cd "${dir}" && "$@" 2>&1)"
   rc=$?
-  set -e
   [ -n "${out}" ] && printf '%s\n' "${out}"
   LAST_RC=${rc}
   return 0
@@ -68,7 +66,12 @@ expect_nonzero() { # expect_nonzero <说明>
   fi
 }
 
-port_up() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && { exec 3>&-; return 0; } || return 1; }
+# Vite dev server 默认只监听 localhost（macOS 上常为 IPv6 ::1）——先试 IPv4，再试 localhost（含 IPv6 解析）
+port_up() {
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && return 0
+  (exec 3<>"/dev/tcp/localhost/$1") 2>/dev/null && return 0
+  return 1
+}
 
 # ── 0) 前置检查 ──────────────────────────────────────────────────────────────
 step "0) 前置检查：host 工程 node_modules（npx fulgurjs 依赖 host 已 npm install）"
@@ -147,11 +150,12 @@ run_cmd_in "${HOST_DIR}" npx fulgurjs doctor --base http://localhost:5364 --apps
 echo "[info] 5a 退出码：${LAST_RC}（见上方注释：双 dev origin + 纯宿主形态下 FAIL 属预期）"
 
 step "5b) 补充采样：容器应用的 per-origin 体检 doctor --base http://localhost:5363 --apps pc-remote --dev"
-# 远程 dev server 运行中且其 vite base=/pc-remote/ 时，探测 URL
-# http://localhost:5363/pc-remote/@fulgurjs-entry.js 可达 → 预期退出码 0（PASS 采样）；
-# 远程未运行时如实报「不可达」FAIL（退出码 1）——两种输出都属 doctor 的诚实语义，脚本 continue。
+# doctor 即便 --dev 也探测 prod 形态端点（fulgurjs-remoteEntry.js / fulgurjs-manifest.json）：
+# Vite dev server 不提供这两个 prod 文件（SPA 回退返回 200 HTML）→ 如实 FAIL；dev 容器入口
+# @fulgurjs-entry.js 探测通过（doctor 对 PASS 项不单独打印，只体现在汇总行）。因此远程运行中
+# 退出码仍为 1；远程未运行时报「不可达」FAIL 同样退出码 1——两种输出都属 doctor 的诚实语义。
 run_cmd_in "${HOST_DIR}" npx fulgurjs doctor --base http://localhost:5363 --apps pc-remote --dev
-echo "[info] 5b 退出码：${LAST_RC}（远程在运行 → 0；未运行 → 1，均属预期语义）"
+echo "[info] 5b 退出码：${LAST_RC}（dev server 不提供 prod 形态端点 → FAIL 属预期；@fulgurjs-entry.js 探测通过不打印）"
 
 # ── 6) 附加：Node 直导入 remoteSchema 恒为空对象的语义断言 ─────────────────────
 step "6) 附加断言：Node 直接导入 @fulgurjs/federation/runtime → remoteSchema === {}（README 如实声明）"
