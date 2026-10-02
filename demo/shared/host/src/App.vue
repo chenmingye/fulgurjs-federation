@@ -22,6 +22,7 @@
       <Card9RegisterShare />
       <Card10AppContext />
       <Card11Fallback />
+      <Card12RuntimeExtras />
     </main>
   </div>
 </template>
@@ -39,4 +40,5 @@ import Card8StrictVersion from './cards/Card8StrictVersion.vue'
 import Card9RegisterShare from './cards/Card9RegisterShare.vue'
 import Card10AppContext from './cards/Card10AppContext.vue'
 import Card11Fallback from './cards/Card11Fallback.vue'
+import Card12RuntimeExtras from './cards/Card12RuntimeExtras.vue'
 </script>

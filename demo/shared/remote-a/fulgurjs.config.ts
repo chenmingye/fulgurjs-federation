@@ -17,6 +17,8 @@ export default {
     './demo-consumer': './src/exposes/demoConsumer.ts',
     './utils': './src/exposes/utils.ts',
   },
+  // 卡片⑫：setup 生命周期（onSession 会话代次记录 → clearSessionState 观测）
+  setup: './src/fulgurjs/setup.ts',
   shared: {
     vue: { singleton: true },
     nanostores: { singleton: true, requiredVersion: false },

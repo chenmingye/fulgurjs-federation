@@ -66,12 +66,17 @@ fixtures/host-react/typecheck/
 # 仓库根严禁 pnpm-lock.yaml（会劫持全树 pnpm 安装；stray pnpm install 会生成——不入库）
 /pnpm-lock.yaml
 
-# 本轮 Demo 展示中心（2026-10-02）：Jeecg 上游基线/实例体积巨大不入库（fetch-upstream.sh + patches 可复现）
+# Demo 展示中心：Jeecg 上游基线体积巨大不入库（fetch-upstream.sh + patches 可复现）；
+# 改造后的演示实例源码（app-a/app-b）自 2026-10-03 起入库交付（node_modules/dist 由全局规则排除）
 demo/jeecg/upstream/
-demo/jeecg/app-a/
-demo/jeecg/app-b/
 demo/.run/
 demo/**/dist/
 demo/**/src/fulgurjs/types/
+# Jeecg 实例的本地缓存/构建副产物（双保险，防止上游 .gitignore 差异漏网）
+demo/jeecg/app-a/node_modules/
+demo/jeecg/app-b/node_modules/
+demo/jeecg/app-a/dist/
+demo/jeecg/app-b/dist/
+demo/jeecg/app-*/stats.html
 # 浏览器验收截图仅保留本地（公开仓库不带业务截图）
 evidence/

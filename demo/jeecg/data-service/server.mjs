@@ -109,6 +109,23 @@ const menuFor = (originPort, userId, isBInstance = false) => {
 /* ─── HTTP 服务 ─── */
 const unmatched = []
 
+/** 已实现端点清单（/_endpoints 可查；未实现端点返回 404 诊断，不用 200 空成功掩盖） */
+const implementedEndpoints = [
+  'POST /jeecg-boot/sys/login（AES-CBC 契约；admin/123456、jeecg/123456，验证码任意）',
+  'GET  /jeecg-boot/sys/user/getUserInfo',
+  'GET  /jeecg-boot/sys/permission/getPermCode',
+  'GET  /jeecg-boot/sys/permission/getUserPermissionByToken（菜单/权限；按实例前缀区分 A/B）',
+  'GET  /jeecg-boot/sys/logout',
+  'GET  /jeecg-boot/sys/randomImage/*（1x1 透明 PNG）',
+  'GET  /jeecg-boot/sys/dict/*（显式空实现：演示页面不消费字典数据）',
+  'GET  /jeecg-boot/system/getAccountList（分页账户演示集）',
+  'GET  /jeecg-boot/fed/orders/list（联邦订单演示集：筛选/分页）',
+  'POST /jeecg-boot/fed/orders/save（编辑保存演示）',
+  'GET  /health',
+  'GET  /_endpoints（本清单）',
+  'GET  /_unmatched（最近 50 条未实现端点请求记录）',
+]
+
 const server = http.createServer(async (req, res) => {
   let url = new URL(req.url, `http://localhost:${PORT}`)
   let path = url.pathname
@@ -202,12 +219,17 @@ const server = http.createServer(async (req, res) => {
   if (path === '/health') {
     return send(ok({ service: 'jeecg-fed-demo-data', port: PORT, orders: fedOrders.length, accounts: accounts.length }))
   }
+  if (path === '/_endpoints') return send(ok(implementedEndpoints))
   if (path === '/_unmatched') return send(ok(unmatched.slice(-50)))
 
-  // 未实现端点：返回 jeecg 标准成功空结果（避免页面级联报错），同时记录便于按需补齐
-  unmatched.push(`${req.method} ${path}`)
-  console.log('[unmatched]', req.method, path)
-  return send(ok({ demo: 'empty（演示数据服务未实现该端点）' }))
+  // 未实现端点：明确 404 诊断 + 记录（不用 HTTP 200 空成功掩盖——关键数据缺失必须可见，
+  // 验收脚本以 /_unmatched 核对"验收动作用到的请求全部命中已实现端点"）
+  const record = `${req.method} ${path}`
+  if (!unmatched.includes(record)) unmatched.push(record)
+  if (unmatched.length > 200) unmatched.splice(0, unmatched.length - 200)
+  console.log('[unmatched]', record)
+  res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': origin || '*', 'access-control-allow-headers': '*' })
+  return res.end(JSON.stringify(err(`本地演示数据服务未实现该端点：${req.method} ${path}。已实现清单见 /_endpoints；如该端点是演示必需，请在 data-service/server.mjs 补充实现。`, 404)))
 })
 
 server.listen(PORT, () => console.log(`[demo-data] Jeecg 联邦演示数据服务: http://localhost:${PORT}/ (仅本地演示)`))
