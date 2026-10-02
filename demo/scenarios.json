@@ -8,8 +8,22 @@
       "desc": "Vue 宿主加载 Vue 远程组件/工具函数/页面；静态与动态远程、加载状态、共享状态、错误恢复。",
       "source": "examples/vue",
       "apps": [
-        { "name": "vue-remote", "url": "http://localhost:5213/", "port": 5213, "dir": "examples/vue/remote", "role": "remote", "framework": "vue" },
-        { "name": "vue-host", "url": "http://localhost:5214/", "port": 5214, "dir": "examples/vue/host", "role": "host", "framework": "vue" }
+        {
+          "name": "vue-remote",
+          "url": "http://localhost:5213/",
+          "port": 5213,
+          "dir": "examples/vue/remote",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "vue-host",
+          "url": "http://localhost:5214/",
+          "port": 5214,
+          "dir": "examples/vue/host",
+          "role": "host",
+          "framework": "vue"
+        }
       ]
     },
     {
@@ -19,8 +33,22 @@
       "desc": "React 宿主加载 React 远程：remoteComponent、useLoadRemote、RemoteErrorBoundary、页面接入 API。",
       "source": "examples/react",
       "apps": [
-        { "name": "react-remote", "url": "http://localhost:5203/", "port": 5203, "dir": "examples/react/remote", "role": "remote", "framework": "react" },
-        { "name": "react-host", "url": "http://localhost:5204/", "port": 5204, "dir": "examples/react/host", "role": "host", "framework": "react" }
+        {
+          "name": "react-remote",
+          "url": "http://localhost:5203/",
+          "port": 5203,
+          "dir": "examples/react/remote",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "react-host",
+          "url": "http://localhost:5204/",
+          "port": 5204,
+          "dir": "examples/react/host",
+          "role": "host",
+          "framework": "react"
+        }
       ]
     },
     {
@@ -30,10 +58,38 @@
       "desc": "Vue 宿主嵌 React 子应用、React 宿主嵌 Vue 子应用；受控会话（切换/登出）、卸载重挂、props 快照。",
       "source": "examples/bridge",
       "apps": [
-        { "name": "bridge-react-remote", "url": "http://localhost:5303/", "port": 5303, "dir": "examples/bridge/react-remote", "role": "remote", "framework": "react" },
-        { "name": "bridge-vue-host", "url": "http://localhost:5314/", "port": 5314, "dir": "examples/bridge/vue-host", "role": "host", "framework": "vue" },
-        { "name": "bridge-vue-remote", "url": "http://localhost:5313/", "port": 5313, "dir": "examples/bridge/vue-remote", "role": "remote", "framework": "vue" },
-        { "name": "bridge-react-host", "url": "http://localhost:5304/", "port": 5304, "dir": "examples/bridge/react-host", "role": "host", "framework": "react" }
+        {
+          "name": "bridge-react-remote",
+          "url": "http://localhost:5303/",
+          "port": 5303,
+          "dir": "examples/bridge/react-remote",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "bridge-vue-host",
+          "url": "http://localhost:5314/",
+          "port": 5314,
+          "dir": "examples/bridge/vue-host",
+          "role": "host",
+          "framework": "vue"
+        },
+        {
+          "name": "bridge-vue-remote",
+          "url": "http://localhost:5313/",
+          "port": 5313,
+          "dir": "examples/bridge/vue-remote",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "bridge-react-host",
+          "url": "http://localhost:5304/",
+          "port": 5304,
+          "dir": "examples/bridge/react-host",
+          "role": "host",
+          "framework": "react"
+        }
       ]
     },
     {
@@ -43,10 +99,38 @@
       "desc": "Vue套Vue、React套React 完整子应用（列表/详情/表单/内部路由），并对比「组件级联邦 vs 应用级桥接」的适用场景。",
       "source": "demo/same-frame",
       "apps": [
-        { "name": "sf-vue-remote", "url": "http://localhost:5323/", "port": 5323, "dir": "demo/same-frame/vue-remote", "role": "remote", "framework": "vue" },
-        { "name": "sf-vue-host", "url": "http://localhost:5324/", "port": 5324, "dir": "demo/same-frame/vue-host", "role": "host", "framework": "vue" },
-        { "name": "sf-react-remote", "url": "http://localhost:5325/", "port": 5325, "dir": "demo/same-frame/react-remote", "role": "remote", "framework": "react" },
-        { "name": "sf-react-host", "url": "http://localhost:5326/", "port": 5326, "dir": "demo/same-frame/react-host", "role": "host", "framework": "react" }
+        {
+          "name": "sf-vue-remote",
+          "url": "http://localhost:5323/",
+          "port": 5323,
+          "dir": "demo/same-frame/vue-remote",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "sf-vue-host",
+          "url": "http://localhost:5324/",
+          "port": 5324,
+          "dir": "demo/same-frame/vue-host",
+          "role": "host",
+          "framework": "vue"
+        },
+        {
+          "name": "sf-react-remote",
+          "url": "http://localhost:5325/",
+          "port": 5325,
+          "dir": "demo/same-frame/react-remote",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "sf-react-host",
+          "url": "http://localhost:5326/",
+          "port": 5326,
+          "dir": "demo/same-frame/react-host",
+          "role": "host",
+          "framework": "react"
+        }
       ]
     },
     {
@@ -56,10 +140,38 @@
       "desc": "子应用内部路由 ↔ 宿主浏览器地址双向同步：深链直达、刷新恢复、前进后退、守卫取消、中文/编码参数、部署 base。",
       "source": "demo/bridge-router",
       "apps": [
-        { "name": "br-react-remote", "url": "http://localhost:5333/", "port": 5333, "dir": "demo/bridge-router/react-remote", "role": "remote", "framework": "react" },
-        { "name": "br-vue-host", "url": "http://localhost:5334/", "port": 5334, "dir": "demo/bridge-router/vue-host", "role": "host", "framework": "vue" },
-        { "name": "br-vue-remote", "url": "http://localhost:5335/", "port": 5335, "dir": "demo/bridge-router/vue-remote", "role": "remote", "framework": "vue" },
-        { "name": "br-react-host", "url": "http://localhost:5336/", "port": 5336, "dir": "demo/bridge-router/react-host", "role": "host", "framework": "react" }
+        {
+          "name": "br-react-remote",
+          "url": "http://localhost:5333/",
+          "port": 5333,
+          "dir": "demo/bridge-router/react-remote",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "br-vue-host",
+          "url": "http://localhost:5334/",
+          "port": 5334,
+          "dir": "demo/bridge-router/vue-host",
+          "role": "host",
+          "framework": "vue"
+        },
+        {
+          "name": "br-vue-remote",
+          "url": "http://localhost:5335/",
+          "port": 5335,
+          "dir": "demo/bridge-router/vue-remote",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "br-react-host",
+          "url": "http://localhost:5336/",
+          "port": 5336,
+          "dir": "demo/bridge-router/react-host",
+          "role": "host",
+          "framework": "react"
+        }
       ]
     },
     {
@@ -69,9 +181,30 @@
       "desc": "singleton/版本协商/strictVersion/别名/eager/fallback、动态注册、预载、运行时插件 hooks、AppContext 实例身份观测。",
       "source": "demo/shared",
       "apps": [
-        { "name": "sh-remote-a", "url": "http://localhost:5343/", "port": 5343, "dir": "demo/shared/remote-a", "role": "remote", "framework": "vue" },
-        { "name": "sh-remote-b", "url": "http://localhost:5345/", "port": 5345, "dir": "demo/shared/remote-b", "role": "remote", "framework": "vue" },
-        { "name": "sh-host", "url": "http://localhost:5344/", "port": 5344, "dir": "demo/shared/host", "role": "host", "framework": "vue" }
+        {
+          "name": "sh-remote-a",
+          "url": "http://localhost:5343/",
+          "port": 5343,
+          "dir": "demo/shared/remote-a",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "sh-remote-b",
+          "url": "http://localhost:5345/",
+          "port": 5345,
+          "dir": "demo/shared/remote-b",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "sh-host",
+          "url": "http://localhost:5344/",
+          "port": 5344,
+          "dir": "demo/shared/host",
+          "role": "host",
+          "framework": "vue"
+        }
       ]
     },
     {
@@ -81,8 +214,22 @@
       "desc": "definePages/createHostPages/remoteSchema/requireAppContext；fulgurjs init/explain/check-pages/doctor 全命令。",
       "source": "demo/pages-cli",
       "apps": [
-        { "name": "pc-remote", "url": "http://localhost:5363/", "port": 5363, "dir": "demo/pages-cli/remote", "role": "remote", "framework": "vue" },
-        { "name": "pc-host", "url": "http://localhost:5364/", "port": 5364, "dir": "demo/pages-cli/host", "role": "host", "framework": "vue" }
+        {
+          "name": "pc-remote",
+          "url": "http://localhost:5363/",
+          "port": 5363,
+          "dir": "demo/pages-cli/remote",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "pc-host",
+          "url": "http://localhost:5364/",
+          "port": 5364,
+          "dir": "demo/pages-cli/host",
+          "role": "host",
+          "framework": "vue"
+        }
       ]
     },
     {
@@ -92,8 +239,22 @@
       "desc": "远程不可用/错误入口/超时/版本冲突/非法桥接契约/setup 与卸载异常——隔离故障注入工程，逐项演示错误码与恢复路径。",
       "source": "demo/errors",
       "apps": [
-        { "name": "err-remote-good", "url": "http://localhost:5352/", "port": 5352, "dir": "demo/errors/remote-good", "role": "remote", "framework": "vue" },
-        { "name": "err-host", "url": "http://localhost:5353/", "port": 5353, "dir": "demo/errors/host", "role": "host", "framework": "vue" }
+        {
+          "name": "err-remote-good",
+          "url": "http://localhost:5352/",
+          "port": 5352,
+          "dir": "demo/errors/remote-good",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "err-host",
+          "url": "http://localhost:5353/",
+          "port": 5353,
+          "dir": "demo/errors/host",
+          "role": "host",
+          "framework": "vue"
+        }
       ]
     },
     {
@@ -103,11 +264,46 @@
       "desc": "JeecgBoot 官方前端（v3.9.5）A套B 自嵌套、Jeecg↔React 双向、受控三层嵌套 A→B→C；本地演示数据服务支撑真实交互。",
       "source": "demo/jeecg",
       "apps": [
-        { "name": "jeecg-b", "url": "http://localhost:5372/", "port": 5372, "dir": "demo/jeecg/app-b", "role": "remote", "framework": "vue" },
-        { "name": "jeecg-a", "url": "http://localhost:5371/", "port": 5371, "dir": "demo/jeecg/app-a", "role": "host", "framework": "vue" },
-        { "name": "jeecg-react-c", "url": "http://localhost:5373/", "port": 5373, "dir": "demo/jeecg/react-c", "role": "remote", "framework": "react" },
-        { "name": "jeecg-react-host", "url": "http://localhost:5374/", "port": 5374, "dir": "demo/jeecg/react-host", "role": "host", "framework": "react" },
-        { "name": "jeecg-data", "url": "http://localhost:5380/", "port": 5380, "dir": "demo/jeecg/data-service", "role": "service", "framework": "node" }
+        {
+          "name": "jeecg-b",
+          "url": "http://localhost:5372/",
+          "port": 5372,
+          "dir": "demo/jeecg/app-b",
+          "role": "remote",
+          "framework": "vue"
+        },
+        {
+          "name": "jeecg-a",
+          "url": "http://localhost:5371/",
+          "port": 5371,
+          "dir": "demo/jeecg/app-a",
+          "role": "host",
+          "framework": "vue"
+        },
+        {
+          "name": "jeecg-react-c",
+          "url": "http://localhost:5373/",
+          "port": 5373,
+          "dir": "demo/jeecg/react-c",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "jeecg-react-host",
+          "url": "http://localhost:5374/",
+          "port": 5374,
+          "dir": "demo/jeecg/react-host",
+          "role": "host",
+          "framework": "react"
+        },
+        {
+          "name": "jeecg-data",
+          "url": "http://localhost:5380/",
+          "port": 5380,
+          "dir": "demo/jeecg/data-service",
+          "role": "service",
+          "framework": "node"
+        }
       ]
     },
     {
