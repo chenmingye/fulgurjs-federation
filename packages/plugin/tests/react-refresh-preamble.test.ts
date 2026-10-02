@@ -47,8 +47,31 @@ describe('跨框架 React refresh preamble', () => {
       const scriptStart = html.lastIndexOf('<script', flagIdx)
       const scriptSlice = html.slice(scriptStart, flagIdx)
       expect(scriptSlice).not.toMatch(/\bimport\s+\*\s+as\s/)
-      // 取真身用动态 import 且整体 try/catch（错源静默跳过）
-      expect(html).toContain('await import("http://localhost:6199/@react-refresh")')
+      // 5.5.2：多 http 远程时不再跨源导入（origin 无歧义才导入）——猜错虽被 catch，
+      // 浏览器仍记录 404 网络噪声；同步标志已保证 preamble 硬检查，真实实例由
+      // React 远程自带 origin 的 shim 自举兜底。断言：多远程下零跨源 import、零 404 面。
+      expect(html).not.toContain('/@react-refresh')
+      expect(html).not.toContain('http://localhost:6199')
+      expect(html).not.toContain('http://localhost:6299')
+    } finally { await server.close() }
+  })
+
+  it('单一 http 远程宿主（5.5.2 回归）：origin 无歧义，跨源动态导入保留', async () => {
+    const server = await createServer({
+      configFile: false,
+      root: path.resolve(import.meta.dirname, '../../../fixtures/host-bridge-vue'),
+      plugins: [federation({
+        name: 'preamble-single-remote-test',
+        remotes: { 'react-remote': { dev: 'http://localhost:6299' } },
+        shared: { vue: { singleton: true }, react: { singleton: true }, 'react-dom': { singleton: true } },
+      })],
+      server: { middlewareMode: true },
+      optimizeDeps: { noDiscovery: true },
+    })
+    try {
+      const html = await server.transformIndexHtml('/', '<!doctype html><html><head></head><body></body></html>')
+      expect(html).toContain('window.__vite_plugin_react_preamble_installed__ = true')
+      expect(html).toContain('await import("http://localhost:6299/@react-refresh")')
       expect(html).toMatch(/\}\s*catch\s*\{\s*\}\s*\}\)\(\);/)
     } finally { await server.close() }
   })

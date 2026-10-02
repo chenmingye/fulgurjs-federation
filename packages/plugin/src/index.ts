@@ -1452,16 +1452,29 @@ export function federation(options: FederationOptions): Plugin[] {
             (s) => s.shareKey === 'react' || s.shareKey === 'react-dom',
           )
           if (!hostConsumesReact) return html
-          const remoteOrigin = state.normalized.remotes
+          const httpOrigins = state.normalized.remotes
             .map((r) => { try { return new URL(r.devEntry).origin } catch { return null } })
-            .find((o) => o !== null && /^https?:/.test(o ?? ''))
-          if (!remoteOrigin) return html
+            .filter((o): o is string => o !== null && /^https?:/.test(o ?? ''))
+          if (httpOrigins.length === 0) return html
           // 5.4.2 修复（多远程宿主）：首个 http 远程未必是 React 远程（如 Vue 宿主同时挂
           // Vue 子应用与 React 子应用），静态 import 错源会以 MIME 错误告吹、标志也无法设置，
           // 真正消费 React 的远程因此拒绝求值（"can't detect preamble"）。改为：标志与注册器
           // 先同步设置（preamble 语义只要求这两个钩子存在），再用动态 import 容错取真身——
           // 错源远程静默跳过（零 console 噪声），正确实例由远程模块的 shim 自举兜底
           // （genReactRefreshShim）或本脚本命中 React 远程 origin 时直接发布。
+          // 5.5.2：多个 http 远程时「选哪个 origin」无法在本机判定（Vue/React 远程外观相同），
+          // 猜错虽被 catch 但浏览器仍会记录一条 404 网络噪声——此时直接跳过跨源导入：
+          // 同步标志已保证 preamble 硬检查通过，真实 react-refresh 实例由各 React 远程
+          // 自带 origin 的 shim 自举并发布页面级单例（JeecgBoot-A 实测：B(5372,Vue)+C(5373,React)
+          // 双远程下 A 页 404 噪声归零，React-C 挂载与 HMR 不受影响）。
+          const remoteOrigin = httpOrigins.length === 1 ? httpOrigins[0] : null
+          if (!remoteOrigin) {
+            return (
+              `<script type="module">` +
+              'window.$RefreshReg$ = () => {};window.$RefreshSig$ = () => (type) => type;window.__vite_plugin_react_preamble_installed__ = true;' +
+              `</script>` + html
+            )
+          }
           return (
             `<script type="module">` +
             'window.$RefreshReg$ = () => {};window.$RefreshSig$ = () => (type) => type;window.__vite_plugin_react_preamble_installed__ = true;' +

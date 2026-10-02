@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.5.2
+
+- **修复：多远程宿主 react-refresh 发布脚本的错源网络噪声**——发布脚本动态 import「首个 http 远程」的 `/@react-refresh`，多远程（Vue 远程 + React 远程并存）时猜错 origin：JS 层 5.4.2 已容错，但浏览器仍记录一条 404 网络错误（JeecgBoot-A 实测：B(5372,Vue)+C(5373,React) 双远程，A 页控制台恒有一条 5372/@react-refresh 404）。现改为：仅单一 http 远程时才跨源导入（origin 无歧义）；多远程时只同步设置 preamble 标志（硬检查语义不变），真实 react-refresh 实例由各 React 远程自带 origin 的 shim 自举并发布页面级单例——A 页 404 噪声归零，React 远程挂载与 HMR 实测不受影响。
+
 ## 5.5.1
 
 - **修复：`getLoadedShare` / `pinLoadedShare` / `clearSessionState` 在 `/runtime` 与 `/react` 入口的类型与生成链缺口**——三个函数在内核（`dist/runtime.js`）实际导出且生成脚本向 `runtime-entry.js` 注入了 `clearSessionState`，但 `src/runtime-entry.ts` / `src/react.ts` 源码导出面未包含（发布包 d.ts 因此缺失，TS 消费者不可导入；`getLoadedShare`/`pinLoadedShare` 的 JS 入口导出也缺失）。现统一：源码、d.ts、生成脚本（`gen-runtime-entry.mjs`）三处一致，React 入口补齐同面；导出面守卫测试（`tests/runtime-entry-graph.test.ts`）批准清单同步。包内 `demo` 场景（`demo/shared` 卡片⑫）以真调用覆盖：getLoadedShare 与 loadShare 结果对象严格相等、pinLoadedShare 收敛、clearSessionState 后新代次 onSession 重跑。
