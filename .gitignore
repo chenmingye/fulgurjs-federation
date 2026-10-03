@@ -80,3 +80,4 @@ demo/jeecg/app-b/dist/
 demo/jeecg/app-*/stats.html
 # 浏览器验收截图仅保留本地（公开仓库不带业务截图）
 evidence/
+demo/jeecg/pnpm-lock.yaml
