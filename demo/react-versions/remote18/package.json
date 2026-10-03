@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fulgurjs/federation": "5.7.0",
+    "@fulgurjs/federation": "5.7.1",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

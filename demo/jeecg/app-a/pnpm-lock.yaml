@@ -15,8 +15,8 @@ importers:
         specifier: ^7.0.1
         version: 7.0.1(vue@3.5.39(typescript@5.9.3))
       '@fulgurjs/federation':
-        specifier: 5.7.0
-        version: 5.7.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue-router@5.1.0(@vue/compiler-sfc@3.5.39)(esbuild@0.28.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rolldown@1.1.5)(rollup@4.52.5)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
+        specifier: 5.7.1
+        version: 5.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue-router@5.1.0(@vue/compiler-sfc@3.5.39)(esbuild@0.28.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rolldown@1.1.5)(rollup@4.52.5)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
       '@iconify/iconify':
         specifier: ^3.1.1
         version: 3.1.1
@@ -1788,8 +1788,8 @@ packages:
     resolution: {integrity: sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
-  '@fulgurjs/federation@5.7.0':
-    resolution: {integrity: sha512-BVmWRUYtOzj+UTORhvZZ6mMJMQkw4f+JZldFRmf6HNRNDNGfblE5iIPWPwg8xz8JKsmRsXKnuNXUcUIGmQVV5A==}
+  '@fulgurjs/federation@5.7.1':
+    resolution: {integrity: sha512-unJsGZ9K1U+yPjYVdwTBYEgfzfAHDeoLkE7u8osIG+ddB1LUcWJe0NjWl38XGmVw4U6DFS1i3zJLTioaeNhz5Q==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -9617,7 +9617,7 @@ snapshots:
 
   '@eslint/js@8.57.1': {}
 
-  '@fulgurjs/federation@5.7.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue-router@5.1.0(@vue/compiler-sfc@3.5.39)(esbuild@0.28.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rolldown@1.1.5)(rollup@4.52.5)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))':
+  '@fulgurjs/federation@5.7.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue-router@5.1.0(@vue/compiler-sfc@3.5.39)(esbuild@0.28.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rolldown@1.1.5)(rollup@4.52.5)(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(less@4.6.7)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))':
     dependencies:
       es-module-lexer: 1.7.0
       esbuild: 0.27.7
