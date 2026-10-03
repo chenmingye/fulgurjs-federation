@@ -3,12 +3,20 @@ import { federation } from '../src/index'
 import { genSharedNsFacade } from '../src/virtual'
 import { SHARED_NS_FACADE_PREFIX } from '../src/options'
 
-/**
- * esbuild 注入路径的判定根：须解析到 vite ≤ 7（本包 devDeps 的 vite 为 8.x，会让
- * optimizeDeps 走 rolldownOptions 分支）。fixtures/host-vue 提交基线为 vite 6；
- * CI 的 test 作业未装 fixtures 时解析失败回退 0，同样落入 esbuild 分支，两态皆确定。
- */
-const ROOT = new URL('../../fixtures/host-vue', import.meta.url).pathname
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+const ROOT = process.cwd()
+
+/** 伪造指定 vite 版本的判定根（node_modules/vite/package.json）——判定逻辑只读版本号 */
+function fakeViteRoot(version: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fg-vite-root-'))
+  fs.mkdirSync(path.join(dir, 'node_modules/vite'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'node_modules/vite/package.json'), JSON.stringify({ name: 'vite', version, main: 'index.js' }))
+  fs.writeFileSync(path.join(dir, 'node_modules/vite/index.js'), 'export default {}\n')
+  return dir
+}
 
 /** 模拟 esbuild 构建器，捕获 onResolve / onLoad 回调 */
 function captureResolver(plugin: { name: string; setup: (b: unknown) => void }) {
@@ -29,13 +37,13 @@ function captureResolver(plugin: { name: string; setup: (b: unknown) => void }) 
 }
 
 describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
-  it('serve + exposes + 纯 remote：注入 esbuild resolver，shared 键改道到 re-export 桩', async () => {
+  it('serve + exposes + 纯 remote：注入 esbuild resolver，shared 键改道到 re-export 桩（vite ≤ 7 根）', async () => {
     const [pre] = federation({
       name: 'remote-a',
       exposes: { './x': './src/x.ts' },
       shared: { 'magic-string': { singleton: true } },
     })
-    const ret = (await pre.config?.({ root: ROOT }, { command: 'serve' } as never)) as Record<string, any>
+    const ret = (await pre.config?.({ root: fakeViteRoot('6.4.3') }, { command: 'serve' } as never)) as Record<string, any>
     const plugins = ret?.optimizeDeps?.esbuildOptions?.plugins
     expect(Array.isArray(plugins)).toBe(true)
     expect(plugins[0].name).toBe('fulgurjs:optimize-shared-external')
@@ -60,13 +68,12 @@ describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
   })
 
   it('vite ≥ 8 根：只注入 rolldownOptions（不再下发已废弃的 esbuildOptions 键）', async () => {
-    // 本包 devDeps 的 vite 为 8.x：该根下必须走 rolldown 预构建分支
     const [pre] = federation({
       name: 'remote-a',
       exposes: { './x': './src/x.ts' },
       shared: { 'magic-string': { singleton: true } },
     })
-    const ret = (await pre.config?.({ root: process.cwd() }, { command: 'serve' } as never)) as Record<string, any>
+    const ret = (await pre.config?.({ root: fakeViteRoot('8.3.2') }, { command: 'serve' } as never)) as Record<string, any>
     expect(ret?.optimizeDeps?.esbuildOptions).toBeUndefined()
     const rd = ret?.optimizeDeps?.rolldownOptions?.plugins
     expect(Array.isArray(rd)).toBe(true)
