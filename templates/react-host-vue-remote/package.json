@@ -1,0 +1,11 @@
+{
+  "name": "fulgurjs-template-react-host-vue-remote",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev:remote": "pnpm --dir vue-remote dev",
+    "dev:host": "pnpm --dir react-host dev",
+    "dev": "pnpm run dev:remote & pnpm run dev:host",
+    "build": "pnpm --dir vue-remote build && pnpm --dir react-host build"
+  }
+}

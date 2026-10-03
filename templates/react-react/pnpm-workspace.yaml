@@ -1,0 +1,7 @@
+packages:
+  - host
+  - remote
+allowBuilds:
+  esbuild: set this to true or false
+minimumReleaseAgeExclude:
+  - '@fulgurjs/federation@5.7.1'

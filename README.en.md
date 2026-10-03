@@ -401,9 +401,10 @@ Specify the framework, whether you need a component or sub-app, remote URLs/expo
 ## Documentation
 
 - [Demo catalog](https://github.com/chenmingye/fulgurjs-federation/blob/master/demo/README.md): setup and runnable scenarios.
+- [Copy-and-run templates](https://github.com/chenmingye/fulgurjs-federation/tree/master/templates): five pnpm-workspace templates (Vue×Vue, React×React, both cross-framework bridge directions, and a full showcase). Copy a folder, then `pnpm install && pnpm dev`.
 - [Migration guide](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md).
 - [CHANGELOG](https://github.com/chenmingye/fulgurjs-federation/blob/master/CHANGELOG.md): changes and migration requirements.
-- [Acceptance records](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/完整Demo展示与全面复测-验收报告-20261002.md): version-specific evidence, not a substitute for testing your application.
+- [Acceptance records](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/整夜全量验收报告-20261004.md): overnight acceptance on two real MES business projects (fresh SVN copies), covering dev, production, fault recovery and HMR, plus the required production-build settings for large Vite 6 apps (disable `manualChunks`, etc.). Historical record: [20261002 demo acceptance](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/完整Demo展示与全面复测-验收报告-20261002.md) — historical results are not a substitute for testing your application.
 
 ## Development and testing
 

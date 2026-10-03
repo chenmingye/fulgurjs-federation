@@ -1,0 +1,9 @@
+packages:
+  - vue-host
+  - vue-remote
+  - react-host
+  - react-remote
+allowBuilds:
+  esbuild: set this to true or false
+minimumReleaseAgeExclude:
+  - '@fulgurjs/federation@5.7.1'

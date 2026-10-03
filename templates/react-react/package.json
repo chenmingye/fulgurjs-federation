@@ -1,0 +1,11 @@
+{
+  "name": "fulgurjs-template-react-react",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev:remote": "pnpm --dir remote dev",
+    "dev:host": "pnpm --dir host dev",
+    "dev": "pnpm run dev:remote & pnpm run dev:host",
+    "build": "pnpm --dir remote build && pnpm --dir host build"
+  }
+}
