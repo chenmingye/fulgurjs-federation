@@ -34,5 +34,5 @@
 
 ## 遗留
 
-- Vite 8 原生 Rolldown 的完整 fixtures dev/prod e2e 矩阵仍未执行；当前仅 CSS manifest 构建回归已验证。
-- fixtures 只覆盖 vue 生态；react fixture 若将来补齐需同步扩 7/8 矩阵。
+- ~~Vite 8 原生 Rolldown 的完整 fixtures dev/prod e2e 矩阵仍未执行~~（2026-10-03 已补齐：vite 8.3.2 dev 73/73 + prod 33/33 随 CI 常驻矩阵，见验收报告 §12.2；Jeecg 企业级应用生产全场景 5/5，根因修复见 CHANGELOG 5.6.0）。
+- fixtures 只覆盖 vue 生态；react fixture 若将来补齐需同步扩 7/8 矩阵。（本轮已补 React 18/19 × vite8 代表性验证：R18+RR6 dev 34/34 + prod 20/20；R19+RR7 随基线矩阵。）

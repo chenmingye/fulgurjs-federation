@@ -51,7 +51,7 @@ pnpm add -D @fulgurjs/federation
 
 要求：Vite ≥ 5.1（实测至 8.x）、Node ≥ 18、Vue 3 和/或 React 18–19（均为可选 peer——按所用框架安装）、浏览器 Chrome 108+（TLA 原生支持）。
 
-> Vite 8（rolldown）：5.3.3 起 dev 与生产构建、生产页面挂载均已通过完整验收（双向桥接 11 步交互矩阵，见验收报告）。**5.4.2 补充边界**：大型应用（如 JeecgBoot v3.9.5）生产构建下，插件的 TLA 共享门面参与 chunk 合并时可触发 rolldown 将应用 async 初始化语句合并丢 `async` 标记（`SyntaxError: Unexpected reserved word`，minify/target/manualChunks 变体与裸基线对照已排除其他变量）——此类应用生产构建请用 Vite 5–7，开发态不受影响。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。
+> Vite 8（rolldown）：**5.6.0 起生产链路完整可用**——同步协商门面（V8-SYNC-FACADE）根除了「TLA 顶层 await × 应用循环依赖」的启动互等死锁（JeecgBoot v3.9.5 全场景验收：登录/A套B/三层深链刷新直达/跨框架深链/React 宿主，vite 8.3.2 + rolldown 1.2.12），并修复 remoteEntry 失败重试、manifest exposes 缺项、依赖预载负缓存三项 vite8 专属缺陷；e2e dev 73/73 + prod 33/33（CI 常驻矩阵）。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。已知代价（仅 vite 8）：同步门面使协商命中他方实例时本地副本 chunk 仍会被模块图拉取（双版本场景共享库网络副本 ≤2，运行时身份仍收敛单一实例）。
 
 ## 快速开始（React 应用）
 
