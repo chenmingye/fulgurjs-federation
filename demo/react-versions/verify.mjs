@@ -11,7 +11,8 @@ const root = path.dirname(fileURLToPath(import.meta.url))
 const mode = process.argv[2] || 'dev'
 if (!['dev', 'prod'].includes(mode)) throw new Error('用法：node verify.mjs dev|prod')
 const apps = [['remote18', 5441], ['remote18-strict', 5442], ['remote19', 5443], ['host', 5440], ['vue-host', 5445]]
-const evidence = path.resolve(root, '../.run/react-versions', mode)
+const engineVersion = JSON.parse(fs.readFileSync(path.join(root, 'host/node_modules/vite/package.json'), 'utf8')).version
+const evidence = path.resolve(root, '../.run/react-versions', engineVersion, mode)
 fs.mkdirSync(evidence, { recursive: true })
 const children = []
 let browser, server, cleanupPromise
@@ -75,8 +76,14 @@ try {
   if (mode === 'dev') {
     for (const [, port] of apps.filter(([app]) => app.startsWith('remote'))) {
       const warm = await browser.newPage()
+      const warmErrors = []
+      warm.on('pageerror', (error) => { warmErrors.push(String(error)); console.log(`warm ${port}: ${error}`) })
+      warm.on('console', (message) => { if (message.type() === 'error') warmErrors.push(message.text()) })
       await warm.goto(`http://localhost:${port}/`)
-      await expect(warm.getByTestId('child-counter')).toBeVisible({ timeout: 60000 })
+      await expect(warm.getByTestId('child-counter')).toBeVisible({ timeout: 60000 }).catch(async (error) => {
+        fs.writeFileSync(path.join(evidence, `warm-${port}-error.json`), JSON.stringify({ errors: warmErrors, html: await warm.content() }, null, 2))
+        await warm.screenshot({ path: path.join(evidence, `warm-${port}-failure.png`) }); throw error
+      })
       await warm.waitForLoadState('networkidle')
       await warm.close()
     }

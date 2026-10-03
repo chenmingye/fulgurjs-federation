@@ -126,10 +126,19 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineR
 
       const promise = (async (): Promise<void> => {
         // react-dom/client 实际 mount 时按需取得（共享子路径 singleton 由 shared 配置协商）
-        const reactDomClient = (await import('react-dom/client')) as { createRoot: (el: HTMLElement) => NonNullable<RootEntry['root']> }
+        // Vite 6 + React 18 的 CJS 子路径可能只提供 default 命名空间；
+        // 与直接 ESM named exports 统一取同一个 renderer，不另加载本地副本。
+        type CreateRoot = (el: HTMLElement) => NonNullable<RootEntry['root']>
+        const reactDomClient = (await import('react-dom/client')) as {
+          createRoot?: CreateRoot; default?: { createRoot?: CreateRoot }
+        }
+        const createRoot = reactDomClient.createRoot ?? reactDomClient.default?.createRoot
         // dynamic import 期间已被作废：不创建 root（迟到的挂载不得复活，BN06）
         if (entry.status === 'abort' || entriesByEl.get(el) !== entry) return
-        const root = reactDomClient.createRoot(el)
+        if (typeof createRoot !== 'function') throw new Error(
+          'react-dom/client 未导出 createRoot。请核对 React 与 renderer 版本及共享子路径配置。',
+        )
+        const root = createRoot(el)
         entry.root = root
         entry.status = 'live'
 

@@ -50,7 +50,7 @@ npm run test:prod
 - Vue 宿主与 React 18 的物理依赖及共享声明均对齐后，实际挂载与交互通过。
 - 正常流程零 console error、零 pageerror；负向流程只允许带 MFU-003 的预期诊断。
 
-结果与三态截图：`demo/.run/react-versions/{dev,prod}/`（不入库）。CI 的 `bridge-versions` 作业用 Vite 6/8 分别执行 dev 与生产验收；CI 将源码候选构建装入锁定应用，与发布后的 registry 包验收分别记录。
+结果与三态截图：`demo/.run/react-versions/{vite}/{dev,prod}/`（不入库）。CI 的 `bridge-versions` 作业用 Vite 6/8 分别执行 dev 与生产验收；CI 将源码候选构建装入锁定应用，与发布后的 registry 包验收分别记录。
 
 ## API 与源码
 

@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const LIMIT = 10496 // 5.7.1：异步入口屏障与旧冻结内核兼容；实测 10261B，保留硬门禁
+const LIMIT = 10496 // 5.7.1：异步入口屏障与旧冻结内核兼容；实测 10273B，保留硬门禁
 const dist = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist')
 const file = path.join(dist, 'runtime.js')
 // React 适配器预算（5.1.0）：任务书建议 3072B，实测 3538B——差值全部来自两条中文三段式

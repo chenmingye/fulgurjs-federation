@@ -850,3 +850,20 @@ it('页面已有冻结旧内核时，新增内部准备入口通过既有 loadSh
   expect(loadShare).toHaveBeenCalledWith('react', { singleton: true })
   expect(later.getRuntime()).toBe(old)
 })
+
+
+it('另一版本的单例正在异步加载时，同步消费明确拒绝，直接 pin 也不能创建第二份实例', async () => {
+  const rt = await fresh()
+  let release!: (value: unknown) => void
+  const pending = new Promise((resolve) => { release = resolve })
+  rt.registerShare('default', 'react', '19.3.0', () => pending, { from: 'host' })
+  const opts = { singleton: true, requiredVersion: false as const }
+  const loading = rt.loadShare('react', opts)
+  expect(() => rt.loadShareSync('react', { ...opts, localVersion: '18.3.1' })).toThrow('MFU-004')
+  rt.pinLoadedShare('react', opts, '18.3.1', { version: '18.3.1' })
+  expect(rt.shareScopeMap.default.react['18.3.1']).toBeUndefined()
+  const react19 = { version: '19.3.0' }
+  release(react19)
+  expect(await loading).toBe(react19)
+  expect(rt.getLoadedShare('react', opts)).toBe(react19)
+})

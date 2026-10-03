@@ -539,7 +539,7 @@ function createRuntime() {
             // 版本一致：本地副本即选中版本的物理实例，回填使后续协商收敛同一实例
             pick.value = instance
             pick.loaded = true
-          } else if (opts.singleton) {
+          } else if (opts.singleton && !pick.pendingGet) {
             // singleton + 选中条目未就绪：首个消费者以本地版本接管（webpack「首个消费者
             // 定单例」语义）。非 strict 的版本漂移已由 loadShareSync 告警（MFU-010）；
             // strictVersion 冲突在 selectShareEntry 阶段抛出，到不了这里。
@@ -739,7 +739,9 @@ function createRuntime() {
     if (entry.version !== undefined && entry.version === opts.localVersion) return { kind: 'local' }
     if (opts.singleton || (opts.strictVersion && opts.requiredVersion &&
       (!opts.localVersion || !satisfies(opts.localVersion, opts.requiredVersion)))) {
-      if (opts.strictVersion) {
+      if (opts.strictVersion || entry.pendingGet) {
+        // 另一版本的 getter 已有消费者等待时，不能再 pin 本地实例，
+        // 否则异步与同步消费者会各持一份单例。
         // strictVersion：选中版本不满足自身要求时已在 selectShareEntry 抛出；此处是
         // 「选中条目尚未加载且非本地版本」——同步路径无法等待，拒绝而非静默改用本地
         throw new FgError(
