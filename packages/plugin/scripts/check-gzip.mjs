@@ -1,7 +1,7 @@
 /**
  * runtime bundle gzip 门禁（build 末尾自动执行，CI 同步）。
- * 阈值 9216B（zlib level9）：中文运行时诊断需要保留可操作的原因与修法，
- * 4.3.0 英文诊断基线为 7547B，本轮中文化后实测 8649B；仍以 9KB 门禁约束增长。
+ * 阈值 10496B（zlib level9）：中文运行时诊断需要保留可操作的原因与修法，
+ * 4.3.0 英文诊断基线为 7547B，本轮中文化后实测 8649B；当前预算包含共享协商屏障与兼容处理的必要增量。
  * 超限 exit 1 —— runtime 体积是本插件核心卖点之一，防止无意膨胀。
  */
 import zlib from 'node:zlib'
@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const LIMIT = 10240 // 5.7.0：loadShareSync 同步协商（快照/同步 hook/strictVersion 拒绝/本地交付）为语义补修的必要增量
+const LIMIT = 10496 // 5.7.1：异步入口屏障与旧冻结内核兼容；实测 10261B，保留硬门禁
 const dist = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist')
 const file = path.join(dist, 'runtime.js')
 // React 适配器预算（5.1.0）：任务书建议 3072B，实测 3538B——差值全部来自两条中文三段式

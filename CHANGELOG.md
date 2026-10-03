@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.7.1
+
+- runtime gzip 预算 10240→10496B（实测 10261B）：共享屏障及旧冻结内核兼容为必要逻辑增量，继续保留硬门禁。
+
+- 修复同步消费拒绝异步 resolveShare 后的迟到 Promise 拒绝，避免额外 unhandledrejection。
+- HTML 入口配置 runtimePlugins 时增加异步协商屏障；远程 expose 执行前准备共享决策，消费方门面保持原有同步形态。异步选择的外部条目与静态/动态实例统一复用；provider 失败后允许重新裁决。
+- 首次消费者接管单例时按真实物理版本登记，不再把 React 18 实例填入标注 React 19 的槽位而绕过 strictVersion。
+- runtimePlugins 的相对路径以项目 root 解析，避免入口/虚拟模块位置改变后解析错误。
+- 新增 demo/react-versions：React 19 嵌 React 18 隔离、异步 hook 覆盖首次静态导入、严格拒绝与版本对齐远程的同页恢复、Vue 宿主对齐 React 18。新增 Vite 6/8 dev+prod 浏览器 CI。
+- 自定义无 HTML 的入口须先完成动态协商再执行消费者，已求值的静态绑定不能追溯改写。
+
 ## 5.7.0
 
 - **修复：Vite 8 同步协商门面的共享语义补修（strictVersion 拒绝 + resolveShare 契约）**——5.6.0 引入的同步门面（V8-SYNC-FACADE）存在两处语义缺陷，本轮以 runtime 新决策入口 `loadShareSync` 统一修复，绑定门面/命名空间门面/CJS 垫片三条同步路径全部改走该入口（各引擎一致）：

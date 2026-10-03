@@ -39,6 +39,7 @@ import {
   genDevProvides,
   genDevRemoteEntry,
   genInitModule,
+  genAsyncBootstrap,
   genProdManifest,
   genReactRefreshPublisherScript,
   genReactRefreshShim,
@@ -230,6 +231,7 @@ export function federation(options: FederationOptions): Plugin[] {
     resolvedSharedPaths: Map<string, string | null>
     entryAbsPaths: Set<string>
     entryInitInjected: Set<string>
+    bootstrapEntries: Set<string>
     /** D6：manualChunks 包装注入时保存的用户原始配置（对象形式 specifier 待 buildStart 解析） */
     manualChunkSpecsPending?: Array<[group: string, specifier: string]>
     /** D6：对象形式 manualChunks 解析结果（模块 id → 组名），包装函数运行时查表 */
@@ -255,6 +257,7 @@ export function federation(options: FederationOptions): Plugin[] {
     exposeFiles: {},
     resolvedSharedPaths: new Map(),
     entryAbsPaths: new Set(),
+    bootstrapEntries: new Set(),
     entryInitInjected: new Set(),
     manualChunkGroups: new Map(),
     sharedClosureRoots: [],
@@ -691,6 +694,7 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean === RUNTIME_VIRTUAL_ID) return RESOLVED.runtime
       if (bareClean === RUNTIME_PROXY_VIRTUAL_ID) return RESOLVED.runtimeProxy
       if (bareClean === INIT_VIRTUAL_ID) return RESOLVED.init
+      if (bareClean.startsWith('virtual:fulgurjs-bootstrap:')) return '\0' + bareClean
       if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade-react') return bareClean
@@ -729,6 +733,9 @@ export function federation(options: FederationOptions): Plugin[] {
       const clean = q === -1 ? raw : raw.slice(0, q)
       if (clean === 'virtual:fulgurjs-runtime') return readRuntimeCode()
       if (clean === RESOLVED.runtimeProxy || clean === RUNTIME_PROXY_VIRTUAL_ID) return genRuntimeProxyModule()
+      if (clean.startsWith('virtual:fulgurjs-bootstrap:') && state.normalized) {
+        return genAsyncBootstrap(state.normalized, decodeURIComponent(clean.slice('virtual:fulgurjs-bootstrap:'.length)))
+      }
       if (clean === 'virtual:fulgurjs-init' && state.normalized) {
         return genInitModule(state.normalized, state.command)
       }
@@ -855,7 +862,7 @@ export function federation(options: FederationOptions): Plugin[] {
       // build：宿主入口模块顶部内联 init（先于一切应用代码注册 remotes/provides）。
       // 不能用独立虚拟模块：rollup 会摇树剥离其顶层调用；入口自身的顶层调用永不被剥离。
       // 曾尝试 side-effect import，后续恢复内联；新版本构建支持以实际矩阵为准。
-      if (state.command === 'build' && state.entryAbsPaths.has(clean) && !state.entryInitInjected.has(clean)) {
+      if (state.command === 'build' && state.entryAbsPaths.has(clean) && !state.bootstrapEntries.has(clean) && !state.entryInitInjected.has(clean)) {
         state.entryInitInjected.add(clean)
         const initCode = genInitModule(state.normalized, state.command)
         return { code: `${initCode}\n${code}`, map: null }
@@ -928,6 +935,20 @@ export function federation(options: FederationOptions): Plugin[] {
           state.entryAbsPaths.add(abs)
         }
         debugLog('init-entry', { stage: 'capture', count: state.entryAbsPaths.size, entries: [...state.entryAbsPaths].map((p) => redactModulePath(p, state.normalized!.root)) })
+        if (state.normalized.runtimePlugins.length > 0) {
+          // 只有存在运行时插件的入口需要异步协商屏障。初始化留在屏障自身，
+          // 应用入口不重复注册插件（重复注册会清掉刚完成的快照）。
+          return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, (script) => {
+            const tag = script.slice(0, script.indexOf('>') + 1)
+            if (!/\btype=["']module["']/.test(tag)) return script
+            const src = srcRe.exec(tag)?.[1]
+            if (!src || src.startsWith('http') || src.startsWith('//')) return script
+            const abs = path.resolve(state.normalized!.root, src.startsWith('/') ? src.slice(1) : src)
+            state.bootstrapEntries.add(abs)
+            const id = 'virtual:fulgurjs-bootstrap:' + encodeURIComponent(abs)
+            return tag.replace(/\s+src=["'][^"']+["']/, '') + `import ${JSON.stringify(id)};</script>`
+          })
+        }
         return html
       },
     },

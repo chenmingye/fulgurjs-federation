@@ -1,6 +1,6 @@
 # Demo 展示中心
 
-`@fulgurjs/federation` 全量真实示例与展示中心。**所有工程均从 npm registry 安装正式包**（不用 workspace link），依赖版本在各自 `package.json` 锁定（当前统一 `5.5.2` + lockfile）。
+`@fulgurjs/federation` 全量真实示例与展示中心。**所有工程均从 npm registry 安装正式包**（不用 workspace link），依赖版本在各自 `package.json` 锁定（版本与 lockfile 一起维护）。
 
 ## 从 GitHub 下载后运行（git clone 与 ZIP 均适用）
 
@@ -52,6 +52,7 @@ node demo/scripts/build-demo.mjs --all
 | 应用桥接 | 同框架完整子应用（Vue套Vue、React套React） | `demo/same-frame` | 5323-5326 |
 | URL 同步 | 双向桥接 URL 同步 | `demo/bridge-router` | 5333-5336 |
 | 共享依赖 | singleton/版本协商/hooks/实例身份（12 卡） | `demo/shared` | 5343/5344/5345 |
+| 共享依赖 | React 18/19 隔离、异步裁决、严格拒绝与恢复 | `demo/react-versions` | 5440-5443、5445 |
 | 页面接入 | 页面清单/类型/CLI | `demo/pages-cli` | 5363/5364 |
 | 错误恢复 | 隔离故障注入与恢复 | `demo/errors` | 5352/5353 |
 | 企业项目 | Jeecg 自嵌套/跨框架/三层 | `demo/jeecg` | 5371-5374 + 数据服务 5380 |

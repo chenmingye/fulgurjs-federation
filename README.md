@@ -509,7 +509,9 @@ const Panel = await loadRemote('shop/Panel', {
 
 > hook 错误契约：`beforeLoadRemote` / `afterLoadRemote` 是**观测 hook**——自身抛错只告警、不改写加载结果；`resolveShare` 是**决策 hook**——显式抛错向调用方传播（绝不静默回退到另一份共享依赖）。
 >
-> **resolveShare 与消费路径（5.7.0 起）**：该 hook 对**异步协商路径**（`loadShare` 动态消费，全部引擎）与**同步静态导入门面**（Vite 8 同步协商路径）都按契约参与：同一消费条件的成功快照无条件复用；无快照时 hook 被调用，其决策（同步返回 picked）生效并写入快照。**引擎差异（如实）**：Vite 8 同步门面在模块求值期无法等待异步决策——hook 返回 Promise、或选中「尚未加载的他人条目」时抛 `MFU-004`（`details.syncUnsupported: true`，附修法：改为同步返回 picked，或让首次消费先经一次动态 `loadShare` 建立快照）；Vite 5–7 的 TLA 门面无此限制，异步 hook 全语义支持。`strictVersion` 版本冲突在所有消费路径一致拒绝（MFU-003，含共享键/要求版本/提供方），本地副本与 fallback 均不得掩盖冲突。singleton 在「作用域无任何已加载实例」时由**首个消费者**确定实例（本地版本接管，MFU-010 告警），后续消费者按已加载优先收敛。
+> **resolveShare 与消费路径（5.7.1 起）**：配置了 `runtimePlugins` 的 HTML 入口在执行应用前完成共享裁决与加载；远程容器也会在执行 expose 前完成异步裁决。同步门面复用同一消费条件的决策与实例，异步 hook 可以选择低版本或原表之外的条目，不会被本地副本覆盖。应用与 provider 之间保留动态导入边界，Vite 8 的消费方门面仍无 TLA，避免把协商等待传入消费方循环依赖。
+>
+> **入口边界**：没有 HTML 入口的 library/自定义入口，或应用运行后才调用 `registerPlugins` 更改策略，需要先 `await loadShare(name, opts)`，再动态导入新的消费者；已经求值的静态绑定无法追溯改写。未准备的同步消费者遇到异步 hook 仍给出 `MFU-004`（`details.syncUnsupported: true`），并接管其迟到拒绝，避免额外 `unhandledrejection`。`strictVersion` 冲突给出 MFU-003；本地接管的实例按真实版本登记，不能借用另一版本槽位绕过检查。需要同时使用 React 18/19 时，为整组 React、renderer 及其消费方设置独立 `shareScope`，通过桥接传普通 props/回调，不跨 renderer 传 ReactElement 或 Context。可运行示例见 [React 版本隔离与恢复](demo/react-versions/README.md)。
 
 ```ts
 import type { RuntimePlugin } from '@fulgurjs/federation/runtime'

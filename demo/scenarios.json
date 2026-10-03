@@ -321,6 +321,55 @@
       "desc": "类型生成（dts source/shim）、包内入口解析、内部入口登记、错误码总表——由 demo/pages-cli 与矩阵文档覆盖。",
       "source": "docs/Demo展示中心API覆盖矩阵-20261002.md",
       "apps": []
+    },
+    {
+      "id": "react-versions",
+      "column": "共享依赖",
+      "title": "React 18 / 19 隔离与恢复",
+      "desc": "React 19 宿主嵌 React 18；独立作用域、异步共享裁决、严格版本拒绝与对齐版本后的重新加载。",
+      "source": "demo/react-versions",
+      "apps": [
+        {
+          "name": "rv-remote18",
+          "url": "http://localhost:5441/",
+          "port": 5441,
+          "dir": "demo/react-versions/remote18",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "rv-remote18-strict",
+          "url": "http://localhost:5442/",
+          "port": 5442,
+          "dir": "demo/react-versions/remote18-strict",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "rv-remote19",
+          "url": "http://localhost:5443/",
+          "port": 5443,
+          "dir": "demo/react-versions/remote19",
+          "role": "remote",
+          "framework": "react"
+        },
+        {
+          "name": "rv-host",
+          "url": "http://localhost:5440/",
+          "port": 5440,
+          "dir": "demo/react-versions/host",
+          "role": "host",
+          "framework": "react"
+        },
+        {
+          "name": "rv-vue-host",
+          "url": "http://localhost:5445/",
+          "port": 5445,
+          "dir": "demo/react-versions/vue-host",
+          "role": "host",
+          "framework": "vue"
+        }
+      ]
     }
   ]
 }

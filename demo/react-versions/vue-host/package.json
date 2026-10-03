@@ -1,0 +1,25 @@
+{
+  "name": "fulgurjs-demo-react-versions-vue-host",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5445 --strictPort",
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@fulgurjs/federation": "5.7.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
+    "typescript": "5.9.3",
+    "vite": "8.3.2",
+    "@vitejs/plugin-vue": "6.0.7",
+    "vue-tsc": "3.3.0"
+  }
+}

@@ -174,7 +174,7 @@ function createRuntime() {
   const plugins: RuntimePlugin[] = []
   /** 同一版本组合只告警一次，避免多个页面重复导入共享依赖时刷屏。 */
   const reportedSingletonSkews = new Set<string>()
-  // 同步查询不能执行异步 resolveShare；只复用相同消费条件下成功协商的结果。
+  // 同一消费条件的已完成裁决；value 未就绪时供 provider 内同步依赖复用决策。
   const resolvedShareSnapshots = new Map<string, ShareEntry>()
   const shareRequestKey = (name: string, opts: LoadShareOptions) => JSON.stringify([
     opts.shareScope || 'default', opts.shareKey || name, opts.requiredVersion ?? null,
@@ -543,11 +543,14 @@ function createRuntime() {
             // singleton + 选中条目未就绪：首个消费者以本地版本接管（webpack「首个消费者
             // 定单例」语义）。非 strict 的版本漂移已由 loadShareSync 告警（MFU-010）；
             // strictVersion 冲突在 selectShareEntry 阶段抛出，到不了这里。
-            pick.value = instance
-            pick.loaded = true
-            console.warn(
-              `[fulgurjs:MFU-010] 共享单例 "${key}" 的首次消费者以本地版本 ${localVersion} 接管了 ${pick.from} 声明的 ${pick.version} 槽位（该版本尚未加载）。`,
-            )
+            // 实例必须登记在其真实版本下；否则后续 strictVersion 会把本地 18
+            // 当成槽位声明的 19，错误地放行不兼容消费。
+            registerShare(scopeName, key, localVersion, () => Promise.resolve(instance), {
+              from: 'fulgurjs:local-fallback', loaded: true,
+            })
+            const local = scope[key][localVersion]
+            local.value = instance
+            local.loaded = true
           }
           // 非 singleton + 版本不一致：不回填（多版本各自持有，不污染他版本槽位）
         }
@@ -568,7 +571,9 @@ function createRuntime() {
     const scopeName = opts.shareScope || 'default'
     const shareKey = opts.shareKey || name
     const byName = getScope(scopeName)[shareKey] || {}
-    let entry = selectShareEntry(name, opts)
+    const requestKey = shareRequestKey(name, opts)
+    const snapshot = hooks.resolveShare ? resolvedShareSnapshots.get(requestKey) : undefined
+    let entry = snapshot || selectShareEntry(name, opts)
     if (!entry) {
       if (opts.fallback) {
         const instance = await opts.fallback()
@@ -583,7 +588,7 @@ function createRuntime() {
       emitError({ remote: shareKey, error: err })
       throw err
     }
-    if (hooks.resolveShare) {
+    if (hooks.resolveShare && !snapshot) {
       const picked = await hooks.resolveShare({
         shareKey,
         shareScope: scopeName,
@@ -592,6 +597,9 @@ function createRuntime() {
         available: Object.values(byName),
       })
       if (picked) entry = picked
+      // 异步决策先于 provider 求值发布；provider 内的同步 CJS 消费可复用
+      // 同一决策，不会重新执行异步 hook。
+      resolvedShareSnapshots.set(requestKey, entry)
     }
     // value 已就绪（含 CJS 垫片 pin 的本地副本与先完成的协商）：直接复用，不再重复
     // get()——保证任何消费者都不会绕过已确定的实例拿到第二份。
@@ -621,6 +629,7 @@ function createRuntime() {
         return entry.value
       }
       entry.loaded = false
+      if (resolvedShareSnapshots.get(requestKey) === entry) resolvedShareSnapshots.delete(requestKey)
       throw e
     } finally {
       if (entry.pendingGet === pending) entry.pendingGet = undefined
@@ -673,7 +682,8 @@ function createRuntime() {
    *
    * hook 契约（resolveShare）在同步路径的参与方式：
    * 1. 该消费条件已有成功快照 → 无条件复用（既有契约，含异步 loadShare 写入的）；
-   * 2. 无快照 → 同步调用 hook：返回 picked（ShareEntry）则按其决策交付（选中条目
+   * 2. 已完成异步裁决但实例尚未就绪 → 复用该条目，不重复执行 hook；
+   *    无裁决 → 同步调用 hook：返回 picked（ShareEntry）则按其决策交付（选中条目
    *    已就绪或恰为本应用本地版本时），决策写入快照供后续消费复用；
    * 3. hook 返回 falsy = 不干预 → 走默认选择。
    * 「kind: 'local'」的两种合法形态：选中条目版本 === 本地版本（本地 import 即该版本
@@ -687,7 +697,7 @@ function createRuntime() {
       const snapKey = shareRequestKey(name, opts)
       const snap = resolvedShareSnapshots.get(snapKey)
       if (snap && snap.value !== undefined) return { kind: 'ready', value: snap.value }
-      const pickedRaw = hooks.resolveShare({
+      const pickedRaw = snap || hooks.resolveShare({
         shareKey,
         shareScope: scopeName,
         requiredVersion: opts.requiredVersion,
@@ -696,11 +706,14 @@ function createRuntime() {
       }) as unknown
       // thenable 检测先于类型窄化：hook 返回 Promise = 同步路径不可等待的决策（明确拒绝）
       if (pickedRaw && typeof (pickedRaw as { then?: unknown }).then === 'function') {
+        // 诊断已经同步交付；仍须接管异步结果，避免 hook 后续拒绝变成
+        // 第二个未处理异常。拒绝不写快照，不 pin 本地实例。
+        void Promise.resolve(pickedRaw).catch(() => {})
         throw new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
           `现象：resolveShare 对共享 "${shareKey}" 返回了 Promise，但该共享正被同步静态导入消费（Vite 8 同步协商门面）。\n` +
             `原因：模块求值期无法等待异步决策；静态导入不能静默忽略 hook 决策。\n` +
-            `修法：让 resolveShare 对该键同步返回 picked（从 available 中选择）；或让首次消费先经一次动态 loadShare 完成协商（成功快照会被静态导入复用）。`,
+            `修法：Vite 8 HTML 入口会先完成异步协商；其他入口请先动态 loadShare 建立快照，再导入消费者，或让该键同步返回 picked。`,
           { shareKey, requiredVersion: opts.requiredVersion, syncUnsupported: true },
         )
       }
@@ -713,8 +726,8 @@ function createRuntime() {
         if (picked.version !== undefined && picked.version === opts.localVersion) return { kind: 'local' }
         throw new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
-          `现象：resolveShare 为共享 "${shareKey}" 选择了 ${picked.version ?? '未就绪条目'}（尚未加载），同步静态导入无法等待其实例就绪。\n` +
-            `修法：让 hook 优先选择已就绪实例或本应用本地版本（${opts.localVersion ?? '未声明'}），或先经动态 loadShare 完成协商。`,
+          `现象：resolveShare 为 "${shareKey}" 选择了未就绪的 ${picked.version ?? '条目'}。\n` +
+            `原因：同步消费不能等待加载。\n修法：先动态 loadShare 再导入消费者，或选择已就绪实例/本地版本 ${opts.localVersion ?? '未声明'}。`,
           { shareKey, requiredVersion: opts.requiredVersion, syncUnsupported: true },
         )
       }
@@ -724,14 +737,15 @@ function createRuntime() {
     if (!entry) return { kind: 'local' } // 无满足版本：strictVersion 已在 selector 抛出；非 strict 对齐异步 fallback
     if (entry.value !== undefined) return { kind: 'ready', value: entry.value }
     if (entry.version !== undefined && entry.version === opts.localVersion) return { kind: 'local' }
-    if (opts.singleton) {
+    if (opts.singleton || (opts.strictVersion && opts.requiredVersion &&
+      (!opts.localVersion || !satisfies(opts.localVersion, opts.requiredVersion)))) {
       if (opts.strictVersion) {
         // strictVersion：选中版本不满足自身要求时已在 selectShareEntry 抛出；此处是
         // 「选中条目尚未加载且非本地版本」——同步路径无法等待，拒绝而非静默改用本地
         throw new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
-          `现象：共享单例 "${shareKey}" 选中了 ${entry.from} 提供的 ${entry.version}（尚未加载），同步静态导入无法等待其实例就绪。\n` +
-            `原因：单例必须全页一致，不能静默改用本地副本分裂实例。\n` +
+          `现象：共享 "${shareKey}" 选中了 ${entry.from} 提供的 ${entry.version}（尚未加载），同步静态导入无法等待其实例就绪。\n` +
+            `原因：不能改用不兼容的本地副本或分裂单例。\n` +
             `修法：让该共享的首次消费先经一次动态 loadShare 完成加载，或将本应用版本与作用域提供版本对齐。`,
           { shareKey, requiredVersion: opts.requiredVersion, syncUnsupported: true },
         )
@@ -751,9 +765,26 @@ function createRuntime() {
     // 非 singleton：本地版本同样满足 requiredVersion（多版本共存允许各自持有），
     // 静态消费交付本地；动态消费仍按异步语义选择，无单实例承诺
     console.warn(
-      `[fulgurjs] 共享 "${shareKey}" 的同步静态消费使用本地副本 ${opts.localVersion ?? ''}（作用域中满足要求的另一版本 ${entry.version} 尚未就绪，无法同步等待）；非单例允许多版本共存。`,
+      `[fulgurjs] 共享 "${shareKey}"：非单例同步消费使用本地 ${opts.localVersion ?? ''}，远程 ${entry.version} 尚未就绪。`,
     )
     return { kind: 'local' }
+  }
+
+  /** 内部入口屏障：先完成所有 hook 决策，再加载 provider，最后执行消费者。 */
+  async function prepareShares(requests: Array<{ name: string; opts: LoadShareOptions }>): Promise<void> {
+    if (!hooks.resolveShare) return
+    for (const { name, opts } of requests) {
+      const key = shareRequestKey(name, opts)
+      if (resolvedShareSnapshots.has(key)) continue
+      const entry = selectShareEntry(name, opts)
+      const picked = await hooks.resolveShare({
+        shareKey: opts.shareKey || name, shareScope: opts.shareScope || 'default',
+        requiredVersion: opts.requiredVersion, picked: entry,
+        available: Object.values(getScope(opts.shareScope || 'default')[opts.shareKey || name] || {}),
+      }) || entry
+      if (picked) resolvedShareSnapshots.set(key, picked)
+    }
+    for (const { name, opts } of requests) await loadShare(name, opts)
   }
 
   /** WP6：错误信息用的 URL 脱敏——去凭证（user:pass@）与 query/hash */
@@ -1257,6 +1288,7 @@ function createRuntime() {
     registerPlugins,
     loadShare,
     loadShareSync,
+    prepareShares,
     getLoadedShare,
     pinLoadedShare,
     loadRemote,
@@ -1306,6 +1338,11 @@ export const loadShare = runtime.loadShare
 /** CJS 垫片专用同步查询（内部使用，不进公开入口壳清单） */
 export const getLoadedShare = runtime.getLoadedShare
 /** 同步静态导入门面的统一协商入口（V8-SYNC-FACADE；内部使用，不进公开入口壳清单） */
+// 页面先加载旧版本内核时不能替换冻结的单例；用既有异步 API 完成准备，
+// 保持补丁版本远程与旧宿主的协议兼容。完整两阶段屏障由 5.7.1 内核提供。
+export const prepareShares = runtime.prepareShares || (async (requests: Array<{ name: string; opts: LoadShareOptions }>) => {
+  for (const { name, opts } of requests) await runtime.loadShare(name, opts)
+})
 export const loadShareSync = runtime.loadShareSync
 export const pinLoadedShare = runtime.pinLoadedShare
 export const loadRemote = runtime.loadRemote

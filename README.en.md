@@ -182,6 +182,12 @@ Standalone page-level boundary. Props: `children`, `fallback` (node or `({ error
 - No `keepAliveNames` / no keep-alive promise (Vue-specific); routing is not a runtime dependency — render `component(spec)` output from your router (React Router examples in `examples/react/host`; route params reach remote pages as props)
 - Cross-framework Context: host and remote get the **same Context object** through the same expose instance; the plugin does not auto-bridge arbitrary React Contexts
 
+### Async shared decisions and React version isolation (5.7.1)
+
+HTML entries configured with `runtimePlugins` negotiate and load shared dependencies before dynamically executing the application. Remote containers prepare shared decisions before executing exposes. Sync facades reuse the same decision and instance, including async hooks selecting a lower version or an external entry. Vite 8 consumer facades remain synchronous; the bootstrap boundary keeps negotiation waits out of consumer dependency cycles.
+
+Library/custom entries without HTML, and policies registered after application startup, must `await loadShare(name, opts)` before dynamically importing new consumers. Existing evaluated static bindings cannot be changed retroactively. An unprepared synchronous consumer still reports MFU-004 with `details.syncUnsupported`; late hook rejections are handled rather than becoming additional unhandled rejections. Local singleton adoption records the instance under its actual version, preserving strict version rejection. To run React 18 and 19 together, isolate React and its renderer in separate share scopes and bridge plain props/callbacks, not React elements or Context objects. See [the runnable version isolation demo](demo/react-versions/README.md).
+
 ### 8.2 Runtime API — `@fulgurjs/federation/runtime` (Vue apps) and common functions on `/react`
 
 | Function | Signature | Semantics |

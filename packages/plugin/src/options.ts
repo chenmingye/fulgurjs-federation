@@ -685,7 +685,7 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     runtime: options.runtime,
     runtimeChunk: options.runtimeChunk,
     manifest: options.manifest === undefined ? true : !!options.manifest,
-    runtimePlugins: options.runtimePlugins ?? [],
+    runtimePlugins: (options.runtimePlugins ?? []).map((id) => id.startsWith('.') ? path.resolve(root, id) : id),
     dts: options.dts === undefined ? true : options.dts,
     root,
     pluginVersion: RUNTIME_VERSION,

@@ -245,3 +245,11 @@ describe('W5/CFG-008: shared 非法组合', () => {
     expect(n.shared).toHaveLength(2)
   })
 })
+
+
+describe('runtimePlugins 的项目根目录解析', () => {
+  it('本地插件以 root 为基准，包名与绝对路径保持原样', () => {
+    const result = norm({ name: 'host', runtimePlugins: ['./src/plugin.ts', 'shared-policy', '/tmp/policy.ts'] })
+    expect(result.runtimePlugins).toEqual([`${ROOT}/src/plugin.ts`, 'shared-policy', '/tmp/policy.ts'])
+  })
+})

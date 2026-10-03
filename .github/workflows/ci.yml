@@ -199,3 +199,44 @@ jobs:
           npm run build
       - name: tarball smoke（pack → 临时 consumer 安装 → exports/类型/build/dev 加载）
         run: node e2e/scripts/pack-smoke.mjs
+
+  bridge-versions:
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        vite: [6.4.3, 8.3.2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build candidate plugin
+        working-directory: packages/plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install locked demos and select engine
+        run: |
+          npm --prefix demo/react-versions ci --no-audit --no-fund
+          for app in host remote18 remote18-strict remote19 vue-host; do
+            npm --prefix "demo/react-versions/$app" ci --no-audit --no-fund
+            npm --prefix "demo/react-versions/$app" install --no-save --package-lock=false "vite@${{ matrix.vite }}" --no-audit --no-fund
+            cp -R packages/plugin/dist/. "demo/react-versions/$app/node_modules/@fulgurjs/federation/dist/"
+          done
+          cd demo/react-versions
+          npx playwright install --with-deps chromium
+      - name: Browser acceptance (dev and production)
+        env:
+          FULGURJS_ACCEPTANCE_STAGE: source-candidate
+        working-directory: demo/react-versions
+        run: |
+          npm run test:dev
+          npm run test:prod
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bridge-versions-vite-${{ matrix.vite }}
+          path: demo/.run/react-versions/

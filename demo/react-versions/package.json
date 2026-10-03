@@ -1,0 +1,12 @@
+{
+  "name": "fulgurjs-demo-react-versions-acceptance",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:dev": "node verify.mjs dev",
+    "test:prod": "node verify.mjs prod"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

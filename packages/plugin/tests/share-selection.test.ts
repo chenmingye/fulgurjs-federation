@@ -286,6 +286,9 @@ describe('runtime: 同步共享查询（getLoadedShare 补修回归）', () => {
     rt.pinLoadedShare('react', { shareKey: 'react', singleton: true }, '19.3.0', local19)
     warnSpy.mockRestore()
     expect(rt.getLoadedShare('react', { shareKey: 'react', singleton: true })).toBe(local19)
+    expect(rt.shareScopeMap.default.react['18.3.1'].value).toBeUndefined()
+    expect(rt.shareScopeMap.default.react['19.3.0'].value).toBe(local19)
+    expect(() => rt.loadShareSync('react', { singleton: true, strictVersion: true, requiredVersion: '^18.0.0' })).toThrow('MFU-003')
     // 已加载优先：接管实例就是单例，后续异步协商收敛同一实例（不抢占）
     expect(await rt.loadShare('react', { shareKey: 'react', singleton: true })).toBe(local19)
     rt.pinLoadedShare('react', { shareKey: 'react', singleton: true }, '18.3.1', hostInstance)
@@ -769,4 +772,81 @@ describe('runtime: loadShareSync（V8 同步门面统一协商，20261003 语义
     expect(threw.details?.syncUnsupported).toBe(true)
     expect(threw.message).toContain('尚未加载')
   })
+})
+
+
+describe('异步共享入口屏障', () => {
+  it('拒绝同步路径的异步 hook 时接管迟到拒绝，不写快照或留下实例', async () => {
+    const rt = await fresh()
+    rt.registerShare('default', 'lib', '1.0.0', async () => ({ value: 1 }), { from: 'provider' })
+    rt.registerPlugins([{ init: (h) => {
+      h.resolveShare = async () => { await Promise.resolve(); throw new Error('late-hook-rejection') }
+    } }])
+    expect(() => rt.loadShareSync('lib', { localVersion: '1.0.0' })).toThrow('MFU-004')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(rt.getLoadedShare('lib')).toBeUndefined()
+    expect(rt.shareScopeMap.default.lib['1.0.0'].loaded).toBe(false)
+  })
+
+  it('先完成跨键异步决策，再求值 provider；其内部同步消费及后续动态消费复用同一实例', async () => {
+    const rt = await fresh()
+    const react = { version: '18.3.1' }
+    const calls: string[] = []
+    const opts = { singleton: true, strictVersion: true, requiredVersion: '^18.0.0', localVersion: '18.3.1' }
+    rt.registerShare('default', 'react', '18.3.1', async () => react, { from: 'provider' })
+    // renderer 放在 React 前面，模拟 provider 求值时跨键的 CJS 依赖。
+    rt.registerShare('default', 'renderer', '18.3.1', async () => {
+      const result = rt.loadShareSync('react', opts)
+      if (result.kind === 'local') rt.pinLoadedShare('react', opts, '18.3.1', react)
+      return { react: result.kind === 'ready' ? result.value : react }
+    }, { from: 'provider' })
+    rt.registerPlugins([{ init: (h) => { h.resolveShare = async ({ shareKey, picked }) => {
+      await Promise.resolve(); calls.push(shareKey); return picked
+    } } }])
+    await rt.prepareShares([{ name: 'renderer', opts }, { name: 'react', opts }])
+    expect(calls).toEqual(['renderer', 'react'])
+    expect(rt.loadShareSync('react', opts).value).toBe(react)
+    expect((await rt.loadShare('renderer', opts)).react).toBe(react)
+    expect(calls).toEqual(['renderer', 'react'])
+  })
+
+  it('provider 失败可重新裁决并恢复；拒绝的异步 hook 不启动 provider', async () => {
+    const rt = await fresh()
+    const getter = vi.fn().mockRejectedValueOnce(new Error('provider-down')).mockResolvedValue({ ok: true })
+    rt.registerShare('default', 'lib', '1.0.0', getter, { from: 'provider' })
+    const hook = vi.fn(async ({ picked }) => picked)
+    rt.registerPlugins([{ init: (h) => { h.resolveShare = hook } }])
+    const requests = [{ name: 'lib', opts: { requiredVersion: '^1.0.0' } }]
+    await expect(rt.prepareShares(requests)).rejects.toThrow('provider-down')
+    await rt.prepareShares(requests)
+    expect(hook).toHaveBeenCalledTimes(2)
+    expect(rt.getLoadedShare('lib', requests[0].opts)).toEqual({ ok: true })
+    rt.registerPlugins([{ init: (h) => { h.resolveShare = async () => { throw new Error('decision-down') } } }])
+    await expect(rt.prepareShares(requests)).rejects.toThrow('decision-down')
+    expect(getter).toHaveBeenCalledTimes(2)
+  })
+})
+
+
+it('非 singleton 的 strict 消费不能用不满足范围的本地版本替代未就绪 provider', async () => {
+  const rt = await fresh()
+  rt.registerShare('default', 'lib', '1.5.0', async () => ({ version: '1.5.0' }), { from: 'provider' })
+  expect(() => rt.loadShareSync('lib', {
+    singleton: false, strictVersion: true, requiredVersion: '^1.0.0', localVersion: '2.0.0',
+  })).toThrow('MFU-004')
+  expect(rt.shareScopeMap.default.lib['1.5.0'].value).toBeUndefined()
+  expect(rt.shareScopeMap.default.lib['2.0.0']).toBeUndefined()
+})
+
+
+it('页面已有冻结旧内核时，新增内部准备入口通过既有 loadShare 兼容，不替换单例', async () => {
+  const rt = await fresh()
+  const loadShare = vi.fn(async () => ({ ok: true }))
+  const old = Object.freeze({ ...rt.getRuntime(), prepareShares: undefined, loadShare })
+  ;(globalThis as any).__FULGURJS_RUNTIME__ = old
+  vi.resetModules()
+  const later = await import('../src/runtime/index')
+  await later.prepareShares([{ name: 'react', opts: { singleton: true } }])
+  expect(loadShare).toHaveBeenCalledWith('react', { singleton: true })
+  expect(later.getRuntime()).toBe(old)
 })

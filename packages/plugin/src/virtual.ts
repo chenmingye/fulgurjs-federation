@@ -387,6 +387,30 @@ export function genInitModule(
   return `${lines.join('\n')}\n`
 }
 
+/** 序列化精确消费条件，屏障与同步门面共用同一快照键。 */
+function prepareSharesCode(options: NormalizedOptions): string {
+  const requests = options.shared.map((item) => ({
+    name: item.shareKey,
+    opts: {
+      shareScope: item.shareScope, shareKey: item.shareKey,
+      requiredVersion: item.requiredVersion === false ? undefined : item.requiredVersion,
+      singleton: item.singleton, strictVersion: item.strictVersion,
+      localVersion: item.version,
+    },
+  }))
+  return `await __fulgurjs_prepare(${JSON.stringify(requests)});`
+}
+
+/** HTML 入口屏障：应用保持动态边界，协商的 await 不进入消费方循环依赖。 */
+export function genAsyncBootstrap(options: NormalizedOptions, entry: string): string {
+  return [
+    genInitModule(options, 'build'),
+    'import { prepareShares as __fulgurjs_prepare } from "virtual:fulgurjs-runtime";',
+    prepareSharesCode(options),
+    `await import(${JSON.stringify(entry)});`,
+  ].join('\n')
+}
+
 function manifestUrlFor(r: NormalizedRemote, command: 'serve' | 'build'): string | null {
   const entry = command === 'serve' ? r.devEntry : r.prodEntry
   if (!entry) return null
@@ -546,6 +570,7 @@ export function genDevRemoteEntry(options: NormalizedOptions, base: string): str
   const b = base.endsWith('/') ? base : `${base}/`
   const remoteLines = registerRemotesLines(options, 'serve')
   return `import ${JSON.stringify(`${b}@vite/client`)};
+import { prepareShares as __fulgurjs_prepare } from ${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)};
 import { name as _fulgurjs_name, exposes, provides } from ${JSON.stringify(`${b}@id/__x00__virtual:fulgurjs-provides`)};
 ${remoteLines.length > 0 ? `import { registerRemotes } from ${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)};\n${remoteLines.join('\n')}` : ''}
 
@@ -568,6 +593,7 @@ export async function get(moduleName) {
     err.code = 'MFU-006';
     throw err;
   }
+  ${prepareSharesCode(options)}
   return loader();
 }
 `
@@ -660,6 +686,7 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
   )
   const remoteLines = registerRemotesLines(options, 'build')
   return [
+    'import { prepareShares as __fulgurjs_prepare } from "virtual:fulgurjs-runtime";',
     ...(remoteLines.length > 0
       ? [`import { registerRemotes } from "virtual:fulgurjs-runtime";`, ...remoteLines]
       : []),
@@ -688,6 +715,7 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
     `    err.code = 'MFU-006';`,
     `    throw err;`,
     `  }`,
+    `  ${prepareSharesCode(options)}`,
     `  return loader();`,
     `}`,
     '',
