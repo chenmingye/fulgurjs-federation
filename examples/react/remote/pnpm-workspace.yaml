@@ -1,7 +1,0 @@
-packages:
-  - '.'
-allowBuilds:
-  esbuild: true
-  vue-demi: true
-minimumReleaseAgeExclude:
-  - '@fulgurjs/federation@5.6.0'
