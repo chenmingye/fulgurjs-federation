@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const LIMIT = 9216
+const LIMIT = 10240 // 5.7.0：loadShareSync 同步协商（快照/同步 hook/strictVersion 拒绝/本地交付）为语义补修的必要增量
 const dist = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist')
 const file = path.join(dist, 'runtime.js')
 // React 适配器预算（5.1.0）：任务书建议 3072B，实测 3538B——差值全部来自两条中文三段式

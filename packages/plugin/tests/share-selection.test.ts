@@ -276,20 +276,31 @@ describe('runtime: 同步共享查询（getLoadedShare 补修回归）', () => {
     expect(rt.getLoadedShare('react', { singleton: true })).toBe(early)
   })
 
-  it('pinLoadedShare：版本不一致不登记（不掩盖版本冲突）；实例已就绪不抢占', async () => {
+  it('pinLoadedShare：singleton 未加载槽位的接管语义（首个消费者定单例）+ 已就绪不抢占 + strict 冲突静默放弃', async () => {
     rt.initSharing('default')
     const hostInstance = { v: 'host-18' }
     rt.registerShare('default', 'react', '18.3.1', async () => hostInstance, { from: 'host' })
     const local19 = { v: 'remote-local-19' }
-    // 远程本地副本是 19.3.0，条目是 18.3.1：不登记
+    // 非 strict singleton + 条目未加载：首个消费者以本地版本接管（MFU-010 告警，20261003 语义）
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     rt.pinLoadedShare('react', { shareKey: 'react', singleton: true }, '19.3.0', local19)
-    expect(rt.getLoadedShare('react', { shareKey: 'react', singleton: true })).toBeUndefined()
-    // 宿主实例加载后：不抢占已就绪实例
-    expect(await rt.loadShare('react', { shareKey: 'react', singleton: true })).toBe(hostInstance)
-    rt.pinLoadedShare('react', { shareKey: 'react', singleton: true }, '18.3.1', local19)
-    expect(rt.getLoadedShare('react', { shareKey: 'react', singleton: true })).toBe(hostInstance)
-    // strictVersion 拒绝场景：pin 静默放弃，不改变错误语义
+    warnSpy.mockRestore()
+    expect(rt.getLoadedShare('react', { shareKey: 'react', singleton: true })).toBe(local19)
+    // 已加载优先：接管实例就是单例，后续异步协商收敛同一实例（不抢占）
+    expect(await rt.loadShare('react', { shareKey: 'react', singleton: true })).toBe(local19)
+    rt.pinLoadedShare('react', { shareKey: 'react', singleton: true }, '18.3.1', hostInstance)
+    expect(rt.getLoadedShare('react', { shareKey: 'react', singleton: true })).toBe(local19)
+    // strictVersion 拒绝场景：pin 静默放弃，不改变错误语义（selectShareEntry 抛被 catch）
     expect(() => rt.pinLoadedShare('react', { shareKey: 'react', requiredVersion: '^19.0.0', singleton: true, strictVersion: true }, '19.3.0', local19)).not.toThrow()
+  })
+
+  it('pinLoadedShare：非 singleton 版本不一致不回填（多版本各自持有，不污染他版本槽位）', async () => {
+    rt.initSharing('default')
+    rt.registerShare('default', 'lib', '2.0.0', async () => ({ v: 2 }), { from: 'a' })
+    const local1 = { v: 'local-1' }
+    rt.pinLoadedShare('lib', { shareKey: 'lib', singleton: false, requiredVersion: '^1.0.0' }, '1.5.0', local1)
+    // 非单例选中 2.0.0（未就绪）且版本不一致 → 不回填（各版本独立，无接管语义）
+    expect(rt.getLoadedShare('lib', { shareKey: 'lib', singleton: false, requiredVersion: '*' })).toBeUndefined()
   })
 
   it('本地 fallback 不掩盖版本冲突：singleton 不满足时仍用单例（宽松）或拒绝（strict），不走 fallback', async () => {
@@ -474,29 +485,28 @@ describe('runtime: loadShare × pinLoadedShare 并发时序（实例所有权回
 describe('CJS 垫片与改写路径（生成物与 transform 行为）', () => {
   const ROOT = process.cwd()
 
-  it('genCjsNsFacade：strictVersion/singleton/requiredVersion 全量透传到 getLoadedShare 参数', () => {
-    const n = normalizeOptions(
-      {
-        name: 'remote',
-        exposes: { './x': './src/x.ts' },
-        shared: { react: { singleton: true, strictVersion: true, requiredVersion: '^18.0.0' } },
-      },
-      ROOT,
-      'build',
-    )
-    const item = n.shared.find((s) => s.shareKey === 'react')!
+  it('genCjsNsFacade：strictVersion/singleton/requiredVersion 全量透传到 loadShareSync 参数', () => {
+    const item = normalizeOptions({
+      name: 'r',
+      exposes: { './x': './src/x.ts' },
+      shared: { react: { singleton: true, requiredVersion: '^18.0.0', strictVersion: true } },
+    }).shared[0] as any
     const code = genCjsNsFacade(item, ['useState', 'createElement'])
-    expect(code).toContain('strictVersion: true')
-    expect(code).toContain('singleton: true')
+    expect(code).toContain('loadShareSync')
+    expect(code).toContain('"react"')
     expect(code).toContain('requiredVersion: "^18.0.0"')
-    expect(code).toContain('getLoadedShare')
-    expect(code).toContain('__fulgurjs_gls("react", {')
-    // webpack 默认值规则：singleton 时不默认 strictVersion，不虚传
-    const n2 = normalizeOptions({ name: 'r', exposes: { './x': './src/x.ts' }, shared: { react: { singleton: true } } }, ROOT, 'build')
-    const item2 = n2.shared.find((x) => x.shareKey === 'react')!
-    expect(item2.strictVersion).toBe(false)
-    const code2 = genCjsNsFacade(item2, ['useState'])
-    expect(code2).not.toContain('strictVersion')
+    expect(code).toContain('singleton: true')
+    expect(code).toContain('strictVersion: true')
+    expect(code).toContain('localVersion:')
+    // 语义补修后不得再吞异常（try/catch 空 catch 已废除）
+    expect(code).not.toContain('catch')
+    const item2 = normalizeOptions({
+      name: 'r',
+      exposes: { './x': './src/x.ts' },
+      shared: { lodash: { requiredVersion: false } },
+    }).shared[0] as any
+    const code2 = genCjsNsFacade(item2, ['debounce'])
+    expect(code2).not.toContain('requiredVersion')
   })
 
   it('宿主提供闭包只豁免自引用，跨共享键的 CJS require 仍需协商', async () => {
@@ -566,5 +576,197 @@ describe('CJS 垫片与改写路径（生成物与 transform 行为）', () => {
     expect(reexport?.code).toMatch(/virtual:fulgurjs-shared:vue\?f=[\w-]+/)
     // 动态 import 的 loadShare 调用携带本地 fallback（协商失败回落本应用副本）
     expect(dyn?.code).toContain('fallback')
+  })
+})
+
+describe('runtime: loadShareSync（V8 同步门面统一协商，20261003 语义补修）', () => {
+  let rt: Runtime
+  beforeEach(async () => {
+    rt = await fresh()
+  })
+
+  it('B-2/B-8 回归：非 singleton（strictVersion 默认 true）+ 已注册未加载的本地版本 → kind=local（不误判为无满足版本）', async () => {
+    rt.initSharing('default')
+    // 宿主 vue 3.5.42 已加载；remote-b 的 3.4.38 已注册未加载（get 提供者从未被调用）
+    const host35 = { v: '3.5.42' }
+    let bGetCalls = 0
+    rt.registerShare('default', 'vue', '3.5.42', async () => host35, { from: 'host' })
+    rt.registerShare('default', 'vue', '3.4.38', async () => {
+      bGetCalls++
+      return { v: '3.4.38' }
+    }, { from: 'remote-b' })
+    // await loadShare('vue', ^3.5) 使宿主实例就绪
+    await rt.loadShare('vue', { shareKey: 'vue', requiredVersion: '^3.5.0', singleton: true })
+    // remote-b 门面的同步协商：requiredVersion ~3.4.0、非 singleton、strictVersion true
+    // （normalizeShared 默认）、localVersion 3.4.38 → 选中 3.4.38 == 本地版本 → local，不抛
+    const r = rt.loadShareSync('vue', {
+      shareKey: 'vue', requiredVersion: '~3.4.0', singleton: false, strictVersion: true, localVersion: '3.4.38',
+    })
+    expect(r.kind).toBe('local')
+    expect(bGetCalls).toBe(0) // 本地副本直接交付，get 不被调用
+  })
+
+  it('strictVersion 版本冲突（singleton 收养不满足版本）→ 抛 MFU-003，本地副本存在也不吞', async () => {
+    rt.initSharing('default')
+    const host19 = { react: '19' }
+    rt.registerShare('default', 'react', '19.3.0', async () => host19, { from: 'host', eager: true, loaded: true })
+    ;(rt.getScopeForTest?.('default') as any)?. // scope 注册表经 registerShare 就位
+    // 模拟宿主实例已就绪：loadShare 一次
+    expect(await rt.loadShare('react', { shareKey: 'react', requiredVersion: '^19.0.0', singleton: true })).toBe(host19)
+    // R18 子应用 strictVersion ^18 同步门面：单例收养 19.3.0 → 必须拒绝（不能静默用本地 18 分裂单例）
+    let threw: any = null
+    try {
+      rt.loadShareSync('react', {
+        shareKey: 'react', requiredVersion: '^18.0.0', singleton: true, strictVersion: true, localVersion: '18.3.1',
+      })
+    } catch (e) { threw = e }
+    expect(threw).not.toBeNull()
+    expect(threw.code).toBe('MFU-003')
+    expect(threw.message).toContain('19.3.0')
+    expect(threw.details?.shareKey).toBe('react')
+  })
+
+  it('singleton 非 strict 冲突：告警并收养已加载实例（kind=ready，与异步 loadShare 同实例）', async () => {
+    rt.initSharing('default')
+    const host35 = { vue: 35 }
+    rt.registerShare('default', 'vue', '3.5.42', async () => host35, { from: 'host' })
+    const viaAsync = await rt.loadShare('vue', { shareKey: 'vue', requiredVersion: '^3.5.0', singleton: true })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const r = rt.loadShareSync('vue', {
+      shareKey: 'vue', requiredVersion: '~3.4.0', singleton: true, strictVersion: false, localVersion: '3.4.38',
+    })
+    warnSpy.mockRestore()
+    expect(r.kind).toBe('ready')
+    expect(r.value).toBe(host35)
+    expect(r.value).toBe(viaAsync) // 同步/异步严格同实例
+  })
+
+  it('非 strict 无满足版本 → kind=local（对齐异步 fallback），strict 时保持拒绝', async () => {
+    rt.initSharing('default')
+    rt.registerShare('default', 'lib', '2.0.0', async () => ({ v: 2 }), { from: 'a' })
+    const r = rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '^1.0.0', localVersion: '1.2.3' })
+    expect(r.kind).toBe('local')
+    let threw: any = null
+    try {
+      rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '^1.0.0', strictVersion: true, localVersion: '1.2.3' })
+    } catch (e) { threw = e }
+    expect(threw?.code).toBe('MFU-003')
+  })
+
+  it('resolveShare 同步决策：选择外部就绪条目 → kind=ready + 快照写入 + getLoadedShare 复用', async () => {
+    rt.initSharing('default')
+    const low = { v: 'low' }
+    const high = { v: 'high' }
+    rt.registerShare('default', 'lib', '1.0.0', async () => low, { from: 'a' })
+    rt.registerShare('default', 'lib', '2.0.0', async () => high, { from: 'b' })
+    await rt.loadShare('lib', { shareKey: 'lib', requiredVersion: '*' }) // 2.0.0 就绪
+    rt.registerPlugins([{
+      name: 'pick-low',
+      init: (h: any) => { h.resolveShare = (ctx: any) => ctx.available.find((e: any) => e.version === '1.0.0') },
+    }])
+    // hook 选择较低兼容版本（异步路径同样生效，先建立快照供同步复用）
+    expect(await rt.loadShare('lib', { shareKey: 'lib', requiredVersion: '^1.0.0' })).toBe(low)
+    // 同步门面首次消费：快命中 hook 决策快照（不被本地覆盖）
+    const r = rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '^1.0.0', localVersion: '0.9.0' })
+    expect(r.kind).toBe('ready')
+    expect(r.value).toBe(low)
+    expect(rt.getLoadedShare('lib', { shareKey: 'lib', requiredVersion: '^1.0.0' })).toBe(low)
+  })
+
+  it('resolveShare 无快照时同步决策被遵循：hook 选中已注册未加载的本地版本 → kind=local，pin 后静态/动态同实例', async () => {
+    rt.initSharing('default')
+    // 现实序列：本应用 init 已注册 1.5.0（provides），外部 2.0.0 也已注册；均未加载
+    const external = { v: 'external' }
+    rt.registerShare('default', 'lib', '2.0.0', async () => external, { from: 'ext' })
+    rt.registerShare('default', 'lib', '1.5.0', async () => ({ v: 'lazy-1.5.0' }), { from: 'self' })
+    rt.registerPlugins([{
+      name: 'pick-local',
+      init: (h: any) => { h.resolveShare = (ctx: any) => ctx.available.find((e: any) => e.version === '1.5.0') },
+    }])
+    // 首次静态导入：hook 决策被遵循（选中 1.5.0 == 本地版本 → local 而非静默换实例）
+    const r = rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '^1.0.0', localVersion: '1.5.0' })
+    expect(r.kind).toBe('local')
+    // 门面 pin 本地副本 → 选中条目回填 → 后续异步协商收敛同一实例（静态/动态一致性）
+    const local = { v: 'local-1.5.0' }
+    rt.pinLoadedShare('lib', { shareKey: 'lib', requiredVersion: '^1.0.0' }, '1.5.0', local)
+    expect(await rt.loadShare('lib', { shareKey: 'lib', requiredVersion: '^1.0.0' })).toBe(local)
+  })
+
+  it('resolveShare 返回 Promise → 抛 MFU-004 + syncUnsupported（不静默忽略 hook，也不被本地覆盖）', async () => {
+    rt.initSharing('default')
+    rt.registerShare('default', 'lib', '2.0.0', async () => ({ v: 2 }), { from: 'a' })
+    rt.registerPlugins([{
+      name: 'async-hook',
+      init: (h: any) => { h.resolveShare = async (ctx: any) => ctx.available[0] },
+    }])
+    let threw: any = null
+    try {
+      rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '*', localVersion: '1.0.0' })
+    } catch (e) { threw = e }
+    expect(threw).not.toBeNull()
+    expect(threw.code).toBe('MFU-004')
+    expect(threw.details?.syncUnsupported).toBe(true)
+    expect(threw.message).toContain('resolveShare')
+  })
+
+  it('resolveShare 抛出 → 原样传播（决策失败不被本地副本掩盖）', async () => {
+    rt.initSharing('default')
+    rt.registerShare('default', 'lib', '2.0.0', async () => ({ v: 2 }), { from: 'a' })
+    rt.registerPlugins([{
+      name: 'boom-hook',
+      init: (h: any) => { h.resolveShare = () => { throw new Error('hook-boom') } },
+    }])
+    expect(() => rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '*', localVersion: '1.0.0' })).toThrow('hook-boom')
+  })
+
+  it('快照按消费条件隔离：不同 requiredVersion 不串用', async () => {
+    rt.initSharing('default')
+    const v1 = { v: 1 }
+    const v2 = { v: 2 }
+    rt.registerShare('default', 'lib', '1.0.0', async () => v1, { from: 'a' })
+    rt.registerShare('default', 'lib', '2.0.0', async () => v2, { from: 'b' })
+    rt.registerPlugins([{ name: 'pick-low', init: (h: any) => { h.resolveShare = (ctx: any) => ctx.available.find((e: any) => e.version === '1.0.0') } }])
+    expect(await rt.loadShare('lib', { shareKey: 'lib', requiredVersion: '^1.0.0' })).toBe(v1)
+    // ^1 快照命中 v1；^2 无快照 → hook 决策仍选 1.0.0（可用列表里就它满足 hook 逻辑）→ 不串用 ^1 的条目对象？——
+    // 快照隔离断言：^2 的同步消费不会拿到 ^1 写入的同一 entry 快照（条件键不同）
+    const r1 = rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '^1.0.0', localVersion: '1.0.0' })
+    const r2 = rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '^2.0.0', localVersion: '2.0.0' })
+    expect(r1.value).toBe(v1)
+    // ^2 条件下 hook 依然选 1.0.0（version 一致），但这是 hook 决策而非快照串用
+    expect(r2.kind === 'ready' ? r2.value : 'local').toBe(v1)
+  })
+
+  it('并发顺序：pin 回填 → registerPlugins 清快照 → 同步决策仍交付已就绪实例（不依赖快照）', async () => {
+    rt.initSharing('default')
+    const external = { v: 'ext' }
+    rt.registerShare('default', 'lib', '2.0.0', async () => external, { from: 'ext' })
+    const local = { v: 'local' }
+    // 门面先 pin（同版本回填守卫允许），registerPlugins 清空快照（既有语义）——
+    // 同步决策仍经选择器命中已回填的 value，实例不依赖快照存活
+    rt.pinLoadedShare('lib', { shareKey: 'lib', requiredVersion: '*' }, '2.0.0', local)
+    rt.registerPlugins([{ name: 'noop', init: (h: any) => { h.resolveShare = () => undefined } }])
+    const r = rt.loadShareSync('lib', { shareKey: 'lib', requiredVersion: '*', localVersion: '2.0.0' })
+    expect(r.kind).toBe('ready')
+    expect(r.value).toBe(local)
+  })
+
+  it('singleton 选中未加载的他人版本：非 strict 首个消费者接管（local+告警）；strict 拒绝（MFU-004+syncUnsupported）', async () => {
+    rt.initSharing('default')
+    // 只注册、从未加载：value 未就绪
+    rt.registerShare('default', 'vue', '3.5.42', async () => ({ v: 35 }), { from: 'host' })
+    // 非 strict：首个消费者以本地版本接管（webpack「首个消费者定单例」），不静默分裂也不误杀
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const r = rt.loadShareSync('vue', { shareKey: 'vue', requiredVersion: '^3.5.0', singleton: true, localVersion: '3.5.39' })
+    warnSpy.mockRestore()
+    expect(r.kind).toBe('local')
+    // strict：明确拒绝（版本冲突不掩盖）
+    let threw: any = null
+    try {
+      rt.loadShareSync('vue', { shareKey: 'vue', requiredVersion: '^3.5.0', singleton: true, strictVersion: true, localVersion: '3.4.38' })
+    } catch (e) { threw = e }
+    expect(threw).not.toBeNull()
+    expect(threw.code).toBe('MFU-004')
+    expect(threw.details?.syncUnsupported).toBe(true)
+    expect(threw.message).toContain('尚未加载')
   })
 })

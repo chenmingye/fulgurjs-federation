@@ -179,19 +179,22 @@ describe('D6: 门面动态化（runtime/本体均 await import，防 chunk 循�
     expect(code).toContain('await import("virtual:fulgurjs-runtime")')
   })
 
-  it('genCjsNsFacade：同步形态（零 TLA）——getLoadedShare 快照优先 + 本体直连兜底（V8-FIX）', () => {
+  it('genCjsNsFacade：同步形态（零 TLA）——loadShareSync 统一协商 + 本地交付 pin（V8-FIX/语义补修）', () => {
     const code = genCjsNsFacade(
       { shareScope: 'default', shareKey: 'react', import: 'react', requiredVersion: '^19.1.0', singleton: true, strictVersion: false, eager: false, version: '19.3.0', aliases: ['react'], configKey: 'react' } as never,
       ['createElement', 'useState'],
     )
     // 零 TLA：rolldown 拒绝 CJS require 含顶层 await 的模块（REQUIRE_TLA）
     expect(code).not.toContain('await')
-    // 同步快照 + 未命中登记本地副本（pin：与 TLA 门面收敛同实例）+ 本体直连三通道
-    expect(code).toContain('import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";')
+    // 统一协商（loadShareSync：全注册版本选择 + strictVersion 拒绝 + hook 参与）
+    expect(code).toContain('import { loadShareSync as __fulgurjs_ls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";')
     expect(code).toContain('import * as __fulgurjs_local from "react";')
-    expect(code).toContain('const __fulgurjs_snap = __fulgurjs_gls("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true });')
-    expect(code).toContain('if (__fulgurjs_snap === undefined) __fulgurjs_pin("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true }, "19.3.0", __fulgurjs_local);')
-    expect(code).toContain('const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;')
+    expect(code).toContain('const __fulgurjs_r = __fulgurjs_ls("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true, localVersion: "19.3.0" });')
+    // 本地交付分支：pin 登记 + 本体直连
+    expect(code).toContain(`if (__fulgurjs_r.kind !== 'ready') __fulgurjs_pin("react", { shareScope: "default", shareKey: "react", requiredVersion: "^19.1.0", singleton: true, localVersion: "19.3.0" }, "19.3.0", __fulgurjs_local);`)
+    expect(code).toContain("const __fulgurjs_m = __fulgurjs_r.kind === 'ready' ? __fulgurjs_r.value : __fulgurjs_local;")
+    // 不吞异常：strictVersion 冲突必须传播（20261003 语义补修移除空 catch）
+    expect(code).not.toContain('catch')
     // default interop 与枚举式命名导出（与 sharedNsFacade 同口径）
     expect(code).toContain('export default __fulgurjs_d;')
     expect(code).toContain('export const createElement = __fulgurjs_d["createElement"];')

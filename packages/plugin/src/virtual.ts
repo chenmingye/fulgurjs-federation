@@ -138,18 +138,23 @@ export function genCjsNsFacade(item: NormalizedShared, exportNames: string[], im
     ...(item.requiredVersion !== false ? [`requiredVersion: ${JSON.stringify(item.requiredVersion)}`] : []),
     ...(item.singleton ? ['singleton: true'] : []),
     ...(item.strictVersion ? ['strictVersion: true'] : []),
+    `localVersion: ${JSON.stringify(item.version)}`,
   ]
   const lines: string[] = [
-    `import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    // loadShareSync（2026-10-03 语义补修）：与异步 loadShare 同一选择器（全注册版本）
+    // 与 strictVersion 语义（冲突抛 MFU-003 不吞）、resolveShare 快照/同步决策参与；
+    // 旧形态 getLoadedShare 的 readyOnly 过滤会把「已注册未加载」的本地版本排除出
+    // 候选集，非 singleton（strictVersion 默认 true）下误判「无满足版本」而拒绝。
+    `import { loadShareSync as __fulgurjs_ls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
     // importTarget 为 load 期解析出的绝对 id（proxy 虚拟 id 上下文里裸包名无法 node 解析）；
     // 兜底保留裸包名（与命名空间门面同语义，无 proxy 载体时可解析）
     `import * as __fulgurjs_local from ${JSON.stringify(importTarget ?? item.import)};`,
-    `const __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} });`,
-    // 未命中同步快照：空作用域登记本地副本，已有条目仅在版本一致且未就绪时回填，
-    // 使先于 TLA 门面求值的垫片（jsx-runtime 拖入 provider chunk 的场景）与后续协商
-    // 收敛到同一份实例，杜绝单例双实例。
-    `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
-    `const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;`,
+    `const __fulgurjs_r = __fulgurjs_ls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} });`,
+    // kind=local：空作用域/选中版本==本地版本——登记本地副本，使先于协商门面求值的
+    // 垫片（jsx-runtime 拖入 provider chunk 的场景）与后续协商收敛到同一份实例，
+    // 杜绝单例双实例。
+    `if (__fulgurjs_r.kind !== 'ready') __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
+    `const __fulgurjs_m = __fulgurjs_r.kind === 'ready' ? __fulgurjs_r.value : __fulgurjs_local;`,
     `const __fulgurjs_d = __fulgurjsU(__fulgurjs_m);`,
     `export default __fulgurjs_d;`,
   ]
@@ -216,27 +221,25 @@ function shareOptsLines(item: NormalizedShared): string[] {
  * （JeecgBoot vite8 生产实测，见 async-mark-repair.ts 与验收报告 §11.1-1）。
  * rollup（vite 5–7）的 chunk 级求值不会产生这种互等，TLA 形态保留。
  *
- * 同步语义与 genCjsNsFacade 一致（React 侧已在 vite8 验证的同构路径）：
- * - getLoadedShare 同步取「已协商加载」实例：宿主先加载时直接命中宿主实例；
- * - 未命中时 pinLoadedShare 登记本地副本（first-wins + 版本守卫），后续任何
- *   loadShare 协商（含远程加载本应用共享）收敛到同一实例——单例不双份；
- * - 本地副本静态入图（无动态 import 边），门面自身零 TLA，消费方求值保持同步。
- * 与 TLA 形态的行为差异（已知且可接受，仅 vite 8 构建路径）：
- * - 自定义 resolveShare hook 无法同步等待——静态导入的首次解析不再被 hook 改道，
- *   此前由 loadShare 协商过的快照仍会被 getLoadedShare 命中；
- * - strictVersion 版本冲突不再在静态导入处抛 MFU-012，而是回退本地副本。
+ * 协商走 runtime 的 loadShareSync（2026-10-03 语义补修：与异步 loadShare 同一选择器
+ * 与 strictVersion 语义）：
+ * - 选择基于**全部已注册版本**——已注册未加载的本地版本是合法选中对象，其物理实例
+ *   就是本门面的本地 import（等价异步路径 await get() 的结果）；
+ * - strictVersion 冲突（singleton 收养不满足版本 / 无满足版本）→ 抛 MFU-003，不吞；
+ * - resolveShare 按契约参与：成功快照无条件复用；无快照时同步调用 hook（返回 Promise
+ *   或选中未就绪的他人版本 → 抛 MFU-004+syncUnsupported，不静默忽略 hook）；
+ * - kind=local（选中版本==本地版本，或非 strict 无满足版本走 fallback）→ pin 登记本地
+ *   副本，作用域与后续协商收敛同一实例。
  */
 export function genBindingFacadeSync(item: NormalizedShared, bindings: string[], importTarget: string): string {
   const opts = shareOptsLines(item)
+  const optsWithLocal = [...opts, `localVersion: ${JSON.stringify(item.version)}`]
   const lines: string[] = [
-    `import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    `import { loadShareSync as __fulgurjs_ls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
     `import * as __fulgurjs_local from ${JSON.stringify(importTarget)};`,
-    // strictVersion 版本冲突时 getLoadedShare 会抛 MFU-003：同步门面与 TLA 路径的
-    // loadShare→fallback 语义对齐——回退本地副本，不让协商冲突杀死模块求值
-    `let __fulgurjs_snap;`,
-    `try { __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }); } catch {}`,
-    `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
-    `const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;`,
+    `const __fulgurjs_r = __fulgurjs_ls(${JSON.stringify(item.shareKey)}, { ${optsWithLocal.join(', ')} });`,
+    `const __fulgurjs_m = __fulgurjs_r.kind === 'ready' ? __fulgurjs_r.value : __fulgurjs_local;`,
+    `if (__fulgurjs_r.kind !== 'ready') __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${optsWithLocal.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
   ]
   const seen = new Set<string>()
   for (const bRaw of bindings) {
@@ -254,17 +257,19 @@ export function genBindingFacadeSync(item: NormalizedShared, bindings: string[],
 
 /**
  * 命名空间门面（同步形态，rolldown/vite 8 构建专用；V8-SYNC-FACADE）。
- * 语义与 genBindingFacadeSync 相同，面向 `import * as ns from '<shared>'` 的命名空间消费。
+ * 协商语义与 genBindingFacadeSync 相同（loadShareSync：全注册版本选择 + strictVersion
+ * 拒绝 + resolveShare 快照/同步决策参与），面向 `import * as ns from '<shared>'` 的
+ * 命名空间消费。
  */
 export function genSharedNsFacadeSync(item: NormalizedShared, exportNames: string[], importTarget: string): string {
   const opts = shareOptsLines(item)
+  const optsWithLocal = [...opts, `localVersion: ${JSON.stringify(item.version)}`]
   const lines: string[] = [
-    `import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    `import { loadShareSync as __fulgurjs_ls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
     `import * as __fulgurjs_local from ${JSON.stringify(importTarget)};`,
-    `let __fulgurjs_snap;`,
-    `try { __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }); } catch {}`,
-    `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
-    `const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;`,
+    `const __fulgurjs_r = __fulgurjs_ls(${JSON.stringify(item.shareKey)}, { ${optsWithLocal.join(', ')} });`,
+    `const __fulgurjs_m = __fulgurjs_r.kind === 'ready' ? __fulgurjs_r.value : __fulgurjs_local;`,
+    `if (__fulgurjs_r.kind !== 'ready') __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${optsWithLocal.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
     `const __fulgurjs_d = __fulgurjsU(__fulgurjs_m);`,
     `export default __fulgurjs_d;`,
   ]
@@ -278,7 +283,8 @@ export function genSharedNsFacadeSync(item: NormalizedShared, exportNames: strin
   return lines.join('\n')
 }
 
-/** 远程绑定门面：静态 import 远程模块时指向它（内部走 loadRemote） */export function genRemoteBindingFacade(remoteSpec: string, bindings: string[], dynamic = false): string {
+/** 远程绑定门面：静态 import 远程模块时指向它（内部走 loadRemote） */
+export function genRemoteBindingFacade(remoteSpec: string, bindings: string[], dynamic = false): string {
   const lines: string[] = [
     dynamic
       ? `const { loadRemote: __fulgurjs_loadRemote, unwrapDefault: __fulgurjsU } = await import("virtual:fulgurjs-runtime");`

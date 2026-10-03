@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.7.0
+
+- **修复：Vite 8 同步协商门面的共享语义补修（strictVersion 拒绝 + resolveShare 契约）**——5.6.0 引入的同步门面（V8-SYNC-FACADE）存在两处语义缺陷，本轮以 runtime 新决策入口 `loadShareSync` 统一修复，绑定门面/命名空间门面/CJS 垫片三条同步路径全部改走该入口（各引擎一致）：
+  - **strictVersion 冲突被吞**——5.6.0 门面用 `getLoadedShare`（readyOnly 过滤：只看已就绪实例）+ 空 catch 兜底：非 singleton（webpack 默认 strictVersion=true）下「已注册未加载的本地版本」被排除出候选集 → 误判「无满足版本」抛 MFU-003 → 被 catch 吞掉后静默使用本地副本，README「strictVersion 冲突抛 MFU-003」契约失效。现与异步 loadShare 共用同一选择器（**全部已注册版本**）——已注册未加载的本地版本是合法选中对象（其物理实例就是门面的本地 import，等价异步 `await get()`），strictVersion 冲突（singleton 收养不满足版本 / 真无满足版本）一律抛 MFU-003（保留 shareKey/requiredVersion/提供方细节），不再被本地 fallback 掩盖；拒绝后不 pin、不污染作用域。
+  - **resolveShare 首次静态导入被跳过**——现按契约参与：该消费条件的成功快照无条件复用；无快照时**同步调用 hook**（其决策写入快照供后续消费复用）；hook 返回 Promise 或选中未就绪的他人条目 → 抛 MFU-004+`details.syncUnsupported`（明确诊断 + 修法，不静默忽略 hook）；hook 抛出原样传播。**已知边界（如实）**：异步 resolveShare（返回 Promise）无法在 Vite 8 同步静态导入路径等待——诊断明确给出两条修法（同步返回 picked / 先经一次动态 loadShare 建立快照），不静默执行错误语义。
+  - **singleton 首个消费者接管语义**——作用域无任何已加载实例时（如 React 宿主声明 vue 单例但自身不消费），首个消费者（同步或异步）以本地版本接管该单例（MFU-010 告警版本漂移），后续消费者按已加载优先收敛同一实例——webpack「首个消费者定单例」语义；strictVersion 冲突仍拒绝。
+- **新增运行时 API：`loadShareSync(key, opts)`**（内部同步路径专用，未进 `/runtime` 公开入口清单）：返回 `{ kind: 'ready', value }`（已就绪实例）或 `{ kind: 'local' }`（使用本地副本，调用方负责 pin）；「没有可用共享实例 / 版本冲突 / 尚未就绪 / 决策失败」四态以返回形态与错误码严格区分。
+- **质量门禁**：单测 631 → 647（loadShareSync 决策树 9 例 + 同步门面×真实 runtime 执行级回归 4 例——strictVersion 传播/hook 遵循/静态与动态实例严格相等/B-2/B-8 本地交付）；e2e dev 73/73 × vite 6.4.3/8.3.2、prod 33/33 × vite 6.4.3/8.3.2；Jeecg vite 8.3.2 生产五场景 5/5 零错误；gzip 阈值 9216→10240B（loadShareSync 为语义补修的必要增量）。
+
 ## 5.6.0
 
 - **修复：Vite 8（rolldown）生产链路五项（V8-SYNC-FACADE 配套）**
