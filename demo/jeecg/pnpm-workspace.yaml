@@ -9,4 +9,4 @@ allowBuilds:
   esbuild: true
   vue-demi: true
 minimumReleaseAgeExclude:
-  - '@fulgurjs/federation@5.6.0'
+  - '@fulgurjs/federation@5.6.0 || 5.7.0'
