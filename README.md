@@ -508,6 +508,8 @@ const Panel = await loadRemote('shop/Panel', {
 （`runtimePlugins: ['./src/fulgurjsPlugin.ts']`）
 
 > hook 错误契约：`beforeLoadRemote` / `afterLoadRemote` 是**观测 hook**——自身抛错只告警、不改写加载结果；`resolveShare` 是**决策 hook**——显式抛错向调用方传播（绝不静默回退到另一份共享依赖）。
+>
+> **resolveShare 与消费路径（5.7.0 起）**：该 hook 对**异步协商路径**（`loadShare` 动态消费，全部引擎）与**同步静态导入门面**（Vite 8 同步协商路径）都按契约参与：同一消费条件的成功快照无条件复用；无快照时 hook 被调用，其决策（同步返回 picked）生效并写入快照。**引擎差异（如实）**：Vite 8 同步门面在模块求值期无法等待异步决策——hook 返回 Promise、或选中「尚未加载的他人条目」时抛 `MFU-004`（`details.syncUnsupported: true`，附修法：改为同步返回 picked，或让首次消费先经一次动态 `loadShare` 建立快照）；Vite 5–7 的 TLA 门面无此限制，异步 hook 全语义支持。`strictVersion` 版本冲突在所有消费路径一致拒绝（MFU-003，含共享键/要求版本/提供方），本地副本与 fallback 均不得掩盖冲突。singleton 在「作用域无任何已加载实例」时由**首个消费者**确定实例（本地版本接管，MFU-010 告警），后续消费者按已加载优先收敛。
 
 ```ts
 import type { RuntimePlugin } from '@fulgurjs/federation/runtime'
