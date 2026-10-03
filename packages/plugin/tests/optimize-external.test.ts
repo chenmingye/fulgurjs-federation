@@ -3,7 +3,12 @@ import { federation } from '../src/index'
 import { genSharedNsFacade } from '../src/virtual'
 import { SHARED_NS_FACADE_PREFIX } from '../src/options'
 
-const ROOT = process.cwd()
+/**
+ * esbuild 注入路径的判定根：须解析到 vite ≤ 7（本包 devDeps 的 vite 为 8.x，会让
+ * optimizeDeps 走 rolldownOptions 分支）。fixtures/host-vue 提交基线为 vite 6；
+ * CI 的 test 作业未装 fixtures 时解析失败回退 0，同样落入 esbuild 分支，两态皆确定。
+ */
+const ROOT = new URL('../../fixtures/host-vue', import.meta.url).pathname
 
 /** 模拟 esbuild 构建器，捕获 onResolve / onLoad 回调 */
 function captureResolver(plugin: { name: string; setup: (b: unknown) => void }) {
@@ -52,6 +57,20 @@ describe('optimizeDeps shared 外部化（dev 预构建协商门面）', () => {
     // 非 shared 键不拦截；入口解析放行（esbuild 禁止 entry point external）
     expect(resolve('axios')).toBeNull()
     expect(resolve('magic-string', 'entry-point')).toBeNull()
+  })
+
+  it('vite ≥ 8 根：只注入 rolldownOptions（不再下发已废弃的 esbuildOptions 键）', async () => {
+    // 本包 devDeps 的 vite 为 8.x：该根下必须走 rolldown 预构建分支
+    const [pre] = federation({
+      name: 'remote-a',
+      exposes: { './x': './src/x.ts' },
+      shared: { 'magic-string': { singleton: true } },
+    })
+    const ret = (await pre.config?.({ root: process.cwd() }, { command: 'serve' } as never)) as Record<string, any>
+    expect(ret?.optimizeDeps?.esbuildOptions).toBeUndefined()
+    const rd = ret?.optimizeDeps?.rolldownOptions?.plugins
+    expect(Array.isArray(rd)).toBe(true)
+    expect(rd[0].name).toBe('fulgurjs:optimize-shared-external')
   })
 
   it('宿主（有 remotes，未开 devSharedSelf）不注入；build 不注入', async () => {

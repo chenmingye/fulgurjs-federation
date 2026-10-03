@@ -80,11 +80,15 @@ test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
       (u) => /vue[-.][\w-]*\.js/.test(u) && !/vue34|remote-b/.test(u) && !/[\\/]fulgurjs-[a-z-]*vue/.test(u),
     )
     expect(new Set(vueChunks).size).toBeLessThanOrEqual(1)
-    // vue 本体（3.5 线）恰一份：host 与 remote-a 的协商必须收敛到同一物理 chunk
+    // vue 本体（3.5 线）恰一份：host 与 remote-a 的协商必须收敛到同一物理 chunk。
+    // vite 8（rolldown）例外：同步协商门面（V8-SYNC-FACADE）把本地副本静态入图——协商
+    // 命中宿主实例时本地物理 chunk 仍会被模块图拉取（运行时身份仍收敛为宿主实例，
+    // 由上面的 vue-check 文本断言守卫）；rollup（vite 5–7）无此边，恒 ≤1。
+    const isRolldown = scriptUrls.some((u) => u.includes('rolldown-runtime'))
     const vueRuntimeCopies = new Set(
       scriptUrls.filter((u) => /(runtime-dom|vue\.runtime)\.esm-bundler/.test(u)),
     )
-    expect(vueRuntimeCopies.size).toBeLessThanOrEqual(1)
+    expect(vueRuntimeCopies.size).toBeLessThanOrEqual(isRolldown ? 2 : 1)
   })
 
   test('B-17 prod CSS 提取与注入（expose chunk 的 css 自动加载）', async ({ page }) => {
@@ -145,8 +149,17 @@ test.describe('prod(NGINX): 容错', () => {
   test('D2 Vue 静态子依赖失败：默认占位提供刷新恢复操作，产品按钮点击后目标页面真实恢复', async ({ page }) => {
     // 阻断与监听先于导航安装（R09 教训）
     let blocked = true
-    await page.route(/\/remote-a\/assets\/static-dep-leaf-[^?]*(\?.*)?$/, (route) => {
-      if (blocked) route.abort('failed')
+    // rolldown（vite 8）把静态 leaf 并入 expose chunk（StaticDep-*.js）：rollup 阻断
+    // 独立 leaf chunk（保留「入口成功、子依赖失败」语义）；rolldown 阻断合并后的
+    // StaticDep chunk——按页面是否出现过 rolldown-runtime 判定产物引擎
+    let isRolldown = false
+    page.on('request', (r) => {
+      if (r.url().includes('rolldown-runtime')) isRolldown = true
+    })
+    await page.route(/\/remote-a\/assets\/(static-dep-leaf|StaticDep)-[^?]*(\?.*)?$/, (route) => {
+      const u = route.request().url()
+      const hit = blocked && (u.includes('static-dep-leaf') || (isRolldown && /\/StaticDep-[^/?]*\.js/.test(u)))
+      if (hit) route.abort('failed')
       else route.continue()
     })
     await page.goto(`${HOST}/#/static-dep`)

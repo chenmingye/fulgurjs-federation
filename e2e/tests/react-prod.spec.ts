@@ -91,10 +91,12 @@ test('prod B1 两个 expose 别名同一 chunk：并发加载身份严格相等�
   await page.goto(`${PROD_BASE}/alias`)
   await login(page, 'alice')
   // Provider 的 useLoadRemote('remote-react/theme-context') 随登录树挂载已触发本会话
-  // 唯一一次网络请求；等它落地后再断言基线
+  // 首次网络请求（rollup 1 份；rolldown/vite8 为门面转发 + 本体两份 chunk，且本体为
+  // 惰性拉取、晚于门面）；等网络静默后采样基线——去重契约 = 后续全部加载零新增请求
   await expect
     .poll(() => themeRequests.length, { timeout: 15000 })
-    .toBe(1)
+    .toBeGreaterThanOrEqual(1)
+  await page.waitForTimeout(2000)
   const baseline = themeRequests.length
   // 面板 Promise.all 两个别名 + 重复加载：全部命中运行时缓存/helper 定型 Promise
   await page.getByTestId('alias-load-both').click()
@@ -175,18 +177,25 @@ test('prod B3c 静态子依赖失败：占位恢复操作真正恢复目标页�
   // 静态 leaf 失败被浏览器 module map 缓存（同 URL 再 import 直接拒绝），同页重试
   // 无法穿透——产品契约 = 默认占位提供「刷新页面重试」，用户点击后整页恢复。
   let blocked = true
+  // rolldown（vite 8）把静态 leaf 并入 expose chunk（无独立 leaf 文件）：rollup 命中
+  // leaf 独立 chunk（保留「入口成功、子依赖失败」语义）；rolldown 需阻断合并后的
+  // target chunk——按页面是否出现过 rolldown-runtime 判定产物引擎
+  let isRolldown = false
   const leafRequests: string[] = []
   const leafFailed: string[] = []
   page.on('request', (r) => {
     const u = r.url()
+    if (u.includes('rolldown-runtime')) isRolldown = true
     if (u.includes('/remote-react/assets/static-dep-leaf-')) leafRequests.push(u)
   })
   page.on('requestfailed', (r) => {
     const u = r.url()
     if (u.includes('/remote-react/assets/static-dep-leaf-')) leafFailed.push(u)
   })
-  await page.route(/\/remote-react\/assets\/static-dep-leaf-[^?]*(\?.*)?$/, (route) => {
-    if (blocked) route.abort('failed')
+  await page.route(/\/remote-react\/assets\/(static-dep-leaf|static-dep-target)-[^?]*(\?.*)?$/, (route) => {
+    const u = route.request().url()
+    const hit = blocked && (u.includes('static-dep-leaf') || (isRolldown && u.includes('static-dep-target')))
+    if (hit) route.abort('failed')
     else route.continue()
   })
   await page.goto(`${PROD_BASE}/alias`)

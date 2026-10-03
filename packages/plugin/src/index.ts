@@ -17,6 +17,7 @@ import {
   SHARED_FACADE_PREFIX,
   SHARED_NS_FACADE_PREFIX,
   type NormalizedOptions,
+  type NormalizedShared,
   type FederationOptions,
 } from './options'
 import {
@@ -45,6 +46,8 @@ import {
   genCjsNsFacade,
   genSharedFacade,
   genSharedNsFacade,
+  genBindingFacadeSync,
+  genSharedNsFacadeSync,
   genProdRetryHelper,
   REACT_REFRESH_GLOBAL_KEY,
   REACT_REFRESH_SHIM_URL,
@@ -195,6 +198,27 @@ function providerChunkOf(id: string, roots: Array<{ root: string; shareKey: stri
   return 'fulgurjs-provider-' + (provider.shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
 }
 
+/**
+ * V8-SYNC-FACADE：同步门面的本体导入目标解析（裸包名 → 绝对 id）。
+ * 门面是虚拟模块，proxy/commonjs 载体上下文里裸包名解析不可靠（同 genCjsNsFacade 的教训）；
+ * 解析失败保留裸包名（root node_modules 兜底）。
+ */
+async function resolveSharedImportTarget(
+  this: { resolve?: (id: string, importer?: string, opts?: { skipSelf?: boolean }) => Promise<{ id: string } | null> },
+  item: NormalizedShared,
+  root: string,
+): Promise<string> {
+  const specifier = item.import
+  if (typeof specifier !== 'string') return item.shareKey
+  try {
+    const resolved = await this.resolve?.(specifier, path.join(root, 'package.json'), { skipSelf: true })
+    if (resolved?.id) return resolved.id
+  } catch {
+    // 解析失败保留裸包名，行为与 CJS 垫片一致
+  }
+  return specifier
+}
+
 export function federation(options: FederationOptions): Plugin[] {
   let remoteSchemaPromise: Promise<string> | null = null
   const state: {
@@ -317,7 +341,8 @@ export function federation(options: FederationOptions): Plugin[] {
           // 不执行 onLoad → UNLOADABLE_DEPENDENCY（react 协商链全断，CI 实测）。rolldown
           // 插件按 rolldownOptions 注入同一外部化语义：resolveId 识别裸键与兼容层两种
           // 虚拟 id 形态，load 产出同款 re-export 桩；门面 URL 标记 external。Vite ≤ 7
-          // 不读取 rolldownOptions（仅 esbuildOptions 生效），两条路径互不干扰。
+          // 不读取 rolldownOptions（仅 esbuildOptions 生效）；Vite ≥ 8 只下发 rolldownOptions
+          // （遗留 esbuildOptions 键会触发 vite 的 deprecation warning）。
           const rolldownShared = {
             name: 'fulgurjs:optimize-shared-external',
             resolveId(source: string, _importer: string | undefined, opts: { isEntry?: boolean } = {}) {
@@ -339,8 +364,9 @@ export function federation(options: FederationOptions): Plugin[] {
               return `export * from ${JSON.stringify(url)};\nexport { default } from ${JSON.stringify(url)};\n`
             },
           }
+          const isVite8Prebundle = Number((readInstalledVersion(root, 'vite') ?? '0').split('.')[0]) >= 8
           ;(extra as Record<string, unknown>).optimizeDeps = {
-            esbuildOptions: { plugins: [sharedExternal] },
+            ...(isVite8Prebundle ? {} : { esbuildOptions: { plugins: [sharedExternal] } }),
             rolldownOptions: { plugins: [rolldownShared] },
           }
         }
@@ -774,6 +800,11 @@ export function federation(options: FederationOptions): Plugin[] {
             if (!names.includes(compat)) names.push(compat)
           }
         }
+        // V8-SYNC-FACADE：rolldown 构建用同步 pin 形态（TLA 会把 await 传播进消费方
+        // 初始化包装，循环依赖互等死锁——见 genBindingFacadeSync 注）
+        if (state.rolldownBuild) {
+          return genSharedNsFacadeSync(item, names, await resolveSharedImportTarget.call(this, item, state.normalized.root))
+        }
         return genSharedNsFacade(item, serializeShareCallForFacade(item), names, state.facadeDynamic)
       }
       if (clean.startsWith('virtual:fulgurjs-shared:') && state.normalized) {
@@ -798,6 +829,11 @@ export function federation(options: FederationOptions): Plugin[] {
         }
         const item = state.normalized.shared.find((x) => x.shareKey === entry.shareKey)
         if (!item || item.import === false) return null
+        // V8-SYNC-FACADE：rolldown 构建用同步 pin 形态（消除插件注入的 TLA 及其在
+        // 循环依赖里的互等死锁——见 genBindingFacadeSync 注）
+        if (state.rolldownBuild) {
+          return genBindingFacadeSync(item, entry.bindings, await resolveSharedImportTarget.call(this, item, state.normalized.root))
+        }
         const opts = [
           'shareScope: ' + JSON.stringify(item.shareScope),
           'shareKey: ' + JSON.stringify(item.shareKey),
@@ -1119,7 +1155,7 @@ export function federation(options: FederationOptions): Plugin[] {
       order: 'pre',
       handler(code, chunk) {
         if (!state.rolldownBuild || state.command !== 'build') return null
-        const result = repairRolldownAsyncMarks(code, (input) => this.parse(input), chunk.fileName)
+        const result = repairRolldownAsyncMarks(code, chunk.fileName)
         if (!result) return null
         debugLog('v8-async-fix', { stage: 'renderChunk', file: chunk.fileName, repaired: result.repaired })
         return result.code
@@ -1160,10 +1196,27 @@ export function federation(options: FederationOptions): Plugin[] {
             }
           }
         }
+        // rolldown（vite 8）分块兜底：expose 模块被并入其他 chunk（无独立 facadeModuleId，
+        // 如 expose 目标同时被应用自身静态引用）时，按 chunk.modules 索引反查所在 chunk。
+        // rollup（vite 5-7）恒有 facadeModuleId，此索引零命中。
+        const moduleToChunk = new Map<string, string>()
+        for (const [fileName, chunk] of Object.entries(bundle)) {
+          if (chunk.type !== 'chunk') continue
+          for (const moduleId of Object.keys((chunk as { modules?: Record<string, unknown> }).modules ?? {})) {
+            if (!moduleToChunk.has(moduleId)) moduleToChunk.set(moduleId, fileName)
+          }
+        }
         for (const e of n.exposes) {
           const abs = state.exposeAbsPaths[e.import]
           const hit = abs ? facadeToChunk[abs] : undefined
-          if (hit) state.exposeFiles[e.name] = hit
+          if (hit) {
+            state.exposeFiles[e.name] = hit
+            continue
+          }
+          const merged = abs ? moduleToChunk.get(abs) : undefined
+          if (merged) {
+            state.exposeFiles[e.name] = { file: merged, css: collectStaticCss(merged) }
+          }
         }
         const entryChunkName = Object.keys(bundle).find((k) => bundle[k].type === 'chunk' && k === n.filename)
         // 失败重试穿透（prod）：浏览器 module map 缓存 import 失败（同 URL 再 import 直接
@@ -1174,12 +1227,35 @@ export function federation(options: FederationOptions): Plugin[] {
         // 非 URL 字符串——不能再包一层 import()（5.1.1 回归：import(Promise) →
         // "[object Promise]" 解析失败，全框架 prod 挂）。
         const entryChunk = entryChunkName ? bundle[entryChunkName] : undefined
-        if (entryChunk && entryChunk.type === 'chunk' && /import\((['"])[^'")]+\1\)/.test(entryChunk.code)) {
+        // rolldown（vite 8）以反引号渲染字面量 import，rollup 用单/双引号——三种引号都包装
+        if (entryChunk && entryChunk.type === 'chunk' && /import\((['"`])[^'"`)]+\1\)/.test(entryChunk.code)) {
           const helper = genProdRetryHelper()
           entryChunk.code = entryChunk.code.replace(
-            /import\((['"])([^'")]+)\1\)/g,
+            /import\((['"`])([^'"`)]+)\1\)/g,
             (_m, q: string, u: string) => `__fgR(${q}${u}${q})`,
           )
+          // rolldown 专属：expose loader 的 __vite__mapDeps 依赖预载过滤为仅 CSS。
+          // vite8 的 <link rel=modulepreload> 会把 JS 依赖写入模块图——网络失败被浏览器
+          // 负缓存后，__fgR 只变换入口 URL 无法恢复依赖 URL（实测：解除阻断后 loader
+          // retry=2 返回 200，而依赖 chunk 零请求、Promise 永不落定）。去掉 JS 预载后
+          // 依赖改由模块图按需拉取（首载多一跳串行），CSS 预载保留（B-17 样式注入语义）。
+          // rollup（vite 5–7）无此现象，保持原生预载不动。
+          if (state.rolldownBuild) {
+            const depsArrayMatch = /__vite__mapDeps=\(i,m=__vite__mapDeps,d=\(m\.f\|\|\(m\.f=(\[[^\]]*\])\)\)\)=>/.exec(entryChunk.code)
+            if (depsArrayMatch) {
+              try {
+                const deps: string[] = JSON.parse(depsArrayMatch[1].replace(/`/g, '"').replace(/'/g, '"'))
+                const cssOnly = new Set(deps.map((d, i) => (/\.(css|scss|less)$/.test(d) ? i : -1)).filter((i) => i >= 0))
+                entryChunk.code = entryChunk.code.replace(/__vite__mapDeps\(\[([\d,\s]*)\]\)/g, (m, list: string) => {
+                  const kept = list.split(',').map((x) => x.trim()).filter(Boolean).map(Number).filter((i) => cssOnly.has(i))
+                  return `__vite__mapDeps([${kept.join(',')}])`
+                })
+                debugLog('manifest', { stage: 'generateBundle', mapDepsCssOnly: true, kept: cssOnly.size, total: deps.length })
+              } catch {
+                // deps 数组解析失败（产物形态变化）：保持原生预载，行为退回重试仅变换入口 URL
+              }
+            }
+          }
           entryChunk.code = `${helper}\n${entryChunk.code}`
           debugLog('manifest', { stage: 'generateBundle', retryBust: 'remoteEntry loaders wrapped' })
         }

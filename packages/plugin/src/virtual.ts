@@ -196,8 +196,89 @@ export function genBindingFacade(
   return lines.join('\n')
 }
 
-/** 远程绑定门面：静态 import 远程模块时指向它（内部走 loadRemote） */
-export function genRemoteBindingFacade(remoteSpec: string, bindings: string[], dynamic = false): string {
+/** shared 项的运行时协商选项（loadShare/getLoadedShare/pinLoadedShare 共用形态） */
+function shareOptsLines(item: NormalizedShared): string[] {
+  return [
+    `shareScope: ${JSON.stringify(item.shareScope)}`,
+    `shareKey: ${JSON.stringify(item.shareKey)}`,
+    ...(item.requiredVersion !== false ? [`requiredVersion: ${JSON.stringify(item.requiredVersion)}`] : []),
+    ...(item.singleton ? ['singleton: true'] : []),
+    ...(item.strictVersion ? ['strictVersion: true'] : []),
+  ]
+}
+
+/**
+ * 绑定门面（同步形态，rolldown/vite 8 构建专用；V8-SYNC-FACADE 2026-10-03）。
+ *
+ * 背景：TLA 形态（await loadShare）在 rolldown 下会把「await」传播进消费方模块的
+ * 惰性初始化包装——应用代码/依赖库自身的循环依赖（如 ant-design-vue 的
+ * useConfigInject ⇄ theme）随即变成两个 async init 互等，页面零报错死锁
+ * （JeecgBoot vite8 生产实测，见 async-mark-repair.ts 与验收报告 §11.1-1）。
+ * rollup（vite 5–7）的 chunk 级求值不会产生这种互等，TLA 形态保留。
+ *
+ * 同步语义与 genCjsNsFacade 一致（React 侧已在 vite8 验证的同构路径）：
+ * - getLoadedShare 同步取「已协商加载」实例：宿主先加载时直接命中宿主实例；
+ * - 未命中时 pinLoadedShare 登记本地副本（first-wins + 版本守卫），后续任何
+ *   loadShare 协商（含远程加载本应用共享）收敛到同一实例——单例不双份；
+ * - 本地副本静态入图（无动态 import 边），门面自身零 TLA，消费方求值保持同步。
+ * 与 TLA 形态的行为差异（已知且可接受，仅 vite 8 构建路径）：
+ * - 自定义 resolveShare hook 无法同步等待——静态导入的首次解析不再被 hook 改道，
+ *   此前由 loadShare 协商过的快照仍会被 getLoadedShare 命中；
+ * - strictVersion 版本冲突不再在静态导入处抛 MFU-012，而是回退本地副本。
+ */
+export function genBindingFacadeSync(item: NormalizedShared, bindings: string[], importTarget: string): string {
+  const opts = shareOptsLines(item)
+  const lines: string[] = [
+    `import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    `import * as __fulgurjs_local from ${JSON.stringify(importTarget)};`,
+    // strictVersion 版本冲突时 getLoadedShare 会抛 MFU-003：同步门面与 TLA 路径的
+    // loadShare→fallback 语义对齐——回退本地副本，不让协商冲突杀死模块求值
+    `let __fulgurjs_snap;`,
+    `try { __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }); } catch {}`,
+    `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
+    `const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;`,
+  ]
+  const seen = new Set<string>()
+  for (const bRaw of bindings) {
+    if (bRaw === 'default') continue
+    const asMatch = bRaw.match(/^(.*?)\s+as\s+(.+)$/)
+    const imported = (asMatch ? asMatch[1] : bRaw).trim()
+    if (seen.has(imported)) continue
+    seen.add(imported)
+    lines.push(`export const ${imported} = __fulgurjs_m.${imported};`)
+  }
+  lines.push(`export default __fulgurjsU(__fulgurjs_m);`)
+  lines.push('')
+  return lines.join('\n')
+}
+
+/**
+ * 命名空间门面（同步形态，rolldown/vite 8 构建专用；V8-SYNC-FACADE）。
+ * 语义与 genBindingFacadeSync 相同，面向 `import * as ns from '<shared>'` 的命名空间消费。
+ */
+export function genSharedNsFacadeSync(item: NormalizedShared, exportNames: string[], importTarget: string): string {
+  const opts = shareOptsLines(item)
+  const lines: string[] = [
+    `import { getLoadedShare as __fulgurjs_gls, pinLoadedShare as __fulgurjs_pin, unwrapDefault as __fulgurjsU } from "virtual:fulgurjs-runtime";`,
+    `import * as __fulgurjs_local from ${JSON.stringify(importTarget)};`,
+    `let __fulgurjs_snap;`,
+    `try { __fulgurjs_snap = __fulgurjs_gls(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }); } catch {}`,
+    `if (__fulgurjs_snap === undefined) __fulgurjs_pin(${JSON.stringify(item.shareKey)}, { ${opts.join(', ')} }, ${JSON.stringify(item.version)}, __fulgurjs_local);`,
+    `const __fulgurjs_m = __fulgurjs_snap ?? __fulgurjs_local;`,
+    `const __fulgurjs_d = __fulgurjsU(__fulgurjs_m);`,
+    `export default __fulgurjs_d;`,
+  ]
+  const seen = new Set<string>(['default'])
+  for (const name of exportNames) {
+    if (seen.has(name) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) continue
+    seen.add(name)
+    lines.push(`export const ${name} = __fulgurjs_d[${JSON.stringify(name)}];`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+/** 远程绑定门面：静态 import 远程模块时指向它（内部走 loadRemote） */export function genRemoteBindingFacade(remoteSpec: string, bindings: string[], dynamic = false): string {
   const lines: string[] = [
     dynamic
       ? `const { loadRemote: __fulgurjs_loadRemote, unwrapDefault: __fulgurjsU } = await import("virtual:fulgurjs-runtime");`
