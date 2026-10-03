@@ -2,8 +2,8 @@
 // D.5 防漂移校验：错误码三处必须一致——
 //   ① 源码定义：runtime/errors.ts 的 MFU 段、context.ts 的 CC 段（各自码表字面量）
 //   ② 登记表 CODE_REGISTRY（src/diagnostics.ts）：新增报错必须先登记
-//   ③ README「错误码总表」：唯一权威文档
-// 校验三向：源码定义 ⊆ 登记表 = README 码表（任一侧缺失即非零退出）。
+//   ③ API 手册「错误码总表」：唯一权威文档
+// 校验三向：源码定义 ⊆ 登记表 = API 手册码表（任一侧缺失即非零退出）。
 // 由 build 调用（npm run build），CI 与 publish 流程据此守门。
 import fs from 'node:fs'
 import path from 'node:path'
@@ -17,7 +17,7 @@ const diag = read(path.join(pluginRoot, 'src/diagnostics.ts'))
 const runtime = read(path.join(pluginRoot, 'src/runtime/errors.ts'))
 const context = read(path.join(pluginRoot, 'src/context.ts'))
 const bridge = read(path.join(pluginRoot, 'src/bridge-errors.ts'))
-const readme = read(path.join(root, 'README.md'))
+const readme = read(path.join(root, 'docs/API.md'))
 
 // ① 源码定义（只扫码表所在文件——散落在注释里的历史码提及不构成定义）
 const defined = new Set()
@@ -31,7 +31,7 @@ const registered = new Set([...diag.matchAll(/code: '([A-Z]{2,4}-\d{3})'/g)].map
 // ③ 文档（只取码表节内条目；节外散文提及不参与校验）
 const section = readme.match(/###\s*6\.\s*错误码总表[\s\S]*?(?=\n###\s)/)
 if (!section) {
-  console.error('[fulgurjs] README 未找到「6. 错误码总表」节——节标题被改动或删除，防漂移校验无法进行')
+  console.error('[fulgurjs] API 手册未找到「6. 错误码总表」节——节标题被改动或删除，防漂移校验无法进行')
   process.exit(1)
 }
 const documented = new Set(section[0].match(/[A-Z]{2,4}-\d{3}/g) ?? [])
@@ -41,14 +41,14 @@ for (const c of defined) {
   if (!registered.has(c)) problems.push(`${c} 源码已定义但未登记进 CODE_REGISTRY`)
 }
 for (const c of registered) {
-  if (!documented.has(c)) problems.push(`${c} 已登记但 README 错误码总表缺条目`)
+  if (!documented.has(c)) problems.push(`${c} 已登记但 API 手册错误码总表缺条目`)
 }
 for (const c of documented) {
-  if (!registered.has(c)) problems.push(`${c} README 错误码总表有条目但未登记进 CODE_REGISTRY`)
+  if (!registered.has(c)) problems.push(`${c} API 手册错误码总表有条目但未登记进 CODE_REGISTRY`)
 }
 const declared = section[0].match(/错误码总表（(\d+)\s*个）/)
 if (declared && Number(declared[1]) !== documented.size) {
-  problems.push(`README 节标题声明「${declared[1]} 个」与实际条目数 ${documented.size} 不符`)
+  problems.push(`API 手册节标题声明「${declared[1]} 个」与实际条目数 ${documented.size} 不符`)
 }
 
 if (problems.length) {

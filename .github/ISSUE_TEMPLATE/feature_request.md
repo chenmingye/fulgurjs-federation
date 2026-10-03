@@ -22,5 +22,5 @@ assignees: ''
 
 ## 是否看过边界清单
 
-<!-- README「边界（明确不支持）」与 docs/webpack-mf-对照与缺口.md 里的项（SSR / React / JS 沙箱等）
+<!-- README「Vite 8 和使用范围」与 docs/webpack-mf-对照与缺口.md 里的项（SSR / JS 沙箱等）
      属于已定调的架构取舍，提之前建议先看一眼 -->

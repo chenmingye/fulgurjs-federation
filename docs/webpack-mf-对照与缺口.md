@@ -20,7 +20,7 @@
 | 加载恢复与诊断 | 支持 | 超时、重试、熔断、显式 fallback、错误码；静态依赖失败的恢复边界见 §三 |
 | 工程辅助 | 支持 | dts、manifest 预载、setup/onSession、CLI 检查与 Demo |
 
-公开签名、默认值和具体例子以 [中文 README](../README.md)、[英文 README](../README.en.md) 为准。版本隔离与恢复例子见 [demo/react-versions](../demo/react-versions/README.md)。
+入门步骤见 [中文 README](../README.md)、[英文 README](../README.en.md)；公开签名及默认值见 [中文 API 手册](API.md)、[English API reference](API.en.md)。版本隔离与恢复例子见 [demo/react-versions](../demo/react-versions/README.md)。
 
 ## 二、当前不提供的能力
 

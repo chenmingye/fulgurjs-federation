@@ -1,5 +1,5 @@
 /**
- * 错误码三方一致性（防漂移）：源码定义 ⊆ 登记表 CODE_REGISTRY = README「错误码总表」。
+ * 错误码三方一致性（防漂移）：源码定义 ⊆ 登记表 CODE_REGISTRY = API 手册「错误码总表」。
  * 校验逻辑单一实现于 scripts/check-manual-codes.mjs（build 门禁同源），本测试 spawn 它，
  * 避免测试与门禁两套实现各自漂移。
  * 背景（2026-09-22 修复）：CC 段曾只写进 README 未登记进 CODE_REGISTRY，旧脚本正则不含
@@ -38,12 +38,13 @@ function mirrorFixtureToTmp() {
   mirror('src/context.ts')
   mirror('src/runtime/errors.ts')
   mirror('src/bridge-errors.ts')
-  fs.copyFileSync(path.join(repoRoot, 'README.md'), path.join(dir, 'README.md'))
+  fs.mkdirSync(path.join(dir, 'docs'), { recursive: true })
+  fs.copyFileSync(path.join(repoRoot, 'docs/API.md'), path.join(dir, 'docs/API.md'))
   return {
     dir,
     script: path.join(pluginDir, scriptRel),
     registry: mirror('src/diagnostics.ts'),
-    readme: path.join(dir, 'README.md'),
+    readme: path.join(dir, 'docs/API.md'),
   }
 }
 
@@ -70,7 +71,7 @@ describe('错误码三方一致性（防漂移门禁）', () => {
     expect(Number(output.match(/登记 (\d+) =/)?.[1])).toBe(actual)
   })
 
-  it('登记表漏登记 CC-001 → 非零退出并同时报出源码定义侧与 README 侧（原事故复现）', () => {
+  it('登记表漏登记 CC-001 → 非零退出并同时报出源码定义侧与 API 手册侧（原事故复现）', () => {
     const f = mirrorFixtureToTmp()
     expect(runGate(f.script).ok, '未注入漂移时不应失败').toBe(true)
 
@@ -79,10 +80,10 @@ describe('错误码三方一致性（防漂移门禁）', () => {
     const { ok, output } = runGate(f.script)
     expect(ok).toBe(false)
     expect(output).toContain('CC-001 源码已定义但未登记进 CODE_REGISTRY')
-    expect(output).toContain('CC-001 README 错误码总表有条目但未登记进 CODE_REGISTRY')
+    expect(output).toContain('CC-001 API 手册错误码总表有条目但未登记进 CODE_REGISTRY')
   })
 
-  it('README 码表出现未登记的码 → 非零退出', () => {
+  it('API 手册码表出现未登记的码 → 非零退出', () => {
     const f = mirrorFixtureToTmp()
     const readme = fs.readFileSync(f.readme, 'utf8')
     fs.writeFileSync(
@@ -92,6 +93,6 @@ describe('错误码三方一致性（防漂移门禁）', () => {
 
     const { ok, output } = runGate(f.script)
     expect(ok).toBe(false)
-    expect(output).toContain('MFU-099 README 错误码总表有条目但未登记进 CODE_REGISTRY')
+    expect(output).toContain('MFU-099 API 手册错误码总表有条目但未登记进 CODE_REGISTRY')
   })
 })
