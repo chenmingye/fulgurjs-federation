@@ -5,31 +5,32 @@
 > **fulgurjs** — Latin for "lightning · flash of light".
 > A Vite plugin that makes Module Federation work out of the box: **one config shape per project, separate dev & prod engines, semantics aligned with webpack Module Federation**, with first-class browser support for both Vue 3 and React 18/19.
 
-![tests](https://img.shields.io/badge/tests-460%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-%3C%209KB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
+![tests](https://img.shields.io/badge/tests-655%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-10.1%20KiB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
 
 ---
 
 ## 1. Why
 
-| | webpack MF | other vite MF solutions | **@fulgurjs/federation** |
-|---|---|---|---|
-| dev experience | separate builds required | manual bootstrap usually required | ✅ dual dev-server direct wiring, zero manual async boundaries |
-| prod artifacts | ✅ | often missing or degraded | ✅ build-time rewriting, stable remoteEntry filename + manifest |
-| semantic parity | 100% | incomplete (version negotiation / singleton / fault tolerance often missing) | ✅ aligned clause-by-clause with webpack semantics, e2e-verified |
-| **UMD / CJS-only deps** | DIY | **commonly unusable** | ✅ automatic (dep-optimizer externalization + build-time require shims) |
-| remote load failures | raw errors | usually missing | ✅ retry / circuit breaker / timeout built in + explicit `fallbackModule` degradation |
-| failure recovery | reload the page | usually missing | ✅ built-in placeholders offer **Retry load** (in-page; failed URLs are varied to penetrate the browser's failed-import cache) and **Refresh page to retry** (a user-initiated full reload for failures the browser caches beyond in-page reach) |
-| runtime size | ~40KB+ | varies | **gzip < 9KB** (framework-neutral core; adapters are separate) |
-| misconfiguration | hard to debug | cryptic | three-part diagnostics: symptom / cause / fix |
+| Capability | webpack 5 built-in MF | **@fulgurjs/federation** |
+|---|---|---|
+| Development loading | webpack compilation and dev server | Vite dual dev-server wiring |
+| Production artifacts | Container/chunks with configurable loading | ESM remoteEntry + manifest |
+| Shared dependencies | Version negotiation, singleton, strictVersion, scopes | Corresponding capabilities with regression checks; see implementation boundaries |
+| UMD / CJS-only dependencies | webpack module processing | Dependency optimization externalization + build-time require shims |
+| Remote failures | Loading errors; applications configure recovery | Built-in retries/circuit breaker/timeout, explicit fallback and placeholders; static dependency failures retain refresh recovery |
+| Runtime size | Varies by configuration, loader and build; no universal comparison | 5.7.1 core gzip measured at 10273B (about 10.1KiB); adapters are separate |
+| App embedding and routing | Core shares modules; app integration is separate | Vue/React sub-app bridges and optional URL sync |
+
+See the [capability and boundary comparison](docs/webpack-mf-对照与缺口.md) for unsupported features and implementation costs.
 
 ## 2. Feature overview
 
 - **Full exposes / remotes / shared semantics** — `name@url` syntax, key renaming, promise-based remotes, full-semver `requiredVersion`, version negotiation (highest wins), singleton / strictVersion, loaded versions are never replaced, multi-version coexistence, `shareKey` redirection, multiple share scopes
 - **UMD / CJS-only deps out of the box** — element-plus, avue and other UMD/CJS-only packages simply go into `optimizeDeps.include`; in dev the plugin re-routes shared keys inside pre-bundled output to negotiation facades (esbuild path on Vite ≤ 7, rolldown plugin on Vite ≥ 8), in build CJS `require(<shared>)` calls are redirected to shims — dual-runtime immune
-- **Automatic async boundaries** — top-level await injected automatically (es2022+); no webpack-style manual `import('./bootstrap')`
+- **Automatic async boundaries** — Vite 5–7 use async negotiation facades; Vite 8 uses synchronous consumer facades. HTML entries configured with runtime plugins negotiate before executing the application; custom entries follow the runtime-plugin entry boundary
 - **Stable artifacts** — remoteEntry keeps a fixed filename (content changes every build → **must be `no-cache`**; only content-hashed chunks may be cached long); `fulgurjs-manifest.json` asset manifest; one chunk per expose
 - **Fault tolerance (webpack MF 2.0 errorLoadRemote aligned)** — retry / circuit breaker / timeout built in; `loadRemote(spec, { retries, fallbackModule })` per-call overrides; on failure the fallback module is returned and the error event is still emitted (**never silent**; without `fallbackModule` the error re-throws)
-- **Real failure recovery** — Chromium/Firefox/Safari cache failed dynamic imports per URL, so re-importing the same URL rejects without hitting the network again (verified per browser in this repo's e2e; see MDN import() for the underlying semantics). After a real failure the runtime varies the URL (`fulgurjs_retry=N`) across remote-entry loading, dev container loaders and the prod remoteEntry, so "service recovered → click Retry load" genuinely re-fetches. Successful modules are never re-requested with a varied URL — module identity and singletons are preserved; concurrent failures advance exactly one retry generation (no module-instance split); repeated access to loaded modules issues zero extra requests. **Known boundary**: a failed **static dependency** chunk of an expose cannot recover in-page (the browser caches the dependency URL's failure). The built-in placeholder therefore also offers **Refresh page to retry** — a user-initiated full reload that keeps the current URL (never automatic, no reload loops) — and that is the supported recovery path for this case; the plugin deliberately does not rewrite the whole site dependency graph to work around it
+- **Real failure recovery** — Native ESM loading can retain failed module URLs in the page module map; retrying an unchanged URL may therefore reuse the failure. After a real failure the runtime varies the URL (`fulgurjs_retry=N`) across remote-entry loading, dev container loaders and the prod remoteEntry, so "service recovered → click Retry load" genuinely re-fetches. Successful modules are never re-requested with a varied URL — module identity and singletons are preserved; concurrent failures advance exactly one retry generation (no module-instance split); repeated access to loaded modules issues zero extra requests. **Known boundary**: a failed **static dependency** chunk of an expose cannot recover in-page (the browser caches the dependency URL's failure). The built-in placeholder therefore also offers **Refresh page to retry** — a user-initiated full reload that keeps the current URL (never automatic, no reload loops) — and that is the supported recovery path for this case; the plugin deliberately does not rewrite the whole site dependency graph to work around it. This boundary applies to this native ESM loading path; it is not a universal webpack MF restriction (see the [loader comparison](docs/webpack-mf-对照与缺口.md))
 - **Enhancements** — dev type generation (dual-track, see §8.6), manifest-driven `preloadRemote()`, runtime plugin hooks (`beforeLoadRemote` / `afterLoadRemote` / `onRemoteError` / `resolveShare`)
 - **Full HMR chain** — remote edits propagate to the host page: component hot swap, state retention, error overlay and recovery
 - **Zero-silent-failure discipline** — config problems fail at startup with three-part diagnostics; federation failures throw explicitly (error code + actionable fix); no silent fallback paths
@@ -53,7 +54,7 @@ pnpm add -D @fulgurjs/federation
 - Vue ≥ 3.2.0 and/or React `>=18.0.0 <20` — all three are **optional peers**; install only the framework you use
 - Chrome 108+ (native top-level await)
 
-> Vite 8 (rolldown): **fully usable in production as of 5.6.0** — the synchronous negotiation facade (V8-SYNC-FACADE) eliminates the startup mutual-await deadlock between top-level await propagation and application circular dependencies (full JeecgBoot v3.9.5 acceptance: login, A-hosts-B, three-layer deep-link refresh, cross-framework deep links, React host; vite 8.3.2 + rolldown 1.2.12), plus three vite8-specific fixes (remoteEntry failure retry, manifest exposes mapping, dependency-preload negative caching); e2e dev 73/73 + prod 33/33 as a standing CI matrix. The first page open on a cold dev cache still falls inside the dependency pre-bundling window (DEV-010; it self-recovers via reload). Warm up before acceptance runs or manual judgement, as documented. Known cost (vite 8 only): the synchronous facade keeps the local copy chunk reachable by the module graph even when negotiation picks another app's instance (dual-version scenarios fetch the shared library at most twice; runtime identity still converges to a single instance).
+> Vite 8 (rolldown): **fully usable in production as of 5.6.0** — the synchronous negotiation facade (V8-SYNC-FACADE) eliminates the startup mutual-await deadlock between top-level await propagation and application circular dependencies (full JeecgBoot v3.9.5 acceptance: login, A-hosts-B, three-layer deep-link refresh, cross-framework deep links, React host; vite 8.3.2 + rolldown 1.2.12), plus three vite8-specific fixes (remoteEntry failure retry, manifest exposes mapping, dependency-preload negative caching); e2e dev 73/73 + prod 33/33 as a standing CI matrix. The first page open on a cold dev cache still falls inside the dependency pre-bundling window (DEV-010; it self-recovers via reload). Warm up before acceptance runs or manual judgement, as documented. Known cost (vite 8 only): the synchronous facade keeps the local copy chunk reachable by the module graph even when negotiation picks another app's instance (tested dual-version scenarios fetch at most two copies; this is not a global upper bound for arbitrary application graphs. Runtime identity converges within the same singleton scope; explicitly isolated scopes may retain separate instances).
 
 `@fulgurjs/federation/runtime` and `@fulgurjs/federation/react` are **ESM-only** browser entries (no `require()`). The build-time main entry supports both ESM and CJS.
 
@@ -437,9 +438,11 @@ Lazy-loading measurement layers: ① nothing until first render of a remote comp
 - Support covers **browser-client** federation for Vue 3 and React 18–19. Not supported: SSR, React Server Components, Next.js full-stack, React Native, Node-side remote loading. **Cross-framework boundary (5.3.0+)**: sub-app-level embedding is supported (§8.7 `/bridge`); direct component-level Vue↔React rendering in one tree is not (that is the product of framework-conversion libraries). Pure single-framework projects keep zero cross-dependency
 - **Bridge isolation boundary (declared honestly in §8.7)**: bridging isolates only the mount/unmount edge of the two component trees — no browser realm isolation. Remote global CSS, `body`/`html` styles, global variables, and DOM rendered outside the container via React Portal / Vue Teleport still affect the host; `unmount` cannot revoke CSS the browser already loaded. Sub-app internal errors do not bubble into host error boundaries (cross-root). Sub-app routing defaults to memory mode; explicit URL sync exists since 5.4.0 (§8.8) — when it is not enabled, refreshing does not restore the sub-app's internal path
 - React side does not promise component keep-alive (`keepAliveNames` is Vue-only); re-opened pages still reuse downloaded modules
-- Cross-origin Fast Refresh: remote React components update via the remote dev server's HMR push; after a cold start the first round often needs a host refresh — component-state retention across the federation boundary is not promised
+- Cross-origin Fast Refresh: compatible remote component edits (text/styles with unchanged Hooks structure) update the host and retain component state; ordinary TS changes propagate to consuming component boundaries. Incompatible exports/Hooks changes or Vite full-reload updates remount or reload following framework semantics; arbitrary edits do not guarantee state retention
 - Not compatible with originjs `virtual:__federation__` legacy imports
 - No browser DevTools extension (the `window.__FULGURJS_*` surfaces serve debugging)
+- No JS sandbox or automatic CSS isolation. Share negotiation selects dependency instances; it does not isolate global side effects
+- No webpack `script`/`var` container interoperability. Remotes are ESM; a similar container interface does not imply direct webpack artifact compatibility. See the [current capability and loading-boundary comparison](docs/webpack-mf-对照与缺口.md)
 
 ## 13. Documentation & examples
 

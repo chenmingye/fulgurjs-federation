@@ -1,5 +1,8 @@
 # @fulgurjs/federation 设计方案 v0.2（全量对齐 Webpack MF 版）
 
+> **当前状态索引（2026-10-03，5.7.1）**：本文是历史设计，早期“100% 配置/行为对齐”和里程碑状态不作为当前兼容承诺。当前为浏览器端 Vue 3 / React 18–19、子应用桥接及可选 URL 同步；能力和明确差异以 [当前对照表](docs/webpack-mf-对照与缺口.md) 与 [README](README.md) 为准。
+
+
 > **品牌**：fulgurjs，拉丁语「闪电 · 辉光」，取自作者名中「烨」字的意译。
 > 系列规划：`@fulgurjs/federation`（模块联邦）→ `@fulgurjs/micro`、`@fulgurjs/dts` …
 > 内外命名统一 `fulgurjs`（`virtual:fulgurjs-*` 虚拟模块、`window.__FULGURJS_*` 调试出口、`FgError` / MFU 错误码）。

@@ -5,21 +5,23 @@
 > **fulgurjs** — 拉丁语「闪电 · 辉光」。
 > 一个把 Vite 模块联邦做到开箱即用的插件：**一套配置，dev / prod 双引擎，语义对齐 Webpack Module Federation**，Vue 3 与 React 18/19 双生态浏览器端支持。
 
-![tests](https://img.shields.io/badge/tests-369%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-%3C%208KB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
+![tests](https://img.shields.io/badge/tests-655%20%2B%20e2e-green) ![runtime](https://img.shields.io/badge/runtime%20gzip-10.1%20KiB-blue) ![vite](https://img.shields.io/badge/vite-5%20%7C%206%20%7C%207%20%7C%208-purple)
 
 ---
 
 ## 为什么是它
 
-| | webpack MF | 其他 vite MF 方案 | **@fulgurjs/federation** |
-|---|---|---|---|
-| dev 体验 | 需要独立构建 | 通常要手工 bootstrap | ✅ 双 dev-server 直连，零手工异步边界 |
-| prod 产物 | ✅ | 常缺失或降级 | ✅ 构建期改写，稳定 remoteEntry 文件名 + manifest |
-| 语义完整度 | 100% | 残缺（版本协商/单例/容错经常缺失） | ✅ 逐条对齐 webpack 语义并有 e2e 验收 |
-| **UMD / CJS-only 依赖** | 需自行处理 | **普遍不可用** | ✅ 自动支持（预构建外部化 + 构建期 require 垫片） |
-| 远程加载失败 | 裸错误，需手写重试 | 普遍缺失 | ✅ 重试/熔断/超时内置 + `fallbackModule` 显式降级 |
-| 运行时体积 | ~40KB+ | 不等 | **gzip < 5KB** |
-| 配置出错时 | 难排查 | 报错晦涩 | 三段式报错：`got / expected / example` |
+| 能力 | webpack 5 内置 MF | **@fulgurjs/federation** |
+|---|---|---|
+| 开发加载 | webpack 编译产物与 dev server | Vite 双 dev-server 直连 |
+| 生产产物 | 容器及 chunk；加载方式可配置 | ESM remoteEntry + manifest |
+| 共享依赖 | 版本协商、singleton、strictVersion、多作用域 | 对应能力与回归验收；实现边界见对照表 |
+| UMD / CJS-only 依赖 | webpack 模块处理能力 | 预构建外部化 + 构建期 require 垫片 |
+| 远程失败 | 加载错误可由应用处理，需配置恢复流程 | 内置重试/熔断/超时、显式 fallback 与错误占位；静态依赖失败保留刷新恢复 |
+| 运行时体积 | 随配置、加载器及构建变化，不作统一比较 | 5.7.1 核心 gzip 实测 10273B（约 10.1KiB），适配器另计 |
+| 框架嵌套与路由 | 核心负责模块共享，应用层另行集成 | Vue/React 子应用桥接、可选 URL 同步 |
+
+完整能力、未支持项及使用代价见 [webpack MF 对照](docs/webpack-mf-对照与缺口.md)。
 
 **真实工程验证**：某企业级 mes 系统（admin 宿主 + bpm/lowcode 两个子应用，21+6 页）已全量迁移，三个应用各自维护项目根目录的 `fulgurjs.config.ts`、Vite 一处 `federation(fulgurjsConfig)` 接入。历史版本验收曾出现"23/23 页面有字即全过"的口径偏差（4.2.1 复核订正：参数页需用有效业务数据进入、错误页不得算通过）；最新一轮以 26 条页面记录 + 27 个菜单入口的逐项业务断言为准，结论见对应版本验收报告与 `docs/` 下证据文件（见[迁移指南](#文档)）。
 
@@ -27,9 +29,9 @@
 
 - **exposes / remotes / shared 全语义**：`name@url` 语法、键重命名、promise-based remote、semver 全语法 requiredVersion、版本协商（最高版本胜出）、singleton / strictVersion、已加载版本永不替换、多版本共存、shareKey 重定向、多 shareScope
 - **UMD / CJS-only 依赖开箱即用**：element-plus、avue 等只有 UMD/CJS 产物的依赖直接进 `optimizeDeps.include` 即可——dev 期插件自动把预构建产物内的 shared 键改道协商门面；build 期自动把 CJS `require(<shared>)` 重定向到垫片，双运行时免疫
-- **自动异步边界**：top-level await 自动注入（es2022+），无需 webpack 式手工 `import('./bootstrap')`
+- **自动异步边界**：Vite 5–7 使用异步协商门面，Vite 8 使用同步消费门面；配置 `runtimePlugins` 的 HTML 入口自动先协商再执行应用，无需手写 `import('./bootstrap')`。无 HTML 的自定义入口见运行时插件的入口边界
 - **稳定产物**：remoteEntry 固定文件名便于稳定引用（入口内容每次构建变，**必须 no-cache**——只有带内容哈希的 chunk 才可长缓存）；`fulgurjs-manifest.json` 资源清单；expose 独立 chunk
-- **容错（对齐 webpack MF 2.0 errorLoadRemote）**：加载重试 / 熔断 / 超时内置；`loadRemote(spec, { retries, fallbackModule })` 单次调用级覆盖——失败时返回 fallback 模块，错误事件仍显式发出（**绝不静默兜底**，不传则照旧抛错）。组件级默认错误占位提供用户恢复操作：**重试加载**（同页重试，失败后换 URL 穿透浏览器失败缓存）与**刷新页面重试**（用户点击才整页刷新，覆盖浏览器失败缓存无法同页穿透的静态子依赖场景）
+- **内置容错**：加载重试 / 熔断 / 超时内置；`loadRemote(spec, { retries, fallbackModule })` 单次调用级覆盖——失败时返回 fallback 模块，错误事件仍显式发出（**绝不静默兜底**，不传则照旧抛错）。组件级默认错误占位提供用户恢复操作：**重试加载**（同页重试，失败后换 URL 穿透浏览器失败缓存）与**刷新页面重试**（用户点击才整页刷新，覆盖浏览器失败缓存无法同页穿透的静态子依赖场景）
 - **增强能力**：dts 类型直连（dev 补全直达 remote 源码）、`preloadRemote()` manifest 驱动精确预载、runtimePlugins 钩子
 - **HMR 全链路**：remote 改动 → host 页面热更，L1 组件热替换 / L2 状态保留 / L3 错误覆盖与恢复
 - **零报错纪律**：配置问题启动瞬间三段式报错；联邦失败显式抛错（错误码 + 可执行修复建议），**无任何静默兜底路径**
@@ -51,7 +53,7 @@ pnpm add -D @fulgurjs/federation
 
 要求：Vite ≥ 5.1（实测至 8.x）、Node ≥ 18、Vue 3 和/或 React 18–19（均为可选 peer——按所用框架安装）、浏览器 Chrome 108+（TLA 原生支持）。
 
-> Vite 8（rolldown）：**5.6.0 起生产链路完整可用**——同步协商门面（V8-SYNC-FACADE）根除了「TLA 顶层 await × 应用循环依赖」的启动互等死锁（JeecgBoot v3.9.5 全场景验收：登录/A套B/三层深链刷新直达/跨框架深链/React 宿主，vite 8.3.2 + rolldown 1.2.12），并修复 remoteEntry 失败重试、manifest exposes 缺项、依赖预载负缓存三项 vite8 专属缺陷；e2e dev 73/73 + prod 33/33（CI 常驻矩阵）。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。已知代价（仅 vite 8）：同步门面使协商命中他方实例时本地副本 chunk 仍会被模块图拉取（双版本场景共享库网络副本 ≤2，运行时身份仍收敛单一实例）。
+> Vite 8（rolldown）：**5.6.0 起生产链路完整可用**——同步协商门面（V8-SYNC-FACADE）根除了「TLA 顶层 await × 应用循环依赖」的启动互等死锁（JeecgBoot v3.9.5 全场景验收：登录/A套B/三层深链刷新直达/跨框架深链/React 宿主，vite 8.3.2 + rolldown 1.2.12），并修复 remoteEntry 失败重试、manifest exposes 缺项、依赖预载负缓存三项 vite8 专属缺陷；e2e dev 73/73 + prod 33/33（CI 常驻矩阵）。dev 冷启动首开仍受依赖预构建窗口影响（DEV-010，首轮打开自动恢复），验收与人工判断请按文档先预热。已知代价（仅 vite 8）：同步门面使协商命中他方实例时本地副本 chunk 仍会被模块图拉取（已测双版本场景共享库网络副本 ≤2；这不是任意应用图的全局数量上限。相同 singleton 作用域中的运行时身份仍收敛单一实例，显式隔离的作用域可以各持一份）。
 
 ## 快速开始（React 应用）
 
@@ -733,7 +735,7 @@ React 浏览器应用唯一导入点：同时导出通用运行时 API（`loadRe
 - 渲染期异常由内置边界捕获并与网络/导出错误**分开记录与展示**（文案区分「加载失败」与「渲染出错」）；ErrorBoundary 不捕获事件处理器与任意异步回调异常——这两类错误遵循 React 自身语义
 - 内置默认错误占位包含：错误码（FgError 的 `code`，无码渲染错误显示 `UNKNOWN`）、真实根因 message、可执行修法，以及两个恢复操作——**「重试加载」**（同页重建加载链）与**「刷新页面重试」**（仅用户点击才整页刷新，保留当前地址；用于浏览器已缓存模块失败的场景，见下条边界）。渲染阶段错误只提供「重试加载」（错误抛自远程代码本身，刷新无法修复）
 - 失败恢复真实穿透浏览器 ESM 失败缓存：运行时对入口 URL 与容器 expose loader 均在失败后的重试上变更 URL（`fulgurjs_retry=N`），服务恢复后点击重试可真实重新拉取（不是只在 mock 下可恢复）。并发加载同一模块失败后重试只推进一个代次（不会因并发失败产生多个重试 URL 导致模块实例分裂）；已成功模块的重复访问零重复网络请求
-- **已知边界**：expose 的**静态依赖** chunk（expose chunk 内 `import` 的普通 chunk）失败后，同页重试不可恢复——浏览器 module map 缓存了该依赖 URL 的失败，重试换 URL 的 expose chunk 重新拉取后其静态 import 仍命中缓存失败。恢复需整页刷新——默认占位的**「刷新页面重试」**就是这条路径的用户操作（用户点击触发，保留当前地址，永不自动刷新）；动态 import 形态的共享依赖不受此限。插件不做全站依赖图递归改写来穿透该限制
+- **已知边界**：expose 的**静态依赖** chunk（expose chunk 内 `import` 的普通 chunk）失败后，同页重试不可恢复——浏览器 module map 缓存了该依赖 URL 的失败，重试换 URL 的 expose chunk 重新拉取后其静态 import 仍命中缓存失败。恢复需整页刷新——默认占位的**「刷新页面重试」**就是这条路径的用户操作（用户点击触发，保留当前地址，永不自动刷新）；插件控制的动态加载边界可通过新 URL 重试，但不保证任意动态依赖都能恢复。插件不做全站依赖图递归改写来穿透该限制。此限制对应当前原生 ESM 加载路径，不能概括为 webpack MF 的共同限制（见 [对照说明](docs/webpack-mf-对照与缺口.md#三使用限制与-webpack-的区别)）
 
 #### `useLoadRemote<Module>(spec, options?)`
 
@@ -770,7 +772,7 @@ const { data, error, loading, reload } = useLoadRemote<Utils>('remote-react/util
 
 ### 8.2 跨框架桥接 API — `/bridge`（子应用级 Vue↔React 互嵌，5.3.0 起）
 
-**产品范围**：整站挂载/卸载的双向嵌入——Vue 3 宿主嵌 React 18/19 子应用、React 18/19 宿主嵌 Vue 3 子应用。组件级互转、宿主与子应用 URL 同步、Angular、SSR/RSC、JS 沙箱、CSS 隔离不在支持面（见 §12）。
+**产品范围**：整站挂载/卸载的双向嵌入——Vue 3 宿主嵌 React 18/19 子应用、React 18/19 宿主嵌 Vue 3 子应用。子应用内部路由与宿主 URL 同步已支持，按 §8.3 显式开启；默认关闭。组件级互转、Angular、SSR/RSC、JS 沙箱、CSS 隔离不在支持面（见本文末尾「边界」）。
 
 #### 入口与导入图
 
@@ -1323,13 +1325,13 @@ const Panel = await loadRemote('shop/Panel', {
 ## 边界（明确不支持）
 
 - Vue 3 与 React 18–19 的**浏览器客户端**联邦为支持面；不支持 SSR / React Server Components / Next.js 全栈 / React Native / Node 服务端加载远程。**跨框架边界（5.3.0 起）**：子应用级互嵌**已支持**（§8.2 `/bridge`）；**组件级混渲染**（Vue 模板直接渲染 React 组件或反之）不支持——那是 veaury 类框架桥接库的产品。两框架各自纯项目互不引入对方；跨框架消费**纯 TS 模块**（如 Vue 宿主加载 React 远程的 utils）可用
-- **桥接的隔离边界（§8.2 如实声明）**：桥接只隔离两棵组件树的挂卸边界，不提供浏览器 realm 隔离——远程全局 CSS、`body`/`html` 样式、全局变量、经 React Portal / Vue Teleport 渲染到容器外的 DOM 仍影响宿主，`unmount` 不承诺撤销浏览器已加载的共享 CSS（样式命名空间与全局副作用清理是接入方责任）。子应用内部错误不冒泡进宿主错误边界（跨 root）；子应用路由用 memory 路由，v1 **不与宿主 URL 同步**（刷新不恢复子应用内部路径，不计为深链）
+- **桥接的隔离边界（§8.2 如实声明）**：桥接只隔离两棵组件树的挂卸边界，不提供浏览器 realm 隔离——远程全局 CSS、`body`/`html` 样式、全局变量、经 React Portal / Vue Teleport 渲染到容器外的 DOM 仍影响宿主，`unmount` 不承诺撤销浏览器已加载的共享 CSS（样式命名空间与全局副作用清理是接入方责任）。子应用内部错误不冒泡进宿主错误边界（跨 root）；子应用使用受控 memory 路由；显式启用 §8.3 的 URL 同步后支持深链、刷新与前进后退。未启用时浏览器地址不记录子应用内部位置
 - React 侧不承诺组件保活：`createReactHostPages` 不提供 `keepAliveNames`（Vue 的 KeepAlive 专属）；页面表里的 `keepAlive` 字段在 React 侧只作普通扩展位。重复打开已下载页面的模块复用照常
 - 跨源 Fast Refresh（5.2.0 修复）：远程 React 组件修改（文本/样式/Hooks 结构不变的兼容改动）自动热更新到正在显示的宿主页面并保留组件本地状态，普通 TS 模块修改自动传播到引用它的组件边界——零手动刷新（插件保证全页单一 react-refresh 实例）。React Refresh 不兼容的导出/Hooks 结构变化、Vite 要求 full-reload 的改动按框架标准重新挂载/整页刷新；不承诺任意改动保活
 - 不兼容 originjs 的 `virtual:__federation__` 旧写法
-- 不支持 SSR（检测到即警告并禁用钩子）
 - 无浏览器 DevTools 扩展（提供 `window.__FULGURJS_SCOPE__ / __FULGURJS_INFO__` 调试面）
-- 无 JS 沙箱 / CSS 隔离——联邦是同 realm 共存架构，靠 shared 单例协商防止双运行时（详见 `docs/沙箱边界审计.md` 的三维度实测）
+- 无 JS 沙箱 / 自动 CSS 隔离——联邦是同 realm 共存架构；共享协商解决依赖实例选择，不隔离全局副作用。多 React 大版本按运行时插件章节的要求隔离整组依赖及消费者（详见 `docs/沙箱边界审计.md`）
+- 不提供 webpack `script`/`var` 容器互操作；当前产出 ESM remote，容器接口相似不代表可直接混用 webpack 产物。能力与使用限制的逐项来源见 [webpack MF 对照](docs/webpack-mf-对照与缺口.md)
 
 ## 文档
 
