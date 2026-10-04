@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url'
 import {
   TEMPLATE_CATALOG,
   copyTemplate,
+  copyMissingFiles,
+  scanTemplateConflicts,
   isExcluded,
   readDevConfig,
   resolveTemplatesRoot,
@@ -57,6 +59,7 @@ function makeIo(installCode = 0): { io: CreateIo; prompts: string[]; logs: strin
     logs,
     io: {
       log: (m) => logs.push(m),
+      out: (m) => logs.push('OUT:' + m),
       error: (m) => logs.push('ERR:' + m),
       prompt: async (q) => {
         prompts.push(q)
@@ -156,6 +159,90 @@ describe('fulgurjs create', () => {
     expect(fs.existsSync(path.join(target, 'pnpm-lock.yaml'))).toBe(true)
     fs.rmSync(root, { recursive: true, force: true })
     fs.rmSync(cwd, { recursive: true, force: true })
+  })
+
+  it('--force 同名冲突不改写：package.json / 锁文件内容保持用户版本，冲突逐项列出', async () => {
+    const root = makeTemplatesRoot()
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-create-'))
+    const target = path.join(cwd, 'conflict')
+    fs.mkdirSync(target, { recursive: true })
+    const userPkg = JSON.stringify({ name: 'user-project', private: true, custom: 'mine' })
+    fs.writeFileSync(path.join(target, 'package.json'), userPkg)
+    const userLock = 'lockfileVersion: USER-LOCK'
+    fs.writeFileSync(path.join(target, 'pnpm-lock.yaml'), userLock)
+    const { io, logs } = makeIo()
+    const r = await createProject(baseOpts(root, cwd, { dir: 'conflict', force: true, json: true }), io)
+    // 用户文件内容逐字节保留（不是只看存在性）
+    expect(fs.readFileSync(path.join(target, 'package.json'), 'utf8')).toBe(userPkg)
+    expect(fs.readFileSync(path.join(target, 'pnpm-lock.yaml'), 'utf8')).toBe(userLock)
+    // 模板里用户没有的文件补齐
+    expect(fs.existsSync(path.join(target, 'scripts/dev.mjs'))).toBe(true)
+    expect(fs.existsSync(path.join(target, 'remote/package.json'))).toBe(true)
+    expect(r.copiedCount).toBeGreaterThan(0)
+    expect(r.skippedConflicts.map((c) => c.rel).sort()).toEqual(['package.json', 'pnpm-lock.yaml'])
+    const out = logs.filter((l) => l.startsWith('OUT:')).join('\n')
+    expect(out).toContain('pnpm-lock.yaml')
+    expect(out).toContain('保留你的版本')
+    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(cwd, { recursive: true, force: true })
+  })
+
+  it('--force 文件/目录类型冲突与符号链接目标：跳过并列出，不写入不穿透', async () => {
+    const root = makeTemplatesRoot()
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-create-'))
+    const target = path.join(cwd, 'typedir')
+    fs.mkdirSync(target, { recursive: true })
+    // 模板 scripts 是目录 → 目标 scripts 放成文件：类型冲突，整个子树不写
+    fs.writeFileSync(path.join(target, 'scripts'), 'i am a file')
+    // 模板 host/package.json 是文件 → 目标同路径放符号链接：不穿透写入
+    fs.mkdirSync(path.join(target, 'host'), { recursive: true })
+    fs.symlinkSync('/etc/hostname', path.join(target, 'host', 'package.json'))
+    // 单元层：预检完整列出两类冲突，copyMissingFiles 不写这些路径
+    const conflicts = scanTemplateConflicts(path.join(root, 'vue-vue'), target)
+    const rels = conflicts.map((c) => c.rel)
+    expect(rels).toContain('scripts')
+    expect(rels).toContain('host/package.json')
+    const outcome = copyMissingFiles(path.join(root, 'vue-vue'), target, conflicts)
+    expect(fs.readFileSync(path.join(target, 'scripts'), 'utf8')).toBe('i am a file')
+    expect(fs.readlinkSync(path.join(target, 'host', 'package.json'))).toBe('/etc/hostname')
+    expect(outcome.skipped.map((c) => c.rel).sort()).toEqual(['host/package.json', 'scripts'])
+    expect(outcome.copied).toContain('pnpm-workspace.yaml')
+    // 工程层：类型冲突挡住 scripts/dev.mjs 关键文件 → 明确报错，用户文件原样
+    const { io } = makeIo()
+    await expect(createProject(baseOpts(root, cwd, { dir: 'typedir', force: true }), io)).rejects.toThrow(/scripts\/dev\.mjs/)
+    expect(fs.readFileSync(path.join(target, 'scripts'), 'utf8')).toBe('i am a file')
+    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(cwd, { recursive: true, force: true })
+  })
+
+  it('目标路径是文件 → 拒绝；全存在的 --force 重跑 = 幂等零改写', async () => {
+    const root = makeTemplatesRoot()
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-create-'))
+    const asFile = path.join(cwd, 'occupied')
+    fs.writeFileSync(asFile, 'not a dir')
+    const { io } = makeIo()
+    await expect(createProject(baseOpts(root, cwd, { dir: 'occupied', force: true }), io)).rejects.toThrow(/目标路径已存在且是文件/)
+    // 幂等：完整工程上重跑 --force → copiedCount 0、内容不变
+    const target = path.join(cwd, 'again')
+    await createProject(baseOpts(root, cwd, { dir: 'again' }), io)
+    const before = fs.readFileSync(path.join(target, 'package.json'), 'utf8')
+    const r2 = await createProject(baseOpts(root, cwd, { dir: 'again', force: true }), io)
+    expect(r2.copiedCount).toBe(0)
+    expect(r2.skippedConflicts.length).toBeGreaterThan(0)
+    expect(fs.readFileSync(path.join(target, 'package.json'), 'utf8')).toBe(before)
+    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(cwd, { recursive: true, force: true })
+  })
+
+  it('copyTemplate 直遇冲突 → 抛错且不写任何文件', () => {
+    const root = makeTemplatesRoot()
+    const dest = path.join(root, 'blocked')
+    fs.mkdirSync(dest)
+    fs.writeFileSync(path.join(dest, 'package.json'), 'user')
+    expect(() => copyTemplate(path.join(root, 'vue-vue'), dest)).toThrow(/同名冲突/)
+    expect(fs.readFileSync(path.join(dest, 'package.json'), 'utf8')).toBe('user')
+    expect(fs.existsSync(path.join(dest, 'pnpm-lock.yaml'))).toBe(false)
+    fs.rmSync(root, { recursive: true, force: true })
   })
 
   it('未知模板 / 包内模板缺失 / 复制后缺关键文件 → 明确报错', async () => {

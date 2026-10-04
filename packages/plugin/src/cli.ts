@@ -22,6 +22,9 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs create <模板> [--dir <路径>] [--no-install] [--force] [--json]
                                                    非交互创建；模板：vue-vue / react-react /
                                                    vue-host-react-remote / react-host-vue-remote / showcase
+                                                   --force 复用非空目录：只补缺失文件，同名冲突逐项列出并
+                                                   保留你的版本（绝不改写）；--json 时 stdout 仅输出结果
+                                                   JSON，进度与安装日志走 stderr
 已有项目（单项目 fulgurjs.config.ts 在应用根目录；命令默认读 ./fulgurjs.config.ts）：
   fulgurjs init [--template <path>] [--force]      生成单项目 fulgurjs.config.ts 起步模板
                                                    （默认导出直接是 federation() 选项；--template 是输出路径）
@@ -128,17 +131,25 @@ async function main(): Promise<number> {
       }
     }
     try {
+      const json = has('--json')
       await createProject(
         {
           template: argv[1] && !argv[1].startsWith('-') ? argv[1] : undefined,
           dir: argOf('--dir'),
           install: !has('--no-install'),
           force: has('--force'),
-          json: has('--json'),
+          json,
           templatesRoot: resolveTemplatesRoot(import.meta.url),
           cwd: process.cwd(),
         },
-        { log: (m) => console.log(m), error: (m) => console.error(m), prompt: promptImpl, install: defaultInstall },
+        {
+          // --json 时进度走 stderr：stdout 只输出最终 JSON，可被消费方直接解析
+          log: json ? (m) => console.error(m) : (m) => console.log(m),
+          out: (m) => console.log(m),
+          error: (m) => console.error(m),
+          prompt: promptImpl,
+          install: (cwd) => defaultInstall(cwd, json ? 'stderr' : 'inherit'),
+        },
       )
       return 0
     } catch (e) {

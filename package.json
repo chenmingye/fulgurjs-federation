@@ -9,7 +9,7 @@
     "examples:stop": "node examples/scripts/stop-demo.mjs",
     "examples:build": "node examples/scripts/build-demo.mjs",
     "examples:portal": "node examples/portal/server.mjs",
-    "test:examples": "node --test examples/scripts/catalog.test.mjs",
+    "test:examples": "node --test examples/scripts/catalog.test.mjs examples/scripts/dev-runner.test.mjs",
     "build": "pnpm --dir packages/plugin build",
     "test:unit": "pnpm --dir packages/plugin test",
     "test:dev": "pnpm --dir e2e test:dev",

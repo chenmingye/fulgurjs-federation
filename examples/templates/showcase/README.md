@@ -107,3 +107,13 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 pnpm run typecheck   # React 工程 tsc --noEmit；Vue 工程 vue-tsc --noEmit
 pnpm run build
 ```
+
+## 改端口（整组同步，漏一处启动器会被旧端口卡住）
+
+四个应用的端口出现在三处，改任何一个都要整组同步：
+
+1. 各应用 `package.json` 的 `dev` 与 `preview` 两个脚本的 `--port`（每应用两处）；
+2. 宿主 `fulgurjs.config.ts` 里 `remotes` 的 dev 地址（`vue-host` 指向 react-remote 的 5333；`react-host` 指向 vue-remote 的 5335）；
+3. 根 `scripts/dev.config.json` 里该应用的 `port`（**必改**：启动器预检/探活都读它）。
+
+生产部署地址（各应用 `prod`）是站点路径，与 dev 端口无关，改端口不要动它。改完自查：`grep -rn "533" --include="*.json" --include="*.ts" .` 不应再出现旧端口。

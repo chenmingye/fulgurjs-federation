@@ -14,7 +14,7 @@ npx @fulgurjs/federation create vue-vue --dir my-federation
 cp -r examples/templates/vue-vue /wherever/you/want && cd /wherever/you/want/vue-vue
 ```
 
-`create` 复制完整模板并默认执行 `pnpm install --frozen-lockfile`；目标目录非空默认拒绝（`--force` 只增量复制，不删除已有文件）；安装失败非零退出并显示原因。它不做应用名称/端口改写——需要改端口时按下方清单手工同步。
+`create` 复制完整模板并默认执行 `pnpm install --frozen-lockfile`；目标目录非空默认拒绝（`--force` 复用目录：只补缺失文件，同名冲突逐项列出并保留你的版本，绝不改写/删除已有内容）；目标路径是文件、复制中途失败、安装失败都会非零退出并说明，已生成的工程保留供排查。它不做应用名称/端口改写——需要改端口时按下方清单手工同步。
 
 ## 选择模板
 
@@ -55,22 +55,23 @@ pnpm dev                # 统一启动器：远程(5213) + 宿主(5214) 按顺�
 
 五个模板共用同一份启动脚本（模板内 `scripts/dev.mjs`，规范源在仓库 `examples/scripts/dev-runner.mjs`，`npm run test:examples` 校验一致）。行为：
 
-- **启动前端口预检**：任一端口被占用则拒绝启动（退出码 2），打印占用查看命令与处理方法；不会替你结束端口上的既有服务。
+- **启动前端口预检**：任一端口被占用则拒绝启动（退出码 2），打印占用查看命令与整组端口同步清单；不会替你结束端口上的既有服务。
 - **按序启动、逐个探活**：远程先启动，就绪后再启动宿主；日志带 `[应用名]` 前缀。
-- **失败整组退出**：任一应用启动失败/超时/运行中退出，停止本次启动的全部进程（退出码 1）并打印该应用日志尾部；不留下半残组合。
-- **Ctrl+C / SIGTERM 清理**：只清理本次启动的子进程（进程组级），不依赖 PID 文件，不按端口批量杀进程。
+- **全生命周期监督、失败整组退出**：每个应用从进程创建起就被持续监督（探活中、部分就绪、全部就绪后任一阶段退出都会被发现）；任一应用启动失败/超时/中途退出，停止本次启动的全部进程（退出码 1）并打印该应用日志尾部；不留下半残组合，也不会漏掉「远程已就绪后、宿主启动期间」的退出。
+- **停止清理到孙进程**：Ctrl+C / SIGTERM 走 POSIX 进程组信号（只杀本次启动的进程组）；即使包管理器父进程已退出，同组的 dev server 孙进程也会被终止，不留占用端口的孤儿。Windows 用 taskkill /T /F 兜底（父进程已退出时无法追溯孙进程，平台限制）。
 - 单独调试某个应用：`pnpm run dev:remote` / `pnpm run dev:host`（showcase 有四个 `dev:*` 入口），绕过启动器直接启动。
 - 「dev server 已监听」表示端口就绪；页面可用以浏览器实际加载为准。
 
-## 改端口的固定清单
+## 改端口的固定清单（四处必须同步）
 
-模板不做端口/名称自动改写；需要改时同步以下三处（以 vue-vue 的远程 5213 为例）：
+模板不做端口/名称自动改写；需要改时**整组同步以下四处**（以 vue-vue 的远程 5213 → 6213 为例）。漏改任何一处，启动器都会被旧端口卡住（预检占用或探活超时）：
 
-1. `remote/package.json` 的 `dev` 与 `preview` 脚本里的 `--port 5213`；
-2. `host/fulgurjs.config.ts` 中 `remotes['vue-remote'].dev` 的 `http://localhost:5213`；
-3. （可选）根 `scripts/dev.config.json` 里该应用的 `port`，保持启动器/文档/场景表一致。
+1. `remote/package.json` 的 `dev` 与 `preview` 两个脚本里的 `--port 5213`（两处都要改）；
+2. `host/fulgurjs.config.ts` 中 `remotes['vue-remote'].dev` 的 `http://localhost:5213`（宿主运行时按这个地址加载远程）；
+3. 根 `scripts/dev.config.json` 里该应用的 `port`（**必改**：启动器的启动前预检和逐个探活都读这里，不是可选项）；
+4. 模板 README 顶部端口表里的记录值（保持文档一致）。
 
-宿主自身端口在 `host/package.json` 的 dev/preview 脚本。跨应用容器名（如 `vue-remote`）改名时，还需同步宿主代码中的 spec 前缀（`vue-remote/...`）与页面表——不建议改名。
+宿主自身端口在 `host/package.json` 的 dev/preview 脚本（host 端口同样要同步 1/3/4 三处）。生产部署地址（`fulgurjs.config.ts` 的 `prod`）是站点路径，与 dev 端口无关，改端口不要动它。跨应用容器名（如 `vue-remote`）改名时，还需同步宿主代码中的 spec 前缀（`vue-remote/...`）与页面表——不建议改名。
 
 ## 生产构建与部署
 

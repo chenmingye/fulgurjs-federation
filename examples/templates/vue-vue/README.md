@@ -79,3 +79,9 @@ server {
 
 `examples/` 面向**使用者**：拷贝、安装 registry 正式包、独立运行。
 仓库根的 `fixtures/` 是**插件内部回归夹具**（源码 `link:` 到插件工作区），不要当作使用模板。
+
+## 改端口（四处必须同步，漏一处启动器会被旧端口卡住）
+
+- 改remote（默认 5213）：① `remote/package.json` 的 `dev` 与 `preview` 两个脚本的 `--port 5213`；② `host/fulgurjs.config.ts` 里 `remotes['vue-remote'].dev` 的 `http://localhost:5213`；③ 根 `scripts/dev.config.json` 里 remote 的 `port`（**必改**：启动器预检/探活都读它）；④ 本 README 顶部端口表。
+- 改host（默认 5214）：① `host/package.json` 的 `dev`/`preview` `--port 5214`；② `scripts/dev.config.json`；③ 本 README 端口表。
+- 生产部署地址（`prod`，如 `/remote`）是站点路径，与 dev 端口无关，改端口不要动它。改名（容器名）不建议：还需同步 spec 前缀与页面表。
