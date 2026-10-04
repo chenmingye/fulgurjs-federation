@@ -22,7 +22,15 @@ function makeTemplatesRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-tpl-'))
   const tpl = path.join(root, 'vue-vue')
   fs.mkdirSync(path.join(tpl, 'scripts'), { recursive: true })
-  fs.writeFileSync(path.join(tpl, 'package.json'), JSON.stringify({ dependencies: { '@fulgurjs/federation': '5.8.0' } }))
+  fs.writeFileSync(path.join(tpl, 'package.json'), JSON.stringify({ private: true }))
+  // dev.config.json 引用的两个子应用：插件依赖声明在子应用 package.json（workspace 根不声明）
+  for (const app of ['remote', 'host']) {
+    fs.mkdirSync(path.join(tpl, app), { recursive: true })
+    fs.writeFileSync(
+      path.join(tpl, app, 'package.json'),
+      JSON.stringify({ name: `demo-${app}`, dependencies: { '@fulgurjs/federation': '5.8.0' } }),
+    )
+  }
   fs.writeFileSync(path.join(tpl, 'pnpm-workspace.yaml'), 'packages:\n  - host\n  - remote\n')
   fs.writeFileSync(path.join(tpl, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n')
   fs.writeFileSync(path.join(tpl, 'scripts/dev.mjs'), '// runner\n')
