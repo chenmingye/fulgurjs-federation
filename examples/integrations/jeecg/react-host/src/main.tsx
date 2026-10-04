@@ -76,6 +76,8 @@ const router = createBrowserRouter(
 )
 
 // 宿主导航端口：读 createBrowserRouter 实例（data router，RR7 协议要求）
-const navPort = createReactBridgeNavigation(router)
+// 子目录部署（basename /jeecg-react-host）：端口必须同源传 basename，否则 getLocation 返回带前缀路径，
+// 通道前缀匹配失败 → 子应用导航全部被拒、宿主地址不更新（showcase routing.ts 同款口径）
+const navPort = createReactBridgeNavigation(router, { basename: '/jeecg-react-host' })
 
 createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />)
