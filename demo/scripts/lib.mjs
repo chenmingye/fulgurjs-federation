@@ -24,11 +24,18 @@ const writePids = (data) => {
 }
 
 export const isPortUp = (port) =>
-  new Promise((resolve) => {
-    const s = net.connect({ port, host: '127.0.0.1', timeout: 800 })
+  Promise.any([
+    // vite6/node24 下 dev server 可能只绑 IPv6 回环（::1），双栈探测
+    probeHost(port, '127.0.0.1'),
+    probeHost(port, '::1'),
+  ]).catch(() => false)
+
+const probeHost = (port, host) =>
+  new Promise((resolve, reject) => {
+    const s = net.connect({ port, host, timeout: 800 })
     s.on('connect', () => { s.destroy(); resolve(true) })
-    s.on('error', () => resolve(false))
-    s.on('timeout', () => { s.destroy(); resolve(false) })
+    s.on('error', reject)
+    s.on('timeout', () => { s.destroy(); reject(new Error('timeout')) })
   })
 
 const waitPort = async (port, timeoutMs = 120000) => {
@@ -63,7 +70,11 @@ async function startApp(app, log) {
   fs.mkdirSync(LOG_DIR, { recursive: true })
   const logFile = path.join(LOG_DIR, `${app.name}.log`)
   const out = fs.openSync(logFile, 'a')
-  const child = spawn('npm', ['run', 'dev'], { cwd, stdio: ['ignore', out, out], detached: false })
+  // role:service 的 node 服务（如 jeecg data-service）：无 package.json，直接 node server.mjs
+  const isNodeService = app.role === 'service' && !fs.existsSync(path.join(cwd, 'package.json'))
+  const child = isNodeService
+    ? spawn('node', ['server.mjs'], { cwd, stdio: ['ignore', out, out], detached: false })
+    : spawn('npm', ['run', 'dev'], { cwd, stdio: ['ignore', out, out], detached: false })
   const pids = readPids()
   pids[app.name] = { pid: child.pid, port: app.port, dir: app.dir, startedAt: new Date().toISOString(), logFile }
   writePids(pids)

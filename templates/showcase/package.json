@@ -9,5 +9,11 @@
     "dev:react-host": "pnpm --dir react-host dev",
     "dev": "pnpm run dev:vue-remote & pnpm run dev:react-remote & pnpm run dev:vue-host & pnpm run dev:react-host",
     "build": "pnpm -r build"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "vue-demi"
+    ]
   }
 }

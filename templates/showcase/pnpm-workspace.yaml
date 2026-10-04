@@ -3,7 +3,8 @@ packages:
   - vue-remote
   - react-host
   - react-remote
-allowBuilds:
-  esbuild: set this to true or false
 minimumReleaseAgeExclude:
-  - '@fulgurjs/federation@5.7.1'
+  - '@fulgurjs/federation@5.7.1 || 5.8.0'
+onlyBuiltDependencies:
+  - esbuild
+  - vue-demi
