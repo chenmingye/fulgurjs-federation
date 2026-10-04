@@ -434,7 +434,7 @@ npx fulgurjs doctor --base https://your-site.example --apps remote-vue
 - [可复制运行模板](https://github.com/chenmingye/fulgurjs-federation/tree/master/templates)：Vue×Vue、React×React、双向跨框架桥接与完整 showcase，五个 pnpm workspace 模板，复制后 `pnpm install && pnpm dev` 即可运行。
 - [迁移指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md)：从已有微前端方案接入。
 - [CHANGELOG](https://github.com/chenmingye/fulgurjs-federation/blob/master/CHANGELOG.md)：版本变化与迁移说明。
-- [验收报告](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/整夜全量验收报告-20261004.md)：真实 MES 业务项目（两个 SVN 项目全新副本）接入验收：dev/生产/故障恢复/HMR；含 Vite6 大型应用生产构建的配置前提（停用 manualChunks 等）。
+- [验收报告](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/整夜全量验收报告-20261004.md)：真实 MES 业务项目（两个 SVN 项目全新副本）接入验收：dev/生产/故障恢复/HMR（历史记录：该轮曾要求大型应用停用 manualChunks，**5.8.0 起已修复，可保留业务 manualChunks**——共享本体自动隔离进 `fulgurjs-provider-*` 组，不受用户分组影响）。
 - 历史验收：[完整Demo展示与全面复测-20261002](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/完整Demo展示与全面复测-验收报告-20261002.md)。历史结果不能代替当前项目验收。
 
 ## 开发与测试

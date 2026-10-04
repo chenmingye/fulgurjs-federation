@@ -200,6 +200,82 @@ function providerChunkOf(id: string, roots: Array<{ root: string; shareKey: stri
 }
 
 /**
+ * providerChunkOf 的闭包扩展形态（MC-FIX-2C，2026-10-04）：把 shared 本体的**完整静态
+ * 闭包**（@vue/* 编译器层、entities 等 rsc 依赖）一并划入 provider 组。
+ *
+ * 背景：仅按包目录前缀归组时，本体闭包里的第三方模块（如 @vue/compiler-dom 依赖的
+ * entities）会被 rollup 按共同消费方指纹并入用户 vendor 大组——provider chunk 因此
+ * 长出指向用户组的静态边，而用户组里的依赖（ant-design-vue）又静态依赖 provider
+ * chunk（本地 vue），形成跨 chunk 模块级环；环上求值顺序由入口导入序决定，一旦
+ * provider chunk 先入环，其函数被用户组顶层调用时 const 绑定仍在 TDZ
+ * （MES admin manualChunks 实测：Cannot access 'q' before initialization）。
+ * 闭包整体并入后 provider chunk 成为叶子（零指向用户组的静态边），环被彻底移除。
+ *
+ * 成组期运行：manualChunks 函数的第二个参数携带 getModuleInfo，BFS 静态 importedIds，
+ * 跳过插件虚拟模块（facadeChunkOf 另行归组）与其他 shareKey 的 provider 根（各自成组）。
+ * 结果按模块 id 记忆化，每轮 build 在 buildStart 重置。
+ */
+interface ChunkingMeta {
+  getModuleInfo?: (id: string) => { importedIds: readonly string[] } | null
+}
+const providerClosureCache = new Map<string, string | undefined>()
+let providerClosureBuilt = false
+
+function providerChunkOfWithClosure(
+  id: string,
+  roots: Array<{ root: string; shareKey: string; entryId?: string }>,
+  meta?: unknown,
+  seeds: string[] = [],
+): string | undefined {
+  if (roots.length === 0) return undefined
+  const clean = id.replace(/^\0/, '').split('?')[0]
+  const direct = providerChunkOf(clean, roots)
+  if (direct) return direct
+  const getModuleInfo = (meta as ChunkingMeta | undefined)?.getModuleInfo
+  if (!getModuleInfo) return undefined
+  if (!providerClosureBuilt) {
+    // 首次调用：从各 provider 的入口模块 BFS 收集完整静态闭包
+    providerClosureBuilt = true
+    debugLog('facade', { stage: 'provider-closure', seeds: seeds.length, hasGetModuleInfo: typeof getModuleInfo === 'function' })
+    const visited = new Set<string>()
+    const queue: Array<{ id: string; name: string }> = []
+    const nameOf = (p: { shareKey: string }) => 'fulgurjs-provider-' + (p.shareKey.replace(/[^A-Za-z0-9_-]/g, '_') || 'unknown')
+    for (const seed of seeds) {
+      const owner = roots.find((p) => seed.replace(/^\0/, '').split('?')[0].startsWith(p.root))
+      if (!owner) continue
+      visited.add(seed)
+      queue.push({ id: seed, name: nameOf(owner) })
+    }
+    for (const p of roots) {
+      if (!p.entryId || visited.has(p.entryId)) continue
+      visited.add(p.entryId)
+      queue.push({ id: p.entryId, name: nameOf(p) })
+    }
+    while (queue.length > 0) {
+      const { id: cur, name } = queue.shift()!
+      let info: { importedIds: readonly string[] } | null = null
+      try {
+        info = getModuleInfo(cur)
+      } catch {
+        info = null
+      }
+      for (const dep of info?.importedIds ?? []) {
+        const depClean = dep.replace(/^\0/, '').split('?')[0]
+        if (depClean.startsWith('virtual:fulgurjs-')) continue // 插件虚拟模块另行归组
+        if (visited.has(depClean)) continue
+        const directDep = providerChunkOf(depClean, roots)
+        if (directDep && directDep !== name) { visited.add(depClean); continue } // 其他 shareKey 的本体根
+        visited.add(depClean)
+        providerClosureCache.set(depClean, name)
+        queue.push({ id: depClean, name })
+      }
+    }
+    debugLog('facade', { stage: 'provider-closure-done', captured: providerClosureCache.size, sample: [...providerClosureCache.keys()].slice(0, 8).map((k) => k.slice(-60)) })
+  }
+  return providerClosureCache.get(clean)
+}
+
+/**
  * V8-SYNC-FACADE：同步门面的本体导入目标解析（裸包名 → 绝对 id）。
  * 门面是虚拟模块，proxy/commonjs 载体上下文里裸包名解析不可靠（同 genCjsNsFacade 的教训）；
  * 解析失败保留裸包名（root node_modules 兜底）。
@@ -244,7 +320,9 @@ export function federation(options: FederationOptions): Plugin[] {
     /** Vite 8（rolldown）生产构建：使用原生 codeSplitting 分组隔离提供/协商/CJS 模块 */
     rolldownBuild: boolean
     /** Vite 8：本地提供包的物理目录（providerRoots 归组用，buildStart 填充） */
-    providerRoots: Array<{ root: string; shareKey: string }>
+    providerRoots: Array<{ root: string; shareKey: string; entryId?: string }>
+    /** MC-FIX-2C：provider 入口模块 id（Node 解析的 CJS 链 + Vite 解析的 ESM 链都作 BFS 种子） */
+    providerEntrySeeds: string[]
     /** WP1：已被本插件改写过的模块 id（含 query 与 clean 两种形态）。这些模块后续再出现
      * 裸 shared specifier = 后置插件（auto-import 等）注入，由 resolveId 期兜底改道。 */
     transformedModules: Set<string>
@@ -252,6 +330,7 @@ export function federation(options: FederationOptions): Plugin[] {
     command: 'serve',
     rolldownBuild: false,
     providerRoots: [],
+    providerEntrySeeds: [],
     base: '/',
     exposeAbsPaths: {},
     exposeFiles: {},
@@ -458,7 +537,10 @@ export function federation(options: FederationOptions): Plugin[] {
                 const facade = facadeChunkOf(id)
                 if (facade) return facade
                 if (isOwnPackageModule(id)) return undefined
-                return userFn(id, meta as never)
+                // MC-FIX-2：shared 本体闭包优先于用户分组（与 5.2.1 函数形式一致）——
+                // 用户把共享包与它的消费方（如 vue + vue-router）分进同组时，fallback
+                // 动态边落回消费方所在 chunk，与「消费方 →静态→ TLA 门面」构成自等待环
+                return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds) ?? userFn(id, meta as never)
               }
               const extraBuild = ((extra as any).build ??= {})
               extraBuild.rollupOptions = { ...(extraBuild.rollupOptions ?? {}), output: { manualChunks: wrapped } }
@@ -468,11 +550,14 @@ export function federation(options: FederationOptions): Plugin[] {
               state.manualChunkSpecsPending = Object.entries(userManualChunks as Record<string, string[]>).flatMap(
                 ([group, specs]) => specs.map((s) => [group, s] as [string, string]),
               )
-              const wrapped = (id: string): string | undefined => {
+              const wrapped = (id: string, meta?: unknown): string | undefined => {
                 const facade = facadeChunkOf(id)
                 if (facade) return facade
                 if (isOwnPackageModule(id)) return undefined
-                return state.manualChunkGroups.get(id.split('?')[0]) ?? state.manualChunkGroups.get(id)
+                // MC-FIX-2：同函数形式——shared 本体闭包优先于用户分组（防自等待环）
+                return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds)
+                  ?? state.manualChunkGroups.get(id.split('?')[0])
+                  ?? state.manualChunkGroups.get(id)
               }
               const extraBuild = ((extra as any).build ??= {})
               extraBuild.rollupOptions = { ...(extraBuild.rollupOptions ?? {}), output: { manualChunks: wrapped } }
@@ -499,7 +584,7 @@ export function federation(options: FederationOptions): Plugin[] {
             const facade = facadeChunkOf(id)
             if (facade) return facade
             if (isOwnPackageModule(id)) return undefined
-            return providerChunkOf(id, state.providerRoots) ?? userFn?.(id, meta)
+            return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds) ?? userFn?.(id, meta)
           }
         const extraBuild = ((extra as any).build ??= {})
         if (Array.isArray(userOutput)) {
@@ -538,7 +623,11 @@ export function federation(options: FederationOptions): Plugin[] {
                   const facade = facadeChunkOf(id)
                   if (facade) return facade
                   if (isOwnPackageModule(id)) return undefined
-                  return groupOf(id)
+                  // MC-FIX-2（2026-10-04）：对象形式此前漏掉 providerChunkOf（函数形式有）——
+                  // MES admin 的 vue-vendor 组同时吃进真实 vue 与被改写的 vue-router，
+                  // 与协商门面的 fallback 动态边互为等待，页面零报错死锁。shared 本体
+                  // 闭包优先归入 fulgurjs-provider-* 组，斩断该环（与函数形式语义对齐）。
+                  return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds) ?? groupOf(id)
                 },
               },
             }
@@ -585,13 +674,15 @@ export function federation(options: FederationOptions): Plugin[] {
             if (isOwnPackageModule(id)) return facadeChunkOf(id) ?? reactDomChunkOf(id) ?? undefined
             const prev = previousMc?.(id, meta)
             if (prev !== undefined) return prev
+            // MC-FIX-2：shared 本体闭包先于用户分组（纯 remote 的 previousMc 不含 5.2.1
+            // 包装；用户把共享包与其消费方同组同样会构造 fallback 自等待环）
+            const provider = providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds)
+            if (provider) return provider
             const user = userFn3?.(id, meta)
             if (user !== undefined) return user
             // V8-FIX：shared 本体闭包与门面同组（破 rolldown chunk 级 TLA 循环）；
             // react-dom 本体属 react-dom 闭包 → 归 fulgurjs-shared-react-dom 组，
             // 同时满足 5.3.0 的 react-dom chunk 隔离（不再落入独立入口 chunk）
-            const provider = providerChunkOf(id, state.providerRoots)
-            if (provider) return provider
             const facade = facadeChunkOf(id)
             if (facade) return facade
             return reactDomChunkOf(id)
@@ -962,6 +1053,9 @@ export function federation(options: FederationOptions): Plugin[] {
       // 等兄弟入口会把垫片拖进消费方静态链（早于 TLA 门面求值），该场景由运行时
       // pinLoadedShare 收敛实例（见 runtime/index.ts），不依赖 chunk 顺序。
       state.providerRoots = []
+      state.providerEntrySeeds = []
+      providerClosureCache.clear()
+      providerClosureBuilt = false
       // commonjs 的 resolve 可能提前 load/transform 本体；在首个异步 resolve 前登记包根，
       // 否则 react-dom 首次变换时尚未登记自身，跨键 require 会永久漏过改写。
       const providerRequire = createRequire(path.join(n.root, 'package.json'))
@@ -973,7 +1067,8 @@ export function federation(options: FederationOptions): Plugin[] {
           if (pos < 0) continue
           const parts = file.slice(pos + '/node_modules/'.length).split('/')
           const pkg = parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
-          state.providerRoots.push({ root: file.slice(0, pos + '/node_modules/'.length) + pkg + '/', shareKey: item.shareKey })
+          state.providerRoots.push({ root: file.slice(0, pos + '/node_modules/'.length) + pkg + '/', shareKey: item.shareKey, entryId: file })
+          state.providerEntrySeeds.push(file)
         } catch { /* 别名/相对源码由后续 Vite resolve 补齐。 */ }
       }
       {
@@ -988,8 +1083,9 @@ export function federation(options: FederationOptions): Plugin[] {
           const parts = file.slice(pos + marker.length).split('/')
           const pkg = parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
           const root = file.slice(0, pos + marker.length) + pkg + '/'
+          state.providerEntrySeeds.push(file)
           if (!state.providerRoots.some((provider) => provider.root === root && provider.shareKey === item.shareKey)) {
-            state.providerRoots.push({ root, shareKey: item.shareKey })
+            state.providerRoots.push({ root, shareKey: item.shareKey, entryId: file })
           }
         }
       }
@@ -1508,6 +1604,17 @@ export function federation(options: FederationOptions): Plugin[] {
     if (!quickCheck) return null
     const n = state.normalized!
     const isPureRemoteBuild = n.exposes.length > 0 && n.remotes.length === 0
+    // MC-FIX-1（2026-10-04）：补齐与 pre.transform 完全一致的 node_modules 闸门。
+    // 此前该兜底直呼 transformModule，而 allowNodeModules 只存在于 ctx 声明、
+    // transformModule 从不读取——纯宿主（remotes>0、无 exposes、devSharedSelf=false）
+    // 构建里 2000+ 依赖模块（vue-router/ant-design-vue/element-plus…）对 shared 键的
+    // 静态导入被错误门面化。与用户 manualChunks 分组叠加后，「消费者所在组 →静态→
+    // TLA 协商门面 →fallback 动态→ 消费者所在组」成 chunk 级自等待环，页面零报错死锁
+    // （MES admin vue-vendor 实测，20261004）。pre 阶段闸门不动，本兜底语义对齐。
+    const providerCjs = /require\s*\(\s*["']/.test(code) &&
+      state.providerRoots.some((provider) => clean.startsWith(provider.root))
+    const allowNodeModules = n.devSharedSelf || isPureRemoteBuild || providerCjs
+    if (!isTransformableId(id, allowNodeModules)) return null
     return transformModule(code, id, {
       onRewrite: () => {
         debugLog('transform', { stage: 'post-fallback', mode: 'build', module: redactModulePath(id, n.root) })

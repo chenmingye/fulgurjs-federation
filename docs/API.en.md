@@ -108,7 +108,7 @@ Import from `/runtime` in Vue or `/react` in React. Apart from page validation, 
 | `filename` | `string`, default `'fulgurjs-remoteEntry.js'` | fixed remoteEntry filename |
 | `manifest` | `boolean \| Record<string, unknown>`, default `true` | false disables; other values enable output. Object form has no additional option fields |
 | `dts` | `boolean \| { dir?, mode?: 'source' \| 'shim' }`, default `true` | dev type generation (see §8.6) |
-| `devSharedSelf` | `boolean`, default inferred | pure remotes & dual-role apps: `true` (dev shared rewriting); pure hosts: `false` |
+| `devSharedSelf` | `boolean`, default inferred | pure remotes & dual-role apps: `true` (dev shared rewriting); pure hosts: `false`. In production builds, shared package bodies (with their static closure) are isolated into `fulgurjs-provider-<key>` groups (since 5.8.0, taking precedence over user `manualChunks` groups — prevents self-waiting cycles and cross-chunk TDZ), so **your own `manualChunks` rules can stay as-is** |
 | `devCorsOrigins` | `'*'` or `string[]`, default `'*'` | dev endpoints + server.cors share the policy; explicit user `server.cors` wins |
 | `devFsRoot` | `boolean`, default `true` | dev manifest carries local fsRoot for type direct-connect; `false` → host falls back to `any` stubs |
 | `runtimePlugins` | `string[]`, default `[]` | modules default-exporting a `RuntimePlugin` |

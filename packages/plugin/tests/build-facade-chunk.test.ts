@@ -169,16 +169,118 @@ describe('D6: 宿主 + devSharedSelf + manualChunks 构建产物形态', () => {
       const nonPlugin = staticImports.filter((f) => !/^(fulgurjs-|virtual_fulgurjs-)/.test(f))
       expect(nonPlugin).toEqual([])
 
-      // 4. 「宿主 + allowNodeModules」路径覆盖证据：vue-vendor 组员（vue-router）内部的
-      //    vue 导入被门面化（devSharedSelf 生效），且其门面引用指向隔离 chunk——
-      //    这正是原缺陷的成环边，现在被隔离 chunk 斩断
-      const vendorChunk = chunks.find((f) => f.startsWith('vue-vendor'))
-      expect(vendorChunk).toBeTruthy()
-      const vendorCode = read(vendorChunk!)
-      // D6 死锁防线：fallback 目标 chunk（vue-vendor）不得静态依赖任何门面 chunk——
-      // vue-router 的 vue 导入走闭包静态化（同一 provide 闭包天然同实例），
-      // 若出现该静态边，将形成「门面 TLA → 动态 import 本体 chunk → 静态 import 门面」死锁
-      expect(vendorCode).not.toMatch(/from ["']\.\/fulgurjs-/)
+      // 4. 「宿主 + allowNodeModules」路径覆盖证据：MC-FIX-2（2026-10-04）起 shared 本体
+      //    闭包（vue/vue-router 包体）优先归入 fulgurjs-provider-* 组，用户 vue-vendor 组
+      //    若因此为空则不再产出 chunk。死锁防线锚点相应迁移：**fallback 目标 chunk（所有
+      //    fulgurjs-provider-* 与仍存在的用户 vendor 组）不得静态依赖任何门面 chunk**——
+      //    若出现该静态边，将形成「门面 TLA → 动态 import 本体 chunk → 静态 import 门面」死锁。
+      const bodyChunks = chunks.filter(
+        (f) => f.startsWith('fulgurjs-provider-') || (f.startsWith('vue-vendor') && !f.startsWith('fulgurjs-')),
+      )
+      expect(bodyChunks.length).toBeGreaterThan(0)
+      for (const f of bodyChunks) {
+        expect(read(f)).not.toMatch(/from ["']\.\/fulgurjs-shared-/)
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * MC-FIX（2026-10-04）回归：纯宿主（无 exposes、devSharedSelf 默认 false）+ 对象形式
+   * manualChunks 把 vue 与其消费方 vue-router 分进同组——MES admin 实机死锁形态。
+   *
+   * 旧缺陷（两个叠加）：
+   * - MC-FIX-1：buildFallbackTransform 缺 node_modules 闸门 → vue-router 对 vue 的静态
+   *   导入被 post 兜底错误门面化（宿主自身依赖本不该改写），2056 个依赖模块受影响；
+   * - MC-FIX-2：对象形式 manualChunks 包装漏 providerChunkOf → 真实 vue 落进用户
+   *   vue-vendor 组（与被改写的 vue-router 同 chunk），「vue-vendor →静态→ TLA 门面
+   *   →fallback 动态→ vue-vendor」自等待，页面零报错死锁（shareScopeMap 恒空）。
+   */
+  it('纯宿主 + 对象 manualChunks（vue+vue-router 同组）：依赖不改写、本体入 provider 组、无环', { timeout: 120_000 }, async () => {
+    const root = fs.mkdtempSync(path.join(HOST_VUE_ROOT, '.mcfix-build-'))
+    try {
+      fs.writeFileSync(
+        path.join(root, 'package.json'),
+        JSON.stringify({
+          name: 'mcfix-host',
+          private: true,
+          type: 'module',
+          dependencies: { vue: '^3.5.22', 'vue-router': '^4.4.0' },
+        }),
+      )
+      fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+      fs.writeFileSync(
+        path.join(root, 'index.html'),
+        '<!doctype html><html><body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>',
+      )
+      fs.writeFileSync(
+        path.join(root, 'src/main.ts'),
+        [
+          `import { createApp, ref } from 'vue'`,
+          `import { createRouter, createWebHistory } from 'vue-router'`,
+          `void createApp({ setup: () => () => ref(1) }).mount('#app')`,
+          `void createRouter({ history: createWebHistory(), routes: [] })`,
+        ].join('\n'),
+      )
+      const outDir = path.join(root, 'dist')
+
+      await build({
+        root,
+        configFile: false,
+        logLevel: 'warn',
+        plugins: [
+          federation({
+            name: 'mcfix-host',
+            remotes: { 'remote-a': { dev: 'http://localhost:5101', prod: '/remote-a' } },
+            shared: { vue: { singleton: true, requiredVersion: '^3.5.0' } },
+            // 无 exposes、无 devSharedSelf —— 与 MES admin 同形态的纯宿主
+          }),
+        ],
+        build: {
+          outDir,
+          emptyOutDir: true,
+          target: 'es2022',
+          minify: false,
+          rollupOptions: {
+            output: {
+              manualChunks: { 'vue-vendor': ['vue', 'vue-router'] },
+            },
+          },
+        },
+      })
+
+      const jsDir = path.join(outDir, 'assets')
+      const dir = fs.existsSync(jsDir) ? jsDir : outDir
+      const chunks = fs.readdirSync(dir).filter((f) => f.endsWith('.js'))
+      expect(chunks.length).toBeGreaterThan(0)
+      const read = (f: string) => fs.readFileSync(path.join(dir, f), 'utf8')
+
+      // 1. 产物 chunk 静态依赖图无环（旧缺陷即环）
+      expect(findChunkCycles(dir)).toEqual([])
+
+      // 2. MC-FIX-2：真实 vue 本体进 fulgurjs-provider-vue 组（用户 vue-vendor 分组被
+      //    provider 隔离覆盖），与消费方 chunk 物理分离
+      const providerVue = chunks.filter((f) => f.startsWith('fulgurjs-provider-vue'))
+      expect(providerVue.length).toBeGreaterThanOrEqual(1)
+
+      // 3. MC-FIX-1：宿主自身依赖（vue-router 包体所在 chunk——用户组或 provider 组）
+      //    不得出现对协商门面的静态依赖——post 兜底不得门面化宿主 node_modules 消费方。
+      //    （入口等应用源码 chunk 的门面导入是 pre 改写的正确行为，不在本断言范围）
+      const vendorOrProvider = chunks.filter(
+        (f) => f.startsWith('fulgurjs-provider-') || (f.startsWith('vue-vendor') && !f.startsWith('fulgurjs-')),
+      )
+      expect(vendorOrProvider.length).toBeGreaterThan(0)
+      for (const f of vendorOrProvider) {
+        expect(read(f)).not.toMatch(/from ["']\.\/fulgurjs-shared-/)
+      }
+
+      // 4. 门面 chunk 仍是"汇"：静态依赖只指向插件自身 chunk
+      const facadeChunk = chunks.find((f) => /^fulgurjs-shared-vue-/.test(f))
+      if (facadeChunk) {
+        const staticImports = [...read(facadeChunk).matchAll(/from\s*["']\.\/([^"']+)["']/g)].map((m) => m[1])
+        expect(staticImports.filter((f) => !/^(fulgurjs-|virtual_fulgurjs-)/.test(f))).toEqual([])
+      }
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
     }

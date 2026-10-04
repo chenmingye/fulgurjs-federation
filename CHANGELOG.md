@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.8.0
+
+- **修复：保留用户 manualChunks 时生产启动挂起/爆 TDZ（MC-FIX，rollup/vite 5–7 路径）**——此前「双向宿主 + 保留业务 manualChunks」与「纯远程 + manualChunks」的生产构建会零报错死锁或 `Cannot access 'x' before initialization`，唯一出路是停用 manualChunks（旧验收记录的"生产三前提①"）。本轮在真实项目（MES admin，对象形式 vue-vendor/antd-vue-vendor 分组）复现并以 chunk 成员图 + 首错栈定位出三层叠加根因，全部修复：
+  - **MC-FIX-1（post 兜底改写缺 node_modules 闸门）**——`buildFallbackTransform`（D6 后置注入兜底，`fulgurjs:vue-post` 与 `fulgurjs:post-last` 共用）此前直接调用 `transformModule`，而 `allowNodeModules` 只存在于 ctx 声明、`transformModule` 从不读取——纯宿主构建里 2000+ 个 node_modules 模块（vue-router/ant-design-vue/element-plus…）对 shared 键的静态导入被错误门面化（pre 阶段闸门正确，post 兜底语义未对齐）。现补齐与 pre.transform 完全一致的 `isTransformableId(id, devSharedSelf || 纯remote || providerCjs)` 闸门。
+  - **MC-FIX-2（对象形式 manualChunks 包装漏 provider 隔离）**——函数形式包装自 5.2.1 起有 `providerChunkOf ?? userFn` 优先级，对象形式只查用户分组表：真实共享本体（vue）被用户 `vue-vendor` 组吞并与被改写的消费方（vue-router）同 chunk，构成「消费方 chunk →静态→ TLA 协商门面 →fallback 动态→ 消费方 chunk」自等待环，页面零报错卡加载（shareScopeMap 恒空、入口 init 永不执行）。现四处 manualChunks 包装（devSharedSelf 函数/对象、宿主隔离 函数/对象/无配置、远程 exposes combined）全部统一为 provider 隔离优先。
+  - **MC-FIX-2C（provider 闭包割裂 → 跨 chunk TDZ）**——仅按包目录前缀归组时，本体闭包内的第三方模块（如 @vue/compiler-dom 依赖的 entities）按共同消费方指纹落入用户 vendor 大组，provider chunk 长出指向用户组的静态边、用户组又静态依赖 provider chunk，环上求值顺序由入口导入序决定，provider chunk 先入环即 TDZ。新增 `providerChunkOfWithClosure`：manualChunks 成组期经 `meta.getModuleInfo` 从 provider 入口（Node 解析的 CJS 链 + Vite 解析的 ESM 链双种子）BFS 收集完整静态闭包并入 provider 组，provider chunk 成为零静态出边的叶子，环被彻底移除。
+  - 验收：单测 654→656（新增纯宿主 manualChunks 回归 + 死锁防线锚点迁移）；e2e dev 43/43 + prod 28/28；真实项目 MES admin（对象分组）manualChunks 保留构建 → chunk 图无环 → 浏览器登录/菜单/深链正常，shareScope=vue@3.5.43；bpm/lowcode（函数形式全量 vendor 分组，最恶劣场景）chunk 图无环；双版本最小复现（host vue 3.5.13 × remote 3.4.38）singleton 协商收敛宿主实例。**旧文档中"必须停用 manualChunks"的兼容结论作废。**
+- 版本 5.7.1 → 5.8.0（含 runtime 同步升版与产物再生）。
+
 ## 5.7.1
 
 - React 桥接兼容 react-dom/client 的 default-only CJS 命名空间（Vite 6 + React 18），使用同一 renderer 完成真实提交与卸载。
