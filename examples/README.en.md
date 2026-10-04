@@ -42,3 +42,7 @@ Use repeated `--scenario` flags or `--all`. [scenarios.json](scenarios.json) def
 ## Directory migration
 
 Vue/React basic examples moved into `examples/templates/`. Bridge examples are the two cross-framework templates. The former `demo/bridge-router` shares its source with `templates/showcase`; other demos moved into `examples/demos/`, Jeecg into `examples/integrations/`, and the portal/scripts into `examples/portal/` and `examples/scripts/`. Plugin APIs and ports are unchanged.
+
+## Examples in the npm package
+
+The npm package includes only the five templates under `examples/templates/`. Download demos, the Jeecg integration and the portal from this GitHub repository.

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,4 +36,21 @@ test('无 package.json 的演示数据服务不执行包安装', async () => {
   const messages = []
   await ensureInstalled(app, (message) => messages.push(message))
   assert.deepEqual(messages, [])
+})
+
+
+test('npm 示例同步只收录完整模板，不收录大型集成、门户或依赖缓存', () => {
+  execFileSync(process.execPath, [path.join(root, 'packages/plugin/scripts/sync-package-examples.mjs')], { cwd: root })
+  const output = path.join(root, 'packages/plugin/examples')
+  assert.deepEqual(readdirSync(output).sort(), ['README.md', 'templates'])
+  for (const template of ['vue-vue', 'react-react', 'vue-host-react-remote', 'react-host-vue-remote', 'showcase']) {
+    assert.ok(existsSync(path.join(output, 'templates', template, 'pnpm-lock.yaml')))
+  }
+  const inspect = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      assert.ok(!['node_modules', 'dist', '.vite'].includes(entry.name), `包内缓存：${entry.name}`)
+      if (entry.isDirectory()) inspect(path.join(directory, entry.name))
+    }
+  }
+  inspect(output)
 })
