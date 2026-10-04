@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.9.1
+
+- **npm 包内模板与正式版本对齐**：包内 `examples/templates` 的插件依赖由 5.8.0 升至 **5.9.0**（精确版本 + 锁文件）。5.9.0 包因「先发布、后升模板依赖」的两阶段时序，包内模板仍锁 5.8.0（可正常安装，但 `create` 生成的工程与 npm latest 不一致）；本版本重新打包，使 `fulgurjs create` 生成的工程直接安装当前正式版本。插件源码与 5.9.0 完全一致（仅 version 常量与包内模板）。
+- 版本 5.9.0 → 5.9.1。
+
 ## 5.9.0
 
 - **新增 CLI：`fulgurjs create`——完整工程创建向导（新项目入口）**。从已安装 npm 包内复制一个完整模板工程（workspace + 子应用 + 锁文件 + 统一启动脚本）并默认执行 `pnpm install --frozen-lockfile`；交互（TTY）与显式参数（`create <模板> [--dir] [--no-install] [--force] [--json]`）双形态；目标目录非空默认拒绝（`--force` 只增量复制不删除）；复制后校验关键文件齐全；安装失败非零退出并透传原因；完成后打印进入/启动/构建/部署命令（入口从模板 `scripts/dev.config.json` 读取）。与 `init` 职责区分：init 面向已有项目生成单文件配置（`--template` 语义不变，仍是输出路径）；create 从零创建完整工程，模板唯一来源为包内 `examples/templates/`，不 clone 插件仓库、不依赖作者路径。不做应用名称/端口改写（改端口清单在模板 README）。
