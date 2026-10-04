@@ -1,67 +1,44 @@
-# fulgurjs-federation Examples
+# Examples, templates and demo portal
 
-Pick your framework, copy the host and remote directories, run `npm install`, and you get a full module federation demo. All four projects are standalone: no dependency on this repo's source, the monorepo workspace, or any parent `node_modules` — the plugin dependency is an exact published version from the npm registry.
+All public runnable projects live under `examples/`. The portal starts the same projects that users copy; basic examples are no longer maintained as duplicate source trees.
 
-## Vue (host 5214 / remote 5213)
+| Goal | Project |
+|---|---|
+| Vue components, pages and TS modules | [templates/vue-vue](templates/vue-vue/) |
+| React components, pages and TS modules | [templates/react-react](templates/react-react/) |
+| Vue host with a React child app | [templates/vue-host-react-remote](templates/vue-host-react-remote/) |
+| React host with a Vue child app | [templates/react-host-vue-remote](templates/react-host-vue-remote/) |
+| Bidirectional bridge routing | [templates/showcase](templates/showcase/) |
+| Sharing, errors, CLI and React version isolation | [demos](demos/) |
+| Jeecg integration | [integrations/jeecg](integrations/jeecg/) |
 
-Full walkthrough: **[vue/README.md](./vue/README.md)** (Chinese).
+## Run a template
 
-```bash
-cd examples/vue/remote && npm install && npm run dev   # terminal 1: vue-remote, http://localhost:5213
-cd examples/vue/host   && npm install && npm run dev   # terminal 2: vue-host,   http://localhost:5214
-```
-
-## React (host 5204 / remote 5203)
-
-Full walkthrough: **[react/README.md](./react/README.md)** (Chinese).
-
-```bash
-cd examples/react/remote && npm install && npm run dev   # terminal 1: react-remote, http://localhost:5203
-cd examples/react/host   && npm install && npm run dev   # terminal 2: react-host,   http://localhost:5204
-```
-
-## Cross-framework bridge (Vue host 5314 × React remote 5303; React host 5304 × Vue remote 5313)
-
-Full walkthrough: **[bridge/README.md](./bridge/README.md)** (Chinese).
+Download the repository ZIP or clone it. From the repository root:
 
 ```bash
-# Vue host × React sub-app
-cd examples/bridge/react-remote && npm install && npm run dev   # 5303
-cd examples/bridge/vue-host     && npm install && npm run dev   # 5314
-
-# React host × Vue sub-app
-cd examples/bridge/vue-remote   && npm install && npm run dev   # 5313
-cd examples/bridge/react-host   && npm install && npm run dev   # 5304
+cd examples/templates/vue-vue
+pnpm install --frozen-lockfile
+pnpm dev
+# http://localhost:5214
 ```
 
-## What each pair demonstrates
+Copy the whole template directory, including its package.json, workspace definition, lockfile and child applications. Templates install the published package and do not depend on repository source or sibling projects. See the [template guide](templates/README.md) for Node/pnpm requirements and deployment instructions.
 
-- A clickable remote counter component (local state lives inside the remote component; operated on the host page)
-- Cross-application plain TS module calls (the host renders real return values)
-- A remote home page plus a parameterized detail page (deep links survive refresh)
-- Host navigation with route-level lazy loading (the home page never bulk-prefetches unvisited remote pages)
-- The plugin's built-in loading/error placeholders and recovery actions (**Retry load** recovers in-page; **Refresh page to retry** recovers via a user-initiated full reload)
-- Production build with a minimal Nginx deployment (including SPA fallback)
+## Manage demos
 
-## Layout
+Run these commands from the repository root:
 
-```text
-examples/
-├── README.md / README.en.md   # this entry (CN/EN)
-├── bridge/                    # Cross-framework bridge (sub-app-level mount/unmount, §8.2)
-│   ├── README.md
-│   ├── vue-host/              # Vue host × React sub-app (5314)
-│   ├── react-remote/          # React sub-app (5303)
-│   ├── react-host/            # React host × Vue sub-app (5304)
-│   └── vue-remote/            # Vue sub-app (5313)
-├── vue/
-│   ├── README.md              # guide for the Vue pair
-│   ├── host/                  # Vue host (vue-host, 5214)
-│   └── remote/                # Vue remote (vue-remote, 5213)
-└── react/
-    ├── README.md              # guide for the React pair
-    ├── host/                  # React host (react-host, 5204)
-    └── remote/                # React remote (react-remote, 5203)
+```bash
+node examples/scripts/check-catalog.mjs
+node examples/portal/server.mjs
+node examples/scripts/start-demo.mjs --scenario vue-basic
+node examples/scripts/build-demo.mjs --scenario vue-basic
+node examples/scripts/stop-demo.mjs --scenario vue-basic
 ```
 
-> `examples/` is for users to copy and run. The repository-root `fixtures/` are internal regression harnesses (source-linked to the plugin workspace) — do not treat them as usage templates.
+Use repeated `--scenario` flags or `--all`. [scenarios.json](scenarios.json) defines project locations, ports, package managers and startup order. Templates use pnpm workspaces; feature demos use npm; Jeecg apps use their documented package manager. Install failures stop startup. Logs and process records are local under `examples/.run/`.
+
+## Directory migration
+
+Vue/React basic examples moved into `examples/templates/`. Bridge examples are the two cross-framework templates. The former `demo/bridge-router` shares its source with `templates/showcase`; other demos moved into `examples/demos/`, Jeecg into `examples/integrations/`, and the portal/scripts into `examples/portal/` and `examples/scripts/`. Plugin APIs and ports are unchanged.

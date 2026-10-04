@@ -1,6 +1,8 @@
 # @fulgurjs/federation
 
-[简体中文](./README.md) | [English](./README.en.md)
+**[所有模板与 Demo 统一入口](examples/README.md)**：示例选择与运行指南。
+
+[简体中文](README.md) | [English](README.en.md)
 
 **让一个 Vite 应用使用另一个应用提供的组件、页面或函数。**
 
@@ -12,14 +14,14 @@
 
 | 你的需求 | 使用方法 | 示例 |
 |---|---|---|
-| Vue 加载另一个应用的 Vue 组件 | `remoteComponent` | [Vue 示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/vue) |
-| React 加载另一个应用的 React 组件 | `/react` 的 `remoteComponent` | [React 示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/react) |
+| Vue 加载另一个应用的 Vue 组件 | `remoteComponent` | [Vue 示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) |
+| React 加载另一个应用的 React 组件 | `/react` 的 `remoteComponent` | [React 示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) |
 | 加载远程 JS/TS 函数 | `loadRemote`；React 也可用 `useLoadRemote` | 见下方快速开始 |
-| 一批宿主路由对应远程页面 | Vue 用 `createHostPages`；React 用 `createReactHostPages` | [页面接入示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/pages-cli) |
-| Vue 嵌 React，或 React 嵌 Vue | 子应用桥接：`defineBridgeApp` + 宿主桥接组件 | [双向嵌套示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/bridge) |
-| 刷新后仍打开子应用的详情页 | 在桥接上开启 URL 同步 | [路由同步示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/bridge-router) |
+| 一批宿主路由对应远程页面 | Vue 用 `createHostPages`；React 用 `createReactHostPages` | [页面接入示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli) |
+| Vue 嵌 React，或 React 嵌 Vue | 子应用桥接：`defineBridgeApp` + 宿主桥接组件 | [双向嵌套示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates) |
+| 刷新后仍打开子应用的详情页 | 在桥接上开启 URL 同步 | [路由同步示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase) |
 | 远程页面需要用户、token 或初始化 | `AppContext` + 可选 `setup`/`onSession` | 见下方业务初始化 |
-| 同页使用 React 18 和 React 19 | 将两组依赖和使用方放入不同 `shareScope` | [版本隔离示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/react-versions) |
+| 同页使用 React 18 和 React 19 | 将两组依赖和使用方放入不同 `shareScope` | [版本隔离示例](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/react-versions) |
 
 这些功能按需组合。**加载一个普通组件，不需要先配置桥接、页面表或登录初始化。**
 
@@ -196,7 +198,7 @@ npm run dev -- --port 5173 --strictPort
 
 打开 `http://localhost:5173`，应看到能增加计数的远程按钮；点击计算按钮应显示 `3`。使用 pnpm 的项目也可用 `pnpm dev` 启动。
 
-完整工程与生产部署配置见 [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/vue)。
+完整工程与生产部署配置见 [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue)。
 
 ## React 怎么接入
 
@@ -241,7 +243,7 @@ export default function App() {
 }
 ```
 
-React 加载普通 TS 模块时可以使用 `loadRemote` 或 `useLoadRemote`，都从 `/react` 导入。完整工程见 [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/react)。
+React 加载普通 TS 模块时可以使用 `loadRemote` 或 `useLoadRemote`，都从 `/react` 导入。完整工程见 [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react)。
 
 ## Vue 和 React 怎么互相嵌套
 
@@ -288,7 +290,7 @@ const RemoteApp = createVueBridgeApp<{ message: string }>('remote-react/bridge')
 - 两个组件树不会自动共用 Context、provide/inject 或路由，需要显式传递或在子应用安装。
 - 普通组件加载用 `remoteComponent`；整个子应用嵌套用桥接工厂。Vue 不能直接用 Vue 的 `remoteComponent` 渲染 React 组件。
 
-双向配置、登录切换和卸载示例见 [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/bridge)。
+双向配置、登录切换和卸载示例见 [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates)。
 
 ## 子应用路由和浏览器地址怎么同步
 
@@ -309,7 +311,7 @@ const RemoteApp = createVueBridgeApp<{ message: string }>('remote-react/bridge')
 
 Vue 使用 `createVueBridgeNavigation` / `connectVueBridgeRouter`；React 使用 `createReactBridgeNavigation` / `createReactBridgeRouter`。React 宿主需要 data router（`createBrowserRouter` 或 `createHashRouter`），不能直接换成 `BrowserRouter`。内置适配支持 Vue Router 4、React Router ≥6.11。
 
-这样刷新、分享链接、前进后退能恢复路由位置；**不会自动保存表单内容或业务数据**。详细步骤见 [URL 同步 API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md#url-sync)，可运行工程见 [bridge-router Demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/bridge-router)。
+这样刷新、分享链接、前进后退能恢复路由位置；**不会自动保存表单内容或业务数据**。详细步骤见 [URL 同步 API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md#url-sync)，可运行工程见 [bridge-router Demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase)。
 
 ## 远程业务页需要用户信息或初始化时
 
@@ -337,7 +339,7 @@ Vue 使用 `createVueBridgeNavigation` / `connectVueBridgeRouter`；React 使用
 
 页面表里 `route` 是宿主路径，`spec` 是远程的 exposes 键（通常省略 `./`，不要重复加远程名）；`remotePrefixes` 指定这批路径属于哪个远程。例如 `/shop/home` + `spec: 'pages/Home'` + `remotePrefixes: { '/shop': 'shop' }`，最终加载的是 `shop/pages/Home`。Vue 可结合 KeepAlive 保存组件状态；React 不提供相同的保活承诺。
 
-完整配置见 [页面 API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md#pages) 和 [pages-cli Demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/pages-cli)。
+完整配置见 [页面 API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md#pages) 和 [pages-cli Demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli)。
 
 ## 构建与部署
 
@@ -357,7 +359,7 @@ npm run build
 - **跨域允许访问**：不同域名时，远程服务器要正确提供 CORS 响应头；开发配置不会自动替你修改生产服务器。
 - **避免旧文件突然失效**：发布期间保留仍被旧页面引用的 chunk，或使用能避免版本混搭的部署流程。
 
-生产部署样例见 [Vue 部署说明](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/vue/README.md) 与 [React 部署说明](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/react/README.md)。
+生产部署样例见 [Vue 部署说明](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/vue-vue/README.md) 与 [React 部署说明](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/react-react/README.md)。
 
 ## 加载失败时怎么办
 
@@ -430,8 +432,8 @@ npx fulgurjs doctor --base https://your-site.example --apps remote-vue
 
 ## 文档
 
-- [完整 Demo 与运行步骤](https://github.com/chenmingye/fulgurjs-federation/blob/master/demo/README.md)：基础加载、双向嵌套、URL 同步、版本隔离和 Jeecg 场景。
-- [可复制运行模板](https://github.com/chenmingye/fulgurjs-federation/tree/master/templates)：Vue×Vue、React×React、双向跨框架桥接与完整 showcase，五个 pnpm workspace 模板，复制后 `pnpm install && pnpm dev` 即可运行。
+- [完整 Demo 与运行步骤](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/README.md)：基础加载、双向嵌套、URL 同步、版本隔离和 Jeecg 场景。
+- [可复制运行模板](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates)：Vue×Vue、React×React、双向跨框架桥接与完整 showcase，五个 pnpm workspace 模板，复制后 `pnpm install && pnpm dev` 即可运行。
 - [迁移指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md)：从已有微前端方案接入。
 - [CHANGELOG](https://github.com/chenmingye/fulgurjs-federation/blob/master/CHANGELOG.md)：版本变化与迁移说明。
 - [验收报告](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/整夜全量验收报告-20261004.md)：真实 MES 业务项目（两个 SVN 项目全新副本）接入验收：dev/生产/故障恢复/HMR（历史记录：该轮曾要求大型应用停用 manualChunks，**5.8.0 起已修复，可保留业务 manualChunks**——共享本体自动隔离进 `fulgurjs-provider-*` 组，不受用户分组影响）。
@@ -451,4 +453,4 @@ pnpm test:unit
 
 ## License
 
-[MIT](./LICENSE) © chenmingye (Jason)
+[MIT](LICENSE) © chenmingye (Jason)

@@ -47,3 +47,9 @@ pnpm test:prod  # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 - 配置类问题先跑 `npx fulgurjs doctor`（部署面体检）与 `npx fulgurjs explain`（查看有效配置），多数问题能直接定位。
 - 报错按错误码查 [API 手册「错误码总表」](docs/API.md#error-codes)，或看 [`docs/迁移指南.md`](docs/迁移指南.md) 的首次使用避坑清单。
 - dev 下改了插件源码要重启 dev server（缓存自动清，但仍需重启进程）。
+
+## 示例与模板目录
+
+公开使用工程统一放在 `examples/`：可复制模板在 `templates/`，API 演示在 `demos/`，大型应用集成在 `integrations/`。基础工程由模板与门户共用，避免再维护相同源码的副本。
+
+新增或移动工程时同步 `examples/scenarios.json` 的目录、包管理器、workspace 安装目录和端口，然后执行 `npm run test:examples`。模板须带有效锁文件，使用 npm registry 正式包，在不含 node_modules/dist 的独立目录中验证冻结安装和构建。

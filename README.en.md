@@ -1,6 +1,8 @@
 # @fulgurjs/federation
 
-[简体中文](./README.md) | [English](./README.en.md)
+**[All templates and demos](examples/README.en.md)**: Example catalog and run guide.
+
+[简体中文](README.md) | [English](README.en.md)
 
 **Use components, pages and functions from another Vite application.**
 
@@ -12,14 +14,14 @@ This is the usage guide, with examples for **5.7.1**. Signatures, defaults and e
 
 | Goal | Use | Example |
 |---|---|---|
-| Load a Vue component in Vue | `remoteComponent` | [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/vue) |
-| Load a React component in React | `remoteComponent` from `/react` | [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/react) |
+| Load a Vue component in Vue | `remoteComponent` | [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) |
+| Load a React component in React | `remoteComponent` from `/react` | [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) |
 | Call a remote JS/TS function | `loadRemote`; React also has `useLoadRemote` | Quick start below |
-| Map several host routes to remote pages | `createHostPages` (Vue) / `createReactHostPages` (React) | [Page demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/pages-cli) |
-| Embed Vue in React, or React in Vue | `defineBridgeApp` + a host bridge component | [Bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/bridge) |
-| Restore a sub-app detail route after refresh | Enable bridge URL sync | [Router demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/bridge-router) |
+| Map several host routes to remote pages | `createHostPages` (Vue) / `createReactHostPages` (React) | [Page demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli) |
+| Embed Vue in React, or React in Vue | `defineBridgeApp` + a host bridge component | [Bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates) |
+| Restore a sub-app detail route after refresh | Enable bridge URL sync | [Router demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase) |
 | Provide user data or run remote initialization | `AppContext`, optional `setup`/`onSession` | Initialization below |
-| Run React 18 and 19 on the same page | Separate dependency groups and consumers using `shareScope` | [Version isolation demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/react-versions) |
+| Run React 18 and 19 on the same page | Separate dependency groups and consumers using `shareScope` | [Version isolation demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/react-versions) |
 
 Combine these features as needed. **A simple remote component does not require a bridge, page table or login lifecycle.**
 
@@ -186,7 +188,7 @@ npm run dev -- --port 5173 --strictPort
 
 Open `http://localhost:5173`. The remote button should count clicks, and the calculation should display `3`. pnpm projects can use `pnpm dev` instead.
 
-Complete projects and deployment configuration: [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/vue).
+Complete projects and deployment configuration: [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue).
 
 ## React setup
 
@@ -229,7 +231,7 @@ export default function App() {
 }
 ```
 
-React also imports `loadRemote` and `useLoadRemote` from `/react` for ordinary modules. Complete projects: [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/react).
+React also imports `loadRemote` and `useLoadRemote` from `/react` for ordinary modules. Complete projects: [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react).
 
 ## Embed Vue and React in each other
 
@@ -271,7 +273,7 @@ Remember:
 - Separate component trees do not inherit Context, provide/inject or routers. Pass or install what is needed explicitly.
 - Use `remoteComponent` for a same-framework component; use a bridge for a sub-app.
 
-Complete bidirectional setup and login/cleanup flows: [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/bridge).
+Complete bidirectional setup and login/cleanup flows: [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates).
 
 ## Keep child routes in the browser URL
 
@@ -290,7 +292,7 @@ Configure both sides:
 
 Vue uses `createVueBridgeNavigation` / `connectVueBridgeRouter`; React uses `createReactBridgeNavigation` / `createReactBridgeRouter`. React hosts need a data router (`createBrowserRouter` or `createHashRouter`), not `BrowserRouter`. Built-in adapters support Vue Router 4 and React Router ≥6.11.
 
-Refresh, shared links and browser history restore the route, **not form contents or business data**. See [routing API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#url-sync) and the runnable [router demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/bridge-router).
+Refresh, shared links and browser history restore the route, **not form contents or business data**. See [routing API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#url-sync) and the runnable [router demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase).
 
 ## User data and remote initialization
 
@@ -318,7 +320,7 @@ Maintain a page table and pass it to `createHostPages` (Vue) or `createReactHost
 
 The table records the host `route` and the remote expose `spec` (omit `./` and do not repeat the remote name); `remotePrefixes` selects the remote. For example, `/shop/home`, `spec: 'pages/Home'` and `remotePrefixes: { '/shop': 'shop' }` resolve to `shop/pages/Home`. Vue can use KeepAlive for component state; React has no equivalent keep-alive promise here.
 
-See [page API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#pages) and [page demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/demo/pages-cli).
+See [page API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#pages) and [page demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli).
 
 ## Build and deploy
 
@@ -332,7 +334,7 @@ Check these settings:
 - Cross-origin deployments need production CORS headers; dev settings do not configure the production server.
 - Keep chunks still referenced by old pages available during releases, or use a deployment flow that avoids mixed versions.
 
-Deployment examples: [Vue](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/vue/README.md) / [React](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/react/README.md).
+Deployment examples: [Vue](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/vue-vue/README.md) / [React](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/react-react/README.md).
 
 ## Handle failures
 
@@ -400,8 +402,8 @@ Specify the framework, whether you need a component or sub-app, remote URLs/expo
 
 ## Documentation
 
-- [Demo catalog](https://github.com/chenmingye/fulgurjs-federation/blob/master/demo/README.md): setup and runnable scenarios.
-- [Copy-and-run templates](https://github.com/chenmingye/fulgurjs-federation/tree/master/templates): five pnpm-workspace templates (Vue×Vue, React×React, both cross-framework bridge directions, and a full showcase). Copy a folder, then `pnpm install && pnpm dev`.
+- [Demo catalog](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/README.md): setup and runnable scenarios.
+- [Copy-and-run templates](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates): five pnpm-workspace examples/templates (Vue×Vue, React×React, both cross-framework bridge directions, and a full showcase). Copy a folder, then `pnpm install && pnpm dev`.
 - [Migration guide](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md).
 - [CHANGELOG](https://github.com/chenmingye/fulgurjs-federation/blob/master/CHANGELOG.md): changes and migration requirements.
 - [Acceptance records](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/整夜全量验收报告-20261004.md): overnight acceptance on two real MES business projects (fresh SVN copies), covering dev, production, fault recovery and HMR, plus production-build notes for large Vite 6 apps (that round required disabling `manualChunks`; **fixed in 5.8.0 — keep your own `manualChunks`, shared bodies are isolated into `fulgurjs-provider-*` chunks automatically**). Historical record: [20261002 demo acceptance](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/完整Demo展示与全面复测-验收报告-20261002.md) — historical results are not a substitute for testing your application.
@@ -420,4 +422,4 @@ See [CONTRIBUTING](https://github.com/chenmingye/fulgurjs-federation/blob/master
 
 ## License
 
-[MIT](./LICENSE) © chenmingye (Jason)
+[MIT](LICENSE) © chenmingye (Jason)

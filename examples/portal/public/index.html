@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>fulgurjs-federation Demo 展示中心</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<header>
+  <div>
+    <h1>fulgurjs-federation <span class="muted">Demo 展示中心</span></h1>
+    <p class="muted" id="meta">加载中…</p>
+  </div>
+  <div class="header-actions">
+    <button id="btn-refresh">刷新状态</button>
+    <a href="https://github.com/chenmingye/fulgurjs-federation" target="_blank" rel="noreferrer">GitHub</a>
+  </div>
+</header>
+
+<nav id="columns" class="columns-nav"></nav>
+
+<main id="scenarios"></main>
+
+<footer>
+  <p class="muted">API 覆盖矩阵见仓库 <code>docs/Demo展示中心API覆盖矩阵-20261002.md</code>；验收证据见 <code>evidence/demo-showcase-20261002/</code>。
+  启动/停止仅管理本门户拉起的进程（PID 记录于 <code>examples/.run/demo-pids.json</code>），不影响其他服务。</p>
+</footer>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

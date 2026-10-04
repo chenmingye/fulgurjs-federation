@@ -19,7 +19,7 @@
 - HTML 入口配置 runtimePlugins 时增加异步协商屏障；远程 expose 执行前准备共享决策，消费方门面保持原有同步形态。异步选择的外部条目与静态/动态实例统一复用；provider 失败后允许重新裁决。
 - 首次消费者接管单例时按真实物理版本登记，不再把 React 18 实例填入标注 React 19 的槽位而绕过 strictVersion；另一版本的单例正在异步加载时拒绝同步接管，避免并发双实例。
 - runtimePlugins 的相对路径以项目 root 解析，避免入口/虚拟模块位置改变后解析错误。
-- 新增 demo/react-versions：React 19 嵌 React 18 隔离、异步 hook 覆盖首次静态导入、严格拒绝与版本对齐远程的同页恢复、Vue 宿主对齐 React 18。新增 Vite 6/8 dev+prod 浏览器 CI。
+- 新增 examples/demos/react-versions：React 19 嵌 React 18 隔离、异步 hook 覆盖首次静态导入、严格拒绝与版本对齐远程的同页恢复、Vue 宿主对齐 React 18。新增 Vite 6/8 dev+prod 浏览器 CI。
 - 自定义无 HTML 的入口须先完成动态协商再执行消费者，已求值的静态绑定不能追溯改写。
 
 ## 5.7.0
@@ -50,7 +50,7 @@
 
 ## 5.5.1
 
-- **修复：`getLoadedShare` / `pinLoadedShare` / `clearSessionState` 在 `/runtime` 与 `/react` 入口的类型与生成链缺口**——三个函数在内核（`dist/runtime.js`）实际导出且生成脚本向 `runtime-entry.js` 注入了 `clearSessionState`，但 `src/runtime-entry.ts` / `src/react.ts` 源码导出面未包含（发布包 d.ts 因此缺失，TS 消费者不可导入；`getLoadedShare`/`pinLoadedShare` 的 JS 入口导出也缺失）。现统一：源码、d.ts、生成脚本（`gen-runtime-entry.mjs`）三处一致，React 入口补齐同面；导出面守卫测试（`tests/runtime-entry-graph.test.ts`）批准清单同步。包内 `demo` 场景（`demo/shared` 卡片⑫）以真调用覆盖：getLoadedShare 与 loadShare 结果对象严格相等、pinLoadedShare 收敛、clearSessionState 后新代次 onSession 重跑。
+- **修复：`getLoadedShare` / `pinLoadedShare` / `clearSessionState` 在 `/runtime` 与 `/react` 入口的类型与生成链缺口**——三个函数在内核（`dist/runtime.js`）实际导出且生成脚本向 `runtime-entry.js` 注入了 `clearSessionState`，但 `src/runtime-entry.ts` / `src/react.ts` 源码导出面未包含（发布包 d.ts 因此缺失，TS 消费者不可导入；`getLoadedShare`/`pinLoadedShare` 的 JS 入口导出也缺失）。现统一：源码、d.ts、生成脚本（`gen-runtime-entry.mjs`）三处一致，React 入口补齐同面；导出面守卫测试（`tests/runtime-entry-graph.test.ts`）批准清单同步。包内 `demo` 场景（`examples/demos/shared` 卡片⑫）以真调用覆盖：getLoadedShare 与 loadShare 结果对象严格相等、pinLoadedShare 收敛、clearSessionState 后新代次 onSession 重跑。
 
 ## 5.5.0
 
@@ -120,7 +120,7 @@
   - 使用合同：桥接宿主必须同时安装 vue + react + react-dom 并将 shared 三键全部 singleton；纯 Vue / 纯 React 项目零对方依赖不受影响。
   - 修复：dev 跨源场景 react-refresh shim 的自引用顶层 await 死锁（无 @vitejs/plugin-react 的宿主消费 React 远程时页面永久挂起；shim 自身不再参与导入改写）；为无 plugin-react preamble 的宿主注入首个 http(s) dev 远程 origin 的 react-refresh preamble + 页面级单例发布。
   - 新增错误码后 gzip 门禁同步：`bridge-host-vue.js` / `bridge-host-react.js` 各 ≤ 4096B（zlib level9，框架外置）；`runtime.js` ≤ 9216B、`react-adapter.js` ≤ 4096B 维持不变（本轮内核零改动）。
-  - 示例：`examples/bridge/{vue-host,react-host,vue-remote,react-remote}` 四个独立工程（registry 正式包消费，双向各一对）。
+  - 示例：`examples/templates/{vue-host,react-host,vue-remote,react-remote}` 四个独立工程（registry 正式包消费，双向各一对）。
 
 ## 5.2.5
 
@@ -149,7 +149,7 @@
 - **修复：生产静态子依赖失败的用户恢复闭环（D2）**——浏览器 module map 缓存静态子依赖失败（同 URL 再 import 直接拒绝），同页重试无法穿透；默认占位的「刷新页面重试」给出确定的整页恢复路径。`prod B3c` 由「两种结果都能 PASS」改写为确定性门禁：占位双操作可见 → 同页重试（记录结果）→ 产品按钮触发导航（跨刷新标记证明，非测试脚本 reload）→ 目标业务页面真实恢复；新增 Vue 静态依赖生产用例（remote-a 静态依赖链 fixture + host-vue 页面）。
 - **修复：React 跨应用开发更新真实自动传播（D3）**——根因：react-refresh 运行时状态（helpersByRendererID/pending 队列）为模块私有，宿主页内第二份副本（远程 origin）刷新空转。修复：宿主 preamble 后注入发布脚本把页面级 react-refresh 单例发布到 globalThis；远程组件的 /@react-refresh 导入改写到插件 shim（dev），shim 优先委托页面单例、standalone 回退本源实例。R11 重写为「5 轮冷启动 × 3 次修改」零人工刷新热更新保活门禁 + R11b 普通 TS 依赖传播门禁（挂载宿主实际看到新值）。
 - **修复：Vite 5.x 双 client 错误覆盖层 IllegalConstructor（D4）**——Vite 5 客户端对 `vite-error-overlay` 的 define 有注册守卫，双 client 场景第二份客户端的本地 ErrorOverlay 类未注册，按 HTML 规范 new 未注册 HTMLElement 子类抛 IllegalConstructor，远程编译错误覆盖层无法显示。修复：把 Vite ≥6 的注册表构造修法前移到 Vite 5 客户端代码（fulgurjs:dev-client-compat，不改已安装 Vite 源码）；fault.spec 的 5.1.4 版本门控 skip 移除，支持矩阵内该用例全部真实执行（Vite 5.1.4 本地实测通过）。
-- **示例重构（D7）**：examples 按框架分组为 `examples/vue/{host,remote}`（5214/5213）与 `examples/react/{host,remote}`（5204/5203）四个完整可复制工程（npm + registry 精确正式包 + 独立 fulgurjs.config.ts + 完整入口/源码/README），每对演示远程可点击组件、普通 TS 模块调用、联邦首页/参数详情页、宿主导航懒加载、默认错误恢复；旧 `examples/{host,remote-a,react-host,react-remote}` 目录移除。中英文 examples 总入口与 GitHub 根 README 同步。
+- **示例重构（D7）**：examples 按框架分组为 `examples/templates/vue-vue/{host,remote}`（5214/5213）与 `examples/templates/react-react/{host,remote}`（5204/5203）四个完整可复制工程（npm + registry 精确正式包 + 独立 fulgurjs.config.ts + 完整入口/源码/README），每对演示远程可点击组件、普通 TS 模块调用、联邦首页/参数详情页、宿主导航懒加载、默认错误恢复；旧 `examples/{host,remote-a,react-host,react-remote}` 目录移除。中英文 examples 总入口与 GitHub 根 README 同步。
 - **文档（D5）**：中英文 README 与恢复/HMR 实际行为对齐；「失败 dynamic import 绝对不会再次访问网络」等表述限定到真实浏览器边界；支持矩阵与恢复操作口径统一。
 
 ## 5.1.4

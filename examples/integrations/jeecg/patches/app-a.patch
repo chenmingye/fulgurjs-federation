@@ -1,0 +1,570 @@
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env app-a/.env
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env	2026-10-02 19:48:21
++++ app-a/.env	2026-10-02 20:25:01
+@@ -1,11 +1,11 @@
+ # port
+-VITE_PORT = 3100
++VITE_PORT = 5371
+ 
+ #  网站标题
+-VITE_GLOB_APP_TITLE = JeecgBoot 企业级低代码平台
++VITE_GLOB_APP_TITLE = JeecgBoot-Fed-A 企业级低代码平台
+ 
+ # 简称，此变量只能是字符/下划线
+-VITE_GLOB_APP_SHORT_NAME = JeecgBoot_Pro
++VITE_GLOB_APP_SHORT_NAME = JeecgBoot_Fed_A
+ 
+ # 单点登录服务端地址
+ VITE_GLOB_APP_CAS_BASE_URL=http://cas.test.com:8443/cas
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development app-a/.env.development
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development	2026-10-02 19:48:21
++++ app-a/.env.development	2026-10-02 21:28:54
+@@ -6,7 +6,7 @@
+ 
+ 
+ # 跨域代理，您可以配置多个 ,请注意，没有换行符
+-VITE_PROXY = [["/jeecgboot","http://localhost:8080/jeecg-boot"],["/upload","http://localhost:3300/upload"]]
++VITE_PROXY = [["/jeecgboot-b","http://localhost:5380/jeecg-boot-b"],["/jeecgboot","http://localhost:5380/jeecg-boot"]]
+ 
+ #后台接口全路径地址(必填)
+ VITE_GLOB_DOMAIN_URL=http://localhost:8080/jeecg-boot
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production app-a/.env.production
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production	2026-10-02 22:15:11
++++ app-a/.env.production	2026-10-02 22:02:53
+@@ -2,7 +2,7 @@
+ VITE_USE_MOCK = false
+ 
+ # 发布路径
+-VITE_PUBLIC_PATH = /
++VITE_PUBLIC_PATH = /jeecg-a/
+ 
+ # 是否启用gzip或brotli压缩
+ # 选项值: gzip | brotli | none
+@@ -36,4 +36,5 @@
+ # icon组件的iconify图标库使用在线还是本地。可选属性：online, local
+ VITE_GLOB_ICONIFY_USE_TYPE=local
+ 
++# 联邦演示：关闭 PWA（SW 拦截子应用资源请求）
+ VITE_USE_PWA = false
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts app-a/build/vite/plugin/index.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts	2026-10-02 19:48:21
++++ app-a/build/vite/plugin/index.ts	2026-10-02 21:58:18
+@@ -144,7 +144,8 @@
+     vitePlugins.push(configCompressPlugin(VITE_BUILD_COMPRESS, VITE_BUILD_COMPRESS_DELETE_ORIGIN_FILE));
+ 
+     // vite-plugin-pwa (PWA 插件注册)
+-    if (!isElectron) {
++    // 联邦演示：Service Worker 会拦截子应用资源请求干扰桥接，默认关闭（VITE_USE_PWA=true 可恢复）
++    if (!isElectron && !viteEnv.VITE_USE_PWA) {
+       vitePlugins.push(configPwaPlugin(isBuild));
+     }
+   }
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/fulgurjs.config.ts app-a/fulgurjs.config.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/fulgurjs.config.ts	1970-01-01 08:00:00
++++ app-a/fulgurjs.config.ts	2026-10-02 22:47:55
+@@ -0,0 +1,33 @@
++import type { FederationOptions } from '@fulgurjs/federation'
++
++/**
++ * Jeecg-A（联邦宿主实例）联邦配置。
++ * remotes：
++ *  - jeecg-b：JeecgBoot 官方前端生成的子应用实例（同基线，端口 5372）
++ *  - jeecg-c：React 完整子应用（examples/integrations/jeecg/react-c，端口 5373）
++ * shared 与子应用端对齐（vue 生态四键 singleton）；演示数据层为各应用内置 mock。
++ */
++export default {
++  name: 'jeecg-a',
++  filename: 'fulgurjs-remoteEntry.js',
++  remotes: {
++    'jeecg-b': {
++      external: 'http://localhost:5372/',
++      dev: 'http://localhost:5372/',
++      prod: '/jeecg-b',
++    },
++    'react-c': {
++      external: 'http://localhost:5373/',
++      dev: 'http://localhost:5373/',
++      prod: '/react-c',
++    },
++  },
++  shared: {
++    vue: { singleton: true, requiredVersion: '^3.5.0' },
++    react: { singleton: true, requiredVersion: '^19.0.0' },
++    'react-dom': { singleton: true, requiredVersion: '^19.0.0' },
++    'vue-router': { singleton: true, requiredVersion: '^5.1.0' },
++    pinia: { singleton: true, requiredVersion: '^3.0.0' },
++    dayjs: { singleton: true, requiredVersion: false },
++  },
++} satisfies FederationOptions
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts app-a/mock/sys/menu.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts	2026-10-02 19:48:21
++++ app-a/mock/sys/menu.ts	2026-10-02 20:26:51
+@@ -236,6 +236,55 @@
+   ],
+ };
+ 
++// 【联邦演示】fulgurjs-federation 桥接页面（Jeecg-A 宿主 → Jeecg-B / React-C）
++// catch-all 子路由保证子应用内部路由变化时宿主视图不重挂
++const fedRoute = {
++  path: '/fed',
++  name: 'FedDemo',
++  component: 'LAYOUT',
++  redirect: '/fed/bridge',
++  meta: {
++    icon: 'ant-design:cluster-outlined',
++    title: '联邦演示（fulgurjs）',
++  },
++  children: [
++    {
++      path: 'bridge',
++      name: 'FedJeecgB',
++      component: '/fed/JeecgBridgeDemo',
++      meta: {
++        title: '嵌入 Jeecg-B（自嵌套）',
++        icon: 'ant-design:appstore-outlined',
++      },
++      children: [
++        {
++          path: ':pathMatch(.*)*',
++          name: 'FedJeecgBAny',
++          component: '/fed/JeecgBridgeDemo',
++          meta: { title: '', hideMenu: true, hideBreadcrumb: true },
++        },
++      ],
++    },
++    {
++      path: 'react',
++      name: 'FedReactC',
++      component: '/fed/ReactBridgeDemo',
++      meta: {
++        title: '嵌入 React-C（跨框架）',
++        icon: 'ant-design:code-outlined',
++      },
++      children: [
++        {
++          path: ':pathMatch(.*)*',
++          name: 'FedReactCAny',
++          component: '/fed/ReactBridgeDemo',
++          meta: { title: '', hideMenu: true, hideBreadcrumb: true },
++        },
++      ],
++    },
++  ],
++};
++
+ export default [
+   {
+     url: `${baseUrl}/sys/permission/getUserPermissionByToken`,
+@@ -255,11 +304,11 @@
+       switch (id) {
+         case '1':
+           dashboardRoute.redirect = dashboardRoute.path + '/' + dashboardRoute.children[0].path;
+-          menu = [dashboardRoute, authRoute, levelRoute, sysRoute, linkRoute];
++          menu = [dashboardRoute, authRoute, levelRoute, sysRoute, linkRoute, fedRoute];
+           break;
+         case '2':
+           dashboardRoute.redirect = dashboardRoute.path + '/' + dashboardRoute.children[1].path;
+-          menu = [dashboardRoute, authRoute, levelRoute, linkRoute];
++          menu = [dashboardRoute, authRoute, levelRoute, linkRoute, fedRoute];
+           break;
+         default:
+           menu = [];
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json app-a/package.json
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json	2026-10-02 20:15:39
++++ app-a/package.json	2026-10-03 04:41:44
+@@ -23,20 +23,23 @@
+     "husky:install": "husky install"
+   },
+   "dependencies": {
+-    "@jeecg/aiflow": "3.9.5-beta",
+-    "@iconify/iconify": "^3.1.1",
+     "@ant-design/colors": "^7.2.1",
+     "@ant-design/icons-vue": "^7.0.1",
+-    "@vue/shared": "^3.5.39",
+-    "@vueuse/core": "^10.11.1",
+-    "@tinymce/tinymce-vue": "4.0.7",
++    "@fulgurjs/federation": "5.5.2",
++    "@iconify/iconify": "^3.1.1",
++    "@jeecg/aiflow": "3.9.5-beta",
+     "@logicflow/core": "^2.2.4",
+     "@logicflow/extension": "^2.3.0",
+     "@logicflow/vue-node-registry": "^1.2.4",
++    "@onlyoffice/document-editor-vue": "^1.6.1",
++    "@tinymce/tinymce-vue": "4.0.7",
++    "@traptitech/markdown-it-katex": "^3.6.0",
++    "@vant/area-data": "^1.5.2",
++    "@vue/shared": "^3.5.39",
++    "@vueuse/core": "^10.11.1",
+     "@zxcvbn-ts/core": "^3.0.4",
+     "ant-design-vue": "^4.2.6",
+     "axios": "^1.18.1",
+-    "@vant/area-data": "^1.5.2",
+     "clipboard": "^2.0.11",
+     "codemirror": "^5.65.21",
+     "cron-parser": "^4.9.0",
+@@ -47,23 +50,26 @@
+     "echarts": "^5.6.0",
+     "emoji-mart-vue-fast": "^15.0.5",
+     "enquire.js": "^2.1.6",
++    "event-source-polyfill": "^1.0.31",
++    "highlight.js": "^11.11.1",
+     "intro.js": "^7.2.0",
+     "lodash-es": "^4.18.1",
+     "lodash.get": "^4.4.2",
++    "lunar-javascript": "^1.7.7",
+     "markdown-it": "^14.3.0",
+     "markdown-it-link-attributes": "^4.0.1",
+-    "event-source-polyfill": "^1.0.31",
+-    "highlight.js": "^11.11.1",
+-    "@traptitech/markdown-it-katex": "^3.6.0",
+     "md5": "^2.3.0",
+     "mockjs": "^1.1.0",
+     "nprogress": "^0.2.0",
+     "path-to-regexp": "^6.3.0",
++    "perfect-scrollbar": "^1.5.6",
+     "pinia": "^3.0.4",
+-    "print-js": "^1.6.0",
+     "pinyin-pro": "^3.28.1",
+-    "qs": "^6.15.3",
++    "print-js": "^1.6.0",
+     "qrcode": "^1.5.4",
++    "qs": "^6.15.3",
++    "react": "19.3.0",
++    "react-dom": "19.3.0",
+     "resize-observer-polyfill": "^1.5.1",
+     "showdown": "^2.1.0",
+     "sortablejs": "^1.15.7",
+@@ -71,31 +77,27 @@
+     "tinymce": "6.6.2",
+     "vditor": "^3.11.2",
+     "vue": "^3.5.39",
++    "vue-color": "^3.3.3",
+     "vue-cropper": "^0.6.5",
+     "vue-cropperjs": "^5.0.0",
++    "vue-grid-layout-v3": "^3.1.2",
+     "vue-i18n": "^9.14.5",
+     "vue-infinite-scroll": "^2.0.2",
+     "vue-print-nb-jeecg": "^1.0.13",
+     "vue-router": "^5.1.0",
+     "vue-types": "^5.1.3",
+     "vuedraggable": "^4.1.0",
+-    "vxe-table": "4.13.31",
+     "vxe-pc-ui": "4.6.12",
++    "vxe-table": "4.13.31",
+     "vxe-table-plugin-antd": "4.0.8",
+     "xe-utils": "3.5.26",
+-    "xss": "^1.0.15",
+-    "@onlyoffice/document-editor-vue": "^1.6.1",
+-    "vue-grid-layout-v3": "^3.1.2",
+-    "lunar-javascript": "^1.7.7",
+-    "perfect-scrollbar": "^1.5.6",
+-    "vue-color": "^3.3.3"
++    "xss": "^1.0.15"
+   },
+   "devDependencies": {
+     "@commitlint/cli": "^18.6.1",
+     "@commitlint/config-conventional": "^18.6.3",
+     "@iconify/json": "^2.2.498",
+     "@purge-icons/generated": "^0.10.0",
+-    "unplugin-icons": "^0.22.0",
+     "@types/codemirror": "^5.60.17",
+     "@types/crypto-js": "^4.2.2",
+     "@types/fs-extra": "^11.0.4",
+@@ -106,9 +108,9 @@
+     "@types/mockjs": "^1.0.10",
+     "@types/node": "^20.19.43",
+     "@types/nprogress": "^0.2.3",
++    "@types/pinyin": "^2.10.2",
+     "@types/qrcode": "^1.5.6",
+     "@types/qs": "^6.15.1",
+-    "@types/pinyin": "^2.10.2",
+     "@types/showdown": "^2.0.6",
+     "@types/sortablejs": "^1.15.9",
+     "@typescript-eslint/eslint-plugin": "^6.21.0",
+@@ -118,11 +120,13 @@
+     "@vue/compiler-sfc": "^3.5.39",
+     "@vue/test-utils": "^2.4.11",
+     "autoprefixer": "^10.5.2",
++    "big.js": "^6.2.2",
+     "commitizen": "^4.3.2",
+     "conventional-changelog-cli": "^4.1.0",
+     "cross-env": "^7.0.3",
+     "cz-git": "^1.13.1",
+     "czg": "^1.13.1",
++    "dingtalk-jsapi": "^3.2.9",
+     "dotenv": "^16.6.1",
+     "eslint": "^8.57.1",
+     "eslint-config-prettier": "^9.1.2",
+@@ -155,11 +159,14 @@
+     "stylelint-config-recommended-vue": "^1.6.1",
+     "stylelint-config-standard": "^36.0.1",
+     "stylelint-order": "^6.0.4",
++    "tinycolor2": "1.6.0",
+     "ts-jest": "^29.4.11",
+     "ts-node": "^10.9.2",
+     "typescript": "^5.9.3",
++    "unocss": "^66.7.5",
++    "unplugin-icons": "^0.22.0",
+     "unplugin-vue-components": "~0.24.1",
+-    "vite": "^8.1.4",
++    "vite": "6.4.3",
+     "vite-plugin-compression": "^0.5.1",
+     "vite-plugin-html": "^3.2.2",
+     "vite-plugin-mkcert": "^1.17.12",
+@@ -167,17 +174,13 @@
+     "vite-plugin-optimize-persist": "^0.1.2",
+     "vite-plugin-package-config": "^0.1.1",
+     "vite-plugin-purge-icons": "^0.10.0",
+-    "vite-plugin-svg-icons": "^2.0.1",
+     "vite-plugin-pwa": "^1.3.0",
+-    "workbox-window": "^7.4.1",
+     "vite-plugin-qiankun": "^1.0.15",
++    "vite-plugin-svg-icons": "^2.0.1",
+     "vite-plugin-vue-setup-extend-plus": "^0.1.0",
+-    "unocss": "^66.7.5",
+     "vue-eslint-parser": "^9.4.3",
+     "vue-tsc": "^1.8.27",
+-    "dingtalk-jsapi": "^3.2.9",
+-    "big.js": "^6.2.2",
+-    "tinycolor2": "1.6.0"
++    "workbox-window": "^7.4.1"
+   },
+   "repository": {
+     "type": "git",
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml app-a/pnpm-workspace.yaml
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml	2026-10-02 20:19:23
++++ app-a/pnpm-workspace.yaml	2026-10-03 03:56:37
+@@ -6,3 +6,5 @@
+   core-js: true
+   esbuild: true
+   vue-demi: true
++minimumReleaseAgeExclude:
++  - '@fulgurjs/federation@5.4.1 || 5.4.2 || 5.4.3 || 5.5.0 || 5.5.1 || 5.5.2'
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/JeecgBridgeDemo.vue app-a/src/views/fed/JeecgBridgeDemo.vue
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/JeecgBridgeDemo.vue	1970-01-01 08:00:00
++++ app-a/src/views/fed/JeecgBridgeDemo.vue	2026-10-02 21:01:35
+@@ -0,0 +1,112 @@
++<template>
++  <div class="fed-jeecg-bridge">
++    <a-card :bordered="false" size="small" class="fed-panel">
++      <template #title>联邦演示 · Jeecg-A 嵌入 Jeecg-B（同源双实例桥接）</template>
++      <a-space direction="vertical" :size="6" style="width: 100%">
++        <a-space wrap>
++          <a-tag color="purple">宿主：jeecg-a（JeecgBoot 官方前端实例 A）</a-tag>
++          <a-tag color="geekblue">子应用：jeecg-b（同基线独立实例，自有 store/路由/主题）</a-tag>
++          <a-tag color="cyan">URL 同步 basePath=/fed/bridge</a-tag>
++        </a-space>
++        <a-space wrap align="center">
++          <span>会话：</span>
++          <a-radio-group v-model:value="sessionName" button-style="solid" size="small" @change="handleSessionChange">
++            <a-radio-button value="alice">用户 alice</a-radio-button>
++            <a-radio-button value="bob">用户 bob</a-radio-button>
++            <a-radio-button value="none">登出</a-radio-button>
++          </a-radio-group>
++          <a-button size="small" @click="handleRemount">卸载后重挂</a-button>
++          <span>子应用挂载次数：<b>{{ mountCount }}</b>（换会话/重挂 +1，B 内路由变化不变）</span>
++        </a-space>
++        <div class="fed-bridge-container" data-fulgurjs="jeecg-a-embeds-jeecg-b">
++          <BridgeJeecgB v-if="sessionKey !== null" :app-props="{ ...appProps, onReady: handleReady }" :session-key="sessionKey"
++            :routing="{ basePath: '/fed/bridge', navigation: navPort }" @ready="handleReady" />
++          <a-empty v-else description="已登出：Jeecg-B 已卸载（会话代次置空）" />
++        </div>
++        <a-collapse ghost>
++          <a-collapse-panel key="diag" header="诊断面板（会话代次 / AppContext / 事件）">
++            <p>sessionKey：<code>{{ sessionKey ?? 'null（登出态）' }}</code></p>
++            <p>appProps：<code>{{ JSON.stringify(appProps) }}</code></p>
++            <p>宿主路由：<code>{{ route.fullPath }}</code> · history.length：<b>{{ historyLen }}</b></p>
++            <p>事件：<code v-if="events.length">{{ events.slice(-6).join(' | ') }}</code><span v-else>（暂无）</span></p>
++          </a-collapse-panel>
++        </a-collapse>
++      </a-space>
++    </a-card>
++  </div>
++</template>
++
++<script setup lang="ts">
++/**
++ * Jeecg-A 宿主桥接视图：嵌入同源异实例的 Jeecg-B。
++ * - createVueBridgeApp（/bridge/vue）+ createVueBridgeNavigation（/bridge/router/vue）；
++ * - 受控会话：sessionKey 组件 prop 驱动（换账号=卸载→清 context→新代次重挂，§8.2 合同）；
++ * - URL 同步：B 的 memory 路由写入本实例浏览器历史（唯一写入方=A）。
++ */
++import { computed, onMounted, ref, watch } from 'vue'
++import { useRoute, useRouter } from 'vue-router'
++import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
++import { createVueBridgeNavigation } from '@fulgurjs/federation/bridge/router/vue'
++
++const route = useRoute()
++const router = useRouter()
++const historyLen = ref(0)
++const mountCount = ref(0)
++const events = ref<string[]>([])
++
++const sessionName = ref<'alice' | 'bob' | 'none'>('alice')
++const sessionKey = computed(() => (sessionName.value === 'none' ? null : `jeecg-a:${sessionName.value}`))
++const appProps = computed(() => ({
++  token: sessionName.value === 'none' ? undefined : sessionName.value === 'bob' ? 'fakeToken2' : 'fakeToken1',
++  user: sessionName.value === 'none' ? undefined : sessionName.value,
++  depth: 0,
++}))
++
++// B 的宿主导航端口：读写本实例（jeecg-a）的浏览器路由
++const navPort = createVueBridgeNavigation(router)
++
++const BridgeJeecgB = createVueBridgeApp('jeecg-b/bridge', {
++  retries: 0,
++  getContext: () => {
++    const user = sessionName.value
++    return {
++      sessionKey: sessionKey.value ?? undefined,
++      user: user === 'none' ? undefined : { name: user, from: 'jeecg-a' },
++      token: user === 'none' ? undefined : appProps.value.token,
++    } as Record<string, unknown>
++  },
++})
++
++watch(
++  () => route.fullPath,
++  () => {
++    historyLen.value = window.history.length
++  },
++  { immediate: true },
++)
++onMounted(() => {
++  historyLen.value = window.history.length
++})
++
++function handleSessionChange(): void {
++  events.value.push(`session→${sessionName.value}`)
++}
++
++function handleReady(): void {
++  mountCount.value++
++  events.value.push(`ready#${mountCount.value}@${String(sessionKey.value)}`)
++}
++
++function handleRemount(): void {
++  events.value.push('manual-remount')
++  const current = sessionName.value
++  sessionName.value = 'none'
++  window.setTimeout(() => {
++    sessionName.value = current === 'none' ? 'alice' : (current as 'alice' | 'bob')
++  }, 50)
++}
++</script>
++
++<style scoped>
++.fed-bridge-container { border: 1px dashed #722ed1; border-radius: 6px; padding: 8px; min-height: 480px; }
++</style>
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/ReactBridgeDemo.vue app-a/src/views/fed/ReactBridgeDemo.vue
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/ReactBridgeDemo.vue	1970-01-01 08:00:00
++++ app-a/src/views/fed/ReactBridgeDemo.vue	2026-10-02 21:02:21
+@@ -0,0 +1,57 @@
++<template>
++  <div class="fed-react-bridge">
++    <a-card :bordered="false" size="small" class="fed-panel">
++      <template #title>联邦演示 · Jeecg-A 嵌入 React-C（跨框架桥接）</template>
++      <a-space direction="vertical" :size="6" style="width: 100%">
++        <a-space wrap>
++          <a-tag color="purple">宿主：jeecg-a（Vue）</a-tag>
++          <a-tag color="volcano">子应用：react-c（React 19 完整子应用）</a-tag>
++          <a-tag color="cyan">URL 同步 basePath=/fed/react</a-tag>
++        </a-space>
++        <div class="fed-bridge-container" data-fulgurjs="jeecg-a-embeds-react-c">
++          <BridgeReactC :app-props="{ host: 'jeecg-a', user: 'alice', onReady: handleReady }"
++            :routing="{ basePath: '/fed/react', navigation: navPort }" @ready="handleReady" />
++        </div>
++        <a-collapse ghost>
++          <a-collapse-panel key="diag" header="诊断面板">
++            <p>宿主路由：<code>{{ route.fullPath }}</code> · history.length：<b>{{ historyLen }}</b></p>
++            <p>C 挂载次数：<b>{{ mountCount }}</b>（C 内路由变化不应增长）</p>
++          </a-collapse-panel>
++        </a-collapse>
++      </a-space>
++    </a-card>
++  </div>
++</template>
++
++<script setup lang="ts">
++/**
++ * Jeecg-A 宿主桥接视图：嵌入 React 完整子应用 react-c（跨框架方向 Vue→React）。
++ */
++import { onMounted, ref, watch } from 'vue'
++import { useRoute, useRouter } from 'vue-router'
++import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
++import { createVueBridgeNavigation } from '@fulgurjs/federation/bridge/router/vue'
++
++const route = useRoute()
++const router = useRouter()
++const historyLen = ref(0)
++const mountCount = ref(0)
++
++const navPort = createVueBridgeNavigation(router)
++const BridgeReactC = createVueBridgeApp('react-c/bridge', { retries: 0 })
++
++watch(
++  () => route.fullPath,
++  () => { historyLen.value = window.history.length },
++  { immediate: true },
++)
++onMounted(() => { historyLen.value = window.history.length })
++
++function handleReady(): void {
++  mountCount.value++
++}
++</script>
++
++<style scoped>
++.fed-bridge-container { border: 1px dashed #fa8c16; border-radius: 6px; padding: 8px; min-height: 480px; }
++</style>
+diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts app-a/vite.config.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts	2026-10-02 19:48:21
++++ app-a/vite.config.ts	2026-10-02 22:42:42
+@@ -8,6 +8,8 @@
+ import { wrapperEnv } from './build/utils';
+ import { createVitePlugins } from './build/vite/plugin';
+ import { OUTPUT_DIR } from './build/constant';
++import { federation } from '@fulgurjs/federation';
++import fulgurjsConfig from './fulgurjs.config';
+ 
+ function pathResolve(dir: string) {
+   return resolve(process.cwd(), '.', dir);
+@@ -45,7 +47,8 @@
+   console.debug('[init] Vite Proxy Config: ', VITE_PROXY);
+ 
+   return {
+-    base: isQiankunMicro ? VITE_GLOB_QIANKUN_MICRO_APP_ENTRY : VITE_PUBLIC_PATH,
++    // 联邦演示：生产构建固定 /jeecg-a/ 子路径（dev 不受影响）
++    base: isBuild ? '/jeecg-a/' : (isQiankunMicro ? VITE_GLOB_QIANKUN_MICRO_APP_ENTRY : VITE_PUBLIC_PATH),
+     root,
+     resolve: {
+       alias: [
+@@ -112,8 +115,9 @@
+     build: {
+       // Vite 8 默认使用 Oxc minifier；'esbuild' 已 deprecated。
+       // 这里保留 minify=true 显式启用，并对 console/debugger 做 drop。
+-      minify: true,
+-      target: 'es2015',
++      minify: false,
++      // 联邦演示：es2015 下 rolldown 组合 TLA 时会把 async init 丢 async 标记（SyntaxError），提升到 es2020 规避
++      target: 'es2022',
+       cssTarget: 'chrome80',
+       outDir: OUTPUT_DIR,
+       rollupOptions: {
+@@ -175,14 +179,14 @@
+     },
+ 
+     // The vite plugin used by the project. The quantity is large, so it is separately extracted and managed
+-    plugins: await createVitePlugins(viteEnv, isBuild, isQiankunMicro),
++    plugins: [...(await createVitePlugins(viteEnv, isBuild, isQiankunMicro)), federation(fulgurjsConfig)],
+ 
+     optimizeDeps: {
+       // Vite 8 uses Rolldown for dep optimization; esbuildOptions is deprecated.
+       // See https://rolldown.rs/ for the rolldownOptions shape.
+       rolldownOptions: {
+         transform: {
+-          target: 'es2020',
++          target: 'es2022',
+         },
+       },
+       // @iconify/iconify: The dependency is dynamically and virtually loaded by @purge-icons/generated, so it needs to be specified explicitly

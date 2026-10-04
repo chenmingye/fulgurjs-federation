@@ -10,6 +10,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  examples-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check public examples and launcher failures
+        run: npm run test:examples
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -220,18 +230,18 @@ jobs:
           npm run build
       - name: Install locked demos and select engine
         run: |
-          npm --prefix demo/react-versions ci --no-audit --no-fund
+          npm --prefix examples/demos/react-versions ci --no-audit --no-fund
           for app in host remote18 remote18-strict remote19 vue-host; do
-            npm --prefix "demo/react-versions/$app" ci --no-audit --no-fund
-            npm --prefix "demo/react-versions/$app" install --no-save --package-lock=false "vite@${{ matrix.vite }}" --no-audit --no-fund
-            cp -R packages/plugin/dist/. "demo/react-versions/$app/node_modules/@fulgurjs/federation/dist/"
+            npm --prefix "examples/demos/react-versions/$app" ci --no-audit --no-fund
+            npm --prefix "examples/demos/react-versions/$app" install --no-save --package-lock=false "vite@${{ matrix.vite }}" --no-audit --no-fund
+            cp -R packages/plugin/dist/. "examples/demos/react-versions/$app/node_modules/@fulgurjs/federation/dist/"
           done
-          cd demo/react-versions
+          cd examples/demos/react-versions
           npx playwright install --with-deps chromium
       - name: Browser acceptance (dev and production)
         env:
           FULGURJS_ACCEPTANCE_STAGE: source-candidate
-        working-directory: demo/react-versions
+        working-directory: examples/demos/react-versions
         run: |
           npm run test:dev
           npm run test:prod
@@ -239,4 +249,4 @@ jobs:
         if: always()
         with:
           name: bridge-versions-vite-${{ matrix.vite }}
-          path: demo/.run/react-versions/
+          path: examples/.run/react-versions/

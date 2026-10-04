@@ -1,69 +1,77 @@
-# fulgurjs-federation 示例总入口
+# 示例、模板与展示中心
 
-选择你的框架，复制对应宿主与远程两个目录，`npm install` 后即可看到完整的模块联邦演示。四个工程互相独立：不依赖本仓库源码、monorepo workspace 或父目录 node_modules，插件依赖为 npm registry 精确正式包。
+所有公开示例统一放在本目录。先选一个模板运行；需要了解更多 API 时，再打开功能演示或展示门户。
 
-## Vue（宿主 5214 / 远程 5213）
+## 选择要运行的工程
 
-完整操作步骤见 **[vue/README.md](./vue/README.md)**。
+| 目的 | 目录 | 包管理器 |
+|---|---|---|
+| Vue 加载 Vue 组件、页面与 TS 模块 | [templates/vue-vue](templates/vue-vue/) | pnpm |
+| React 加载 React 组件、页面与 TS 模块 | [templates/react-react](templates/react-react/) | pnpm |
+| Vue 宿主嵌 React 子应用 | [templates/vue-host-react-remote](templates/vue-host-react-remote/) | pnpm |
+| React 宿主嵌 Vue 子应用 | [templates/react-host-vue-remote](templates/react-host-vue-remote/) | pnpm |
+| 双向桥接与 URL 同步 | [templates/showcase](templates/showcase/) | pnpm |
+| 共享协商、错误恢复、同框架桥接、CLI、React 版本隔离 | [demos](demos/) | npm |
+| Jeecg 自嵌套、跨框架与多层集成 | [integrations/jeecg](integrations/jeecg/) | 见集成说明 |
 
-```bash
-cd examples/vue/remote && npm install && npm run dev   # 终端 1：vue-remote，http://localhost:5213
-cd examples/vue/host   && npm install && npm run dev   # 终端 2：vue-host，http://localhost:5214
-```
+模板与门户共用同一份工程，基础示例不会再额外复制到另一个目录。场景位置、端口、启动顺序和包管理器统一登记在 [scenarios.json](scenarios.json)。
 
-## React（宿主 5204 / 远程 5203）
+## 下载后直接运行
 
-完整操作步骤见 **[react/README.md](./react/README.md)**。
+可以下载整个仓库 ZIP 或 git clone。Node 版本使用各工程支持的版本（当前验证环境为 Node 24）；模板安装要求见 [模板指南](templates/README.md)。
 
-```bash
-cd examples/react/remote && npm install && npm run dev   # 终端 1：react-remote，http://localhost:5203
-cd examples/react/host   && npm install && npm run dev   # 终端 2：react-host，http://localhost:5204
-```
-
-## 跨框架桥接（Vue 宿主 5314 × React 远程 5303；React 宿主 5304 × Vue 远程 5313）
-
-完整操作步骤见 **[bridge/README.md](./bridge/README.md)**。
+以 Vue 模板为例，在仓库根执行：
 
 ```bash
-# Vue 宿主 × React 子应用：终端 1 起子应用，终端 2 起宿主
-cd examples/bridge/react-remote && npm install && npm run dev   # 5303
-cd examples/bridge/vue-host     && npm install && npm run dev   # 5314
-
-# React 宿主 × Vue 子应用
-cd examples/bridge/vue-remote   && npm install && npm run dev   # 5313
-cd examples/bridge/react-host   && npm install && npm run dev   # 5304
+cd examples/templates/vue-vue
+pnpm install --frozen-lockfile
+pnpm dev
+# 打开 http://localhost:5214
 ```
 
-## 每对示例演示什么
+复制到自己的项目时，复制整个 `vue-vue/`，包含根 package.json、pnpm-workspace.yaml、pnpm-lock.yaml 和 host/remote 两个子目录。无需复制插件源码、其他模板或仓库根 node_modules；每个工程都从 registry 安装正式插件包。
 
-- 远程可点击计数组件（本地状态在远程组件内，宿主页面直接操作）
-- 普通 TS 模块跨应用调用（宿主展示真实返回值）
-- 远程首页 + 带真实路由参数的详情页（深链刷新可恢复）
-- 宿主导航、路由级懒加载（首页不批量预取未访问的远程页面）
-- 插件默认加载/错误占位与恢复操作（**重试加载** 同页恢复；**刷新页面重试** 整页恢复）
-- 生产构建 + 最小 Nginx 部署（含 SPA fallback）
+## 统一管理场景
 
-## 目录
+以下命令在仓库根执行；无需先安装仓库根依赖：
+
+```bash
+node examples/scripts/check-catalog.mjs          # 核对场景、workspace 成员与锁文件
+node examples/scripts/check-env.mjs              # 查看包管理器、安装和端口状态
+node examples/portal/server.mjs                  # 展示门户：http://localhost:5390
+node examples/scripts/start-demo.mjs --scenario vue-basic
+node examples/scripts/build-demo.mjs --scenario vue-basic
+node examples/scripts/stop-demo.mjs --scenario vue-basic
+```
+
+`--scenario` 可重复使用；`--all` 操作全部可运行场景。启动器按场景表选择 npm/pnpm，模板在自己的 workspace 根安装，远程先启动、宿主后启动。已占用端口会报告跳过，不证明占用者属于当前版本，验收时仍需核对页面与实际包版本。
+
+停止器只处理 `examples/.run/demo-pids.json` 登记的进程。日志、PID、node_modules、dist 都不提交 GitHub。若只复制单个模板，直接执行该模板的 pnpm 命令即可，统一管理脚本不是模板运行依赖。
+
+## 目录职责
 
 ```text
 examples/
-├── README.md / README.en.md   # 本入口（中/英）
-├── bridge/                    # 跨框架桥接（子应用级挂载/卸载，§8.2）
-│   ├── README.md              # 双向组合说明
-│   ├── vue-host/              # Vue 宿主 × React 子应用（5314）
-│   ├── react-remote/          # React 子应用（5303）
-│   ├── react-host/            # React 宿主 × Vue 子应用（5304）
-│   └── vue-remote/            # Vue 子应用（5313）
-├── vue/
-│   ├── README.md              # Vue 一对示例的组合说明
-│   ├── host/                  # Vue 宿主（vue-host，5214）
-│   └── remote/                # Vue 远程（vue-remote，5213）
-└── react/
-    ├── README.md              # React 一对示例的组合说明
-    ├── host/                  # React 宿主（react-host，5204）
-    └── remote/                # React 远程（react-remote，5203）
+├── templates/      # 五个可独立复制的模板，也是基础展示工程
+├── demos/          # 共享、错误、生命周期、页面与版本隔离演示
+├── integrations/   # 大型公开项目集成
+├── portal/         # 展示门户
+├── scripts/        # 统一核对、启动、停止、构建
+└── scenarios.json  # 唯一场景表
 ```
 
-> `examples/` 面向使用者拷贝运行；仓库根的 `fixtures/` 是插件内部回归夹具（源码 link 到插件工作区），请勿当作使用模板。
+[API 覆盖矩阵](../docs/Demo展示中心API覆盖矩阵-20261002.md)说明各能力在哪里验证。`fixtures/` 是插件内部测试夹具；`testbed/runs/` 是私有业务验收副本，均不属于用户下载模板。
 
-> 提示：复制后可在项目根目录运行 `npx fulgurjs explain`（纯本地、无网络）核对联邦配置摘要。
+## 原目录迁移
+
+| 原位置 | 当前位置 |
+|---|---|
+| `examples/vue`、`templates/vue-vue` | `examples/templates/vue-vue` |
+| `examples/react`、`templates/react-react` | `examples/templates/react-react` |
+| `examples/bridge` | 两个 `examples/templates/*-host-*-remote` 模板 |
+| `demo/bridge-router`、`templates/showcase` | `examples/templates/showcase` |
+| `demo/jeecg` | `examples/integrations/jeecg` |
+| 其他 `demo/<场景>` | `examples/demos/<场景>` |
+| `demo/portal`、`demo/scripts` | `examples/portal`、`examples/scripts` |
+
+使用旧命令或收藏的源码路径时，按上表更新。插件 API 和端口没有因目录整理而变化。

@@ -7,7 +7,7 @@
 
 ## API 参考
 
-本手册按功能列出配置、参数和执行规则。先读 [使用指南](../README.md)，需要查询某个 API 时再回到这里。下文的长代码块包含集成片段；完整可运行工程见 [examples](../examples/README.md) 与 [Demo](https://github.com/chenmingye/fulgurjs-federation/blob/master/demo/README.md)。应用代码只导入公开入口，不依赖 `/internal/*`。
+本手册按功能列出配置、参数和执行规则。先读 [使用指南](../README.md)，需要查询某个 API 时再回到这里。下文的长代码块包含集成片段；完整可运行工程见 [examples](../examples/README.md) 与 [Demo](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/README.md)。应用代码只导入公开入口，不依赖 `/internal/*`。
 
 <a id="plugin-options"></a>
 
@@ -171,7 +171,7 @@ const Panel = await loadRemote('shop/Panel', {
 >
 > **resolveShare 与消费路径（5.7.1 起）**：配置了 `runtimePlugins` 的 HTML 入口在执行应用前完成共享裁决与加载；远程容器也会在执行 expose 前完成异步裁决。同步门面复用同一消费条件的决策与实例，异步 hook 可以选择低版本或原表之外的条目，不会被本地副本覆盖。应用与 provider 之间保留动态导入边界，Vite 8 的消费方门面仍无 TLA，避免把协商等待传入消费方循环依赖。
 >
-> **入口边界**：没有 HTML 入口的 library/自定义入口，或应用运行后才调用 `registerPlugins` 更改策略，需要先 `await loadShare(name, opts)`，再动态导入新的消费者；已经求值的静态绑定无法追溯改写。未准备的同步消费者遇到异步 hook 仍给出 `MFU-004`（`details.syncUnsupported: true`），并接管其迟到拒绝，避免额外 `unhandledrejection`。`strictVersion` 冲突给出 MFU-003；本地接管的实例按真实版本登记，不能借用另一版本槽位绕过检查。需要同时使用 React 18/19 时，为整组 React、renderer 及其消费方设置独立 `shareScope`，通过桥接传普通 props/回调，不跨 renderer 传 ReactElement 或 Context。可运行示例见 [React 版本隔离与恢复](https://github.com/chenmingye/fulgurjs-federation/blob/master/demo/react-versions/README.md)。
+> **入口边界**：没有 HTML 入口的 library/自定义入口，或应用运行后才调用 `registerPlugins` 更改策略，需要先 `await loadShare(name, opts)`，再动态导入新的消费者；已经求值的静态绑定无法追溯改写。未准备的同步消费者遇到异步 hook 仍给出 `MFU-004`（`details.syncUnsupported: true`），并接管其迟到拒绝，避免额外 `unhandledrejection`。`strictVersion` 冲突给出 MFU-003；本地接管的实例按真实版本登记，不能借用另一版本槽位绕过检查。需要同时使用 React 18/19 时，为整组 React、renderer 及其消费方设置独立 `shareScope`，通过桥接传普通 props/回调，不跨 renderer 传 ReactElement 或 Context。可运行示例见 [React 版本隔离与恢复](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/react-versions/README.md)。
 
 ```ts
 import type { RuntimePlugin } from '@fulgurjs/federation/runtime'

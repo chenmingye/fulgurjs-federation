@@ -1,0 +1,420 @@
+{
+  "$comment": "Demo 展示中心场景注册表。order: 启动顺序（同组先远程后宿主）。portal 字段驱动门户页。",
+  "scenarios": [
+    {
+      "id": "vue-basic",
+      "column": "基础联邦",
+      "title": "基础 Vue 联邦",
+      "desc": "Vue 宿主加载 Vue 远程组件/工具函数/页面；静态与动态远程、加载状态、共享状态、错误恢复。",
+      "source": "examples/templates/vue-vue",
+      "apps": [
+        {
+          "name": "vue-remote",
+          "url": "http://localhost:5213/",
+          "port": 5213,
+          "dir": "examples/templates/vue-vue/remote",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/vue-vue"
+        },
+        {
+          "name": "vue-host",
+          "url": "http://localhost:5214/",
+          "port": 5214,
+          "dir": "examples/templates/vue-vue/host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/vue-vue"
+        }
+      ]
+    },
+    {
+      "id": "react-basic",
+      "column": "基础联邦",
+      "title": "基础 React 联邦",
+      "desc": "React 宿主加载 React 远程：remoteComponent、useLoadRemote、RemoteErrorBoundary、页面接入 API。",
+      "source": "examples/templates/react-react",
+      "apps": [
+        {
+          "name": "react-remote",
+          "url": "http://localhost:5203/",
+          "port": 5203,
+          "dir": "examples/templates/react-react/remote",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/react-react"
+        },
+        {
+          "name": "react-host",
+          "url": "http://localhost:5204/",
+          "port": 5204,
+          "dir": "examples/templates/react-react/host",
+          "role": "host",
+          "framework": "react",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/react-react"
+        }
+      ]
+    },
+    {
+      "id": "bridge-cross",
+      "column": "应用桥接",
+      "title": "Vue↔React 双向桥接",
+      "desc": "Vue 宿主嵌 React 子应用、React 宿主嵌 Vue 子应用；受控会话（切换/登出）、卸载重挂、props 快照。 两个方向对应两个独立模板。",
+      "source": "examples/templates",
+      "apps": [
+        {
+          "name": "bridge-react-remote",
+          "url": "http://localhost:5303/",
+          "port": 5303,
+          "dir": "examples/templates/vue-host-react-remote/react-remote",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/vue-host-react-remote"
+        },
+        {
+          "name": "bridge-vue-host",
+          "url": "http://localhost:5314/",
+          "port": 5314,
+          "dir": "examples/templates/vue-host-react-remote/vue-host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/vue-host-react-remote"
+        },
+        {
+          "name": "bridge-vue-remote",
+          "url": "http://localhost:5313/",
+          "port": 5313,
+          "dir": "examples/templates/react-host-vue-remote/vue-remote",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/react-host-vue-remote"
+        },
+        {
+          "name": "bridge-react-host",
+          "url": "http://localhost:5304/",
+          "port": 5304,
+          "dir": "examples/templates/react-host-vue-remote/react-host",
+          "role": "host",
+          "framework": "react",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/react-host-vue-remote"
+        }
+      ]
+    },
+    {
+      "id": "same-frame",
+      "column": "应用桥接",
+      "title": "同框架完整子应用桥接",
+      "desc": "Vue套Vue、React套React 完整子应用（列表/详情/表单/内部路由），并对比「组件级联邦 vs 应用级桥接」的适用场景。",
+      "source": "examples/demos/same-frame",
+      "apps": [
+        {
+          "name": "sf-vue-remote",
+          "url": "http://localhost:5323/",
+          "port": 5323,
+          "dir": "examples/demos/same-frame/vue-remote",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "npm"
+        },
+        {
+          "name": "sf-vue-host",
+          "url": "http://localhost:5324/",
+          "port": 5324,
+          "dir": "examples/demos/same-frame/vue-host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "npm"
+        },
+        {
+          "name": "sf-react-remote",
+          "url": "http://localhost:5325/",
+          "port": 5325,
+          "dir": "examples/demos/same-frame/react-remote",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "npm"
+        },
+        {
+          "name": "sf-react-host",
+          "url": "http://localhost:5326/",
+          "port": 5326,
+          "dir": "examples/demos/same-frame/react-host",
+          "role": "host",
+          "framework": "react",
+          "packageManager": "npm"
+        }
+      ]
+    },
+    {
+      "id": "bridge-router",
+      "column": "URL 同步",
+      "title": "双向 URL 同步",
+      "desc": "子应用内部路由 ↔ 宿主浏览器地址双向同步：深链直达、刷新恢复、前进后退、守卫取消、中文/编码参数、部署 base。",
+      "source": "examples/templates/showcase",
+      "apps": [
+        {
+          "name": "br-react-remote",
+          "url": "http://localhost:5333/",
+          "port": 5333,
+          "dir": "examples/templates/showcase/react-remote",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/showcase"
+        },
+        {
+          "name": "br-vue-host",
+          "url": "http://localhost:5334/",
+          "port": 5334,
+          "dir": "examples/templates/showcase/vue-host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/showcase"
+        },
+        {
+          "name": "br-vue-remote",
+          "url": "http://localhost:5335/",
+          "port": 5335,
+          "dir": "examples/templates/showcase/vue-remote",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/showcase"
+        },
+        {
+          "name": "br-react-host",
+          "url": "http://localhost:5336/",
+          "port": 5336,
+          "dir": "examples/templates/showcase/react-host",
+          "role": "host",
+          "framework": "react",
+          "packageManager": "pnpm",
+          "installDir": "examples/templates/showcase"
+        }
+      ]
+    },
+    {
+      "id": "shared-runtime",
+      "column": "共享依赖",
+      "title": "共享依赖与运行时能力",
+      "desc": "singleton/版本协商/strictVersion/别名/eager/fallback、动态注册、预载、运行时插件 hooks、AppContext 实例身份观测。",
+      "source": "examples/demos/shared",
+      "apps": [
+        {
+          "name": "sh-remote-a",
+          "url": "http://localhost:5343/",
+          "port": 5343,
+          "dir": "examples/demos/shared/remote-a",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "npm"
+        },
+        {
+          "name": "sh-remote-b",
+          "url": "http://localhost:5345/",
+          "port": 5345,
+          "dir": "examples/demos/shared/remote-b",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "npm"
+        },
+        {
+          "name": "sh-host",
+          "url": "http://localhost:5344/",
+          "port": 5344,
+          "dir": "examples/demos/shared/host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "npm"
+        }
+      ]
+    },
+    {
+      "id": "pages-cli",
+      "column": "页面接入",
+      "title": "页面清单、类型与 CLI",
+      "desc": "definePages/createHostPages/remoteSchema/requireAppContext；fulgurjs init/explain/check-pages/doctor 全命令。",
+      "source": "examples/demos/pages-cli",
+      "apps": [
+        {
+          "name": "pc-remote",
+          "url": "http://localhost:5363/",
+          "port": 5363,
+          "dir": "examples/demos/pages-cli/remote",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "npm"
+        },
+        {
+          "name": "pc-host",
+          "url": "http://localhost:5364/",
+          "port": 5364,
+          "dir": "examples/demos/pages-cli/host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "npm"
+        }
+      ]
+    },
+    {
+      "id": "errors",
+      "column": "错误恢复",
+      "title": "错误恢复",
+      "desc": "远程不可用/错误入口/超时/版本冲突/非法桥接契约/setup 与卸载异常——隔离故障注入工程，逐项演示错误码与恢复路径。",
+      "source": "examples/demos/errors",
+      "apps": [
+        {
+          "name": "err-remote-good",
+          "url": "http://localhost:5352/",
+          "port": 5352,
+          "dir": "examples/demos/errors/remote-good",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "npm"
+        },
+        {
+          "name": "err-host",
+          "url": "http://localhost:5353/",
+          "port": 5353,
+          "dir": "examples/demos/errors/host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "npm"
+        }
+      ]
+    },
+    {
+      "id": "jeecg",
+      "column": "企业项目",
+      "title": "Jeecg 自嵌套与跨框架",
+      "desc": "JeecgBoot 官方前端（v3.9.5）A套B 自嵌套、Jeecg↔React 双向、受控三层嵌套 A→B→C；本地演示数据服务支撑真实交互。",
+      "source": "examples/integrations/jeecg",
+      "apps": [
+        {
+          "name": "jeecg-data",
+          "url": "http://localhost:5380/",
+          "port": 5380,
+          "dir": "examples/integrations/jeecg/data-service",
+          "role": "service",
+          "framework": "node",
+          "packageManager": "npm"
+        },
+        {
+          "name": "jeecg-b",
+          "url": "http://localhost:5372/",
+          "port": 5372,
+          "dir": "examples/integrations/jeecg/app-b",
+          "role": "remote",
+          "framework": "vue",
+          "packageManager": "pnpm"
+        },
+        {
+          "name": "jeecg-a",
+          "url": "http://localhost:5371/",
+          "port": 5371,
+          "dir": "examples/integrations/jeecg/app-a",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "pnpm"
+        },
+        {
+          "name": "jeecg-react-c",
+          "url": "http://localhost:5373/",
+          "port": 5373,
+          "dir": "examples/integrations/jeecg/react-c",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "npm"
+        },
+        {
+          "name": "jeecg-react-host",
+          "url": "http://localhost:5374/",
+          "port": 5374,
+          "dir": "examples/integrations/jeecg/react-host",
+          "role": "host",
+          "framework": "react",
+          "packageManager": "npm"
+        }
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "column": "生命周期",
+      "title": "生命周期与会话",
+      "desc": "setup/onSession 应用级与会话级初始化、会话切换清理、卸载后迟到请求作废、KeepAlive 保活——由桥接示例与 examples/demos/shared 共同覆盖。",
+      "source": "examples/templates",
+      "apps": []
+    },
+    {
+      "id": "tools-types",
+      "column": "工具与类型",
+      "title": "工具、类型与元数据",
+      "desc": "类型生成（dts source/shim）、包内入口解析、内部入口登记、错误码总表——由 examples/demos/pages-cli 与矩阵文档覆盖。",
+      "source": "docs/Demo展示中心API覆盖矩阵-20261002.md",
+      "apps": []
+    },
+    {
+      "id": "react-versions",
+      "column": "共享依赖",
+      "title": "React 18 / 19 隔离与恢复",
+      "desc": "React 19 宿主嵌 React 18；独立作用域、异步共享裁决、严格版本拒绝与对齐版本后的重新加载。",
+      "source": "examples/demos/react-versions",
+      "apps": [
+        {
+          "name": "rv-remote18",
+          "url": "http://localhost:5441/",
+          "port": 5441,
+          "dir": "examples/demos/react-versions/remote18",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "npm"
+        },
+        {
+          "name": "rv-remote18-strict",
+          "url": "http://localhost:5442/",
+          "port": 5442,
+          "dir": "examples/demos/react-versions/remote18-strict",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "npm"
+        },
+        {
+          "name": "rv-remote19",
+          "url": "http://localhost:5443/",
+          "port": 5443,
+          "dir": "examples/demos/react-versions/remote19",
+          "role": "remote",
+          "framework": "react",
+          "packageManager": "npm"
+        },
+        {
+          "name": "rv-host",
+          "url": "http://localhost:5440/",
+          "port": 5440,
+          "dir": "examples/demos/react-versions/host",
+          "role": "host",
+          "framework": "react",
+          "packageManager": "npm"
+        },
+        {
+          "name": "rv-vue-host",
+          "url": "http://localhost:5445/",
+          "port": 5445,
+          "dir": "examples/demos/react-versions/vue-host",
+          "role": "host",
+          "framework": "vue",
+          "packageManager": "npm"
+        }
+      ]
+    }
+  ]
+}
