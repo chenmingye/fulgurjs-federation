@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.9.3
+
+- **修复：hostPages keepAlive 页在 Vue 3.5 下永不缓存**——Vue 3.5 的 KeepAlive 对「已解析的异步组件」按 `__asyncResolved.name`（内层组件自身的 name）做 include 匹配，而 createHostPages 的保活白名单给的是包装名（`Fulgurjs_<remote>_<spec>`）：解析后两名不一致 → 白名单永不命中 → keepAlive 页每次进出都重挂（数据看板计数/表单输入丢失；pages-cli 实测 100% 复现）。修复：keepAlive 页的 loader 对解析结果做**浅克隆独立命名副本**（name 与包装一致，不改写共享模块导出对象——多页共享同一导出时改写会串名；非选项组件保持原样退化为旧行为）。回归：解析后内层与包装同名、共享模块导出保持原样、非 keepAlive 页不受影响（host-pages.test.ts 13/13，全量 675/675）。
+- 模板依赖钉 5.9.2（5.9.3 发布时的最后已发布验证版本；模板场景未用到 hostPages）。版本 5.9.2 → 5.9.3。
+
 ## 5.9.2
 
 - **修复：`fulgurjs create --force` 提示与实际覆盖行为不一致**——此前 `copyFileSync` 会静默改写非空目录中的同名文件，与「只新增、不删除/改写已有文件」的提示矛盾。现实现一致的覆盖合同：`--force` 复用目录时只补缺失文件，同名冲突（同名文件 / 文件-目录类型不符 / 目标侧符号链接）预检后逐项列出并保留用户版本，绝不改写；目标路径是文件、复制中途失败、依赖安装失败均非零退出并保留现场（已生成工程可用于排查，不删除用户原文件）。`--json` 模式 stdout 仅输出最终结果 JSON（进度与 pnpm 安装日志改走 stderr），输出新增 `copiedCount`/`skippedConflicts`。回归：同名 `package.json`/锁文件内容逐字节保护、类型冲突、符号链接不穿透、幂等重跑零改写等 14 例。

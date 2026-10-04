@@ -214,12 +214,21 @@ export function createHostPages(
       const name = cleanCompName(spec)
       // 页面 loader 与可恢复占位共用同一闭包：重试重跑 beforeLoad + load，
       // 与首载语义完全一致（会话 context、导出校验零差异）。
+      const keepAlivePage = core.pages.some((p) => p.keepAlive && core.specOf(p) === spec)
       const pageLoader = async (): Promise<any> => {
         await beforeLoad?.()
         const mod = await load(spec)
-        const inner = mod?.default ?? mod
+        let inner = mod?.default ?? mod
         if (!inner) {
           throw noRenderableExportError(spec, inner)
+        }
+        if (keepAlivePage && inner && typeof inner === 'object') {
+          // keepAlive 页（Vue 3.5 KeepAlive 语义）：include 对「已解析的异步组件」按
+          // __asyncResolved.name 匹配，而非包装名——解析后若内层组件名与包装名不一致，
+          // 保活页每次进出都会重挂。这里以浅克隆创建【独立命名副本】（不改写共享导出
+          // 对象——多页共享同一模块导出时改写会串名），选项组件为普通对象可安全展开；
+          // 非选项组件（函数式）保持原样退化为旧行为（每次重挂），不阻断加载。
+          inner = Object.defineProperties({ ...inner }, { name: { value: name, configurable: true } })
         }
         return inner
       }

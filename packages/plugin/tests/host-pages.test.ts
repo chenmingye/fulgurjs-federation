@@ -116,6 +116,21 @@ describe('createHostPages：校验复用与保活名称', () => {
     const comp: any = hp.component('remote-b/list')
     expect(comp.name).toBe('Fulgurjs_remote-b_list')
   })
+
+  it('keepAlive 页解析后内层组件与包装同名（Vue 3.5 KeepAlive include 按 __asyncResolved.name 匹配）', async () => {
+    const hp = make()
+    const kaComp: any = hp.component('remote-b/list')
+    await mount(kaComp)
+    // Vue 3.5：已解析异步组件的 include 匹配读 __asyncResolved.name——必须与包装同名才会缓存
+    await vi.waitFor(() => expect(kaComp.__asyncResolved?.name).toBe('Fulgurjs_remote-b_list'), { timeout: 5000 })
+    // 共享模块导出对象不被改写（浅克隆命名副本语义）
+    const mod = await load.mock.results.find((r) => r.type === 'return')!.value
+    expect((mod.default as any).name).toBe('Inner')
+    // 非 keepAlive 页不重命名（远程模块自身 name 保留）
+    const plain: any = hp.component('remote-a/home')
+    await mount(plain)
+    await vi.waitFor(() => expect(plain.__asyncResolved?.name).toBe('Inner'))
+  })
 })
 
 describe('createHostPages：组件加载与会话感知缓存', () => {
