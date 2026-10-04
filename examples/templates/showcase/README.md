@@ -1,6 +1,6 @@
 # 双向桥接 URL 同步（examples/templates/showcase）
 
-`@fulgurjs/federation` 5.8.0「桥接 URL 同步」（`/bridge/router/*`，README §8.3）的双向旗舰演示：
+`@fulgurjs/federation` 5.9.1「桥接 URL 同步」（`/bridge/router/*`，README §8.3）的双向旗舰演示：
 两个方向的宿主 × 子应用各一套——
 
 - **vue-host（:5334）× react-remote（:5333）**：Vue Router 4 宿主 + `createReactBridgeRouter` React 子应用
