@@ -18,6 +18,14 @@ import { fileURLToPath } from 'node:url'
 
 const REPO_RUNNER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'dev-runner.mjs')
 
+/** hermetic fake pnpm：实现 --dir <dir> run <script>（读 package.json 用 sh 执行），
+ *  CI 与本机都不依赖全局 pnpm；「pnpm 不存在」与「pnpm 启动失败」用例仍用 PATH 注入覆盖。 */
+const FAKE_BIN = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-fakepnpm-bin-'))
+fs.writeFileSync(path.join(FAKE_BIN, 'pnpm'), "#!/bin/sh\n# hermetic pnpm shim (dev-runner tests only)\nif [ \"$1\" = \"--dir\" ]; then\n  dir=\"$2\"\n  shift 2\nfi\nscript=\"$2\"\ncd \"${dir:-.}\" || exit 1\ncmd=$(node -e \"const p=require(process.cwd()+'/package.json');console.log((p.scripts||{})[process.argv[1]]||'')\" \"$script\")\nif [ -z \"$cmd\" ]; then\n  echo \"pnpm: missing script $script\" >&2\n  exit 1\nfi\nexec sh -c \"$cmd\"\n")
+fs.chmodSync(path.join(FAKE_BIN, 'pnpm'), 0o755)
+process.env.__FAKEPNPM = FAKE_BIN
+
+
 /** 专用端口池：与其他服务隔离；被占用即测试前置失败（不静默换端口掩盖问题） */
 const POOL = [58131, 58132, 58133, 58134, 58135]
 
@@ -81,7 +89,7 @@ function makeFixture({ appSpecs, readyTimeoutMs = 6000, dirname = 'fx' }) {
 function runRunner(root, envExtra = {}) {
   const child = spawn(process.execPath, [path.join(root, 'scripts', 'dev.mjs')], {
     cwd: root,
-    env: { ...process.env, ...envExtra },
+    env: { ...process.env, PATH: `${process.env.__FAKEPNPM}:${process.env.PATH}`, ...envExtra },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   })
