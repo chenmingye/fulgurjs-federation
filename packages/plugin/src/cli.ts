@@ -3,7 +3,8 @@
  * fulgurjs CLI（主包内置 bin）。
  *
  * 子命令（单项目 fulgurjs.config.ts 唯一形态；命令默认读 ./fulgurjs.config.ts）：
- * - fulgurjs init [--template <path>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出
+ * - fulgurjs create [模板] [--dir <路径>] ...                        从已安装的 npm 包复制完整模板工程（新项目入口）
+ * - fulgurjs init [--template <path>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出（已有项目用）
  * - fulgurjs explain [--config <path>] [--json]                    配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
  * - fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<p|URL>]... [--require-verified] [--json]
  * - fulgurjs doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
@@ -16,9 +17,14 @@ import { runDoctor, formatDoctorReport } from './doctor'
 
 const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
 
-用法（单项目 fulgurjs.config.ts 在应用根目录；命令默认读 ./fulgurjs.config.ts）：
+新项目：从完整模板创建可独立运行的联邦工程（复制后 pnpm install + pnpm dev）：
+  fulgurjs create [--list]                         交互选择模板（TTY）
+  fulgurjs create <模板> [--dir <路径>] [--no-install] [--force] [--json]
+                                                   非交互创建；模板：vue-vue / react-react /
+                                                   vue-host-react-remote / react-host-vue-remote / showcase
+已有项目（单项目 fulgurjs.config.ts 在应用根目录；命令默认读 ./fulgurjs.config.ts）：
   fulgurjs init [--template <path>] [--force]      生成单项目 fulgurjs.config.ts 起步模板
-                                                   （默认导出直接是 federation() 选项）
+                                                   （默认导出直接是 federation() 选项；--template 是输出路径）
   fulgurjs init --config <path>                    校验配置；输出 federation(fulgurjsConfig) 接入块
                                                  与接入核对清单
   fulgurjs explain [--config <path>] [--json]      解释本应用有效联邦形态与加载链（纯本地，无网络）
@@ -28,11 +34,13 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
                                                  manifest 来源优先级 --manifest > --site/prod 推导，
                                                  显式指定来源失败不回退；确定性错误非零退出；
                                                  --require-verified 时无法验证也非零）
+部署体检（--apps 是站点根下的部署子目录，远程部署在 /remote-a/ 就写 remote-a）：
   fulgurjs doctor --base <URL> --apps <a,b,c> [--dev] [--json] [--chunk-sample N]
   fulgurjs --help
 
-示例（应用根目录内运行）：
-  fulgurjs init                                    # 当前目录写 fulgurjs.config.ts（已存在则拒绝，--force 覆盖）
+示例：
+  fulgurjs create vue-vue --dir my-federation      # 创建完整工程并安装依赖（推荐的新项目起点）
+  fulgurjs init                                    # 已有项目：当前目录写 fulgurjs.config.ts（已存在则拒绝，--force 覆盖）
   fulgurjs explain                                 # 解释本应用（--config 指向其他路径时显式传）
   fulgurjs check-pages --site http://your-site     # 按 remotes prod 地址推导远程 manifest 核对
   fulgurjs check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
@@ -92,10 +100,51 @@ async function main(): Promise<number> {
        import fulgurjsConfig from './fulgurjs.config'
        // plugins: [ ...原有插件, federation(fulgurjsConfig) ]
   3. npx fulgurjs explain   # 核对有效形态与加载链
-  4. 宿主应用另在 fulgurjs.config.ts 具名导出 hostPages（与运行时页面数据模块同源），
-     运行 npx fulgurjs check-pages --site <站点> 核对页面契约
-  5. 部署后：npx fulgurjs doctor --base <URL> --apps <容器名>`)
+  4. 部署后：npx fulgurjs doctor --base <URL> --apps <部署子目录>
+     （--apps 是站点根下的部署子目录，如远程部署在 /my-remote/ 就写 my-remote，不是容器名）
+说明：加载普通组件/模块不需要页面表。只有当宿主用「页面路由表 → 远程页面」方式接入时，
+才在 fulgurjs.config.ts 追加具名导出 hostPages，并运行 npx fulgurjs check-pages --site <站点> 核对。`)
     return 0
+  }
+
+  if (cmd === 'create') {
+    if (has('--list')) {
+      const { TEMPLATE_CATALOG } = await import('./create')
+      for (const t of TEMPLATE_CATALOG) console.log(`${t.name.padEnd(24)} ${t.summary}`)
+      return 0
+    }
+    const { createProject, resolveTemplatesRoot, defaultInstall } = await import('./create')
+    let promptImpl: (question: string) => Promise<string>
+    if (process.stdin.isTTY) {
+      const readline = await import('node:readline/promises')
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+      promptImpl = (q) => rl.question(q)
+    } else {
+      promptImpl = async () => {
+        throw new Error(
+          '[fulgurjs:create] 当前不是交互终端，缺少模板参数。\n' +
+            '  修法：显式传模板与目录，例如 fulgurjs create vue-vue --dir my-federation（--no-install 可跳过安装）',
+        )
+      }
+    }
+    try {
+      await createProject(
+        {
+          template: argv[1] && !argv[1].startsWith('-') ? argv[1] : undefined,
+          dir: argOf('--dir'),
+          install: !has('--no-install'),
+          force: has('--force'),
+          json: has('--json'),
+          templatesRoot: resolveTemplatesRoot(import.meta.url),
+          cwd: process.cwd(),
+        },
+        { log: (m) => console.log(m), error: (m) => console.error(m), prompt: promptImpl, install: defaultInstall },
+      )
+      return 0
+    } catch (e) {
+      console.error(String((e as Error).message ?? e))
+      return 2
+    }
   }
 
   if (cmd === 'explain' || cmd === 'check-pages') {

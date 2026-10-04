@@ -1,0 +1,8 @@
+{
+  "apps": [
+    { "name": "vue-remote", "dir": "vue-remote", "port": 5335 },
+    { "name": "react-remote", "dir": "react-remote", "port": 5333 },
+    { "name": "vue-host", "dir": "vue-host", "port": 5334 },
+    { "name": "react-host", "dir": "react-host", "port": 5336 }
+  ]
+}

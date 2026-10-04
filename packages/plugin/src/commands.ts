@@ -30,6 +30,8 @@ export interface ExplainResult {
   pages: Array<{ route: string; remote: string; spec: string; title?: string }>
   /** 页面数据来源说明（报告 hostPages 导出是否找到） */
   pagesSource?: string
+  /** 桥接完备性 WARN（纯本地启发式；无 WARN 时为空） */
+  bridgeWarnings?: string[]
   chain: string[]
 }
 
@@ -98,6 +100,63 @@ function chainLines(options: FederationOptions, role: ExplainResult['role']): st
   return chain
 }
 
+/**
+ * 桥接完备性诊断（explain 纯本地 WARN，不新增错误码）。
+ * 覆盖两类高频错误：桥接子应用少共享自己的框架（运行时症状：Invalid hook call/双实例）；
+ * 跨框架桥接宿主漏 singleton（运行时症状：两套框架实例、共享协商错乱）。
+ */
+export function bridgeWarningsOf(options: FederationOptions): string[] {
+  const warns: string[] = []
+  const rawShared = options.shared
+  const shared: Record<string, unknown> = rawShared && !Array.isArray(rawShared) ? (rawShared as Record<string, unknown>) : {}
+  const hintOf = (name: string): { singleton?: boolean } | undefined => {
+    const v = shared[name]
+    if (v === undefined) return undefined
+    if (typeof v === 'string') return { singleton: false }
+    return v as { singleton?: boolean }
+  }
+  const isSingleton = (name: string): boolean => hintOf(name)?.singleton === true
+  const exposeKeys = Object.keys(options.exposes ?? {}).map((k) => k.replace(/^\.\//, ''))
+  const hasVue = hintOf('vue') !== undefined
+  const hasReact = hintOf('react') !== undefined
+
+  // ① 桥接子应用：exposes './bridge' —— 必须共享并 singleton 自己的框架
+  if (exposeKeys.includes('bridge')) {
+    if (hasVue && !hasReact && !isSingleton('vue')) {
+      warns.push(
+        'WARN 桥接子应用 shared.vue 缺少 singleton: true——宿主与子应用会各持一份 Vue 实例（症状：provide/inject 失效、状态不互通）。\n' +
+          '  修法: fulgurjs.config.ts 的 shared 改为 vue: { singleton: true }',
+      )
+    }
+    if (hasReact && !hasVue && (!isSingleton('react') || !isSingleton('react-dom'))) {
+      warns.push(
+        `WARN 桥接子应用 React 侧需 react 与 react-dom 双 singleton（当前 react=${String(isSingleton('react'))}，react-dom=${hintOf('react-dom') === undefined ? '未共享' : String(isSingleton('react-dom'))}）——缺一会出现两套 React/renderer（症状：Invalid hook call）。\n` +
+          '  修法: shared 加 react: { singleton: true }, \'react-dom\': { singleton: true }',
+      )
+    }
+    if (!hasVue && !hasReact) {
+      warns.push(
+        'WARN exposes 含 ./bridge（桥接子应用契约）但 shared 未声明任何框架——宿主无法与子应用收敛到同一框架实例。\n' +
+          '  修法: 在 shared 声明本应用框架（Vue 子应用：vue；React 子应用：react + react-dom），全部 singleton: true',
+      )
+    }
+  }
+
+  // ② 跨框架桥接宿主：shared 同时含 vue 与 react —— 三键全 singleton
+  if (hasVue && hasReact) {
+    const missing = ['vue', 'react', 'react-dom'].filter((k) => hintOf(k) !== undefined && !isSingleton(k))
+    const absent = ['vue', 'react', 'react-dom'].filter((k) => hintOf(k) === undefined)
+    if (missing.length > 0 || absent.length > 0) {
+      warns.push(
+        `WARN 跨框架桥接宿主需 vue、react、react-dom 三键全部 singleton: true` +
+          `（未 singleton：${missing.join('、') || '无'}；未共享：${absent.join('、') || '无'}）——缺一会导致跨框架挂载时出现双实例或协商错乱。\n` +
+          '  修法: shared 声明三键并各配 singleton: true（参见 API 手册 §8.2 双框架安装合同）',
+      )
+    }
+  }
+  return warns
+}
+
 function explainAppMode(loaded: AppConfigLoadResult): ExplainResult {
   const options = loaded.options!
   const role = roleOfOptions(options)
@@ -117,6 +176,7 @@ function explainAppMode(loaded: AppConfigLoadResult): ExplainResult {
     pagesSource: hp
       ? `fulgurjs.config.ts 的 hostPages 具名导出（${hp.pages.length} 条；运行时真源为应用内同一数据模块）`
       : '未找到 hostPages 具名导出（纯远程应用无需页面表；宿主若要跑 check-pages 请在 fulgurjs.config.ts 补具名导出 hostPages）',
+    bridgeWarnings: bridgeWarningsOf(options),
     chain: chainLines(options, role),
   }
 }
@@ -144,6 +204,10 @@ export function formatExplain(r: ExplainResult): string {
     }
   }
   L.push(`devSharedSelf：${r.devSharedSelf.value}（来源：${r.devSharedSelf.source === 'explicit' ? '显式配置' : '按角色推断——提供 exposes/setup 的应用为 true，纯宿主为 false'}）`)
+  if (r.bridgeWarnings?.length) {
+    L.push('桥接完备性：')
+    for (const w of r.bridgeWarnings) L.push(`  ${w.replaceAll('\n', '\n  ')}`)
+  }
   if (r.pages.length) {
     L.push(`页面 spec 映射（${r.pages.length}）——来源：${r.pagesSource}：`)
     for (const p of r.pages) L.push(`  ${p.route} → ${p.spec}${p.title ? `（${p.title}）` : ''}`)

@@ -30,7 +30,7 @@ export const STARTER_CONFIG = `// fulgurjs.config.ts —— @fulgurjs/federation
 // CLI（纯本地，无网络）：
 //   npx fulgurjs explain                      # 解释本应用有效形态与加载链
 //   npx fulgurjs check-pages                  # 宿主页面表 ↔ 远程 manifest 契约核对
-//   npx fulgurjs doctor --base http://<站点> --apps <容器名>   # 部署体检
+//   npx fulgurjs doctor --base http://<站点> --apps <部署子目录>   # 部署体检（部署在 /my-remote/ 就写 my-remote）
 import type { FederationOptions } from '@fulgurjs/federation'
 
 export default {
@@ -103,7 +103,7 @@ const COMMON_CHECKLIST = [
   '5. 应用代码唯一 API 入口：import { loadRemote, provideAppContext, getAppContext, clearAppContext, definePages, createHostPages, remoteSchema, remoteComponent } from \'@fulgurjs/federation/runtime\'',
   '6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言',
   '7. 配置解释：fulgurjs explain；页面契约核对：fulgurjs check-pages（宿主项目运行，--manifest/--site 指定远程 manifest 来源）；',
-  '   部署体检：fulgurjs doctor --base <URL> --apps <容器名...>',
+  '   部署体检：fulgurjs doctor --base <URL> --apps <部署子目录...>（--apps 是站点根下的部署子目录，不是容器名）',
   '8. 部署语义：remoteEntry/manifest/index.html 必须 no-cache（严禁 immutable）；带 hash 的 assets 长缓存',
 ]
 

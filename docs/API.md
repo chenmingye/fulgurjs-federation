@@ -1,6 +1,6 @@
 # API 手册（中文）
 
-> 对应 5.7.1。配置默认值、公开入口与类型以仓库源码及发布包声明核对；版本变更见 [CHANGELOG](../CHANGELOG.md)。
+> 对应 5.8.0。配置默认值、公开入口与类型以仓库源码及发布包声明核对；版本变更见 [CHANGELOG](../CHANGELOG.md)。
 > 桥接是“把子应用挂到宿主提供的 DOM 容器”；作用域是“共享依赖的分组”。以下执行规则用于避免误用，不要求入门时全部阅读。
 
 [插件配置](#plugin-options) · [运行时](#runtime) · [错误码](#error-codes) · [桥接](#bridge) · [URL 同步](#url-sync)
@@ -274,11 +274,12 @@ CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ re
 
 | 命令 | 说明 |
 |---|---|
-| `fulgurjs init` | 在当前目录生成**单项目** `fulgurjs.config.ts` 起步模板（默认导出 = `federation()` 选项 + 可选 `hostPages` 具名导出示例）；`--template <path>` 指定输出路径；已存在拒绝覆盖，`--force` 强制。init **只生成配置起步模板**，不生成桥/路由/启动器/NGINX 文件 |
+| `fulgurjs create [--list]` | **完整工程创建向导（新项目入口）**：从已安装 npm 包内复制一个完整模板工程（workspace + 子应用 + 锁文件 + 启动脚本）并默认执行 `pnpm install --frozen-lockfile`。交互模式（TTY）选择场景；非交互用 `fulgurjs create <模板名> [--dir <目标目录>] [--no-install] [--force] [--json]`。模板：`vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`。目标目录非空默认拒绝（保护已有文件），`--force` 只增量复制不删除；复制后校验关键文件齐全；安装失败非零退出并透传原因。不做应用名称/端口改写（改端口清单见模板 README） |
+| `fulgurjs init` | 在当前目录生成**单项目** `fulgurjs.config.ts` 起步模板（默认导出 = `federation()` 选项 + 可选 `hostPages` 具名导出示例）；`--template <path>` 指定**输出文件路径**（不是模板编号）；已存在拒绝覆盖，`--force` 强制。init **只生成配置起步模板**，面向已有项目，不生成完整工程（新项目用 `create`）、不生成桥/路由/启动器/NGINX 文件 |
 | `fulgurjs init --config <path>` | 校验配置（CFG 三段式报错）+ 输出 `federation(fulgurjsConfig)` 接入块与通用核对清单（纯打印）。旧聚合形状报中文迁移错误 |
-| `fulgurjs explain [--config <path>] [--json]` | 配置解释器（纯本地、无网络、不读 token/环境秘密）：应用角色（**按实际 federation 选项判定**——配 `remotes` 即消费、配 `exposes`/`setup` 即提供，两者均有=双角色，如双向联邦的 BPM）、有效 remotes、公开 exposes、内部 setup、shared、页面 spec 映射与数据来源、`devSharedSelf` 最终值及来源、加载链。`--json` 供 CI。传 `--app`（5.0.0 已删除的聚合选择器）报中文迁移错误 |
+| `fulgurjs explain [--config <path>] [--json]` | 配置解释器（纯本地、无网络、不读 token/环境秘密）：应用角色（**按实际 federation 选项判定**——配 `remotes` 即消费、配 `exposes`/`setup` 即提供，两者均有=双角色，如双向联邦的 BPM）、有效 remotes、公开 exposes、内部 setup、shared、页面 spec 映射与数据来源、`devSharedSelf` 最终值及来源、加载链；另附**桥接完备性 WARN**（exposes 含 `./bridge` 的子应用：本框架键须 `singleton: true`，React 子应用需 react+react-dom 双键；shared 同时含 vue 与 react 的桥接宿主：三键全 `singleton: true`——启发式提示，不产生错误码）。`--json` 供 CI。传 `--app`（5.0.0 已删除的聚合选择器）报中文迁移错误 |
 | `fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<路径\|URL>]... [--require-verified]` | 页面契约核对：宿主页面表（`hostPages` 具名导出）↔ 远程 manifest exposes。manifest 来源优先级 **`--manifest`（可多次、文件路径或 URL） > `--site`/消费方 prod 地址推导**（显式来源失败不回退、无本地 dist 兜底），输出每个 remote 的实际命中来源（防止旧本地 dist 冒充线上核对）。报告未知 remote、映射到未消费远程、缺失 expose、路由冲突（R1–R5）；**确定性错误退出码 1**，远程不可达报「无法验证」，`--require-verified` 时无法验证也非零（CI 严格模式，避免 0 条核对显示通过）。`--json` 供 CI |
-| `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检：remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
+| `fulgurjs doctor --base <URL> --apps <a,b,c>` | 部署体检（`--apps` 为**站点根下的部署子目录**，如远程部署在 `/remote-a/` 就写 `remote-a`，不是容器名）：检查 `<base>/<app>/` 下的 remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。`--dev` 检查 dev 容器入口；`--json` 输出 JSON（CI 断言）；`--chunk-sample N` 控制抽样数（默认 16）。**退出码：有 FAIL 即 1**，可直接做 CI 门禁 |
 
 <a id="error-codes"></a>
 

@@ -1,6 +1,6 @@
 # API reference (English)
 
-> For 5.7.1. Start with the [usage guide](../README.en.md). This reference preserves signatures, defaults and lifecycle rules; integration fragments may use application-owned objects. Complete runnable projects are in [examples](../examples/README.en.md). Only import public entries; `/internal/*` is implementation detail.
+> For 5.8.0. Start with the [usage guide](../README.en.md). This reference preserves signatures, defaults and lifecycle rules; integration fragments may use application-owned objects. Complete runnable projects are in [examples](../examples/README.en.md). Only import public entries; `/internal/*` is implementation detail.
 
 ## 8. API reference
 
@@ -252,6 +252,17 @@ React: `createReactBridgeRouter(ctx.routing!, routes).element` — `createMemory
 **Lifecycle and navigation**: both child connectors accept an optional third argument `{ signal?: AbortSignal }`; pass `ctx.signal` to dispose on session invalidation, or call `connection.dispose()` yourself. Push and replace retain their history action; numeric navigation delegates to the host history. Concurrent requests are serialized and superseded requests are invalidated. Navigation errors reject with MFU-033 and preserve `cause`; they are not reported as cancellation. Custom host ports receive an optional third argument `{ signal }` and must check it before asynchronous commits.
 
 **Contract highlights**: `basePath` is a static absolute path from the host-router perspective (segment-matched; conflicting/overlapping prefixes rejected, `MFU-030`); location is compared and preserved as three raw strings (duplicate query keys, encoding, fragments survive without re-encoding); cancellation never auto-retries; session switch (`sessionKey→null`) invalidates the old channel — late navigations are rejected and never write the URL; KeepAlive-cached instances pause routing writes; enabling sync against a contract without `{ routing: true }` shows `MFU-031` instead of silently falling back to memory; escaping targets and illegal `go` arguments → `MFU-032`; redirect loops beyond 5 internal replaces → `MFU-033` with the chain attached. Router libraries are optional peers consumed only through the two opt-in entries (`/bridge/router/vue`, `/bridge/router/react`, each gated ≤ 4096B gzip); the default entries never load a router library. Not promised: SSR/RSC, cross-window, nested multi-level bridge routing proxies, TanStack Router and other libraries (extend via the `BridgeHostNavigation`/`BridgeChildRoute` ports).
+
+## 8.9 CLI commands
+
+| Command | Purpose |
+|---|---|
+| `fulgurjs create [--list]` | **Full-project wizard (new projects)**: copies a complete template workspace (lockfile + startup script included) from the installed npm package and runs `pnpm install --frozen-lockfile` by default. Interactive on a TTY; non-interactive form: `fulgurjs create <template> [--dir <path>] [--no-install] [--force] [--json]` with templates `vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`. Refuses a non-empty target unless `--force` (which only adds files); verifies required files after copy; install failures exit non-zero with the underlying output. Does not rename apps/ports (fixed checklist in the template README) |
+| `fulgurjs init [--template <path>] [--force]` | Writes a single-project `fulgurjs.config.ts` starter (default export = `federation()` options) for an **existing** project; `--template` is the output file path, not a template id. Refuses to overwrite unless `--force` |
+| `fulgurjs init --config <path>` | Validates a config (CFG three-part errors) and prints the `federation(fulgurjsConfig)` wiring snippet plus checklist |
+| `fulgurjs explain [--config <path>] [--json]` | Explains the effective federation shape (role, remotes, exposes, setup, shared, page mapping, `devSharedSelf`, load chain) purely offline; adds bridge-completeness WARNs (`./bridge` sub-apps must singleton their own framework — React needs react+react-dom; hosts sharing both vue and react need all three keys singleton). No new error codes |
+| `fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<p\|URL>]... [--require-verified] [--json]` | Compares the host page table with remote manifests. Manifest source priority: `--manifest` > `--site`/prod derivation; explicit sources never fall back. Deterministic errors exit 1; unreachable remotes report "unverified" (non-zero only with `--require-verified`) |
+| `fulgurjs doctor --base <URL> --apps <a,b,c> [--dev] [--json] [--chunk-sample N]` | Deployment check of `<base>/<app>/` (`--apps` are **deployment subdirectories**, not container names): remoteEntry/manifest/index.html 200 + no-cache + JS shape, CORS, chunk sampling, shared-version skew rehearsal. Exit 1 on any FAIL |
 
 ## 9. Artifacts, endpoints & caching
 

@@ -18,7 +18,9 @@
 
 ## 下载后直接运行
 
-可以下载整个仓库 ZIP 或 git clone。Node 版本使用各工程支持的版本（当前验证环境为 Node 24）；模板安装要求见 [模板指南](templates/README.md)。
+**不需要 clone 仓库的最短路径**：`npx @fulgurjs/federation create`——从 npm 正式包交互选择模板并创建完整工程（含冻结安装与后续命令）。
+
+也可以下载整个仓库 ZIP 或 git clone。Node 版本使用各工程支持的版本（当前验证环境为 Node 24）；模板安装要求见 [模板指南](templates/README.md)。
 
 以 Vue 模板为例，在仓库根执行：
 

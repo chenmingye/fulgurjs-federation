@@ -8,7 +8,7 @@
 
 For example, a main application can load a separately deployed approval page, a Vue host can embed a React sub-app, or several applications can use the same utility module. Each application can live in its own repository and build and deploy separately.
 
-This is the usage guide, with examples for **5.7.1**. Signatures, defaults and execution rules are in the [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md).
+This is the usage guide. Examples and templates are written against **5.8.0** (the exact version in each project's `package.json` is what gets installed). Signatures, defaults and execution rules are in the [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md).
 
 ## Choose what you need
 
@@ -55,6 +55,19 @@ pnpm add -D @fulgurjs/federation
 - The plugin requires Node.js ≥18, but **Vite 7/8 require Node.js 20.19+ or 22.12+**. Meet both requirements.
 - Set the build target to `es2022` or newer. Chrome 108+ is the browser baseline; other browsers need corresponding ESM, dynamic import and top-level await support.
 - A pure Vue application needs Vue; a pure React application needs React and react-dom. A cross-framework bridge host installs both frameworks as explained below.
+
+## Starting fresh: create a complete project
+
+Without an existing project, scaffold from a complete template with the CLI (Node ≥ 20 and pnpm ≥ 9 required):
+
+```bash
+npx @fulgurjs/federation create            # interactive; or explicit:
+npx @fulgurjs/federation create vue-vue --dir my-federation
+```
+
+Five templates cover Vue×Vue, React×React, a Vue host embedding a React child app, a React host embedding a Vue child app, and the bidirectional bridge + URL sync showcase. `create` copies a runnable workspace (lockfile and startup script included) and runs a frozen install by default, then prints the commands to enter, start and build. For an **existing** project skip this and use the quick start below plus `fulgurjs init`.
+
+Template sources live in [examples/templates/](examples/templates/README.md); no manual wiring is needed unless you change names/ports (fixed checklist in the template guide).
 
 ## Quick start: two Vue applications
 
@@ -267,11 +280,28 @@ A cross-framework host installs and shares `vue`, `react` and `react-dom`. The c
 
 In the other direction, use `createReactBridgeApp` in the React host. The Vue child uses `defineBridgeApp` from `/runtime` and returns a `createApp(...)` application.
 
-Remember:
+### The shortest bridge mental model
 
-- `appProps` is a snapshot taken at mount. Replacing top-level fields later does not update the child. Pass stable callbacks/shared stores for live data, or change the component `key` to remount.
-- Separate component trees do not inherit Context, provide/inject or routers. Pass or install what is needed explicitly.
-- Use `remoteComponent` for a same-framework component; use a bridge for a sub-app.
+| Question | Answer |
+|---|---|
+| Which frameworks does each side install? | The bridge host installs and shares `vue` + `react` + `react-dom` (all three `singleton: true`); the child installs and shares only its own framework. This contract is mandatory — a missing key produces double instances (Invalid hook call / broken state) |
+| What do `shared` / `singleton` do here? | They make host and child use the **same** framework instance; `singleton` converges instances but does not make incompatible majors compatible |
+| How does the child export its entry? | The `./bridge` expose file **default-exports** the value returned by `defineBridgeApp(...)`; missing `mount`/`unmount` fails with MFU-015 |
+| How does the host mount it? | `createVueBridgeApp('remote/bridge')` / `createReactBridgeApp(...)` return a component: render to mount, remove to unmount; pass `appProps` and optional `sessionKey` |
+| When is URL sync needed? | Only when refresh/share/back-forward must restore the child's internal page (`routing` + `basePath`, configured on both ends). Without it, child navigation not touching the host URL is normal behavior |
+| How do sessions and unmount work? | Login generations use `sessionKey` (new generation re-runs `onSession`; logout → `null` unmounts and empties). Unmount is driven by the host component lifecycle; a child cleanup throw blocks that container until a full page reload |
+
+### `appProps` is a mount-time snapshot, not reactive props
+
+Top-level fields are shallow-copied at mount; later host-side replacements do **not** update the child. Three channels for live data:
+
+| Situation | Use | Cost |
+|---|---|---|
+| Child needs current host values (token, user name…) | Pass a **stable callback** (`getToken: () => store.token`) — calls read the latest value | No remount; good for "reads" |
+| Both sides share one state | Pass the host store instance via `appProps` or AppContext; both subscribe to the same instance | Reactivity does not cross roots; the child subscribes explicitly |
+| Must re-initialize with new props | Change the bridge component's `key` to remount explicitly (full unload → reload chain) | All state resets; do not trigger frequently |
+
+This differs from ordinary component props on purpose — it is a structural property of cross-root mounting, not a bug. Separate component trees do not inherit Context, provide/inject or routers. Pass or install what is needed explicitly. Use `remoteComponent` for a same-framework component; use a bridge for a sub-app.
 
 Complete bidirectional setup and login/cleanup flows: [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates).
 
@@ -368,7 +398,11 @@ See the [capability comparison](https://github.com/chenmingye/fulgurjs-federatio
 Run in the application directory:
 
 ```bash
-npx fulgurjs init
+# No existing project: create a complete project from a template (see "Starting fresh")
+npx @fulgurjs/federation create
+
+# Existing project: generate a federation config starter file
+npx fulgurjs init                        # --template <path> sets the output path (a path, not a template id)
 npx fulgurjs explain
 
 # Optional: validate a configured host page table
@@ -378,9 +412,9 @@ npx fulgurjs check-pages --site http://localhost:5173
 npx fulgurjs doctor --base https://your-site.example --apps remote-vue
 ```
 
-For `doctor`, `--base` is the site URL and `--apps` lists deployment subdirectories: the example checks `/remote-vue/`. It does not infer a different development port from a container name.
+For `doctor`, `--base` is the site URL and `--apps` lists **deployment subdirectories** (a remote deployed under `/remote-vue/` is `remote-vue`): the example checks `https://your-site.example/remote-vue/`. It does not infer a different development port from a container name.
 
-`init` creates a federation config template, not a full application, router or Nginx configuration. `check-pages` compares the page table with remote exposes; an unreachable remote is reported as unverified.
+`init` creates a federation config template, not a full application, router or Nginx configuration (use `create` for a new complete project). `check-pages` compares the page table with remote exposes; an unreachable remote is reported as unverified.
 
 Remote dev types are generated by default. Accessible source provides more precise mapping; inaccessible source produces `any` declarations without precise checks/completion. Set `dts: false` to disable generation. See the reference for details.
 

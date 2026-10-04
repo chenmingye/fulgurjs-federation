@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.9.0
+
+- **新增 CLI：`fulgurjs create`——完整工程创建向导（新项目入口）**。从已安装 npm 包内复制一个完整模板工程（workspace + 子应用 + 锁文件 + 统一启动脚本）并默认执行 `pnpm install --frozen-lockfile`；交互（TTY）与显式参数（`create <模板> [--dir] [--no-install] [--force] [--json]`）双形态；目标目录非空默认拒绝（`--force` 只增量复制不删除）；复制后校验关键文件齐全；安装失败非零退出并透传原因；完成后打印进入/启动/构建/部署命令（入口从模板 `scripts/dev.config.json` 读取）。与 `init` 职责区分：init 面向已有项目生成单文件配置（`--template` 语义不变，仍是输出路径）；create 从零创建完整工程，模板唯一来源为包内 `examples/templates/`，不 clone 插件仓库、不依赖作者路径。不做应用名称/端口改写（改端口清单在模板 README）。
+- **模板统一 dev 启动器**：五个模板根 `dev` 脚本由 shell `&` 改为 `node scripts/dev.mjs`（规范源 `examples/scripts/dev-runner.mjs`，经同步脚本分发五模板，`check-catalog` 门禁校验逐字节一致）。行为：启动前端口预检（占用即拒绝并指认处理方法，不杀既有进程）→ 远程先宿主后按序启动、逐个探活 → 任一应用失败/超时/运行中退出即整组清理并打印日志尾部（非零退出码）→ Ctrl+C/SIGTERM 只清理本次启动的子进程（进程组级，无 PID 文件依赖）。单独调试入口 `dev:remote`/`dev:host`（showcase 四个）保留。平台：macOS/Linux 实测，Windows 兜底路径未验证（模板 README 如实标注）。
+- **CLI/文档引导一致性**：`init` 成功提示不再把 hostPages 页面表写进默认后续步骤（普通组件接入无需页面表，仅页面表接入才需要）；`init` 生成模板注释与核对清单、`doctor --apps` 全部统一为「部署子目录」语义（此前 init 提示写「容器名」，与 doctor 实现——拼 `<base>/<app>/` 部署路径——不一致，易填错）。
+- **explain 桥接完备性 WARN**（纯本地启发式，不新增错误码）：exposes 含 `./bridge` 的子应用未以 `singleton: true` 共享本框架（React 子应用需 react+react-dom 双键）；shared 同时含 vue 与 react 的桥接宿主未三键全 singleton——输出现象/修法，提前拦住 Invalid hook call/双实例类配置错误。
+- **README 中英同步**：跨框架桥接节新增「最短理解」表（两端框架安装合同、shared/singleton 作用、入口导出、宿主挂载、URL 同步时机、会话与卸载）与「appProps 挂载快照」三通道表（稳定回调/共享 store/key 显式重挂各自适用场景）；新增「从零开始」create 入口；API 手册（中英）补 CLI 命令总表。
+- 模板依赖随发布升级 5.9.0（精确版本 + 锁文件重生成，冻结安装验证）。
+- 版本 5.8.0 → 5.9.0。
+
 ## 5.8.0
 
 - **修复：保留用户 manualChunks 时生产启动挂起/爆 TDZ（MC-FIX，rollup/vite 5–7 路径）**——此前「双向宿主 + 保留业务 manualChunks」与「纯远程 + manualChunks」的生产构建会零报错死锁或 `Cannot access 'x' before initialization`，唯一出路是停用 manualChunks（旧验收记录的"生产三前提①"）。本轮在真实项目（MES admin，对象形式 vue-vendor/antd-vue-vendor 分组）复现并以 chunk 成员图 + 首错栈定位出三层叠加根因，全部修复：

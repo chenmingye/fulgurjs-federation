@@ -14,7 +14,9 @@ All public runnable projects live under `examples/`. The portal starts the same 
 
 ## Run a template
 
-Download the repository ZIP or clone it. From the repository root:
+**Shortest path without cloning this repository**: `npx @fulgurjs/federation create` — pick a template interactively and get a complete project (frozen install + next commands included) from the published npm package.
+
+Alternatively download the repository ZIP or clone it. From the repository root:
 
 ```bash
 cd examples/templates/vue-vue

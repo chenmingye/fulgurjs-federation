@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { explainApp, formatExplain, checkPages, formatCheckPages } from '../src/commands'
+import { explainApp, formatExplain, checkPages, formatCheckPages, bridgeWarningsOf } from '../src/commands'
 
 function writeTempConfig(content: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-cmd-'))
@@ -161,6 +161,72 @@ export default { name: 'a', remotes: { x: 'http://localhost:1/x' } } satisfies F
     const r = await checkPages(p)
     expect(r.failed).toBe(false)
     expect(r.issues[0]!.level).toBe('unverified')
+    fs.rmSync(path.dirname(p), { recursive: true, force: true })
+  })
+})
+
+describe('fulgurjs explain 桥接完备性 WARN（任务 D，纯本地启发式）', () => {
+  it('桥接 React 子应用缺 react-dom singleton → WARN 指向 shared 修法', () => {
+    const options = {
+      name: 'bridge-react-remote',
+      exposes: { './bridge': './src/bridge.tsx' },
+      shared: { react: { singleton: true }, 'react-dom': { singleton: false } },
+    } as never
+    const warns = bridgeWarningsOf(options)
+    expect(warns).toHaveLength(1)
+    expect(warns[0]).toContain('react-dom')
+    expect(warns[0]).toContain('singleton: true')
+  })
+
+  it('桥接 Vue 子应用 vue 非 singleton → WARN；未声明任何框架 → WARN', () => {
+    const noSingleton = bridgeWarningsOf({
+      name: 'bridge-vue-remote',
+      exposes: { './bridge': './src/bridge.ts' },
+      shared: { vue: { singleton: false } },
+    } as never)
+    expect(noSingleton[0]).toContain('shared.vue')
+    const noFramework = bridgeWarningsOf({
+      name: 'bridge-remote',
+      exposes: { './bridge': './src/bridge.ts' },
+    } as never)
+    expect(noFramework[0]).toContain('未声明任何框架')
+  })
+
+  it('跨框架桥接宿主三键缺 singleton/漏键 → WARN；三键齐备不告警', () => {
+    const missing = bridgeWarningsOf({
+      name: 'bridge-host',
+      remotes: { a: 'http://localhost:1/a' },
+      shared: { vue: { singleton: true }, react: { singleton: true } },
+    } as never)
+    expect(missing[0]).toContain('未共享：react-dom')
+    const ok = bridgeWarningsOf({
+      name: 'bridge-host',
+      remotes: { a: 'http://localhost:1/a' },
+      shared: {
+        vue: { singleton: true },
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    } as never)
+    expect(ok).toHaveLength(0)
+  })
+
+  it('普通单框架配置不告警；explain 输出包含桥接完备性段落', async () => {
+    expect(bridgeWarningsOf({ name: 'plain', remotes: { x: 'http://localhost:1/x' }, shared: { vue: { singleton: true } } } as never)).toHaveLength(0)
+    const p = writeTempConfig(`
+import type { FederationOptions } from '@fulgurjs/federation'
+export default {
+  name: 'bridge-react-remote',
+  exposes: { './bridge': './src/bridge.tsx' },
+  shared: { react: { singleton: true } },
+} satisfies FederationOptions
+`)
+    // 配置加载器校验 expose 目标文件存在：补建桥接入口
+    fs.mkdirSync(path.join(path.dirname(p), 'src'), { recursive: true })
+    fs.writeFileSync(path.join(path.dirname(p), 'src/bridge.tsx'), 'export default {}\n')
+    const r = await explainApp(p)
+    expect(r.bridgeWarnings?.length).toBe(1)
+    expect(formatExplain(r)).toContain('桥接完备性')
     fs.rmSync(path.dirname(p), { recursive: true, force: true })
   })
 })

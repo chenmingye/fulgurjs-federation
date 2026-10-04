@@ -45,6 +45,9 @@ test('npm 示例同步只收录完整模板，不收录大型集成、门户或�
   assert.deepEqual(readdirSync(output).sort(), ['README.md', 'templates'])
   for (const template of ['vue-vue', 'react-react', 'vue-host-react-remote', 'react-host-vue-remote', 'showcase']) {
     assert.ok(existsSync(path.join(output, 'templates', template, 'pnpm-lock.yaml')))
+    // create/dev 依赖的模板资产：统一启动器副本 + 启动清单必须随包附带
+    assert.ok(existsSync(path.join(output, 'templates', template, 'scripts', 'dev.mjs')), `${template} 缺 scripts/dev.mjs`)
+    assert.ok(existsSync(path.join(output, 'templates', template, 'scripts', 'dev.config.json')), `${template} 缺 scripts/dev.config.json`)
   }
   const inspect = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {

@@ -8,7 +8,7 @@
 
 例如：主系统加载独立部署的审批页面，Vue 页面中嵌入一个 React 子应用，或者多个应用共用同一套工具函数。提供方和使用方可以放在不同仓库，各自构建和部署。
 
-本文是使用指南，示例按 **5.7.1** 编写。完整参数、默认值和执行规则在 [API 手册](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md)。
+本文是使用指南，示例与模板按 **5.8.0** 编写（各工程 `package.json` 声明的精确版本即实际安装版本）。完整参数、默认值和执行规则在 [API 手册](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md)。
 
 ## 先看你要做什么
 
@@ -55,6 +55,19 @@ pnpm add -D @fulgurjs/federation
 - 本插件要求 Node.js ≥18，但 **Vite 7/8 要求 Node.js 20.19+ 或 22.12+**，不能只按插件的最低版本选 Node。
 - 构建目标使用 `es2022` 或更新；浏览器基线为 Chrome 108+，其他浏览器需要相应的 ESM、动态导入和顶层 await 支持。
 - 普通 Vue 项目安装 Vue 即可；普通 React 项目安装 React 和 react-dom 即可。双向跨框架桥接的宿主按下面说明安装两个框架。
+
+## 从零开始：创建一个完整工程
+
+没有可接入的存量项目时，用 CLI 从完整模板创建（需要 Node ≥ 20 和 pnpm ≥ 9）：
+
+```bash
+npx @fulgurjs/federation create          # 交互选择场景；也可显式指定：
+npx @fulgurjs/federation create vue-vue --dir my-federation
+```
+
+五个模板覆盖：Vue×Vue、React×React、Vue 宿主嵌 React 子应用、React 宿主嵌 Vue 子应用、双向桥接+URL 同步 showcase。`create` 复制完整可运行的 workspace（含锁文件与启动脚本）并默认执行冻结安装，完成后打印进入目录、启动和构建命令。要接入**已有**项目时跳过这步，用下面的快速开始 + `fulgurjs init`。
+
+模板源码在仓库 [examples/templates/](examples/templates/README.md)；不改名称/端口时无需任何手工配置。改端口的固定修改点见模板指南。
 
 ## 快速开始：两个 Vue 应用
 
@@ -284,11 +297,28 @@ const RemoteApp = createVueBridgeApp<{ message: string }>('remote-react/bridge')
 
 反方向用 React 宿主的 `createReactBridgeApp`，Vue 子应用用 `/runtime` 的 `defineBridgeApp` 返回 `createApp(...)` 创建的应用。
 
-需要记住三点：
+### 跨框架桥接的最短理解
 
-- `appProps` 在挂载时取得快照。之后替换顶层字段不会自动更新子应用；实时数据可传稳定回调或共享 store，需要重新挂载时使用组件 `key`。
-- 两个组件树不会自动共用 Context、provide/inject 或路由，需要显式传递或在子应用安装。
-- 普通组件加载用 `remoteComponent`；整个子应用嵌套用桥接工厂。Vue 不能直接用 Vue 的 `remoteComponent` 渲染 React 组件。
+| 问题 | 答案 |
+|---|---|
+| 宿主和子应用各装什么框架？ | 桥接宿主装并共享 `vue` + `react` + `react-dom`（三键全 `singleton: true`）；子应用只装并共享自己的框架。这是硬性合同，缺一键就会出现双实例（Invalid hook call / 状态不互通） |
+| `shared` 与 `singleton` 在这里的作用？ | 让宿主与子应用拿到**同一个**框架实例；`singleton` 只是收敛实例，不把不兼容的大版本变成兼容 |
+| 子应用入口怎么导出？ | `exposes: { './bridge': … }` 指向的文件**默认导出** `defineBridgeApp(...)` 的返回值；缺 `mount/unmount` 会报 MFU-015 |
+| 宿主怎么挂载？ | `createVueBridgeApp('远程名/bridge')` / `createReactBridgeApp(...)` 返回一个组件，渲染它即挂载、移除即卸载；传 `appProps` 与可选 `sessionKey` |
+| URL 同步什么时候需要？ | 只有「刷新/分享/前进后退要恢复子应用内部页面」时才开（`routing` + `basePath`，两端都要配置）；不开发同步时子应用内部跳转不影响宿主地址，这是正常行为 |
+| 会话切换与卸载怎么处理？ | 登录代次用 `sessionKey`（换号→新代次重跑 `onSession`；登出→`null` 即卸载清空）；卸载由宿主组件生命周期驱动，子应用清理逻辑抛错会封锁该容器（只能整页刷新） |
+
+### `appProps` 是挂载快照，不是响应式 props
+
+挂载时顶层字段做浅拷贝传入；之后宿主替换字段**不会**自动更新子应用。三种实时数据通道按需选择：
+
+| 场景 | 用什么 | 代价 |
+|---|---|---|
+| 子应用需要宿主的实时值（token、用户名等） | 传**稳定回调**（如 `getToken: () => store.token`），子应用调用时取到最新值 | 无重挂；适合“读” |
+| 两边共享一块状态 | 把宿主 store 实例经 `appProps` 或 AppContext 传过去，双方订阅同一实例 | 框架响应式不跨 root，子应用需自行订阅 |
+| 必须以新 props 重新初始化 | 宿主给桥接组件换 `key` 显式重挂（卸载→重新走完整加载链） | 全部状态重置；不要频繁触发 |
+
+这与普通 Vue/React 组件的 props 语义不同，是跨 root 挂载的结构限制，不是 bug。两个组件树也不会自动共用 Context、provide/inject 或路由，需要显式传递或在子应用安装。普通组件加载用 `remoteComponent`；整个子应用嵌套用桥接工厂。Vue 不能直接用 Vue 的 `remoteComponent` 渲染 React 组件。
 
 双向配置、登录切换和卸载示例见 [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates)。
 
@@ -393,7 +423,11 @@ npm run build
 在应用根目录运行：
 
 ```bash
-npx fulgurjs init                        # 创建联邦配置起步文件
+# 没有存量项目：从模板创建完整工程（见「从零开始」一节）
+npx @fulgurjs/federation create
+
+# 已有项目：生成联邦配置起步文件
+npx fulgurjs init                        # --template <路径> 指定输出路径（是路径，不是模板编号）
 npx fulgurjs explain                     # 查看当前应用的联邦配置
 
 # 使用页面表时，核对宿主页面声明：
@@ -403,9 +437,9 @@ npx fulgurjs check-pages --site http://localhost:5173
 npx fulgurjs doctor --base https://your-site.example --apps remote-vue
 ```
 
-`doctor` 的 `--base` 是站点地址，`--apps` 是要检查的部署子目录；上例检查 `/remote-vue/`。它不会从容器名自动猜测另一个开发端口。
+`doctor` 的 `--base` 是站点地址，`--apps` 是要检查的**部署子目录**（远程部署在 `/remote-vue/` 就写 `remote-vue`）；上例检查 `https://your-site.example/remote-vue/`。它不会从容器名自动猜测另一个开发端口。
 
-`init` 只生成联邦配置模板，不替你创建完整应用、路由或 Nginx 配置。`check-pages` 核对页面表与远程模块声明；远程不可达会报告无法验证，不代表通过。
+`init` 只生成联邦配置模板，不替你创建完整应用、路由或 Nginx 配置（新建完整工程用 `create`）。`check-pages` 核对页面表与远程模块声明；远程不可达会报告无法验证，不代表通过。
 
 开发类型默认开启：插件为远程模块生成类型声明。能访问远程源码时可获得更精确的提示；不能访问时生成 `any` 声明，表示可以导入但没有准确类型。需要关闭时设 `dts: false`。详细规则见 API 手册。
 

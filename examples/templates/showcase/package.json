@@ -7,7 +7,7 @@
     "dev:react-remote": "pnpm --dir react-remote dev",
     "dev:vue-host": "pnpm --dir vue-host dev",
     "dev:react-host": "pnpm --dir react-host dev",
-    "dev": "pnpm run dev:vue-remote & pnpm run dev:react-remote & pnpm run dev:vue-host & pnpm run dev:react-host",
+    "dev": "node scripts/dev.mjs",
     "build": "pnpm -r build"
   }
 }

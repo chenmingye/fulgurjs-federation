@@ -1,0 +1,6 @@
+{
+  "apps": [
+    { "name": "remote", "dir": "remote", "port": 5213 },
+    { "name": "host", "dir": "host", "port": 5214 }
+  ]
+}
