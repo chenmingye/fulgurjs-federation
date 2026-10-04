@@ -7,11 +7,5 @@
     "dev:host": "pnpm --dir host dev",
     "dev": "pnpm run dev:remote & pnpm run dev:host",
     "build": "pnpm --dir remote build && pnpm --dir host build"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "vue-demi"
-    ]
   }
 }

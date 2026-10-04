@@ -3,6 +3,8 @@ packages:
   - vue-remote
 minimumReleaseAgeExclude:
   - '@fulgurjs/federation@5.7.1 || 5.8.0'
-onlyBuiltDependencies:
-  - esbuild
-  - vue-demi
+# pnpm >=12 构建脚本批准（12 起弃用 onlyBuiltDependencies；pnpm 9-11 忽略本键：
+# esbuild >=0.16 二进制经 optionalDependencies 平台包分发，postinstall 仅校验，不阻塞安装）
+allowBuilds:
+  esbuild: true
+  vue-demi: true

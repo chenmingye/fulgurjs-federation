@@ -7,11 +7,5 @@
     "dev:host": "pnpm --dir react-host dev",
     "dev": "pnpm run dev:remote & pnpm run dev:host",
     "build": "pnpm --dir vue-remote build && pnpm --dir react-host build"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "vue-demi"
-    ]
   }
 }

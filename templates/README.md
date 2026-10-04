@@ -1,6 +1,6 @@
 # fulgurjs-federation 模板（templates/）
 
-五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation@5.7.1`（精确版本 + pnpm 锁文件），不依赖本仓库源码、workspace 或父目录。
+五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation@5.8.0`（精确版本 + pnpm 锁文件），不依赖本仓库源码、workspace 或父目录。
 
 ## 选择模板
 
@@ -16,7 +16,9 @@
 
 ## 最短运行路径
 
-环境要求：Node ≥ 20（实测 24.x）、pnpm ≥ 9（锁文件为 pnpm 12 生成，10/11/12 均可安装）。
+环境要求：Node ≥ 20（实测 24.x）、pnpm ≥ 9。**推荐 pnpm ≥ 12**（锁文件由 pnpm 12 生成；9/10/11 亦可安装）。
+
+> **pnpm 12 用户注意**：各模板 `pnpm-workspace.yaml` 已带 `allowBuilds: {esbuild: true, vue-demi: true}`（pnpm 12 的构建脚本批准形态；pnpm 9–11 忽略该键——esbuild ≥0.16 的二进制经 optionalDependencies 平台包分发，postinstall 仅做校验，不影响安装与运行）。若用 pnpm 10/11 且提示未批准构建脚本，可改回 `onlyBuiltDependencies: [esbuild, vue-demi]` 或按提示 `pnpm approve-builds`。**不要**让 pnpm 把 `allowBuilds: <pkg>: set this to true or false` 的占位提示留在 yaml 里——把值改成 `true` 即可通过（pnpm 12 会在遇到未决构建脚本时自动写入该提示行）。
 
 ```bash
 # 以 vue-vue 为例；其余模板把目录名换掉即可
