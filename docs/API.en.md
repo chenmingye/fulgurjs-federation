@@ -1,6 +1,6 @@
 # API reference (English)
 
-> For 5.8.0. Start with the [usage guide](../README.en.md). This reference preserves signatures, defaults and lifecycle rules; integration fragments may use application-owned objects. Complete runnable projects are in [examples](../examples/README.en.md). Only import public entries; `/internal/*` is implementation detail.
+> For 5.9.0. Start with the [usage guide](../README.en.md). This reference preserves signatures, defaults and lifecycle rules; integration fragments may use application-owned objects. Complete runnable projects are in [examples](../examples/README.en.md). Only import public entries; `/internal/*` is implementation detail.
 
 ## 8. API reference
 

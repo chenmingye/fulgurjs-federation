@@ -11,8 +11,8 @@ importers:
   react-host:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 5.8.0
-        version: 5.8.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
+        specifier: 5.9.0
+        version: 5.9.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -45,8 +45,8 @@ importers:
   react-remote:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 5.8.0
-        version: 5.8.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
+        specifier: 5.9.0
+        version: 5.9.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -76,8 +76,8 @@ importers:
   vue-host:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 5.8.0
-        version: 5.8.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
+        specifier: 5.9.0
+        version: 5.9.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -107,8 +107,8 @@ importers:
   vue-remote:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 5.8.0
-        version: 5.8.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
+        specifier: 5.9.0
+        version: 5.9.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
       vue:
         specifier: ^3.5.13
         version: 3.5.43(typescript@5.9.3)
@@ -526,8 +526,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fulgurjs/federation@5.8.0':
-    resolution: {integrity: sha512-uvoCntilxLGFSXxCMBszQRJ3naw8CMKvymoE3Tipld9M84zAgirlEksMRsHUUzjnBqT+IBJ4cJYu13MDCxNdIw==}
+  '@fulgurjs/federation@5.9.0':
+    resolution: {integrity: sha512-9dNKsdR8KwGCWLhMRHIYQ8oslI6MiOVqKIyYjhbhYmT7FGBwlPu4tV6v3SQPOEak4m65yqsnWeiqM6zsO55kZQ==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -1348,7 +1348,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@fulgurjs/federation@5.8.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))':
+  '@fulgurjs/federation@5.9.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue-router@4.6.4(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       es-module-lexer: 1.7.0
       esbuild: 0.27.7

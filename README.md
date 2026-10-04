@@ -8,7 +8,7 @@
 
 例如：主系统加载独立部署的审批页面，Vue 页面中嵌入一个 React 子应用，或者多个应用共用同一套工具函数。提供方和使用方可以放在不同仓库，各自构建和部署。
 
-本文是使用指南，示例与模板按 **5.8.0** 编写（各工程 `package.json` 声明的精确版本即实际安装版本）。完整参数、默认值和执行规则在 [API 手册](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md)。
+本文是使用指南，示例与模板按 **5.9.0** 编写（各工程 `package.json` 声明的精确版本即实际安装版本）。完整参数、默认值和执行规则在 [API 手册](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md)。
 
 ## 先看你要做什么
 

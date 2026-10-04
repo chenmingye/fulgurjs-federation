@@ -8,7 +8,7 @@
 
 For example, a main application can load a separately deployed approval page, a Vue host can embed a React sub-app, or several applications can use the same utility module. Each application can live in its own repository and build and deploy separately.
 
-This is the usage guide. Examples and templates are written against **5.8.0** (the exact version in each project's `package.json` is what gets installed). Signatures, defaults and execution rules are in the [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md).
+This is the usage guide. Examples and templates are written against **5.9.0** (the exact version in each project's `package.json` is what gets installed). Signatures, defaults and execution rules are in the [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md).
 
 ## Choose what you need
 
