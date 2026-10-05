@@ -11,6 +11,7 @@ import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-rout
 import { defineBridgeApp } from '@fulgurjs/federation/vue'
 import App from './App.vue'
 import TicketList from './pages/TicketList.vue'
+import RemoteForm from './pages/RemoteForm.vue'
 import TicketDetail from './pages/TicketDetail.vue'
 import TicketEdit from './pages/TicketEdit.vue'
 import './demo.css'
@@ -30,6 +31,8 @@ export const childRoutes: RouteRecordRaw[] = [
   { path: '/tickets', component: TicketList },
   { path: '/tickets/:id', component: TicketDetail, props: true },
   { path: '/tickets/:id/edit', component: TicketEdit, props: true },
+  { path: '/remote-form', component: RemoteForm },
+  { path: '/remote-form/:id', component: RemoteForm, props: false },
   { path: '/:pathMatch(.*)*', redirect: '/tickets' },
 ]
 

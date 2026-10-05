@@ -11,6 +11,7 @@ import RenamePage from './pages/Rename.vue'
 import PromiseRemotePage from './pages/PromiseRemote.vue'
 import SharedStatePage from './pages/SharedState.vue'
 import StaticDepPage from './pages/StaticDep.vue'
+import FormGlobalPage from './pages/FormGlobal.vue'
 
 const routes = [
   { path: '/', component: HomePage },
@@ -22,6 +23,7 @@ const routes = [
   { path: '/promise-remote', component: PromiseRemotePage },
   { path: '/shared-state', component: SharedStatePage },
   { path: '/static-dep', component: StaticDepPage },
+  { path: '/form-global', component: FormGlobalPage },
 ]
 
 const router = createRouter({ history: createWebHashHistory(), routes })

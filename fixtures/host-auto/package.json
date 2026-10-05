@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5110 --strictPort",
+    "dev": "vite --host --port 5110 --strictPort",
     "build": "vite build",
     "preview": "vite preview --port 5110 --strictPort"
   },

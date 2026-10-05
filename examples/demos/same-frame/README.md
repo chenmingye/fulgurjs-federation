@@ -4,7 +4,7 @@ Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（README §8.
 每个子应用是一个**自带路由与状态、可整站挂载/卸载**的完整业务系统（工单中心），
 每个宿主以三页对照呈现「组件级联邦 vs 应用级桥接」的差异与各自适用场景。
 
-四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `5.4.1` + lockfile），
+四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.0` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 |
@@ -34,6 +34,26 @@ cd react-host   && npm install && npm run dev # 终端 4：http://localhost:5326
 | 页面2 · 应用级桥接 | `createVueBridgeApp` / `createReactBridgeApp` 挂载完整子应用 + 受控会话演示 |
 | 页面3 · 对比说明 | 组件级 vs 应用级对比表 + API 文档锚点链接 |
 
+## 远程表单链路（宿主 → 子应用 → 远程表单，6.1.0）
+
+Vue 对额外演示「三层嵌套」的样式正确性：子应用内部菜单「远程表单（宿主提供）」页面，
+经 `remoteComponent('sf-vue-host/form/ApprovalForm')` **反向消费宿主暴露的审批表单**，
+业务数据由子应用以显式 props 传入（表单不读 window/URL 全局状态）。
+
+表单模板使用字符串标签 `<sf-form-section>`（分节线）——这类标签依赖**提供方 app 的全局注册**，
+不随组件打包走。宿主在 `src/fulgurjs/setup.ts` 声明 `globalComponents` 后，
+插件在每次 `loadRemote` 时把声明幂等安装进**当次消费方 app**（含桥接子应用每次挂载新建的 app 实例），
+分节线渲染为带橙色边框的分节卡片。若消费方未拿到注册，标签会退化为无样式的字面自定义元素
+（真实业务里 `app.use(Antd)` 的 `<a-divider>`/`<a-button>` 即此类）——该页即此缺陷的可视化对照。
+
+操作与预期：
+
+1. 先启动 vue-remote（5323）与 vue-host（5324）（两个都要运行：表单来自宿主）。
+2. 打开宿主 5324 → 页面2 · 应用级桥接 → 子应用菜单点「远程表单（宿主提供）」。
+3. 预期看到两张橙色边框分节（基本信息/审批意见），字段为工单数据；
+   DOM 中不残留 `<sf-form-section>` 字面元素；控制台 0 error。
+4. 「卸载再挂载」后重进该页：分节样式仍在（每次加载重新安装注册，幂等）。
+
 ## 演示操作步骤与预期结果（实测记录）
 
 以 Vue 宿主（http://localhost:5324）为例，React 宿主逐条同构等价：
@@ -42,7 +62,7 @@ cd react-host   && npm install && npm run dev # 终端 4：http://localhost:5326
    「子应用 sf-vue-remote · 框架 Vue · 内部路由 /tickets · 宿主会话 session-1-alice · 用户 Alice」，
    下方是工单列表（9 条，4 待处理 / 3 进行中 / 2 已完成，客户端筛选 + 分页 3 页）。
    页面徽标行显示「宿主 sf-vue-host · Vue · 宿主角色 / 远程 sf-vue-remote · Vue · 子应用 /
-   @fulgurjs/federation/runtime v5.4.1」（版本为运行时真实导出值）。
+   @fulgurjs/federation/runtime v5.4.1」（版本为运行时真实导出值；锁 6.1.0+）。
 2. **子应用内部导航不写宿主 URL**：点击列表第一条「登录页验证码不显示」进入详情
    （#101，字段齐全），浏览器地址栏仍停留在 `/app-bridge`——子应用 memory 路由与宿主 history 路由互不干扰。
 3. **编辑与保存**：详情页点「编辑」→ 改标题为「登录页验证码不显示（已修复）」、状态改「进行中」→「保存」
@@ -96,7 +116,7 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 | 子应用路由 | memory 路由两个页面（首页/关于） | Vue 侧 vue-router `createMemoryHistory`、React 侧 `createMemoryRouter` 自包含（列表/详情/编辑带参路由） |
 | 组件级对照项 | 无（bridge 专属示例） | 每宿主页面1 用 `remoteComponent` 直渲染远程组件，与页面2 形成显式对照 |
 | 诊断能力 | 页面级 onReady 计数 | 每页 `<details>` 诊断面板：mount/unmount/会话切换计数 + 真实事件日志（含 `fulgurjs:error` 监听）+ AppContext 快照 JSON |
-| 版本 / 端口 | 5.3.3；5303/5313 + 5314/5304 | **5.4.1**（registry 精确版本 + lockfile）；5323/5324 + 5325/5326 |
+| 版本 / 端口 | 5.3.3；5303/5313 + 5314/5304 | **6.1.0**（registry 精确版本 + lockfile）；5323/5324 + 5325/5326 |
 | 相同点 | 同一套 `/bridge` 契约、同一套受控 sessionKey 顺序（null → clearAppContext → 新快照 → 新 key）、同一套 MFU-015/016/017 错误语义 | |
 
 ## 构建 / 类型检查 / 部署

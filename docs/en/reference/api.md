@@ -54,6 +54,8 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
+The `consumerApp` option is passed automatically by framework adapters (Vue `remoteComponent` captures the currently rendering app); business code never sets it by hand: a remote's declared setup `globalComponents` are registered idempotently onto it on every load. A manual `loadRemote` (no component context) omits the option and skips registration.
+
 Call timing and lifecycle: `spec` fully resolved → container load (timeout/retries/breaker) → `init(shareScope)` (shared scope adoption) → setup → onSession → business module returned. The setup module's own imports complete their shared negotiation at that stage.
 
 ### Other exported general-purpose functions
@@ -244,6 +246,7 @@ const FederatedForm = remoteComponent('remote-a/Form', {
 Semantics and boundaries:
 
 - Internally = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`, returning a standard Vue async component; `props` pass straight through at the usage site;
+- **Global-component auto-install (6.1.0)**: a remote component renders inside the **consumer app** context, and string tags in its templates (e.g. `<a-divider>`) resolve against the consumer's global registry — the provider app's `app.use(X)` registrations do not travel with the component. When the remote declares `globalComponents` in its setup module, this factory captures the currently rendering app on load and registers them idempotently (including consumption inside bridge child apps); see Section 6 `federation({ setup })` for the globalComponents contract;
 - **No fallback/degradation whatsoever** (zero silent fallback): a load failure explicitly enters the error state; without an `errorComponent`, the built-in placeholder renders (error code + root cause + fix + **Retry load / Refresh page**), and the `fulgurjs:error` event is emitted as usual by the runtime layer;
 - Module dedup reuses `loadRemote`'s internal Promise cache — multiple component instances with the same spec load the container module only once;
 - Call timing = zero side effects at factory declaration; loading happens at render time;
@@ -312,6 +315,16 @@ export async function onSession(context: RemoteSetupContext) {
   if (context.signal.aborted) return  // ← must be checked after awaits and before writing state: the account may have switched/logged out meanwhile
   writeToStores(data)
 }
+
+// 6.1.0 optional named export: the "consumer-side globally registered components" the exposed
+// surface depends on (key = registered name, value = component). For component federation
+// (remoteComponent): the remote component renders inside the CONSUMER app, and string tags in
+// its templates (e.g. <a-divider>) resolve against the consumer's global registry — without
+// registration they render as unstyled literal custom elements. The runtime registers these
+// idempotently onto the current consumer app on every loadRemote; omit for zero behavior.
+export const globalComponents: RemoteSetupModule['globalComponents'] = {
+  // ADivider: Divider,   // registered names must resolve from template tags (a-divider → ADivider)
+}
 ```
 
 `RemoteSetupContext`: `{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`. `appContext` is the snapshot taken from the page-level AppContext **at call time** (never a saved stale reference); `signal` is invalidated when the login generation changes or on logout cleanup.
@@ -321,11 +334,12 @@ Fixed contract:
 | Dimension | Semantics |
 |---|---|
 | Trigger entry | `loadRemote('remote/module')` is the **unified entry** (`remoteComponent` and the host page adapters share the same source). `loadRemote('remote')`, `getContainer()`, `preloadRemote()`, and calling `container.get()` directly all **do not run** initialization |
-| Timing | Container acquired → `init(shareScope)` (shared scope adoption) → **setup** → **onSession** → business module returned. The setup module's own imports complete their shared negotiation at that stage |
+| Timing | Container acquired → `init(shareScope)` (shared scope adoption) → **setup** → **onSession** → **globalComponents install** → business module returned. The setup module's own imports complete their shared negotiation at that stage |
 | Execution count (setup) | Once per container; concurrent calls share one Promise; never repeated after success. `preloadRemote` only prefetches resources and never executes |
+| Execution count (globalComponents) | Declaration is extracted once with setup; **installation runs on every `loadRemote`** (idempotent — `app.component` same-name overwrite) so bridge child apps that create a fresh app instance per mount also receive the registration. A manual `loadRemote` (no `consumerApp`) skips installation without error |
 | Execution count (onSession) | Deduplicated by the non-sensitive `sessionKey`: once per login generation; a new generation first invalidates the old `signal`, then chains the old call and the new call **serially** per remote (preventing two accounts' async writes from interleaving); `clearAppContext()` invalidates the dedup state, forcing a rerun on the next login. App-level setup does not re-run on logout/generation switch |
 | sessionKey | The host login flow generates a new generation on every successful login/re-login (non-sensitive ID, never a token); kept when a token refreshes but the session does not. **onSession present but sessionKey missing → MFU-013**; identity is never guessed from a user object reference; remotes without onSession need no sessionKey |
-| Export validation | Must default-export a function; the named `onSession` is optional and must be a function; other exports are not entries. Violations → MFU-011 (reports actual type / expected signature / fix) |
+| Export validation | Must default-export a function; the named `onSession` is optional and must be a function; `globalComponents` is optional and must be an object (key = registered name, value = component). Violations → MFU-011 (reports actual type / expected signature / fix) |
 | Failure and retry | setup/onSession throwing → that `loadRemote` rejects (MFU-012); **only the failed stage's cache is cleared** (after a setup failure the retry starts at setup; an onSession failure only reruns the session segment); already-successful stages are not repeated. `fallbackModule` never masks an initialization failure |
 | Self-recursion | `loadRemote(same remote/…)` inside setup/onSession's synchronous segment → MFU-014 (the call waits on itself, deadlocking). Same-remote recursion inside the async segment cannot be attributed precisely and shows up as a hang — never load same-remote modules inside initialization |
 | dev/prod parity | The dev container (middleware-served) and the prod container (build artifact) carry the same setup metadata (the container's `__fulgurjsSetup` field + the manifest's `setup` field); the internal expose key `./__fulgurjs_setup__` never appears in dts types or public exposes lists |
@@ -411,7 +425,7 @@ The bridge defaults to memory routing; URL sync makes the **host URL express the
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue host navigation port. Vue Router fullPath is already the logical path; no deployment base needed. Vue Router 4, history or hash mode |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React host navigation port. **Data router only** (`createBrowserRouter`/`createHashRouter` + `RouterProvider`); declarative mode (BrowserRouter) has no cancellation semantics and is not supported. React Router ≥ 6.11. `canNavigate` is optional and only an early rejection; the port observes the real blocker state — wait for `reset()` to resolve as cancelled and for the actual location to commit after `proceed()`; success is never judged solely by the settle of navigate's Promise |
 | `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue child app wiring for the controlled memory router; `await …ready` settles before `app.use(router)` (order must not be reversed) |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element }` | React child app: returns a `RouterProvider` element used directly as the contract product |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React child app: returns a `RouterProvider` element used directly as the contract product. `routerReady: Promise<Router>` is the wired memory-router readiness contract (since 6.0.0): the fast path (module-level warmup already settled, the common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Introspect via `await routerReady` instead of assuming `element.props.router` exists synchronously. `dispose()` tears down the wiring idempotently (auto-invoked by the signal); late tasks after dispose never write state |
 
 The channel parameter the host passes to the bridge component: `routing: BridgeHostRouting = { basePath: '/approval', navigation }`; after the child app contract's second parameter declares `{ routing: true }`, it receives the channel from `ctx.routing`. The wiring's third argument on both ends, `{ signal?: AbortSignal }`, defaults to empty; passing `ctx.signal` is recommended for automatic dispose — without it, the child app explicitly calls `dispose()`. A custom `BridgeHostNavigation.navigate(target, action, { signal })` should re-check the optional signal before an async commit and forbid late writes once aborted.
 

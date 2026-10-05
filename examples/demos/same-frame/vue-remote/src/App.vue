@@ -5,7 +5,7 @@
  * onReady/onGone 只在桥接态由宿主传入——供宿主推进真实的挂载/卸载计数。
  */
 import { onMounted, onUnmounted } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterLink, RouterView } from 'vue-router'
 import ChildIdentityBar from './components/ChildIdentityBar.vue'
 
 const props = defineProps<{
@@ -27,6 +27,18 @@ onUnmounted(() => {
   <div class="sfc-child-app">
     <ChildIdentityBar />
     <p v-if="label" class="sfc-child-label">{{ label }}</p>
+    <nav class="sfc-child-nav">
+      <RouterLink to="/tickets">工单列表</RouterLink>
+      <RouterLink to="/remote-form">远程表单（宿主提供）</RouterLink>
+    </nav>
     <RouterView />
   </div>
 </template>
+
+<style scoped>
+.sfc-child-nav {
+  display: flex;
+  gap: 14px;
+  margin: 4px 0 10px;
+}
+</style>

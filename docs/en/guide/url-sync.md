@@ -121,7 +121,7 @@ export default defineBridgeApp(async (props, ctx) => {
 }, { routing: true })
 ```
 
-**React child app**: `createReactBridgeRouter` returns a `RouterProvider` element:
+**React child app**: `createReactBridgeRouter` returns `{ element, dispose(), routerReady }`, where `element` is a directly usable `RouterProvider` element:
 
 ```tsx
 // src/bridge.tsx (React child app)
@@ -136,6 +136,8 @@ export default defineBridgeApp((_props, ctx) => {
   ], { signal: ctx.signal }).element
 }, { routing: true })
 ```
+
+`routerReady: Promise<Router>` is the wired memory-router readiness contract: the fast path (module-level warmup settled — the overwhelmingly common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (a rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Hosts/tests that need to introspect the router instance (e.g. asserting the current location) should `await routerReady` instead of assuming `element.props.router` exists synchronously. After teardown (`dispose()` / `signal` abort), late router operations never write navigation state.
 
 The third argument of the wiring on both ends, `{ signal?: AbortSignal }`, defaults to empty; passing `ctx.signal` is recommended for automatic dispose — without it, the child app must explicitly call the connection's `dispose()`.
 

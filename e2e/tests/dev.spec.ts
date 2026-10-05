@@ -82,6 +82,31 @@ test.describe('dev: 远程模块消费与 shared 语义', () => {
     await shot(page, 'dev-pinia-shared-singleton')
   })
 
+  test('B-18 全局注册组件：setup globalComponents 安装进消费方 app（6.1.0）', async ({ page }) => {
+    const consoleErrors: string[] = []
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text())
+    })
+    await page.goto(`${HOST}/#/form-global`)
+    await page.getByTestId('form-global-load').click()
+    // 字符串标签 <f-form-section> 解析为真实组件 DOM（fieldset+legend），非字面死元素
+    const sections = page.getByTestId('f-form-section')
+    await expect(sections).toHaveCount(2)
+    await expect(sections.first()).toContainText('基本信息')
+    await expect(sections.first()).toContainText('表单字段区')
+    await expect(sections.nth(1)).toContainText('审批意见')
+    // 未解析时会残留字面自定义元素——必须为 0
+    const literal = await page.locator('f-form-section').count()
+    expect(literal).toBe(0)
+    // 卸载→再次挂载（同页重进）：注册幂等，仍正确解析
+    await page.getByTestId('form-global-unload').click()
+    await expect(page.getByTestId('f-form-section')).toHaveCount(0)
+    await page.getByTestId('form-global-load').click()
+    await expect(page.getByTestId('f-form-section')).toHaveCount(2)
+    expect(consoleErrors).toEqual([])
+    await shot(page, 'dev-global-components-installed')
+  })
+
   test('B-17 远程组件样式注入（dev style 注入）', async ({ page }) => {
     await page.goto(`${HOST}/#/multi`)
     const card = page.getByTestId('slot-card').getByTestId('remote-card')

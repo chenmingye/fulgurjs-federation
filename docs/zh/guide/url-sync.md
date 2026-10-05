@@ -121,7 +121,7 @@ export default defineBridgeApp(async (props, ctx) => {
 }, { routing: true })
 ```
 
-**React 子应用**：`createReactBridgeRouter` 返回 `RouterProvider` 元素：
+**React 子应用**：`createReactBridgeRouter` 返回 `{ element, dispose(), routerReady }`，`element` 是直接可用的 `RouterProvider` 元素：
 
 ```tsx
 // src/bridge.tsx（React 子应用）
@@ -136,6 +136,8 @@ export default defineBridgeApp((_props, ctx) => {
   ], { signal: ctx.signal }).element
 }, { routing: true })
 ```
+
+`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同：fast 路径（模块级预热已就绪，绝大多数情况）返回**同步已 resolve** 的 Promise，值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主首次渲染接线完成时 resolve；缺 react-router-dom 时以清晰错误 reject。宿主/测试需要内省 router 实例（如断言当前 location）时 `await routerReady`，不要假设 `element.props.router` 同步存在。卸载（`dispose()`/`signal` abort）后迟到的 router 操作不再写导航状态。
 
 两端接线的第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用连接的 `dispose()`。
 

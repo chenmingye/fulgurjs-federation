@@ -1,5 +1,5 @@
 /** Vue 适配层只接收加载函数，不静态引用运行时内核。 */
-import { defineAsyncComponent, defineComponent, h, ref, type Component, type PropType } from 'vue'
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, ref, type Component, type PropType } from 'vue'
 import type { PageRouteLike, RemoteSchemaEntry } from './pages'
 import {
   cleanCompName,
@@ -140,9 +140,15 @@ function createRecoverableErrorPlaceholder(
   })
 }
 
-export function createRemoteComponent(loadRemote: (spec: string, opts?: { retries?: number }) => Promise<any>) {
+export function createRemoteComponent(loadRemote: (spec: string, opts?: { retries?: number; consumerApp?: unknown }) => Promise<any>) {
   return function remoteComponent(spec: string, opts: RemoteComponentOptions = {}): Component {
-    const loader = (): Promise<any> => loadRemote(spec, { retries: opts.retries }).then(m => m.default ?? m)
+    // consumerApp：当前渲染远程组件的 app 实例（异步包装组件 setup 内同步可得）。
+    // 远程 setup 声明的 globalComponents 借它注册进消费方全局注册表——桥接子应用
+    // 每次挂载新建 app 也能拿到；无组件上下文（重试等）时为 undefined，仅跳过注册。
+    const loader = (): Promise<any> => {
+      const consumerApp = getCurrentInstance()?.appContext.app
+      return loadRemote(spec, { retries: opts.retries, consumerApp }).then(m => m.default ?? m)
+    }
     return defineAsyncComponent({
       loader,
       loadingComponent: opts.loadingComponent,

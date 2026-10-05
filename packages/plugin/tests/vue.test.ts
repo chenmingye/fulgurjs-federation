@@ -41,7 +41,7 @@ describe('remoteComponent（@fulgurjs/federation/vue）', () => {
     expect(Comp).not.toBeInstanceOf(Promise)
     const el = await mount(Comp)
     expect(el.innerHTML).toContain('dev-adapter')
-    expect(load).toHaveBeenCalledWith('r-dev/Card', { retries: undefined })
+    expect(load).toHaveBeenCalledWith('r-dev/Card', { retries: undefined, consumerApp: expect.anything() })
   })
 
   it('V-1 loader 解包 default 导出', async () => {
@@ -80,7 +80,35 @@ describe('remoteComponent（@fulgurjs/federation/vue）', () => {
     const { remoteComponent } = await import('../src/vue')
     const el = await mount(remoteComponent('r3/Card', { retries: 5 }))
     expect(el.querySelector('i')).toBeTruthy()
-    expect(rt.loadRemote).toHaveBeenCalledWith('r3/Card', { retries: 5 })
+    // 6.1.0：consumerApp（当前渲染 app）随 retries 一并透传，供 setup globalComponents 安装
+    expect(rt.loadRemote).toHaveBeenCalledWith('r3/Card', { retries: 5, consumerApp: expect.anything() })
+  })
+
+  it('V-9 远程组件模板依赖全局注册标签：setup globalComponents 安装进消费方 app（6.1.0 样式异常根因回归）', async () => {
+    const rt = await import('../src/runtime/index')
+    // 远程暴露的组件模板使用字符串标签 <remote-section>（等价业务 <a-divider>），
+    // 只在远程自己的 app 里全局注册——消费方 app 没有该注册。
+    const RemoteSection = { template: '<fieldset class="remote-section"><legend>section-ok</legend><slot/></fieldset>' }
+    rt.registerRemote({
+      name: 'r9',
+      entry: '',
+      promise: async () => ({
+        name: 'r9',
+        __fulgurjsSetup: './__fulgurjs_setup__',
+        init: async () => {},
+        get: async (m: string) =>
+          m === './__fulgurjs_setup__'
+            ? { default: () => {}, globalComponents: { RemoteSection } }
+            : { default: { template: '<remote-section>表单内容</remote-section>' } },
+      }),
+    })
+    const { remoteComponent } = await import('../src/vue')
+    const el = await mount(remoteComponent('r9/form'))
+    // 标签解析成功：渲染出远程全局组件的真实 DOM；不再残留未解析的字面自定义元素
+    expect(el.querySelector('fieldset.remote-section')).toBeTruthy()
+    expect(el.textContent).toContain('section-ok')
+    expect(el.textContent).toContain('表单内容')
+    expect(el.querySelector('remote-section')).toBeNull()
   })
 
   it('V-4 加载失败 → 默认错误占位（错误码+根因+修法）+ fulgurjs:error 显式', async () => {

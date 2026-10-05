@@ -107,6 +107,21 @@ test.describe('prod(NGINX): 远程消费 + shared 语义', () => {
     await shot(page, 'prod-remote-css-injection')
   })
 
+  test('B-18 prod 全局注册组件：setup globalComponents 安装进消费方 app（6.1.0）', async ({ page }) => {
+    await page.goto(`${HOST}/#/form-global`)
+    await page.getByTestId('form-global-load').click()
+    const sections = page.getByTestId('f-form-section')
+    await expect(sections).toHaveCount(2)
+    await expect(sections.first()).toContainText('基本信息')
+    await expect(sections.nth(1)).toContainText('审批意见')
+    expect(await page.locator('f-form-section').count()).toBe(0)
+    // 生产环境整页刷新（新 app 实例）后：每次 loadRemote 重新安装注册
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByTestId('form-global-load').click()
+    await expect(page.getByTestId('f-form-section')).toHaveCount(2)
+    await shot(page, 'prod-global-components-installed')
+  })
+
   test('B-13 eager shared：初始加载即下载 pinia（不经交互）', async ({ page }) => {
     const piniaReqs: string[] = []
     page.on('request', (req) => {

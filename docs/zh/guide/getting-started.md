@@ -143,7 +143,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 | 消费方（consumer） | `name` + `remotes` | 加载别人。dev/prod 地址二段式或单地址字符串 |
 | 双角色（dual） | `name` + `exposes` + `remotes` | 双向联邦。`devSharedSelf` 缺省即 `true`（按角色推断），无需显式配置 |
 
-远程需要启动期初始化（全局组件/样式/locale/登录态同步）的提供方，另加 `setup` 字段，见 [API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期)。
+远程需要启动期初始化（全局组件/样式/locale/登录态同步）的提供方，另加 `setup` 字段，见 [API 参考 · setup/onSession](../reference/api.md)。
 
 ### 纯 TS 项目（无 Vue/React）
 

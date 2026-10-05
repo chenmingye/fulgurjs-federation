@@ -59,6 +59,13 @@ export interface LoadRemoteOptions {
   shareScope?: string
   retries?: number
   fallbackModule?: () => any
+  /**
+   * 发起本次加载的消费方应用实例（框架适配器自动传入，业务代码不用手填）：
+   * Vue 侧 remoteComponent/useLoadRemote 捕获当前渲染 app；远程 setup 声明的
+   * globalComponents 会在每次加载时幂等注册到它（桥接子应用每次挂载新建 app 也能拿到注册）。
+   * 运行时只在当次调用内消费该引用，不保存、不感知具体框架类型。
+   */
+  consumerApp?: unknown
 }
 
 export interface PreloadRemoteOptions {
@@ -120,12 +127,21 @@ export interface RemoteSetupContext {
 export interface RemoteSetupModule {
   default: (ctx: RemoteSetupContext) => void | Promise<void>
   onSession?: (ctx: RemoteSetupContext) => void | Promise<void>
+  /**
+   * 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象）：
+   * 组件联邦（remoteComponent）把远程组件渲染进消费方 app 上下文，模板里的
+   * 字符串标签（如 <a-divider>）按消费方 app 的全局注册表解析——消费方没注册就
+   * 渲染成死元素。提供方在此声明后，运行时在每次 loadRemote 时把它们幂等注册到
+   * 当次传入的 consumerApp 上；无 consumerApp（无组件上下文的手动加载）时静默跳过。
+   */
+  globalComponents?: Record<string, unknown>
 }
 
 /** 每个远程的初始化状态（应用级 setup 一次；会话级 onSession 按 sessionKey 去重） */
 interface LifecycleState {
   setupPromise?: Promise<void>
   setupExports?: Record<string, any>
+  globalComponents?: Record<string, unknown>
   sessionKey?: string
   sessionPromise?: Promise<void>
   controller?: AbortController
@@ -278,6 +294,19 @@ function createRuntime() {
         )
       }
       st.setupExports = mod
+      if (mod.globalComponents !== undefined) {
+        // 契约校验：必须是普通对象（键=注册名 → 值=组件）；值的具体形状由消费方框架判定
+        if (typeof mod.globalComponents !== 'object' || mod.globalComponents === null || Array.isArray(mod.globalComponents)) {
+          throw new FgError(
+            ErrorCodes.SETUP_INVALID_EXPORT,
+            `现象：远程应用 "${remote.name}" 的 setup 模块 "${setupKey}" 无法初始化。\n` +
+              `原因：globalComponents 导出类型为 ${Array.isArray(mod.globalComponents) ? 'array' : typeof mod.globalComponents}，应为对象（键=组件注册名，值=组件）。\n` +
+              `修法：改为 export const globalComponents = { 组件注册名: 组件 } 形态，或删除该导出。`,
+            { remote: remote.name, module: setupKey },
+          )
+        }
+        st.globalComponents = mod.globalComponents as Record<string, unknown>
+      }
       await invokeLifecycleFn(
         remote.name,
         setupFn,
@@ -289,6 +318,7 @@ function createRuntime() {
       remote.debug.setup = 'failed'
       // 只清应用级缓存：onSession 语义不存在，重试从 setup 重新开始
       st.setupExports = undefined
+      st.globalComponents = undefined
       throw err
     }
   }
@@ -1068,6 +1098,14 @@ function createRuntime() {
     // setup/onSession 生命周期：容器 init（shared 作用域收养）完成后、返回业务模块前执行；
     // 已缓存的业务模块同样经过此处——换账号后打开已加载过的页面仍会触发新代次的 onSession
     await ensureLifecycle(remote, container)
+    // 全局注册组件安装：远程 setup 声明的 globalComponents 幂等注册到本次消费方 app。
+    // 每次加载都执行（不随 setup 只跑一次）——桥接子应用每次挂载新建 app 实例，
+    // 一次性注册会漏掉重进；app.component 同名覆盖天然幂等，重复注册无副作用。
+    const gc = lifecycleOf(name).globalComponents
+    const consumerApp = opts?.consumerApp as { component?: (n: string, c: unknown) => unknown } | undefined
+    if (gc && consumerApp && typeof consumerApp.component === 'function') {
+      for (const compName of Object.keys(gc)) consumerApp.component(compName, gc[compName])
+    }
     const cacheKey = `${name}@${remote.shareScope || 'default'}#${module}`
     if (!loadedModules.has(cacheKey)) {
       loadedModules.set(

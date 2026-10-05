@@ -54,6 +54,8 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
+`consumerApp` 选项由框架适配器自动传入（Vue `remoteComponent` 捕获当前渲染 app），业务代码不用手填：远程 setup 声明的 `globalComponents` 会在每次加载时幂等注册到它。手动 `loadRemote`（无组件上下文）不传该选项，跳过注册。
+
 调用时机与生命周期：`spec` 完整解析 → 容器加载（超时/重试/熔断）→ `init(shareScope)`（共享作用域收养）→ setup → onSession → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商。
 
 ### 其他已导出的通用函数
@@ -243,6 +245,7 @@ const FederatedForm = remoteComponent('remote-a/Form', {
 语义与边界：
 
 - 内部 = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件，`props` 在使用处直接透传；
+- **全局注册组件自动安装（6.1.0）**：远程组件渲染在**消费方 app** 上下文里，其模板字符串标签（如 `<a-divider>`）按消费方全局注册表解析——提供方 app 的 `app.use(X)` 全局注册不随组件走。远程在 setup 模块声明 `globalComponents` 后，本工厂加载时自动捕获当前渲染 app 并完成幂等注册（含桥接子应用内消费的场景）；详见第 6 节 `federation({ setup })` 的 globalComponents 契约；
 - **无任何兜底/降级**（零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法 + **重试加载 / 刷新页面重试**），`fulgurjs:error` 事件由 runtime 层照常发出；
 - 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
 - 调用时机 = 组件工厂声明时零副作用，渲染时才加载；
@@ -311,6 +314,14 @@ export async function onSession(context: RemoteSetupContext) {
   if (context.signal.aborted) return  // ← await 之后写状态前必须检查：期间可能已换账号/退出
   writeToStores(data)
 }
+
+// 6.1.0 可选具名导出：暴露面依赖的「消费方全局注册组件」声明（键=注册名，值=组件）。
+// 适用场景：组件联邦（remoteComponent）把远程组件渲染进消费方 app，其模板里的字符串标签
+// （如 <a-divider>）按消费方全局注册表解析——消费方没注册就渲染成无样式死元素。
+// 运行时在每次 loadRemote 时把它们幂等注册到当次消费方 app；不声明则零行为。
+export const globalComponents: RemoteSetupModule['globalComponents'] = {
+  // ADivider: Divider,   // 注册名须与模板标签可解析对应（a-divider → ADivider）
+}
 ```
 
 `RemoteSetupContext`：`{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`。`appContext` 是**调用时**从页面级 AppContext 取得的快照（不保存永不更新的旧引用）；`signal` 在登录代次变化或退出清理时失效。
@@ -320,11 +331,12 @@ export async function onSession(context: RemoteSetupContext) {
 | 维度 | 语义 |
 |---|---|
 | 触发入口 | `loadRemote('remote/模块')` 是**统一入口**（`remoteComponent` 与宿主页面适配器同源）。`loadRemote('remote')`、`getContainer()`、`preloadRemote()`、直调 `container.get()` 都**不执行**初始化 |
-| 时序 | 取得容器 → `init(shareScope)`（共享作用域收养）→ **setup** → **onSession** → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商 |
+| 时序 | 取得容器 → `init(shareScope)`（共享作用域收养）→ **setup** → **onSession** → **globalComponents 安装** → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商 |
 | 执行次数（setup） | 每容器一次；并发调用共享同一 Promise；成功后不重复。`preloadRemote` 只预取资源不执行 |
+| 执行次数（globalComponents） | 声明提取随 setup 一次；**安装随每次 `loadRemote` 执行**（幂等，`app.component` 同名覆盖）——桥接子应用每次挂载新建 app 实例也能拿到注册。手动 `loadRemote`（无 `consumerApp`）跳过安装，不报错 |
 | 执行次数（onSession） | 按非敏感 `sessionKey` 去重：同一登录代次一次；新代次先作废旧 `signal`，再按远程**串行**衔接旧调用与新调用（防两账号异步写入交错）；`clearAppContext()` 失效去重状态，下次登录必须重跑。应用级 setup 不因退出/换代重复执行 |
 | sessionKey | 宿主登录流程每次成功登录/重登生成新代次（非敏感 ID，禁止用 token）；token 刷新但会话未变时沿用。**有 onSession 却缺 sessionKey → MFU-013**，不凭用户对象引用猜测身份；无 onSession 的远程无需 sessionKey |
-| 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；其他导出不作为入口。违反 → MFU-011（报实际类型/预期签名/修法） |
+| 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）。违反 → MFU-011（报实际类型/预期签名/修法） |
 | 失败与重试 | setup/onSession 抛错 → 该次 `loadRemote` 拒绝（MFU-012）；**只清失败阶段的缓存**（setup 失败重试从 setup 开始；onSession 失败只重跑会话段），已成功的阶段不重复。`fallbackModule` 不掩盖初始化失败 |
 | 自递归 | setup/onSession 同步段内 `loadRemote(同 remote/…)` → MFU-014（该调用会等待自身形成死锁）。异步段内的同远程递归无法精确归因，表现为挂起——不要在初始化内加载同远程模块 |
 | dev/prod 一致 | dev 容器（中间件直出）与 prod 容器（构建产物）携带同一 setup 元数据（容器上的 `__fulgurjsSetup` 字段 + manifest 的 `setup` 字段）；内部 expose 键 `./__fulgurjs_setup__` 不出现在 dts 类型与公开文档 exposes 清单中 |
@@ -410,7 +422,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue 宿主导航端口。Vue Router fullPath 已是逻辑路径，无需传部署 base。Vue Router 4，history/hash 模式皆可 |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React 宿主导航端口。**仅支持 data router**（`createBrowserRouter`/`createHashRouter` + `RouterProvider`）；declarative 模式（BrowserRouter）无取消语义，不支持。React Router ≥ 6.11。`canNavigate` 可选仅作提前拒绝；端口观察真实 blocker 状态，等待 `reset()` 返回 cancelled、`proceed()` 后实际位置提交返回 committed，不能只凭 navigate 的 Promise 落定判成功 |
 | `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue 子应用接线受控 memory 路由；`await …ready` 落定后再 `app.use(router)`（顺序不能反） |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物 |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同（6.0.0 起）：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dependency 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
 
 宿主传给桥接组件的通道参数：`routing: BridgeHostRouting = { basePath: '/approval', navigation }`；子应用契约第二参数声明 `{ routing: true }` 后从 `ctx.routing` 接收通道。两端接线第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用 `dispose()`。自定义 `BridgeHostNavigation.navigate(target, action, { signal })` 应在异步提交前复核可选 signal，已 aborted 时禁止迟到写入。
 

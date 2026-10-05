@@ -1,5 +1,19 @@
 # Changelog
 
+## 6.1.0
+
+**组件联邦的全局注册组件安装（setup `globalComponents` 契约）。** 修复一类真实缺陷：远程组件模板内的字符串标签（如 `<a-divider>`）按**消费方 app** 的全局注册表解析——提供方 app 里的 `app.use(X)` 全局注册不随组件走，消费方没注册就渲染成无样式的字面自定义元素（真实业务实测：流程内嵌表单的分节线/选人控件/上传按钮全部退化为死元素）。此前 setup 的注册目标 `hostApp` 在「宿主 → 桥接子应用 → 子应用内再消费远程表单」的嵌套场景拿不到真正渲染表单的子应用 app，本版本补齐该链路。
+
+### 新增
+
+- **`RemoteSetupModule.globalComponents`**（setup 模块可选具名导出，`Record<注册名, 组件>`）：提供方声明其暴露面依赖的全局注册组件。运行时在**每次 `loadRemote`** 时把它们幂等注册到当次消费方 app（`app.component` 同名覆盖天然幂等）——按次而非按 setup 一次执行，桥接子应用每次挂载新建 app 实例也能拿到注册。非法导出类型（数组/非对象）按 MFU-011 三段式报错并支持重试。无声明、无消费方 app（手动 `loadRemote`）、或消费方 app 无 `component` 方法时零行为、零副作用。
+- **`LoadRemoteOptions.consumerApp`**（可选）：发起本次加载的消费方应用实例。由框架适配器自动传入（Vue 的 `remoteComponent` 在异步包装组件 setup 内同步捕获当前渲染 app），业务代码不需要手填；运行时只在当次调用内消费，不保存、不感知具体框架类型。React 无全局组件注册表，不参与该机制。
+- 单测：`tests/global-components.test.ts`（注册/换 app 重注册/幂等/跳过/MFU-011/失败清缓存/无声明零行为）+ `tests/vue.test.ts` V-9（jsdom 全链路：远程模板字符串标签经 globalComponents 解析为真实 DOM，不再残留字面自定义元素）。
+
+### 修复
+
+- **修复（文档）：`createReactBridgeRouter` 返回值合同文档缺失 `routerReady` 与 `dispose`**——6.0.0 新增的 `routerReady` 就绪合同（fast 路径同步已 resolve；slow 路径惰性接线完成时 resolve、缺依赖 reject）只存在于源码与类型，公开 API 文档未覆盖。现已在 docs/zh 与 docs/en 的 API 参考/URL 同步指南补齐完整语义（返回类型、等待时机、成功/失败、与 element 的关系、调用顺序、卸载行为）。
+
 ## 6.0.0
 
 **破坏性版本：公共入口统一为四类。** 应用开发者先选框架，再从同一个入口导入全部能力；内部 bridge/router/context 分层不再是用户必学的路径规则。

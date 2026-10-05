@@ -10,6 +10,13 @@ import type { FederationOptions } from '@fulgurjs/federation'
 export default {
   name: 'sf-vue-remote',
   filename: 'fulgurjs-remoteEntry.js',
+  // 反向消费宿主暴露的远程表单（宿主→子应用→远程表单三层链路；宿主须已启动）
+  remotes: {
+    'sf-vue-host': {
+      dev: 'http://localhost:5324',
+      prod: '/',
+    },
+  },
   exposes: {
     './bridge': './src/bridge.ts',
     './components/TicketSummary': './src/exposes/TicketSummary.vue',

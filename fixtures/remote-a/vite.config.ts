@@ -22,12 +22,15 @@ export default defineConfig({
         './StaticDep': './src/exposes/StaticDep.vue',
         './static-dep-second': './src/exposes/static-dep-second.ts',
         './counter': './src/exposes/counter.ts',
+        // 6.1.0 globalComponents：依赖全局注册组件的远程表单（setup 声明注册表）
+        './FormGlobal': './src/exposes/FormGlobal.vue',
         // 5.3.0 桥接：Vue 子应用契约 + 故障注入 expose（BN01/BN02）
         './bridge': './src/bridge.ts',
  './bridge-routed': './src/bridge-routed.ts',
         './bridge-broken': './src/bridge-broken.ts',
         './bridge-mount-fail': './src/bridge-mount-fail.ts',
       },
+      setup: './src/setup.ts',
       shared: {
         vue: { singleton: true, requiredVersion: '^3.4.0' },
         pinia: { singleton: true },
