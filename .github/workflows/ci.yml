@@ -99,7 +99,7 @@ jobs:
 
   # WP3：Vite 5.1 最低支持线定时兼容（peer 声明 >=5.1.0；@vitejs/plugin-vue@5 与 Vite5 peer 匹配）
   vite5:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # 6.0.0 起随每次 push 实跑（上轮最终 CI 曾 skipped——声明支持的主版本必须实跑，不靠总状态绿）
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
