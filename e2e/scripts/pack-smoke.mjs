@@ -176,7 +176,7 @@ fs.writeFileSync(
 )
 fs.writeFileSync(
   path.join(consumer, 'src/exposed.ts'),
-  `import { version, remoteComponent } from '@fulgurjs/federation/runtime'\nexport const exposedRuntimeVersion = version\nexport const Widget = remoteComponent('smoke-r/Widget')\n`,
+  `import { version } from '@fulgurjs/federation/runtime'\nimport { remoteComponent } from '@fulgurjs/federation/vue'\nexport const exposedRuntimeVersion = version\nexport const Widget = remoteComponent('smoke-r/Widget')\n`,
 )
 fs.writeFileSync(
   path.join(consumer, 'vite.config.ts'),
