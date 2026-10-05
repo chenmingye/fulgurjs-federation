@@ -11,8 +11,8 @@ importers:
   react-remote:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 6.0.0
-        version: 6.0.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue@3.5.43(typescript@5.9.3))
+        specifier: 6.1.0
+        version: 6.1.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue@3.5.43(typescript@5.9.3))
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -42,8 +42,8 @@ importers:
   vue-host:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 6.0.0
-        version: 6.0.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue@3.5.43(typescript@5.9.3))
+        specifier: 6.1.0
+        version: 6.1.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue@3.5.43(typescript@5.9.3))
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -467,8 +467,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fulgurjs/federation@6.0.0':
-    resolution: {integrity: sha512-h3/ZvxdJZVtbvQcQ/OycsTQq7J9LYTfDjpjtoLli0eMk1gOjr2xdvtYaKw57Rt+ccGyfJgYPCsF2U48vVkRFpg==}
+  '@fulgurjs/federation@6.1.0':
+    resolution: {integrity: sha512-H3pYeXof2CQvLosR70KcXEQSOlflGu/JqKoOsxbUZI8ng6xKaRRVKXT+0E9YkHtL5UjSdZTZq2QmPlk4e1D8sQ==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -1221,7 +1221,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@fulgurjs/federation@6.0.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue@3.5.43(typescript@5.9.3))':
+  '@fulgurjs/federation@6.1.0(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.3)(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       es-module-lexer: 1.7.0
       esbuild: 0.27.7
