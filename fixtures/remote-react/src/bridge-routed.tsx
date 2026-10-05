@@ -50,5 +50,10 @@ export default defineBridgeApp((_props, ctx) => {
     { path: '/secret', element: <Secret /> },
   ], { signal: ctx.signal })
   ;(globalThis as any).__ROUTED_REACT_ROUTER__ = (conn.element.props as any).router
+  // 6.0.0 可选预热竞态合同：slow 路径下 props.router 不存在——e2e 统一 await routerReady
+  ;(globalThis as any).__ROUTED_REACT_ROUTER_READY__ = conn.routerReady.then((r) => {
+    ;(globalThis as any).__ROUTED_REACT_ROUTER__ = r
+    return r
+  })
   return conn.element
 }, { routing: true })

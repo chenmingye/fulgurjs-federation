@@ -131,6 +131,13 @@ export function createReactBridgeNavigation(
 export interface ReactBridgeRouterConnection {
   element: ReactElement
   dispose(): void
+  /**
+   * 已接线 memory router 的就绪合同（可加性导出）：
+   * fast 路径（预热已就绪）= 同步已 resolve 的 Promise（element.props.router 等价）；
+   * slow 路径（预热未落定/缺依赖）= 惰性宿主接线完成时 resolve（缺依赖时 reject 清晰错误）。
+   * 宿主内省请优先用它，不要假设 element.props.router 同步存在。
+   */
+  routerReady: Promise<WiredRouter['router']>
 }
 
 /** 已接线的 memory router（fast 路径同步产出；slow 路径由惰性宿主补挂） */
@@ -237,24 +244,34 @@ export function createReactBridgeRouter(routing: BridgeChildRoute, routes: Route
   if (routerDomModule) {
     // fast 路径：与历史行为一致——同步创建 router，element.props.router 可被内省
     wired = wireReactBridgeRouter(routerDomModule, routing, routes, options)
+    const fastRouter = wired.router
     const connection: ReactBridgeRouterConnection = {
       element: createElement(wired.RouterProvider, { router: wired.router }),
       dispose,
+      routerReady: Promise.resolve(fastRouter),
     }
     options.signal?.addEventListener('abort', connection.dispose, { once: true })
     if (options.signal?.aborted) connection.dispose()
     return connection
   }
   // slow 路径：预热未落定（罕见竞态）或缺依赖（缺依赖错误在首次渲染时以合同内异常暴露）
+  let wireResolve: (r: WiredRouter['router']) => void = () => {}
+  const routerReady = new Promise<WiredRouter['router']>((resolve, reject) => {
+    wireResolve = resolve
+    void routerDomReady.then(() => {
+      if (routerDomFailure && !routerDomModule) reject(routerDomFailure)
+    }, (e) => reject(e))
+  })
   const connection: ReactBridgeRouterConnection = {
     element: createElement(LazyRouterProviderHost, {
       routing,
       routes,
       signal: options.signal,
       isDisposed: () => disposed,
-      onWired: (w) => { wired = w },
+      onWired: (w) => { wired = w; wireResolve(w.router) },
     }),
     dispose,
+    routerReady,
   }
   options.signal?.addEventListener('abort', connection.dispose, { once: true })
   if (options.signal?.aborted) connection.dispose()

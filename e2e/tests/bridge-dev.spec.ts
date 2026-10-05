@@ -127,9 +127,10 @@ test.describe('bridge-dev：Vue 宿主 × React 子应用', () => {
     expect(hostGraph).not.toContain('react-adapter')
     expect(hostGraph).not.toContain('bridge-react.js')
     expect(hostGraph).not.toMatch(/\/bridge\.js/)
-    // 桥接链路：runtime + bridge-vue + bridge-host-vue + context/pages 必须出现
-    expect(hostGraph).toContain('bridge-vue.js')
-    expect(hostGraph).toContain('bridge-host-vue.js')
+    // 桥接链路（6.0.0 统一入口）：宿主代码经 /vue——运行时与宿主桥接适配器必须出现；
+    // 旧 bridge-vue.js 壳已随入口统一移除，统一入口壳为 dist/vue.js
     expect(hostGraph).toContain('runtime.js')
+    expect(hostGraph).toMatch(/dist\/vue\.js|@fulgurjs_federation_vue/)
+    expect(hostGraph).toContain('bridge-host-vue')
   })
 })
