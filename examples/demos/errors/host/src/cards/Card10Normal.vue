@@ -36,7 +36,7 @@
  * 未预期计数保持 0 即整页错误隔离成立。
  */
 import { computed, ref, shallowRef } from 'vue'
-import { loadRemote, remoteComponent } from '@fulgurjs/federation/runtime'
+import { loadRemote, remoteComponent } from '@fulgurjs/federation/vue'
 import { monitor } from '../error-monitor'
 import CardShell from '../components/CardShell.vue'
 import ErrorView from '../components/ErrorView.vue'

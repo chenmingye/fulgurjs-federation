@@ -65,9 +65,11 @@ for (const name of ['bridge-host-vue.js', 'bridge-host-react.js']) {
   console.log(`[check-gzip] ${name} gzip ${gz.length}B ≤ ${BRIDGE_HOST_LIMIT}B ✓（raw ${raw.length}B）`)
 }
 
-// 路由适配入口预算（5.4.0 URL 同步）：/bridge/router/{vue,react} 按需入口（含通道内核
-// 打入），框架与路由库外置。显式定档 4096B 防止路由层无意膨胀；默认 /bridge 不含本模块。
-const BRIDGE_ROUTER_LIMIT = 4096
+// 路由适配入口预算（5.4.0 URL 同步）：路由同步模块（含通道内核打入），框架与路由库外置。
+// 显式定档防止路由层无意膨胀。6.0.0 上调 4096→4352B：/react 统一入口要求 react-router-dom
+// 成为可选依赖（react-router-dom 值导入改为模块级按需预热 + 未就绪惰性宿主 + 空 chunk 形状
+// 校验），该合同增量实测 4143B（zlib level9）；CHANGELOG 记录同口径。
+const BRIDGE_ROUTER_LIMIT = 4352
 for (const name of ['bridge-router-vue.js', 'bridge-router-react.js']) {
   const file = path.join(dist, name)
   if (!fs.existsSync(file)) {

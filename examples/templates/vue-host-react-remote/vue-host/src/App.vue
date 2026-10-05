@@ -5,7 +5,7 @@
  */
 import { ref } from 'vue'
 import { clearAppContext } from '@fulgurjs/federation/runtime'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import { getLatestHostContext, login, logout } from './host-session'
 
 // 工厂选项：retries 透传 loadRemote；getContext 在每次实际加载前同步取最新快照
@@ -51,7 +51,7 @@ async function doLogout(): Promise<void> {
 
 <template>
   <div style="font-family: sans-serif; padding: 16px; max-width: 720px">
-    <h1>Vue 宿主 × React 子应用（@fulgurjs/federation/bridge/vue）</h1>
+    <h1>Vue 宿主 × React 子应用（@fulgurjs/federation/vue）</h1>
     <p data-testid="demo-session">会话：{{ sessionKey ?? '未登录' }}（{{ userName || '—' }}）· onReady 次数：{{ readyCount }}</p>
 
     <p>

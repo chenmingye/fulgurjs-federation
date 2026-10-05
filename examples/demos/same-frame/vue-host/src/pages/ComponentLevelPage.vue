@@ -3,7 +3,7 @@
  * 页面1 · 组件级联邦（对比项）：remoteComponent 直渲染远程单个组件。
  * defineAsyncComponent + loadRemote 标准封装——无路由、无会话协议、无整站挂载。
  */
-import { remoteComponent } from '@fulgurjs/federation/runtime'
+import { remoteComponent } from '@fulgurjs/federation/vue'
 import IdentityBadges from '../components/IdentityBadges.vue'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
 

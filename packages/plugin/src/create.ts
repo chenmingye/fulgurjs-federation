@@ -73,7 +73,7 @@ export interface CreateResult {
   template: string
   target: string
   pluginVersion: string
-  apps: Array<{ name: string; dir: string; port: number }>
+  apps: Array<{ name: string; dir: string; port: number; host?: boolean }>
   installRan: boolean
   installCode?: number
   /** 本次实际写入的模板文件数（复用目录时可能小于模板总数） */
@@ -188,7 +188,7 @@ export function validateTemplateDir(dir: string): string[] {
 }
 
 export interface TemplateAppConfig {
-  apps: Array<{ name: string; dir: string; port: number }>
+  apps: Array<{ name: string; dir: string; port: number; host?: boolean }>
 }
 
 /** 模板启动清单（任务 C 的 dev-runner 与 create 的入口提示共用同一份） */
@@ -231,15 +231,19 @@ export function formatCreateResult(result: CreateResult): string {
     for (const c of result.skippedConflicts) lines.push(`  ${c.rel} — ${c.reason}`)
   }
   lines.push('后续步骤：')
-  lines.push(`  cd ${result.target}`)
+  lines.push(`  cd "${result.target}"`)
   if (!result.installRan) lines.push('  pnpm install --frozen-lockfile')
   lines.push('  pnpm dev                # 按启动顺序拉起全部应用，失败会整组退出并说明原因')
   lines.push('访问入口（远程先于宿主就绪）：')
   for (const app of apps) {
     lines.push(`  http://localhost:${app.port}/    ${app.name}${app.dir !== app.name ? `（目录 ${app.dir}）` : ''}`)
   }
-  const hosts = apps.slice().reverse()
-  lines.push(`浏览器打开宿主入口：${hosts.length ? `http://localhost:${hosts[0].port}/` : '（见模板 README）'}`)
+  const hosts = apps.filter((a) => a.host)
+  const hostList = hosts.length ? hosts : apps.slice(-1)
+  lines.push(
+    '浏览器打开宿主入口：' +
+      hostList.map((a) => `http://localhost:${a.port}/（${a.name}）`).join('  '),
+  )
   lines.push('  pnpm build              # 各子应用生产构建（远程生成 fulgurjs-remoteEntry.js / fulgurjs-manifest.json）')
   lines.push('  部署规则（no-cache / SPA 回退 / base 对齐）见模板内各子应用 README；部署后可用 npx fulgurjs doctor --base <站点> --apps <部署子目录> 体检')
   lines.push('  改端口（四处同步，漏一处启动器会被旧端口卡住）：')
@@ -272,11 +276,25 @@ function formatCreateJson(result: CreateResult): string {
   )
 }
 
-/** Node 版本核查（模板口径 Node ≥ 20，实测 24）：不满足仅警告不阻断 */
-export function nodeVersionWarning(nodeVersion: string): string | undefined {
+/** 引擎范围核查（>=X.Y.Z 形态；模板 package.json engines.node 声明）：不满足返回失败原因 */
+export function nodeEnginesViolation(nodeVersion: string, range: string | undefined): string | undefined {
+  if (!range) return undefined
+  const m = range.trim().match(/^>=?(\d+)\.(\d+)(?:\.(\d+))?/)
+  if (!m) return undefined
+  const parse = (v: string) => v.replace(/^v/, '').split(/[.-]/).map((x) => Number(x) || 0)
+  const [curMajor, curMinor = 0, curPatch = 0] = parse(nodeVersion)
+  const [minMajor, minMinor = 0, minPatch = 0] = [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)]
+  const ge = (a: number[], b: number[]) =>
+    a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : (a[2] ?? 0) >= (b[2] ?? 0)
+  if (range.startsWith('>=')) {
+    if (!ge([curMajor, curMinor, curPatch], [minMajor, minMinor, minPatch])) {
+      return `当前 Node ${nodeVersion} 不满足模板要求 engines.node ${range}`
+    }
+    return undefined
+  }
   const major = Number(nodeVersion.replace(/^v/, '').split('.')[0])
-  if (Number.isFinite(major) && major < 20) {
-    return `当前 Node ${nodeVersion} 低于模板要求（Node ≥ 20，实测 24.x）——安装可能成功，但与模板验证环境不符`
+  if (Number.isFinite(major) && major < minMajor) {
+    return `当前 Node ${nodeVersion} 低于模板要求 engines.node ${range}`
   }
   return undefined
 }
@@ -314,9 +332,25 @@ export async function createProject(opts: CreateOptions, io: CreateIo): Promise<
     }
   }
 
-  const warnings: string[] = []
-  const nodeWarn = nodeVersionWarning(process.version)
-  if (nodeWarn) warnings.push(nodeWarn)
+  // UX-07：环境校验前置——在写入/安装发生之前，按模板真实 engines 与工具链校验；
+  // 不满足即失败并给准确升级方法，不产生半份工程
+  const enginesViolation = nodeEnginesViolation(process.version, templateEnginesNode(templateDir))
+  if (enginesViolation) {
+    throw new Error(
+      `[fulgurjs:create] 环境校验失败：${enginesViolation}\n` +
+        '  修法：升级 Node（nvm install <版本> && nvm use <版本>，或从 https://nodejs.org 安装 LTS）后重试；' +
+        '未写入任何文件',
+    )
+  }
+  if (opts.install) {
+    const pnpmMissing = await pnpmUnavailableReason()
+    if (pnpmMissing) {
+      throw new Error(
+        `[fulgurjs:create] 环境校验失败：${pnpmMissing}\n` +
+          '  修法：corepack enable（Node 自带），或 npm i -g pnpm；未写入任何文件',
+      )
+    }
+  }
 
   let outcome: CopyOutcome
   try {
@@ -364,8 +398,6 @@ export async function createProject(opts: CreateOptions, io: CreateIo): Promise<
   } else {
     io.log('[fulgurjs:create] 按要求跳过安装（--no-install）：进入目录后先执行 pnpm install --frozen-lockfile')
   }
-  for (const w of warnings) io.log(`[fulgurjs:create] 警告：${w}`)
-
   const result: CreateResult = {
     template: templateName,
     target,
@@ -379,6 +411,30 @@ export async function createProject(opts: CreateOptions, io: CreateIo): Promise<
   if (opts.json) io.out(formatCreateJson(result))
   else io.log(formatCreateResult(result))
   return result
+}
+
+/** 模板根 package.json 的 engines.node（未声明返回 undefined——不虚构要求） */
+export function templateEnginesNode(templateDir: string): string | undefined {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(templateDir, 'package.json'), 'utf8')) as {
+      engines?: { node?: string }
+    }
+    return pkg.engines?.node
+  } catch {
+    return undefined
+  }
+}
+
+/** pnpm 不可用时的具体原因（可用返回 undefined）；用于安装前置校验 */
+export async function pnpmUnavailableReason(): Promise<string | undefined> {
+  const code = await new Promise<number>((resolve) => {
+    const child = spawn('pnpm', ['--version'], { stdio: 'ignore' })
+    child.once('error', () => resolve(127))
+    child.once('close', (c) => resolve(c ?? 1))
+  })
+  if (code === 127) return 'pnpm 未安装或不在 PATH'
+  if (code !== 0) return `pnpm --version 退出码 ${code}（pnpm 安装异常）`
+  return undefined
 }
 
 /** CLI 默认安装器：继承 stdio 透传原因，退出码原样返回；json 模式传 'stderr' 保持 stdout 数据流纯净 */

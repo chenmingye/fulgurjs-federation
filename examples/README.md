@@ -62,7 +62,7 @@ examples/
 └── scenarios.json  # 唯一场景表
 ```
 
-[API 覆盖矩阵](../docs/Demo展示中心API覆盖矩阵-20261002.md)说明各能力在哪里验证。`fixtures/` 是插件内部测试夹具；`testbed/runs/` 是私有业务验收副本，均不属于用户下载模板。
+各能力在哪个示例验证见[文档中心的示例指南](../docs/zh/guide/examples.md)。`fixtures/` 是插件内部测试夹具，不属于用户下载模板。
 
 ## 原目录迁移
 

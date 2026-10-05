@@ -1,6 +1,15 @@
 {
   "apps": [
-    { "name": "remote", "dir": "remote", "port": 5203 },
-    { "name": "host", "dir": "host", "port": 5204 }
+    {
+      "name": "remote",
+      "dir": "remote",
+      "port": 5203
+    },
+    {
+      "name": "host",
+      "dir": "host",
+      "port": 5204,
+      "host": true
+    }
   ]
 }

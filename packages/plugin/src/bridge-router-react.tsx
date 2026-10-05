@@ -1,11 +1,18 @@
-/** React Router data router 的宿主端口与子应用 memory router 接线（按需入口）。 */
-import type { ReactElement } from 'react'
-import { createElement } from 'react'
-import { RouterProvider, createMemoryRouter, type RouteObject } from 'react-router-dom'
+/** React Router data router 的宿主导航端口与子应用 memory router 接线（统一入口 /react 提供）。 */
+// react-router-dom 是 /react 的**可选**依赖边界：纯 React 组件工程（未安装 react-router-dom）
+// 导入 /react 时不得被强制解析它。因此本文件对 react-router-dom 只保留 type 导入
+// （RouteObject），运行期取值一律走下方模块级按需预热 + 就绪判定：
+// - dev：Vite 将依赖内缺失的动态导入改写为 optional-peer-dep 错误模块（200 + 描述性 throw），
+//   预热的拒绝被捕获，零噪声；装了 react-router-dom 的工程照常解析。
+// - prod：缺依赖时 rollup 产出空 chunk（import 成功但形状为空）——按形状校验兜底。
+// 就绪前调用 createReactBridgeRouter 走惰性宿主（首次渲染等待预热落定）；就绪后与
+// 历史行为完全一致：同步创建 memory router，element.props.router 可被宿主内省。
+import { createElement, useEffect, useState, type ReactElement } from 'react'
+import type { RouterProvider, createMemoryRouter, RouteObject } from 'react-router-dom'
 import { sameLocation, type BridgeChildRoute, type BridgeHostNavigation, type BridgeLocation, type BridgeHostRouting } from './bridge-router-core'
 import { collapseConsecutiveReports, connectChildNavigation } from './bridge-router-sync'
 
-/** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
+/** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；见 API 手册 url-sync） */
 export type { BridgeHostRouting }
 
 export type ReactBridgeCancelPolicy = (next: BridgeLocation) => boolean
@@ -18,6 +25,31 @@ export interface ReactDataRouterLike {
   subscribe(cb: () => void): () => void
   navigate(to: string | number, opts?: { replace?: boolean }): void | Promise<void>
 }
+
+// ---- react-router-dom 模块级按需预热（可选依赖边界，见文件头） ----
+type ReactRouterModule = { createMemoryRouter: typeof createMemoryRouter; RouterProvider: typeof RouterProvider }
+let routerDomModule: ReactRouterModule | null = null
+let routerDomFailure: unknown = null
+const routerDomReady: Promise<void> = import('react-router-dom').then(
+  (m) => {
+    // prod 缺依赖：rollup 产出空 chunk——import 成功但缺成员，按形状判定为不可用
+    const candidate = m as Partial<ReactRouterModule> | null
+    if (candidate && typeof candidate.createMemoryRouter === 'function' && typeof candidate.RouterProvider === 'function') {
+      routerDomModule = candidate as ReactRouterModule
+    } else {
+      routerDomFailure = new Error(
+        '[fulgurjs] react-router-dom 未安装或不可用（createMemoryRouter/RouterProvider 缺失）。' +
+          'createReactBridgeRouter（URL 同步受控路由）需要 react-router-dom ≥6.11；' +
+          '不使用路由同步的纯 React 组件工程无需安装。',
+      )
+    }
+  },
+  (e) => {
+    routerDomFailure = e
+  },
+)
+/** 内部时序缝隙：等待模块级预热落定（仅测试使用；生产代码不需要等待——未就绪时走惰性宿主） */
+export const __reactRouterDomReady = routerDomReady
 
 /** canNavigate 是可选预判；最终结果同时核对真实 blocker 与已提交位置。 */
 export function createReactBridgeNavigation(
@@ -101,16 +133,32 @@ export interface ReactBridgeRouterConnection {
   dispose(): void
 }
 
-/** 返回 RouterProvider 元素，直接作为 defineBridgeApp 工厂的 ReactElement 返回值。 */
-export function createReactBridgeRouter(routing: BridgeChildRoute, routes: RouteObject[], options: { signal?: AbortSignal } = {}): ReactBridgeRouterConnection {
+/** 已接线的 memory router（fast 路径同步产出；slow 路径由惰性宿主补挂） */
+interface WiredRouter {
+  router: ReturnType<ReactRouterModule['createMemoryRouter']>
+  RouterProvider: ReactRouterModule['RouterProvider']
+  dispose(): void
+}
+
+/**
+ * 用真实 react-router-dom 模块创建 memory data router 并接线路由同步
+ * （fast/slow 两条路径共用；与历史同步行为逐行等价）。
+ */
+function wireReactBridgeRouter(
+  m: ReactRouterModule,
+  routing: BridgeChildRoute,
+  routes: RouteObject[],
+  options: { signal?: AbortSignal },
+): WiredRouter {
   const init = routing.getLocation()
-  const router = createMemoryRouter(routes, { initialEntries: [init.pathname + init.search + init.hash] })
+  const router = m.createMemoryRouter(routes, { initialEntries: [init.pathname + init.search + init.hash] })
   const navigate = router.navigate.bind(router)
   let disposed = false
+  const report = collapseConsecutiveReports((error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error))
   const sync = connectChildNavigation(routing, async (loc) => {
     const cur = router.state.location
     if (!sameLocation(cur, loc)) await navigate(loc.pathname + loc.search + loc.hash, { replace: true })
-  }, collapseConsecutiveReports((error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error)))
+  }, report)
   router.navigate = ((to: Parameters<typeof router.navigate>[0], options?: Parameters<typeof router.navigate>[1]) => {
     if (typeof to === 'number') { if (!disposed) routing.go(to); return Promise.resolve() }
     const task = sync.enqueue(async () => {
@@ -118,7 +166,7 @@ export function createReactBridgeRouter(routing: BridgeChildRoute, routes: Route
       const l = router.state.location
       return { pathname: l.pathname, search: l.search, hash: l.hash }
     }, options?.replace ? 'replace' : 'push').then(() => {})
-    void task.catch(collapseConsecutiveReports((error) => console.error('[fulgurjs] 子应用 React 路由同步失败：', error)))
+    void task.catch(report)
     return task
   }) as typeof router.navigate
   // 初始 loader 重定向使用 replace 同步；普通 Router 状态更新不再误报为 push。
@@ -129,13 +177,84 @@ export function createReactBridgeRouter(routing: BridgeChildRoute, routes: Route
     const actual = router.state.location
     if (!sameLocation(actual, init)) void sync.enqueue(async () => actual, 'replace').catch((error) => console.error('[fulgurjs] 初始 React 路由同步失败：', error))
   })
-  const connection: ReactBridgeRouterConnection = {
-    element: createElement(RouterProvider, { router }),
+  const wired: WiredRouter = {
+    router,
+    RouterProvider: m.RouterProvider,
     dispose() {
       if (disposed) return
-      options.signal?.removeEventListener('abort', connection.dispose)
-      disposed = true; unwatch(); sync.dispose(); router.dispose()
+      disposed = true
+      options.signal?.removeEventListener('abort', disposeWired)
+      unwatch(); sync.dispose(); router.dispose()
     },
+  }
+  const disposeWired = () => wired.dispose()
+  options.signal?.addEventListener('abort', disposeWired, { once: true })
+  if (options.signal?.aborted) wired.dispose()
+  return wired
+}
+
+/** 惰性宿主：模块级预热未就绪时（罕见竞态），首次渲染等待落定后补挂 RouterProvider */
+function LazyRouterProviderHost(props: {
+  routing: BridgeChildRoute
+  routes: RouteObject[]
+  signal?: AbortSignal
+  isDisposed: () => boolean
+  onWired: (w: WiredRouter) => void
+}): ReactElement | null {
+  const [wired, setWired] = useState<WiredRouter | null>(null)
+  const [failure, setFailure] = useState<unknown>(routerDomFailure)
+  useEffect(() => {
+    if (wired || failure !== null) return
+    let alive = true
+    void routerDomReady.then(
+      () => {
+        if (!alive) return
+        if (routerDomFailure) { setFailure(routerDomFailure); return }
+        if (!routerDomModule || props.isDisposed()) return
+        const w = wireReactBridgeRouter(routerDomModule, props.routing, props.routes, { signal: props.signal })
+        props.onWired(w)
+        setWired(w)
+      },
+      (e) => { if (alive) setFailure(e) },
+    )
+    return () => { alive = false }
+  }, [wired, failure, props])
+  if (failure !== null) {
+    throw failure instanceof Error ? failure : new Error(String(failure))
+  }
+  return wired ? createElement(wired.RouterProvider, { router: wired.router }) : null
+}
+
+/** 返回 RouterProvider 元素，直接作为 defineBridgeApp 工厂的 ReactElement 返回值。 */
+export function createReactBridgeRouter(routing: BridgeChildRoute, routes: RouteObject[], options: { signal?: AbortSignal } = {}): ReactBridgeRouterConnection {
+  let disposed = false
+  let wired: WiredRouter | null = null
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    wired?.dispose()
+  }
+  if (routerDomModule) {
+    // fast 路径：与历史行为一致——同步创建 router，element.props.router 可被内省
+    wired = wireReactBridgeRouter(routerDomModule, routing, routes, options)
+    const connection: ReactBridgeRouterConnection = {
+      element: createElement(wired.RouterProvider, { router: wired.router }),
+      dispose,
+    }
+    options.signal?.addEventListener('abort', connection.dispose, { once: true })
+    if (options.signal?.aborted) connection.dispose()
+    return connection
+  }
+  // slow 路径：预热未落定（罕见竞态）或缺依赖（缺依赖错误在首次渲染时以合同内异常暴露）
+  const connection: ReactBridgeRouterConnection = {
+    element: createElement(LazyRouterProviderHost, {
+      routing,
+      routes,
+      signal: options.signal,
+      isDisposed: () => disposed,
+      onWired: (w) => { wired = w },
+    }),
+    dispose,
   }
   options.signal?.addEventListener('abort', connection.dispose, { once: true })
   if (options.signal?.aborted) connection.dispose()

@@ -1,459 +1,100 @@
 # @fulgurjs/federation
 
-**[All templates and demos](examples/README.en.md)**: Example catalog and run guide.
+**Let one Vite app use components, pages, functions — or entire sub apps — provided by another.**
 
-[简体中文](README.md) | [English](README.en.md)
+For example: a main system loads an independently deployed approval page, a Vue page embeds a React sub app, or several apps share one copy of a dependency. Providers and consumers can live in separate repos and build/deploy independently. Supports Vue 3 and React 18/19 on Vite 5.1–8.
 
-**Use components, pages and functions from another Vite application.**
+[简体中文](README.md) ｜ **[Documentation center](docs/README.md)** (Chinese [docs/zh](docs/zh/README.md) · English [docs/en](docs/en/README.md))
 
-For example, a main application can load a separately deployed approval page, a Vue host can embed a React sub-app, or several applications can use the same utility module. Each application can live in its own repository and build and deploy separately.
+## Quick start
 
-This is the usage guide. Examples and templates are written against **5.9.0** (the exact version in each project's `package.json` is what gets installed). Signatures, defaults and execution rules are in the [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md).
-
-## Choose what you need
-
-| Goal | Use | Example |
-|---|---|---|
-| Load a Vue component in Vue | `remoteComponent` | [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) |
-| Load a React component in React | `remoteComponent` from `/react` | [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) |
-| Call a remote JS/TS function | `loadRemote`; React also has `useLoadRemote` | Quick start below |
-| Map several host routes to remote pages | `createHostPages` (Vue) / `createReactHostPages` (React) | [Page demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli) |
-| Embed Vue in React, or React in Vue | `defineBridgeApp` + a host bridge component | [Bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates) |
-| Restore a sub-app detail route after refresh | Enable bridge URL sync | [Router demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase) |
-| Provide user data or run remote initialization | `AppContext`, optional `setup`/`onSession` | Initialization below |
-| Run React 18 and 19 on the same page | Separate dependency groups and consumers using `shareScope` | [Version isolation demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/react-versions) |
-
-Combine these features as needed. **A simple remote component does not require a bridge, page table or login lifecycle.**
-
-## Terms in plain language
-
-| Term | Meaning |
-|---|---|
-| Host | The application displaying remote content |
-| Remote | The application providing a module |
-| `exposes` | Files the remote allows other applications to load |
-| `remotes` | The remote names and addresses the host uses |
-| `shared` | Dependencies that participate in sharing, such as Vue or React |
-| `singleton` | Adopt one dependency instance within a share scope; this does not make incompatible major versions compatible |
-| `shareScope` | A group of shared dependencies; separate groups can use separate versions |
-| Bridge | A DOM container in which a sub-app manages its own rendering and cleanup |
-| URL sync | Record the sub-app route in the host URL so refresh, sharing and history navigation can restore it |
-
-An application can both expose and consume modules.
-
-## Install
-
-Install in every participating Vite project:
+**New project** (recommended): scaffold a fully runnable federation workspace from a template:
 
 ```bash
-pnpm add -D @fulgurjs/federation
-# npm projects: npm install -D @fulgurjs/federation
-```
-
-- Supports browser applications using Vue 3, React 18/19, and plain JS/TS modules.
-- Supports Vite 5.1+ within the Vite 5/6/7/8 series. Your framework plugins must also support your chosen Vite version.
-- The plugin requires Node.js ≥18, but **Vite 7/8 require Node.js 20.19+ or 22.12+**. Meet both requirements.
-- Set the build target to `es2022` or newer. Chrome 108+ is the browser baseline; other browsers need corresponding ESM, dynamic import and top-level await support.
-- A pure Vue application needs Vue; a pure React application needs React and react-dom. A cross-framework bridge host installs both frameworks as explained below.
-
-## Starting fresh: create a complete project
-
-Without an existing project, scaffold from a complete template with the CLI (Node ≥ 20 and pnpm ≥ 9 required):
-
-```bash
-npx @fulgurjs/federation create            # interactive; or explicit:
 npx @fulgurjs/federation create vue-vue --dir my-federation
+cd my-federation
+pnpm dev
 ```
 
-Five templates cover Vue×Vue, React×React, a Vue host embedding a React child app, a React host embedding a Vue child app, and the bidirectional bridge + URL sync showcase. `create` copies a runnable workspace (lockfile and startup script included) and runs a frozen install by default, then prints the commands to enter, start and build. For an **existing** project skip this and use the quick start below plus `fulgurjs init`.
+**Existing project**: install the package, register the plugin in `vite.config.ts`, and import from the unified entry for your framework:
 
-Template sources live in [examples/templates/](examples/templates/README.md); no manual wiring is needed unless you change names/ports (fixed checklist in the template guide).
-
-## Quick start: two Vue applications
-
-These steps add federation to **existing Vite + Vue projects**, which retain their own HTML and application entry files.
-
-```text
-remote-vue/     Provides a button and add() function; dev port 5174
-host-vue/       Loads them; dev port 5173
+```bash
+npm add @fulgurjs/federation
 ```
-
-### 1. Declare remote files
-
-`remote-vue/fulgurjs.config.ts`:
 
 ```ts
-import type { FederationOptions } from '@fulgurjs/federation'
-
-export default {
-  name: 'remote-vue',
-  exposes: {
-    './Button': './src/Button.vue',
-    './math': './src/math.ts',
-  },
-  shared: { vue: { singleton: true, strictVersion: true } },
-} satisfies FederationOptions
-```
-
-`remote-vue/src/Button.vue`:
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-defineProps<{ label: string }>()
-const count = ref(0)
-</script>
-
-<template>
-  <button @click="count++">{{ label }}: {{ count }}</button>
-</template>
-```
-
-`remote-vue/src/math.ts`:
-
-```ts
-export function add(a: number, b: number): number {
-  return a + b
-}
-```
-
-### 2. Declare the address in the host
-
-`host-vue/fulgurjs.config.ts`:
-
-```ts
-import type { FederationOptions } from '@fulgurjs/federation'
-
-export default {
-  name: 'host-vue',
-  remotes: {
-    'remote-vue': {
-      dev: 'http://localhost:5174',
-      prod: '/remote-vue',
-    },
-  },
-  shared: { vue: { singleton: true, strictVersion: true } },
-} satisfies FederationOptions
-```
-
-`dev` is the development URL. `prod` is the deployed URL; `/remote-vue` refers to a path on the host origin, not a local filesystem folder.
-
-### 3. Register the plugin in both applications
-
-Each project's `vite.config.ts` imports its own federation config:
-
-```ts
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+// vite.config.ts — build config uses the package root
 import federation from '@fulgurjs/federation'
-import fulgurjsConfig from './fulgurjs.config'
 
-export default defineConfig({
-  plugins: [vue(), federation(fulgurjsConfig)],
-  build: { target: 'es2022' },
-})
-```
-
-Keep existing aliases, proxies and other settings. Install compatible Vue versions in both applications; `strictVersion` rejects incompatible shared versions.
-
-### 4. Display and call the remote modules
-
-`host-vue/src/App.vue`:
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { loadRemote, remoteComponent } from '@fulgurjs/federation/runtime'
-
-const RemoteButton = remoteComponent('remote-vue/Button')
-const result = ref('Not calculated yet')
-
-async function calculate() {
-  try {
-    const math = await loadRemote<{ add(a: number, b: number): number }>('remote-vue/math')
-    result.value = String(math.add(1, 2))
-  } catch (error) {
-    result.value = error instanceof Error ? error.message : String(error)
-  }
+export default {
+  plugins: [federation({
+    name: 'my-app',
+    // exposes / remotes / shared as needed — see "Adopting in an existing project"
+  })],
 }
-</script>
-
-<template>
-  <RemoteButton label="Remote button" />
-  <button @click="calculate">Call remote add()</button>
-  <p>{{ result }}</p>
-</template>
 ```
-
-In `remote-vue/Button`, `remote-vue` matches the host's `remotes` key and `Button` matches the remote's `./Button` expose key. The `./` can be omitted when loading it.
-
-`loadRemote` returns module exports. You still need to call `math.add()` to perform the calculation.
-
-### 5. Run both applications
-
-```bash
-# Terminal one, inside remote-vue
-npm run dev -- --port 5174 --strictPort
-
-# Terminal two, inside host-vue
-npm run dev -- --port 5173 --strictPort
-```
-
-Open `http://localhost:5173`. The remote button should count clicks, and the calculation should display `3`. pnpm projects can use `pnpm dev` instead.
-
-Complete projects and deployment configuration: [Vue examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue).
-
-## React setup
-
-Use the same configuration structure with these changes:
-
-1. Use `@vitejs/plugin-react` in `vite.config.ts`, followed by `federation(fulgurjsConfig)`.
-2. Expose `./Button` from `./src/Button.tsx`; configure the remote's address in the host.
-3. Both applications use compatible React/renderer versions and share:
 
 ```ts
-shared: {
-  react: { singleton: true, strictVersion: true },
-  'react-dom': { singleton: true, strictVersion: true },
-}
+// Vue app code imports from @fulgurjs/federation/vue
+import { loadRemote, remoteComponent } from '@fulgurjs/federation/vue'
+const RemoteButton = remoteComponent('remote-a/Button')
+const math = await loadRemote<{ add(a: number, b: number): number }>('remote-a/math')
 ```
-
-Remote `src/Button.tsx`:
 
 ```tsx
-import { useState } from 'react'
-
-export default function Button({ label }: { label: string }) {
-  const [count, setCount] = useState(0)
-  return <button onClick={() => setCount(count + 1)}>{label}: {count}</button>
-}
+// React app code imports from @fulgurjs/federation/react
+import { remoteComponent, useLoadRemote, RemoteErrorBoundary } from '@fulgurjs/federation/react'
 ```
 
-Host `src/App.tsx`, with a remote configured as `remote-react`:
-
-```tsx
-import { remoteComponent } from '@fulgurjs/federation/react'
-
-// Create once at module scope, not on every render.
-const RemoteButton = remoteComponent<{ label: string }>('remote-react/Button', {
-  fallback: <p>Loading…</p>,
-})
-
-export default function App() {
-  return <RemoteButton label="Remote React button" />
-}
+```ts
+// Framework-agnostic browser modules: @fulgurjs/federation/runtime (zero Vue/React)
+import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 ```
 
-React also imports `loadRemote` and `useLoadRemote` from `/react` for ordinary modules. Complete projects: [React examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react).
+## Entries (6.0.0)
 
-## Embed Vue and React in each other
-
-**A bridge embeds a sub-app with its own component tree. It does not convert a React component into a Vue component.**
-
-For a Vue host embedding React:
-
-1. React remote `src/bridge.tsx`:
-
-```tsx
-import { defineBridgeApp } from '@fulgurjs/federation/react'
-
-export default defineBridgeApp((props) => (
-  <section>React sub-app: {String(props.message ?? '')}</section>
-))
-```
-
-2. Add `exposes: { './bridge': './src/bridge.tsx' }` to the remote config.
-3. Configure the remote address in the Vue host, then use:
-
-```vue
-<script setup lang="ts">
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
-const RemoteApp = createVueBridgeApp<{ message: string }>('remote-react/bridge')
-</script>
-
-<template>
-  <RemoteApp :app-props="{ message: 'From Vue host' }" />
-</template>
-```
-
-A cross-framework host installs and shares `vue`, `react` and `react-dom`. The child installs and shares its own framework. React and react-dom must be compatible; multiple React majors need separate dependency groups and consumers, as shown in the isolation demo.
-
-In the other direction, use `createReactBridgeApp` in the React host. The Vue child uses `defineBridgeApp` from `/runtime` and returns a `createApp(...)` application.
-
-### The shortest bridge mental model
-
-| Question | Answer |
+| Where | Entry |
 |---|---|
-| Which frameworks does each side install? | The bridge host installs and shares `vue` + `react` + `react-dom` (all three `singleton: true`); the child installs and shares only its own framework. This contract is mandatory — a missing key produces double instances (Invalid hook call / broken state) |
-| What do `shared` / `singleton` do here? | They make host and child use the **same** framework instance; `singleton` converges instances but does not make incompatible majors compatible |
-| How does the child export its entry? | The `./bridge` expose file **default-exports** the value returned by `defineBridgeApp(...)`; missing `mount`/`unmount` fails with MFU-015 |
-| How does the host mount it? | `createVueBridgeApp('remote/bridge')` / `createReactBridgeApp(...)` return a component: render to mount, remove to unmount; pass `appProps` and optional `sessionKey` |
-| When is URL sync needed? | Only when refresh/share/back-forward must restore the child's internal page (`routing` + `basePath`, configured on both ends). Without it, child navigation not touching the host URL is normal behavior |
-| How do sessions and unmount work? | Login generations use `sessionKey` (new generation re-runs `onSession`; logout → `null` unmounts and empties). Unmount is driven by the host component lifecycle; a child cleanup throw blocks that container until a full page reload |
+| Vite config, `FederationOptions` types | `@fulgurjs/federation` |
+| Vue app code (components/pages/bridge/router sync) | `@fulgurjs/federation/vue` |
+| React app code (components/pages/bridge/router sync) | `@fulgurjs/federation/react` |
+| Framework-agnostic browser modules | `@fulgurjs/federation/runtime` |
 
-### `appProps` is a mount-time snapshot, not reactive props
+Since 6.0.0 the legacy entries `/bridge`, `/bridge/vue`, `/bridge/react` and `/bridge/router/{vue,react}` are removed; their features live in `/vue` and `/react`. See the [migration guide](docs/en/migration.md).
 
-Top-level fields are shallow-copied at mount; later host-side replacements do **not** update the child. Three channels for live data:
+## Capabilities
 
-| Situation | Use | Cost |
-|---|---|---|
-| Child needs current host values (token, user name…) | Pass a **stable callback** (`getToken: () => store.token`) — calls read the latest value | No remount; good for "reads" |
-| Both sides share one state | Pass the host store instance via `appProps` or AppContext; both subscribe to the same instance | Reactivity does not cross roots; the child subscribes explicitly |
-| Must re-initialize with new props | Change the bridge component's `key` to remount explicitly (full unload → reload chain) | All state resets; do not trigger frequently |
-
-This differs from ordinary component props on purpose — it is a structural property of cross-root mounting, not a bug. Separate component trees do not inherit Context, provide/inject or routers. Pass or install what is needed explicitly. Use `remoteComponent` for a same-framework component; use a bridge for a sub-app.
-
-Complete bidirectional setup and login/cleanup flows: [bridge examples](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates).
-
-## Keep child routes in the browser URL
-
-Bridging does not change the host URL by default. Enable URL sync to map:
-
-```text
-Host /approval/list        → Child /list
-Host /approval/detail/42   → Child /detail/42
-```
-
-Configure both sides:
-
-1. The host router must handle all child paths under `/approval` without unmounting the child on each detail navigation.
-2. Pass `routing` to the host bridge component, including `basePath: '/approval'` and the host navigation adapter.
-3. The child declares `defineBridgeApp(..., { routing: true })` and connects a controlled memory router.
-
-Vue uses `createVueBridgeNavigation` / `connectVueBridgeRouter`; React uses `createReactBridgeNavigation` / `createReactBridgeRouter`. React hosts need a data router (`createBrowserRouter` or `createHashRouter`), not `BrowserRouter`. Built-in adapters support Vue Router 4 and React Router ≥6.11.
-
-Refresh, shared links and browser history restore the route, **not form contents or business data**. See [routing API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#url-sync) and the runnable [router demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase).
-
-## User data and remote initialization
-
-These features are optional. A plain button or utility module does not need them.
-
-| Need | API | When |
-|---|---|---|
-| Provide user, token getter, store, etc. | `provideAppContext` | Host supplies them before loading business modules |
-| Read host values | `getAppContext` / `requireAppContext` | Called by remote business code |
-| Initialize a remote once | Default export in configured `setup` file | Before the first business `loadRemote('remote/module')` returns |
-| Synchronize permissions after login/account changes | Named `onSession` export in the same file | Deduplicated by `sessionKey` |
-| Clear account context on logout | `clearAppContext` | Host logout flow; host also removes private pages/caches |
-
-`sessionKey` identifies a login attempt; it is **not a token or authorization credential**. Generate a new value on login/account change; token refresh alone retains it.
-
-A bridge can read current data using `getContext`. Controlled `sessionKey: null` means logged out: unmount and stop loading. Omitting the key disables controlled session switching.
-
-Only a configured `setup` file participates in initialization. `preloadRemote` fetches resources without running setup/onSession. Async initialization must check `context.signal.aborted` before writing state, so late responses do not restore old-account data.
-
-See the [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#context).
-
-## Several remote pages
-
-Maintain a page table and pass it to `createHostPages` (Vue) or `createReactHostPages` (React). These helpers resolve modules, cache loading components and provide loading/error states. **They do not create your host Router.**
-
-The table records the host `route` and the remote expose `spec` (omit `./` and do not repeat the remote name); `remotePrefixes` selects the remote. For example, `/shop/home`, `spec: 'pages/Home'` and `remotePrefixes: { '/shop': 'shop' }` resolve to `shop/pages/Home`. Vue can use KeepAlive for component state; React has no equivalent keep-alive promise here.
-
-See [page API](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#pages) and [page demo](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli).
-
-## Build and deploy
-
-Build each application separately with its own `npm run build`. The remote produces `fulgurjs-remoteEntry.js` and `fulgurjs-manifest.json` by default. The host locates them through `prod`.
-
-Check these settings:
-
-- Remote deployment `/remote-vue/` → remote Vite `base: '/remote-vue/'` and host `prod: '/remote-vue'`.
-- HTML, remoteEntry and manifest use `Cache-Control: no-cache`; content-hashed chunks can use long-lived caching.
-- SPA routes support refresh; missing resource URLs return 404 rather than HTML.
-- Cross-origin deployments need production CORS headers; dev settings do not configure the production server.
-- Keep chunks still referenced by old pages available during releases, or use a deployment flow that avoids mixed versions.
-
-Deployment examples: [Vue](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/vue-vue/README.md) / [React](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/react-react/README.md).
-
-## Handle failures
-
-| Symptom | Check | Recovery |
-|---|---|---|
-| Remote unavailable | Server, address, CORS | Timeout/retry/error UI; optional backup entry or fallback module |
-| Module missing | remotes name and exposes key | Fix the name and retry |
-| Shared version incompatible | Installed versions, requiredVersion, strictVersion, scope | Align or isolate versions |
-| Static dependency remains failed after service recovery | Browser may retain the failed dependency URL | User-initiated refresh preserves the current address |
-| Child unmount fails | Child cleanup, timers and subscriptions | Container stays blocked; refresh and fix cleanup |
-
-`remoteComponent` and bridge components provide default error UI. Direct `loadRemote` calls and React `useLoadRemote` require application error handling. An explicit `fallbackModule` does not repair the original remote.
-
-Errors include a code, cause and fix. See [error codes](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#error-codes).
-
-## Vite 8 and support boundaries
-
-**Supports Vite 8 development and production. The earlier large-application startup hang has been fixed and relevant regression tests pass.**
-
-Two practical details:
-
-- A first dev visit may reload while Vite prepares newly discovered dependencies. Wait for optimization before judging stable behavior. This is not a production behavior on every visit.
-- Some shared scenarios fetch an unused local library copy. One singleton scope still uses one instance; explicitly isolated React 18/19 scopes may use one each. Downloaded file count and active instance count are different.
-
-Not provided: SSR/RSC, Node-side federation, React Native, automatic JS/CSS isolation, webpack `script/var` artifact interoperability, component-type conversion, automatic multi-level bridge routing proxies or cross-window route sync. Global CSS/variables can affect the host; children need their own internal error handling.
-
-See the [capability comparison](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/webpack-mf-对照与缺口.md) for detailed boundaries and differences from webpack.
-
-## Debugging, types and CLI
-
-Run in the application directory:
-
-```bash
-# No existing project: create a complete project from a template (see "Starting fresh")
-npx @fulgurjs/federation create
-
-# Existing project: generate a federation config starter file
-npx fulgurjs init                        # --template <path> sets the output path (a path, not a template id)
-npx fulgurjs explain
-
-# Optional: validate a configured host page table
-npx fulgurjs check-pages --site http://localhost:5173
-
-# After deployment under /remote-vue/, substitute your actual site:
-npx fulgurjs doctor --base https://your-site.example --apps remote-vue
-```
-
-For `doctor`, `--base` is the site URL and `--apps` lists **deployment subdirectories** (a remote deployed under `/remote-vue/` is `remote-vue`): the example checks `https://your-site.example/remote-vue/`. It does not infer a different development port from a container name.
-
-`init` creates a federation config template, not a full application, router or Nginx configuration (use `create` for a new complete project). `check-pages` compares the page table with remote exposes; an unreachable remote is reported as unverified.
-
-Remote dev types are generated by default. Accessible source provides more precise mapping; inaccessible source produces `any` declarations without precise checks/completion. Set `dts: false` to disable generation. See the reference for details.
-
-Advanced diagnostics use `window.__FULGURJS_SCOPE__`, `window.__FULGURJS_INFO__` and `FULGURJS_DEBUG`. Normal integration does not require editing these objects.
-
-## API reference
-
-Use the current reference rather than guessing signatures from old task documents:
-
-- [Plugin options and defaults](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#plugin-options)
-- [Runtime loading, registration and hooks](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#runtime)
-- [Bridge props, sessions and cleanup](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#bridge)
-- [URL sync and navigation](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.en.md#url-sync)
-- [Chinese API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/API.md)
-
-### When an AI implements your integration
-
-Specify the framework, whether you need a component or sub-app, remote URLs/expose names, and whether login switching or URL sync is required. Have it read the guide and relevant API section first, preserve the existing Vite configuration, check installed versions and use the correct browser entry. It should not invent configuration fields. Verify mounting, interaction and error handling; URL sync also needs deep-link refresh, history and cancellation checks.
+- **Components & modules**: `remoteComponent` (Vue/React), `useLoadRemote`, `RemoteErrorBoundary`, `loadRemote` — explicit retryable error states, no silent fallbacks.
+- **Per-page pages**: `definePages` + `createHostPages` (host route table → remote pages) with CLI `check-pages` contract checks.
+- **Full sub app bridge**: `defineBridgeApp` (child) + `createVueBridgeApp` / `createReactBridgeApp` (host); mount/unmount, session epochs, unmount-failure quarantine.
+- **URL sync**: `createVueBridgeNavigation` / `createReactBridgeNavigation` (host) + `connectVueBridgeRouter` / `createReactBridgeRouter` (child); deep-link refresh, guard cancellation, query/hash preservation.
+- **Shared dependencies**: singleton / requiredVersion / strictVersion / shareScope / eager, sync & async negotiation, React 18/19 multi-version isolation.
+- **CLI**: `create` / `init` / `explain` / `check-pages` / `doctor` / `port`.
 
 ## Documentation
 
-- [Demo catalog](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/README.md): setup and runnable scenarios.
-- [Copy-and-run templates](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates): five pnpm-workspace examples/templates (Vue×Vue, React×React, both cross-framework bridge directions, and a full showcase). Copy a folder, then `pnpm install && pnpm dev`.
-- [Migration guide](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/迁移指南.md).
-- [CHANGELOG](https://github.com/chenmingye/fulgurjs-federation/blob/master/CHANGELOG.md): changes and migration requirements.
-- [Acceptance records](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/整夜全量验收报告-20261004.md): overnight acceptance on two real MES business projects (fresh SVN copies), covering dev, production, fault recovery and HMR, plus production-build notes for large Vite 6 apps (that round required disabling `manualChunks`; **fixed in 5.8.0 — keep your own `manualChunks`, shared bodies are isolated into `fulgurjs-provider-*` chunks automatically**). Historical record: [20261002 demo acceptance](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/完整Demo展示与全面复测-验收报告-20261002.md) — historical results are not a substitute for testing your application.
+| Need | Entry |
+|---|---|
+| New project / existing project | [Getting started](docs/en/guide/getting-started.md) |
+| Vue/React components & plain modules | [Components & modules](docs/en/guide/components-and-modules.md) |
+| Full sub apps / cross-framework nesting | [App bridge](docs/en/guide/app-bridge.md) |
+| Router sync / deep links | [URL sync](docs/en/guide/url-sync.md) |
+| All options & defaults | [Configuration](docs/en/reference/configuration.md) |
+| Full API signatures & semantics | [API reference](docs/en/reference/api.md) |
+| CLI commands & exit codes | [CLI reference](docs/en/reference/cli.md) |
+| Error codes (symptom/cause/fix) | [Error code table](docs/en/reference/errors.md) |
+| Troubleshooting / compatibility | [Troubleshooting](docs/en/troubleshooting/README.md) |
+| Templates & demos | [Examples overview](examples/README.md) |
 
-## Development and testing
+## Examples
 
-These commands develop **this plugin repository**; ordinary consumers do not need them:
+Five complete templates (`vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`) plus feature demos live in [examples/](examples/README.md). Each can be copied out and installed standalone.
 
-```bash
-pnpm --dir packages/plugin install
-pnpm --dir packages/plugin build
-pnpm test:unit
-```
+## Contributing & security
 
-See [CONTRIBUTING](https://github.com/chenmingye/fulgurjs-federation/blob/master/CONTRIBUTING.md) for fixture installation and browser test prerequisites. CI checks builds, types, unit tests, installed packages and browser scenarios across multiple Vite versions. Counts come from the corresponding run.
+- See [CONTRIBUTING.md](CONTRIBUTING.md); architecture and release process live in [docs/maintainers/](docs/maintainers/README.md).
+- Please report security issues privately via [SECURITY.md](SECURITY.md).
 
 ## License
 
-[MIT](LICENSE) © chenmingye (Jason)
+[MIT](LICENSE)

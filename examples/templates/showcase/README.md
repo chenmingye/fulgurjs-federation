@@ -81,12 +81,12 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 
 | 插件公开 API | 入口 | 本演示接线位置 |
 |---|---|---|
-| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/bridge/vue` | `vue-host/src/pages/BridgeReactPage.vue`（`<RemoteReactBridge :routing="routing" :app-props="appProps" />`） |
-| `createVueBridgeNavigation(router)` | `@fulgurjs/federation/bridge/router/vue` | `vue-host/src/routing.ts`（模块级单例端口，main.ts 组装后 `initBridgeRouting(router)`） |
-| `connectVueBridgeRouter(routing, router, { signal })` → `await conn.ready` 后 `app.use(router)` | `@fulgurjs/federation/bridge/router/vue` | `vue-remote/src/bridge.ts`（异步工厂：初始 push 落定后再 install，顺序不能反） |
-| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/bridge/react` | `react-host/src/pages/BridgeVuePage.tsx`（`<RemoteVueBridge routing={routing} appProps={appProps} />`） |
-| `createReactBridgeNavigation(router, { canNavigate?, basename? })`（仅 data router） | `@fulgurjs/federation/bridge/router/react` | `react-host/src/routing.ts`（`createBrowserRouter` 实例组装后初始化） |
-| `createReactBridgeRouter(routing, routes, { signal })` → `{ element }` 直接作为工厂返回值 | `@fulgurjs/federation/bridge/router/react` | `react-remote/src/bridge.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
+| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | `vue-host/src/pages/BridgeReactPage.vue`（`<RemoteReactBridge :routing="routing" :app-props="appProps" />`） |
+| `createVueBridgeNavigation(router)` | `@fulgurjs/federation/vue` | `vue-host/src/routing.ts`（模块级单例端口，main.ts 组装后 `initBridgeRouting(router)`） |
+| `connectVueBridgeRouter(routing, router, { signal })` → `await conn.ready` 后 `app.use(router)` | `@fulgurjs/federation/vue` | `vue-remote/src/bridge.ts`（异步工厂：初始 push 落定后再 install，顺序不能反） |
+| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | `react-host/src/pages/BridgeVuePage.tsx`（`<RemoteVueBridge routing={routing} appProps={appProps} />`） |
+| `createReactBridgeNavigation(router, { canNavigate?, basename? })`（仅 data router） | `@fulgurjs/federation/react` | `react-host/src/routing.ts`（`createBrowserRouter` 实例组装后初始化） |
+| `createReactBridgeRouter(routing, routes, { signal })` → `{ element }` 直接作为工厂返回值 | `@fulgurjs/federation/react` | `react-remote/src/bridge.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
 | `defineBridgeApp(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/runtime`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/bridge.ts`、`react-remote/src/bridge.tsx`（工厂内校验 `ctx?.routing`，`ctx.signal` 传入接线自动 dispose） |
 | `BridgeHostRouting`（`{ basePath, navigation }` 组件 prop，独立控制通道不进 appProps） | 类型面见 README §8.3 | `vue-host/src/routing.ts`、`react-host/src/routing.ts`（basePath 常量 `BRIDGE_BASE_PATH`） |
 | `BridgeChildRoute` / `BridgeLocation`（通道与位置契约） | `/bridge/router/*` | 由插件随 mount 第三参数注入子应用；两端仓库源码 `packages/plugin/src/bridge-router-core.ts` |

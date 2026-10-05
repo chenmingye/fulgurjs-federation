@@ -6,8 +6,8 @@
  */
 import { createApp, defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
-import { connectVueBridgeRouter } from '@fulgurjs/federation/bridge/router/vue'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { connectVueBridgeRouter } from '@fulgurjs/federation/vue'
 
 const List = defineComponent({
   setup() {

@@ -7,7 +7,7 @@
 import type { ReactElement } from 'react'
 import { redirect } from 'react-router-dom'
 import { defineBridgeApp } from '@fulgurjs/federation/react'
-import { createReactBridgeRouter } from '@fulgurjs/federation/bridge/router/react'
+import { createReactBridgeRouter } from '@fulgurjs/federation/react'
 import ChildLayout from './ChildLayout'
 import OrderList from './pages/OrderList'
 import OrderDetail from './pages/OrderDetail'

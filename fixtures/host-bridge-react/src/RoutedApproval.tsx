@@ -6,8 +6,8 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Link, Outlet, useBlocker, useLocation } from 'react-router-dom'
 import { clearAppContext } from '@fulgurjs/federation/react'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
-import { createReactBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/bridge/router/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
+import { createReactBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/react'
 import { getLatestHostContext, switchSession } from './host-context'
 
 

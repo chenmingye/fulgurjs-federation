@@ -16,7 +16,7 @@ import {
   readDevConfig,
   resolveTemplatesRoot,
   createProject,
-  nodeVersionWarning,
+  nodeEnginesViolation,
   type CreateIo,
 } from '../src/create'
 
@@ -121,7 +121,7 @@ describe('fulgurjs create', () => {
     expect(r.installRan).toBe(false)
     expect(r.apps.map((a) => a.port)).toEqual([5213, 5214])
     const text = logs.join('\n')
-    expect(text).toContain(`cd ${path.join(cwd, 'vue-vue')}`)
+    expect(text).toContain(`cd "${path.join(cwd, 'vue-vue')}"`)
     expect(text).toContain('pnpm install --frozen-lockfile')
     expect(text).toContain('pnpm dev')
     expect(text).toContain('http://localhost:5214/')
@@ -281,8 +281,9 @@ describe('fulgurjs create', () => {
     expect(() => readDevConfig(dir)).toThrow(/port/)
     fs.writeFileSync(path.join(dir, 'scripts/dev.config.json'), JSON.stringify({ apps: [] }))
     expect(() => readDevConfig(dir)).toThrow(/apps/)
-    expect(nodeVersionWarning('v24.19.0')).toBeUndefined()
-    expect(nodeVersionWarning('v18.0.0')).toMatch(/低于模板要求/)
+    expect(nodeEnginesViolation('v24.19.0', '>=20.19.0')).toBeUndefined()
+    expect(nodeEnginesViolation('v18.0.0', '>=20.19.0')).toMatch(/不满足模板要求/)
+    expect(nodeEnginesViolation('v24.19.0', undefined)).toBeUndefined()
     fs.rmSync(dir, { recursive: true, force: true })
   })
 

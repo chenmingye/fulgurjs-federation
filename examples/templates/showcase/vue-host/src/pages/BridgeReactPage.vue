@@ -6,7 +6,7 @@
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import { BRIDGE_BASE_PATH, getBridgeRouting } from '../routing'
 import { handleChildEvent, logNav } from '../demo-log'
 import ObsPanel from '../ObsPanel.vue'

@@ -92,7 +92,7 @@ jobs:
           name: dev-vite-${{ matrix.vite }}
           path: |
             e2e/artifacts
-            docs/playwright-report
+            artifacts/playwright-report
             /tmp/fulgurjs-ci-dev
 
 
@@ -130,7 +130,7 @@ jobs:
           name: dev-vite5
           path: |
             e2e/artifacts
-            docs/playwright-report
+            artifacts/playwright-report
             /tmp/fulgurjs-ci-dev
 
 
@@ -189,7 +189,7 @@ jobs:
           name: prod-browser-vite-${{ matrix.vite }}
           path: |
             e2e/artifacts
-            docs/playwright-report
+            artifacts/playwright-report
 
 
   # WP3：npm tarball consumer smoke（发布产物可解析/可构建/可 dev，不依赖 link:）

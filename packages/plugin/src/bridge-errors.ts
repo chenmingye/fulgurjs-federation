@@ -41,7 +41,7 @@ export function invalidBridgeContractError(spec: string, mod: unknown): FgError 
       (missing.length ? `，缺少函数类型的 ${missing.map((m) => `"${m}"`).join(' / ')} 导出。` : '。') +
       '\n' +
       `  修法: 远程侧用 defineBridgeApp(...) 创建契约并作为模块默认导出——\n` +
-      `        Vue 子应用: import { defineBridgeApp } from '@fulgurjs/federation/runtime'；\n` +
+      `        Vue 子应用: import { defineBridgeApp } from '@fulgurjs/federation/vue'；\n` +
       `        React 子应用: import { defineBridgeApp } from '@fulgurjs/federation/react'。\n` +
       `        契约必须包含 mount(el, props?) 与 unmount(el) 两个函数。`,
     { spec, missing, actual },

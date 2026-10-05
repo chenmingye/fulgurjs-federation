@@ -41,7 +41,7 @@
  * getContext 提供与受控 sessionKey 一致的快照，避免 MFU-017 干扰本卡主路径。
  */
 import { computed, nextTick, ref, shallowRef, type Component } from 'vue'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import { findExpectedByKeyword } from '../error-monitor'
 import CardShell from '../components/CardShell.vue'
 

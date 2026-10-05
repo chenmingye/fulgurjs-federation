@@ -25,7 +25,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  reporter: [['list'], ['html', { open: 'never', outputFolder: '../docs/playwright-report' }]],
+  reporter: [['list'], ['html', { open: 'never', outputFolder: '../artifacts/playwright-report' }]],
   use: {
     ...devices['Desktop Chrome'],
     headless: true,

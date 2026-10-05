@@ -11,7 +11,7 @@ import { createElement } from 'react'
 import { Navigate } from 'react-router-dom'
 import type { RouteObject } from 'react-router-dom'
 import { defineBridgeApp } from '@fulgurjs/federation/react'
-import { createReactBridgeRouter } from '@fulgurjs/federation/bridge/router/react'
+import { createReactBridgeRouter } from '@fulgurjs/federation/react'
 import { Dashboard, NotFound, OrderDetail, Orders, Settings, type ShellProps } from './pages'
 import { Shell, ShellPropsContext } from './Shell'
 

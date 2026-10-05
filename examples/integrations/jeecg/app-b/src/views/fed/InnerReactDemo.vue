@@ -40,8 +40,8 @@
  */
 import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
-import { createVueBridgeNavigation } from '@fulgurjs/federation/bridge/router/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
+import { createVueBridgeNavigation } from '@fulgurjs/federation/vue'
 import { useBridgeProps } from '/@/fulgurjs/props'
 
 const route = useRoute()

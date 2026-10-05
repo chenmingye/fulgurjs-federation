@@ -36,7 +36,7 @@
  * 恢复：渲染同远程正常组件 ClickButton（真实可用，可点击计数）。
  */
 import { computed, ref } from 'vue'
-import { remoteComponent } from '@fulgurjs/federation/runtime'
+import { remoteComponent } from '@fulgurjs/federation/vue'
 import CardShell from '../components/CardShell.vue'
 
 const FaultComp = remoteComponent('err-good/module-error', { retries: 0 })

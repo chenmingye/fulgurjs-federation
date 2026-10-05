@@ -4,7 +4,7 @@
  * 恢复（切换 err-good/bridge-good）后可重试。
  * 注入手法与 fixtures/remote-react/src/bridge-mount-fail.tsx（BN02）一致。
  */
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
 export default defineBridgeApp(() => {
   throw new Error('bridge-mount-fail 故障注入：mount 阶段同步抛错（err-good，examples/demos/errors 卡 7）')

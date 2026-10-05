@@ -12,8 +12,8 @@
 import { createApp } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import { setActivePinia } from 'pinia'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
-import { connectVueBridgeRouter } from '@fulgurjs/federation/bridge/router/vue'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { connectVueBridgeRouter } from '@fulgurjs/federation/vue'
 
 import 'uno.css'
 import '/@/design/index.less'

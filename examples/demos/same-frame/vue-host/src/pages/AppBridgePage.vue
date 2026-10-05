@@ -8,7 +8,7 @@
  */
 import { ref } from 'vue'
 import { clearAppContext } from '@fulgurjs/federation/runtime'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import IdentityBadges from '../components/IdentityBadges.vue'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
 import { currentSession, getLatestHostContext, login } from '../host-session'

@@ -30,12 +30,20 @@ export interface DoctorCheck {
 export interface DoctorOptions {
   /** 站点根，如 http://your-site */
   base: string
-  /** 应用路径列表（相对站点根），如 ['app-a', 'app-b'] */
+  /** 应用路径列表（相对站点根，'.' 表示站点根本部署；条目也可以是完整 URL 覆盖 base） */
   apps: string[]
   /** dev 体检（检查 @fulgurjs-entry.js 与端口监听） */
   dev?: boolean
   /** remoteEntry 内 chunk 抽样上限（默认 8） */
   chunkSample?: number
+  /** 自定义远程入口文件名（默认 fulgurjs-remoteEntry.js；自定义 filename 的部署用） */
+  entry?: string
+  /** 纯宿主/无远程入口部署：跳过 remoteEntry 检查（不静默猜 main，也不误报缺失） */
+  noEntry?: boolean
+  /** 合法关闭 manifest 的部署：跳过 manifest 检查 */
+  noManifest?: boolean
+  /** 无站点页面（纯远程入口子目录等）：跳过 index.html 检查 */
+  noHtml?: boolean
 }
 
 function fetchHeadOrGet(url: string, method: 'HEAD' | 'GET' = 'GET'): Promise<{
@@ -198,13 +206,21 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
   const chunkSample = opts.chunkSample ?? 16
 
   for (const app of opts.apps) {
-    const root = `${opts.base.replace(/\/$/, '')}/${app.replace(/^\//, '')}`
+    // '.' / '' 表示部署在站点根；条目为完整 URL 时覆盖 base（多 origin 部署）
+    const root = /^(https?:)?\/\//.test(app)
+      ? app.replace(/\/$/, '')
+      : app === '.' || app === ''
+        ? opts.base.replace(/\/$/, '')
+        : `${opts.base.replace(/\/$/, '')}/${app.replace(/^\//, '')}`
+    const entryName = opts.entry ?? 'fulgurjs-remoteEntry.js'
 
-    // 1) remoteEntry：200 + JS 形态 + no-cache
-    const entry = await checkStatus(`${root}/fulgurjs-remoteEntry.js`, app, 'fulgurjs-remoteEntry.js', {
-      expectJs: true,
-      expectNoCache: !opts.dev,
-    })
+    // 1) remoteEntry：200 + JS 形态 + no-cache（纯宿主 --no-entry 时跳过，不误报缺失）
+    const entry = opts.noEntry
+      ? { res: undefined, check: undefined }
+      : await checkStatus(`${root}/${entryName}`, app, entryName, {
+          expectJs: true,
+          expectNoCache: !opts.dev,
+        })
     if (entry.check) checks.push(entry.check)
     if (entry.res && !opts.dev) {
       const acao = header(entry.res, 'access-control-allow-origin')
@@ -220,10 +236,12 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
       })
     }
 
-    // 2) manifest：200 + 可解析 + no-cache
-    const manifestRes = await checkStatus(`${root}/fulgurjs-manifest.json`, app, 'fulgurjs-manifest.json', {
-      expectNoCache: !opts.dev,
-    })
+    // 2) manifest：200 + 可解析 + no-cache（--no-manifest 为合法配置，跳过不误报）
+    const manifestRes = opts.noManifest
+      ? { res: undefined, check: undefined }
+      : await checkStatus(`${root}/fulgurjs-manifest.json`, app, 'fulgurjs-manifest.json', {
+          expectNoCache: !opts.dev,
+        })
     if (manifestRes.check) checks.push(manifestRes.check)
     let manifest: ProdFederationManifest | undefined
     if (manifestRes.res?.status === 200) {
@@ -264,16 +282,16 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
       }
     }
 
-    // 3) index.html：200 + no-cache（prod；dev 由 vite 自管）；同时作为 chunk 引用抽取源
+    // 3) index.html：200 + no-cache（prod；dev 由 vite 自管）；--no-html 为合法形态
     let htmlBody = ''
-    if (!opts.dev) {
+    if (!opts.dev && !opts.noHtml) {
       const html = await checkStatus(`${root}/index.html`, app, 'index.html', { expectNoCache: true })
       if (html.check) checks.push(html.check)
       htmlBody = html.res?.body ?? ''
     }
 
-    // 4) dev：@fulgurjs-entry.js 直出 JS
-    if (opts.dev) {
+    // 4) dev：@fulgurjs-entry.js 直出 JS（dev 模式不适用 --no-entry 纯宿主）
+    if (opts.dev && !opts.noEntry) {
       const devEntry = await checkStatus(`${root}/@fulgurjs-entry.js`, app, '@fulgurjs-entry.js（dev 容器入口）', {
         expectJs: true,
       })

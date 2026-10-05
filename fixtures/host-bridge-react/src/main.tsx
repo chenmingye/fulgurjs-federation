@@ -6,7 +6,7 @@
 import { createElement, useCallback, useEffect, useRef, useState, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { clearAppContext } from '@fulgurjs/federation/react'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
 import { getLatestHostContext, switchSession, logoutSession } from './host-context'
 
 const params = new URLSearchParams(window.location.search)

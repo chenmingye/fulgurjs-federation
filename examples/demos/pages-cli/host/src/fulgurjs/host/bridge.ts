@@ -1,4 +1,4 @@
-import { provideAppContext, clearAppContext, getAppContext } from '@fulgurjs/federation/runtime'
+import { provideAppContext, clearAppContext, getAppContext } from '@fulgurjs/federation/vue'
 
 /**
  * 宿主桥的演示实现（真实工程见 README §9 的 bridge.ts 形态）：

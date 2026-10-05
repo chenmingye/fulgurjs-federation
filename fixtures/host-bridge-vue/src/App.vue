@@ -6,7 +6,7 @@
  */
 import { onMounted, ref } from 'vue'
 import { clearAppContext } from '@fulgurjs/federation/runtime'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import { getLatestHostContext, switchSession, logoutSession } from './host-context'
 
 const params = new URLSearchParams(window.location.search)

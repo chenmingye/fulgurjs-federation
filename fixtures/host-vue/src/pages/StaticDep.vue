@@ -7,7 +7,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { remoteComponent } from '@fulgurjs/federation/runtime'
+import { remoteComponent } from '@fulgurjs/federation/vue'
 
 // 经 remoteComponent 加载：失败时走插件默认错误占位（重试加载/刷新页面重试）
 const Comp = remoteComponent('remote-a/StaticDep')

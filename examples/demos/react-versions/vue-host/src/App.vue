@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 const Child = createVueBridgeApp('rv-remote18-strict/bridge', {
   retries: 0, getContext: () => ({ sessionKey: 'vue-react18', user: { name: '演示用户' } }),
 })

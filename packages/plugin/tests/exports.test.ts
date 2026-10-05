@@ -11,8 +11,8 @@ import { describe, expect, it } from 'vitest'
 const pkgRoot = path.resolve(__dirname, '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'))
 
-// 5.0.0：公开带类型子路径仅 ./runtime；内部产物不进 typesVersions。
-const SUBPATHS = ['./runtime'] as const
+// 6.0.0：公开带类型子路径为 /vue /runtime /react 三入口；内部产物不进 typesVersions。
+const SUBPATHS = ['./vue', './runtime', './react'] as const
 
 describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () => {
   it('每个带 types 的 exports 子路径都有 typesVersions 映射', () => {
@@ -51,14 +51,18 @@ describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () =
 
 describe('历史破坏性收敛：旧公开入口已删除', () => {
   // 3.0.0 删除的公开子路径 + 5.0.0 删除的 /config 聚合入口与无消费者的 ./internal/vue.js
-  const REMOVED = ['./pages', './context', './vue', './config', './internal/vue.js'] as const
+  // + 6.0.0 删除的 /bridge、/bridge/{vue,react}、/bridge/router/{vue,react}（统一进 /vue、/react）
+  const REMOVED = [
+    './pages', './context', './config', './internal/vue.js',
+    './bridge', './bridge/vue', './bridge/react', './bridge/router/vue', './bridge/router/react',
+  ] as const
   it('exports 白名单不再包含旧子路径', () => {
     for (const sub of REMOVED) {
       expect(pkg.exports[sub], `${sub} 应已从 exports 删除`).toBeUndefined()
     }
   })
   it('typesVersions 不再映射旧子路径', () => {
-    for (const sub of ['./pages', './context', './vue', './config'] as const) {
+    for (const sub of ['./pages', './context', './config', './bridge', './bridge/vue', './bridge/react', './bridge/router/vue', './bridge/router/react'] as const) {
       expect(pkg.typesVersions?.['*']?.[sub.slice(2)], `${sub} 的 typesVersions 映射应已删除`).toBeUndefined()
     }
   })
@@ -68,10 +72,15 @@ describe('历史破坏性收敛：旧公开入口已删除', () => {
     expect(pkg.exports['./internal/vue-adapter.js']).toBeTruthy()
     expect(pkg.exports['./runtime'].require).toBeUndefined()
   })
-  it('构建产物不再生成已删除入口的 dist/config.*（dist/vue.js 是 runtime-entry 的内核唯一再导出实体，保留）', () => {
-    for (const f of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.ts']) {
+  it('构建产物不再生成已删除入口的 dist/config.* 与 dist/bridge{,-vue,-react}.js 壳', () => {
+    for (const f of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.ts', 'dist/bridge.js', 'dist/bridge-vue.js', 'dist/bridge-react.js']) {
       expect(fs.existsSync(path.join(pkgRoot, f)), `${f} 不应存在`).toBe(false)
     }
+  })
+
+  it('/vue 统一入口可被 require 拒绝（浏览器 ESM，不承诺 require）', () => {
+    const req = createRequire(path.join(pkgRoot, 'package.json'))
+    expect(() => req('@fulgurjs/federation/vue')).toThrow()
   })
 
   it('/runtime 的 CommonJS require 被 exports 拒绝', () => {

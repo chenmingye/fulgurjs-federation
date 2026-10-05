@@ -14,7 +14,7 @@
 
 1. 明确任务属于答疑、只读排查、文档、实现、验收还是发布。用户说“先不要改”时，保留证据并报告，不改代码、依赖、配置或部署。
 2. 核对 `pwd`、`git status --short`、当前分支、HEAD 和远端。记录已有的修改与未跟踪文件，保护用户及其他 AI 正在进行的工作。
-3. 读 [README.md](README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)，按任务查 [中文 API](docs/API.md)、[英文 API](docs/API.en.md)、[示例入口](examples/README.md)。历史任务书和报告只用于追溯，不能替代当前实现。
+3. 读 [README.md](README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)，按任务查 [文档中心](docs/README.md)（中文 docs/zh/、英文 docs/en/、维护者 docs/maintainers/）、[示例入口](examples/README.md)。历史任务书和报告只用于追溯（本机 testbed/private-docs/），不能替代当前实现。
 4. 从 `packages/plugin/package.json` 核对源码版本、公开导出和脚本；涉及正式包时再核对 `npm view @fulgurjs/federation version`、锁文件和实际安装版本。
 5. 涉及已有服务时，先确认端口、PID、启动目录和用途。端口在线不等于运行的是本轮代码。
 
@@ -34,9 +34,9 @@
 | `examples/integrations/` | 大型公开集成，例如 Jeecg 自嵌套 |
 | `examples/portal/`、`examples/scripts/` | 展示门户与统一管理脚本 |
 | `examples/scenarios.json` | 场景目录、端口、启动顺序、包管理器和安装目录的统一登记表 |
-| `docs/API.md`、`docs/API.en.md` | 当前配置、API、执行规则与错误码手册 |
+| `docs/README.md` | 文档中心总入口：zh/ guide+reference+troubleshooting、en/ 镜像、maintainers/（含 API 手册 zh/reference/api.md、错误码 zh/reference/errors.md、迁移 zh/migration.md） |
 | `.github/workflows/` | 实际 CI 与正式发布流程 |
-| `testbed/runs/` | 本机私有业务验收副本与证据，不上传 GitHub、不打进 npm 包 |
+| `testbed/` | 本机私有验收目录（Git 忽略）：runs/ 为各轮验收现场，private-docs/ 为任务书/报告/私有规则 |
 
 源码定位：
 
@@ -95,22 +95,15 @@ npm run test:examples
 - npm 包仅同步五个模板，见 `packages/plugin/scripts/sync-package-examples.mjs`；大型集成、门户和功能 Demo 从 GitHub 下载。核验打包内容时进入 `packages/plugin/` 执行 `npm pack --dry-run --json`。
 - 本机可能为旧进程保留忽略的兼容链接或历史缓存；这些不是第二份公共源码，不提交。是否清理先确认进程归属。
 
-## 7. 用户本机业务验收与 8662
+## 7. 本机私有业务验收（所有者专用）
 
-本节适用于仓库所有者明确授权的本机 MESZC/demes5.5 验收和交付；普通贡献、文档任务或其他机器不因此获得部署权限。
+本仓库的固定私有业务验收/部署流程（专用站点、SVN 副本管理、部署复验规则）不写入公开文档，
+由仓库所有者本机的私有接手说明维护（本机 `testbed/private-docs/AGENTS-private.md`，不提交 Git）。
+公开仓库只保留通用原则：
 
-- 真实项目副本和本轮日志、截图、脚本、报告统一放 `testbed/runs/<本轮目录>/`。不公开私有业务代码、凭据、内网配置或测试数据。
-- 要求全新业务验收时，从核实的 SVN 来源重新检出，记录 revision、`svn info`、初始 `svn status`，再按当前 API 做联邦接入。不可复用旧副本或旧 dist 冒充全新验收。
-- **业务副本绝不执行 `svn commit`。** 不修改 SVN 服务端，不把接入补丁提交回业务 SVN。
-- **8662 是固定 MESZC 模块联邦测试站点。** 每次涉及该站点的验收、修复或插件版本交付，都要更新，并留在线供用户复测。
-- 正确流程：`SVN 基线 → 独立副本 → 模块联邦迁移 → 正式包安装 → dev/prod 验收 → 副本构建 → 8662 部署复验`。
-- 原始 SVN 项目可能仍是乾坤版本。**不能直接拿 SVN 原版部署 8662，也不能拿 demes、公开 Jeecg Demo 或另一层宿主代替 MESZC 联邦副本。**
-- 部署前核对当前 Nginx 映射与实际产物，备份现有站点；从已验收副本同批次重建 admin、BPM、lowcode，再切换部署。不要凭历史绝对路径猜目录。
-- 部署完成核对实际 HTTP 文件与构建产物一致、正式插件版本正确，再做页面交互、深链/刷新和故障恢复复验。构建日志或版本清单不能代替在线站点验证。
-- 保留可复现锁文件，优先冻结安装。禁止为方便安装直接用 `--no-frozen-lockfile` 造成依赖漂移；确需重锁时记录原因、依赖差异并重新验证。
-- 区分插件、项目接入、业务前端、后端与环境问题，用同条件 A/B 或最小复现证明归因。不能因为错误在 provider chunk 出现就认定插件有错，也不能未经证据宣布是“上游限制”。
-- 后端未实现接口不自动授权补后端；记录具体接口和证据，继续完成插件及其他可完成项。
-- 只清理本任务启动并确认归属的临时进程。保留要求交付的站点，不按端口批量杀掉其他 AI、用户、常驻后端或 Nginx。
+- 私有业务副本、日志、截图、报告一律放 Git 必略的本机目录，不进公开文档、AGENTS、npm 包。
+- 只清理自己启动并确认归属的进程；保留交付站点与用户常驻服务。
+- 区分插件、接入层、业务前端、后端与环境问题，用同条件 A/B 或最小复现证明归因。
 
 ## 8. 完成、提交与发布
 

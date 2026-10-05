@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createBrowserRouter, Link, RouterProvider, useLocation } from 'react-router-dom'
 import { createRoot } from 'react-dom/client'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
-import { createReactBridgeNavigation } from '@fulgurjs/federation/bridge/router/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
+import { createReactBridgeNavigation } from '@fulgurjs/federation/react'
 import { provideAppContext, version as runtimeVersion } from '@fulgurjs/federation/react'
 
 provideAppContext({

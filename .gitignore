@@ -92,3 +92,4 @@ examples/integrations/jeecg/pnpm-lock.yaml
 /examples/react-remote/
 # 上轮误生成的 Jeecg 空壳 npm 锁；两个实际应用分别使用自己的 pnpm 锁。
 /examples/integrations/jeecg/package-lock.json
+artifacts/

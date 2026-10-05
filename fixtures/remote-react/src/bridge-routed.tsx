@@ -6,7 +6,7 @@
  */
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { defineBridgeApp } from '@fulgurjs/federation/react'
-import { createReactBridgeRouter } from '@fulgurjs/federation/bridge/router/react'
+import { createReactBridgeRouter } from '@fulgurjs/federation/react'
 
 function List(): React.ReactNode {
   return (

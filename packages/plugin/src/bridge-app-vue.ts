@@ -64,7 +64,7 @@ function entriesAborted(el: HTMLElement): boolean {
  *
  * ```ts
  * import { createApp } from 'vue'
- * import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+ * import { defineBridgeApp } from '@fulgurjs/federation/vue'
  * export default defineBridgeApp((props) => { const app = createApp(App, props); app.use(router); return app })
  * ```
  */

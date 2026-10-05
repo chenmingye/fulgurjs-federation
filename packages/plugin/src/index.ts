@@ -31,7 +31,6 @@ import {
 } from './transform'
 import {
   genApiFacade,
-  genBridgeFacade,
   genBindingFacade,
   genRuntimeProxyModule,
   genBuildRemoteEntry,
@@ -788,10 +787,8 @@ export function federation(options: FederationOptions): Plugin[] {
       if (bareClean.startsWith('virtual:fulgurjs-bootstrap:')) return '\0' + bareClean
       if (bareClean === 'virtual:fulgurjs-remote-schema') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade') return bareClean
+      if (bareClean === 'virtual:fulgurjs-api-facade-vue') return bareClean
       if (bareClean === 'virtual:fulgurjs-api-facade-react') return bareClean
-      if (bareClean === 'virtual:fulgurjs-api-facade-bridge') return bareClean
-      if (bareClean === 'virtual:fulgurjs-api-facade-bridge-vue') return bareClean
-      if (bareClean === 'virtual:fulgurjs-api-facade-bridge-react') return bareClean
       if (bareClean === 'virtual:fulgurjs-provides') return RESOLVED.provides
       if (bareClean === 'virtual:fulgurjs-remote-entry') return RESOLVED.remoteEntry
       // D3：react-refresh 单例 shim（dev）。注册为可解析模块——改写后的根相对导入在
@@ -834,19 +831,13 @@ export function federation(options: FederationOptions): Plugin[] {
         return genDevProvides(state.normalized)
       }
       if (clean === 'virtual:fulgurjs-api-facade' && state.command === 'serve') {
+        return genApiFacade('runtime')
+      }
+      if (clean === 'virtual:fulgurjs-api-facade-vue' && state.command === 'serve') {
         return genApiFacade('vue')
       }
       if (clean === 'virtual:fulgurjs-api-facade-react' && state.command === 'serve') {
         return genApiFacade('react')
-      }
-      if (clean === 'virtual:fulgurjs-api-facade-bridge' && state.command === 'serve') {
-        return genBridgeFacade('both')
-      }
-      if (clean === 'virtual:fulgurjs-api-facade-bridge-vue' && state.command === 'serve') {
-        return genBridgeFacade('vue')
-      }
-      if (clean === 'virtual:fulgurjs-api-facade-bridge-react' && state.command === 'serve') {
-        return genBridgeFacade('react')
       }
       if (clean === 'virtual:fulgurjs-remote-schema' && state.normalized) {
         // D.2 Tier2：remote exposes 清单（dev 实测探针产出；build 诚实降级为空）

@@ -29,8 +29,8 @@
  */
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
-import { createVueBridgeNavigation } from '@fulgurjs/federation/bridge/router/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
+import { createVueBridgeNavigation } from '@fulgurjs/federation/vue'
 
 const route = useRoute()
 const router = useRouter()

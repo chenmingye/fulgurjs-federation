@@ -359,7 +359,7 @@
       "column": "工具与类型",
       "title": "工具、类型与元数据",
       "desc": "类型生成（dts source/shim）、包内入口解析、内部入口登记、错误码总表——由 examples/demos/pages-cli 与矩阵文档覆盖。",
-      "source": "docs/Demo展示中心API覆盖矩阵-20261002.md",
+      "source": "docs/zh/guide/examples.md",
       "apps": []
     },
     {

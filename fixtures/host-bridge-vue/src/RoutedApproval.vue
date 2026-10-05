@@ -10,8 +10,8 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { clearAppContext } from '@fulgurjs/federation/runtime'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
-import { createVueBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/bridge/router/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
+import { createVueBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/vue'
 import { getLatestHostContext, switchSession } from './host-context'
 
 const route = useRoute()

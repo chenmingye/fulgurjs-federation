@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { getAppContext } from '@fulgurjs/federation/runtime'
+import { getAppContext } from '@fulgurjs/federation/vue'
 import { pushRemoteTrace } from '../fulgurjs/trace'
 
 // props 由宿主路由的 props 函数透传：{ ...route.params, ...route.query }

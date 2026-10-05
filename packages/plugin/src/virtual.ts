@@ -723,12 +723,13 @@ export function genBuildRemoteEntry(options: NormalizedOptions, exposeAbsPaths: 
 }
 
 /**
- * 开发态 expose 的内部代理门面。应用代码仍写物理入口（/runtime 或 /react），transform 后指向此模块。
- * 适配器接收代理 loadRemote（页面级单例），不导入第二份内核。
- * framework 决定接入的适配层：vue → remoteComponent/createHostPages/defineBridgeApp（Vue 子应用桥接），
- * react → remoteComponent/useLoadRemote/RemoteErrorBoundary/createReactHostPages/defineBridgeApp。
+ * 开发态 expose 的内部代理门面（统一入口 /runtime、/vue、/react 的 expose 目标专用——
+ * 宿主页非 expose 目标时导入保持原 specifier，直接消费 node_modules 的 dist 壳）。
+ * runtime 门面只含框架无关面（loadRemote/loadShare/context/pages）；
+ * vue/react 门面绑定页面级代理 loadRemote 的完整框架入口面（组件/页面/桥接/路由同步），
+ * 与 dist 壳的公开导出面一一对应（drift 由 runtime-entry-graph / client-types 测试守护）。
  */
-export function genApiFacade(framework: 'vue' | 'react' = 'vue'): string {
+export function genApiFacade(framework: 'runtime' | 'vue' | 'react'): string {
   const head = [
     'export {',
     '  loadRemote, loadShare, preloadRemote, getContainer,',
@@ -742,41 +743,32 @@ export function genApiFacade(framework: 'vue' | 'react' = 'vue'): string {
   const vueBody = [
     "import { createRemoteComponent, createHostPages as __fulgurjs_chp } from '@fulgurjs/federation/internal/vue-adapter.js';",
     "import { defineBridgeApp } from '@fulgurjs/federation/internal/bridge-app-vue.js';",
+    // internal/bridge-host-vue.js 导出的是工厂 createVueBridgeAppWithLoader（绑定发生在
+    // dist 生成壳）——门面必须取 WithLoader 名并就地绑定 loadRemote；5.9.x 的旧桥接门面
+    // 曾误写 { createVueBridgeApp } 具名导入（潜在缺陷，expose 目标不导宿主工厂所以未触发；
+    // 6.0.0 统一入口后被 /vue 门面放大，dev 预构建即报 MFU-001——tests/api-facade-bindings 守护）
+    "import { createVueBridgeAppWithLoader as __fulgurjs_cvb } from '@fulgurjs/federation/internal/bridge-host-vue.js';",
+    "import { createVueBridgeNavigation, connectVueBridgeRouter } from '@fulgurjs/federation/internal/bridge-router-vue.js';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     'export const createHostPages = (options) => __fulgurjs_chp(options, __fulgurjs_loadRemote);',
     'export { defineBridgeApp };',
+    'export const createVueBridgeApp = __fulgurjs_cvb(__fulgurjs_loadRemote);',
+    'export { createVueBridgeNavigation, connectVueBridgeRouter };',
   ]
   const reactBody = [
     "import { createRemoteComponent, createUseLoadRemote, RemoteErrorBoundary, createReactHostPages as __fulgurjs_rhp } from '@fulgurjs/federation/internal/react-adapter.js';",
     "import { defineBridgeApp } from '@fulgurjs/federation/internal/bridge-app-react.js';",
+    "import { createReactBridgeAppWithLoader as __fulgurjs_crb } from '@fulgurjs/federation/internal/bridge-host-react.js';",
+    "import { createReactBridgeNavigation, createReactBridgeRouter } from '@fulgurjs/federation/internal/bridge-router-react.js';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     'export const useLoadRemote = createUseLoadRemote(__fulgurjs_loadRemote);',
     'export { RemoteErrorBoundary };',
     'export const createReactHostPages = (options) => __fulgurjs_rhp(options, __fulgurjs_loadRemote);',
     'export { defineBridgeApp };',
-  ]
-  return [...head, ...(framework === 'react' ? reactBody : vueBody), ''].join('\n')
-}
-
-/**
- * 开发态桥接宿主门面（/bridge、/bridge/vue、/bridge/react 的 expose 目标专用——
- * 宿主页非 expose 目标时导入保持原 specifier，直接消费 node_modules 的 dist 壳）。
- * framework 决定绑定哪个宿主适配器；聚合入口绑定两个（加载代价见 §3.1，推荐分离入口）。
- */
-export function genBridgeFacade(framework: 'vue' | 'react' | 'both' = 'both'): string {
-  const head = [
-    "export { provideAppContext, getAppContext, requireAppContext, clearAppContext } from '@fulgurjs/federation/internal/context.js';",
-    "import { loadRemote as __fulgurjs_loadRemote } from 'virtual:fulgurjs-runtime-proxy';",
-  ]
-  const vueBody = [
-    "import { createVueBridgeApp as __fulgurjs_cvb } from '@fulgurjs/federation/internal/bridge-host-vue.js';",
-    'export const createVueBridgeApp = __fulgurjs_cvb(__fulgurjs_loadRemote);',
-  ]
-  const reactBody = [
-    "import { createReactBridgeApp as __fulgurjs_crb } from '@fulgurjs/federation/internal/bridge-host-react.js';",
     'export const createReactBridgeApp = __fulgurjs_crb(__fulgurjs_loadRemote);',
+    'export { createReactBridgeNavigation, createReactBridgeRouter };',
   ]
-  const body = framework === 'vue' ? vueBody : framework === 'react' ? reactBody : [...vueBody, ...reactBody]
+  const body = framework === 'vue' ? vueBody : framework === 'react' ? reactBody : []
   return [...head, ...body, ''].join('\n')
 }
 

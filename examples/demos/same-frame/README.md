@@ -77,8 +77,8 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 |---|---|---|---|
 | `defineBridgeApp(factory)` | `@fulgurjs/federation/runtime` | [vue-remote/src/bridge.ts](vue-remote/src/bridge.ts) | `bridge-app-vue.ts` |
 | `defineBridgeApp(factory)` | `@fulgurjs/federation/react` | [react-remote/src/bridge.tsx](react-remote/src/bridge.tsx) | `bridge-app-react.ts` |
-| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/bridge/vue` | [vue-host/src/pages/AppBridgePage.vue](vue-host/src/pages/AppBridgePage.vue) | `bridge-host-vue.ts` |
-| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/bridge/react` | [react-host/src/pages/AppBridgePage.tsx](react-host/src/pages/AppBridgePage.tsx) | `bridge-host-react.ts` |
+| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | [vue-host/src/pages/AppBridgePage.vue](vue-host/src/pages/AppBridgePage.vue) | `bridge-host-vue.ts` |
+| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | [react-host/src/pages/AppBridgePage.tsx](react-host/src/pages/AppBridgePage.tsx) | `bridge-host-react.ts` |
 | `remoteComponent(spec, options)` | `@fulgurjs/federation/runtime`（React 侧 `/react`） | vue-host / react-host 的 `pages/ComponentLevelPage.*` | `runtime/` |
 | `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/runtime`（React 侧 `/react`） | 宿主 `host-session.ts` + 桥接层内部写入；子应用 `App.vue` / `ChildLayout.tsx` 读取 | `context.ts` |
 | 受控 `sessionKey`（undefined/null/非空串） | 桥接组件 prop | 两宿主 `AppBridgePage` 的 `handleSwitchSession` / `handleRemount` | `bridge-core.ts`（`assertControlledSessionKey`、`resolveBridgeContext`） |

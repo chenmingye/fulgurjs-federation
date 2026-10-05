@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react'
 import { clearAppContext } from '@fulgurjs/federation/react'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
 import IdentityBadges from '../components/IdentityBadges'
 import DiagnosticsPanel from '../components/DiagnosticsPanel'
 import { diagStore, countMount, countSessionSwitch, countUnmount, logDiag } from '../diagnostics'

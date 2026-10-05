@@ -5,7 +5,7 @@
  */
 import { createApp, defineComponent, h, onMounted } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, useRoute, useRouter } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
 /** props 回显 + memory 路由导航的桥接根组件 */
 const BridgeRoot = defineComponent({

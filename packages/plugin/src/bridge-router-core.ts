@@ -378,3 +378,21 @@ export class RoutingChannel implements BridgeChildRoute {
     this.onEvent?.({ type: 'disposed' })
   }
 }
+
+/**
+ * vue-router 实例的最小结构面（/vue 路由同步端口参数；真实 vue-router Router 结构兼容可赋值）。
+ * 6.0.0 可选依赖边界：/vue 的 d.ts 不得 import vue-router 类型——未安装 vue-router 的
+ * 纯组件工程在 skipLibCheck:false 下也必须能通过类型检查；结构类型的宽化只影响
+ * 路由同步端口处的精确提示，业务代码自己的 Router 类型不受影响。
+ */
+export interface VueRouterLike {
+  currentRoute: { value: { fullPath: string } }
+  push(to: string): Promise<unknown>
+  replace(to: string): Promise<unknown>
+  go(delta: number): void
+  back(): void
+  forward(): void
+  afterEach(handler: (to: unknown, from: unknown, failure?: unknown) => void): () => void
+  beforeResolve(handler: () => unknown): () => void
+  beforeEach(handler: () => unknown): () => void
+}

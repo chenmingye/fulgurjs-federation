@@ -2,7 +2,7 @@ import { label } from 'rv-policy'
 import React, { createContext, useContext, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { loadShare, unwrapDefault, version } from '@fulgurjs/federation/react'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
 
 const context = createContext('宿主 Context')
 const options = { retries: 0, getContext: () => ({ sessionKey: 'version-demo', user: { name: '演示用户' } }) }

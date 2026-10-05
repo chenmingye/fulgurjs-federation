@@ -9,7 +9,7 @@
  * defineBridgeApp 的 unmount 会把 app.unmount() 的异常包装为 MFU-016（phase: unmount）。
  */
 import { createApp, defineComponent, h, onMounted, type PropType } from 'vue'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
 const UnmountFailRoot = defineComponent({
   name: 'ErrGoodUnmountFailRoot',

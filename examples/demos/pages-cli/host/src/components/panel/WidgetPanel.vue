@@ -17,7 +17,7 @@
 </template>
 
 <script setup lang="ts">
-import { remoteComponent } from '@fulgurjs/federation/runtime'
+import { remoteComponent } from '@fulgurjs/federation/vue'
 
 // 工厂放模块顶层：模块求值时只创建包装组件，不触发任何远程加载
 const StatCard = remoteComponent('pc-remote/widgets/stat-card')

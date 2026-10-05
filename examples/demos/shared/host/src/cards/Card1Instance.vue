@@ -44,7 +44,7 @@
  *   严格相等——证明 remote-a/remote-b 的 nanostores 导入被协商到了宿主实例。
  */
 import { onMounted, onUnmounted, ref } from 'vue'
-import { loadRemote, remoteComponent } from '@fulgurjs/federation/runtime'
+import { loadRemote, remoteComponent } from '@fulgurjs/federation/vue'
 import { atom as hostAtom } from 'nanostores'
 import DemoCard from './DemoCard.vue'
 import { formatError } from '../demo/format'

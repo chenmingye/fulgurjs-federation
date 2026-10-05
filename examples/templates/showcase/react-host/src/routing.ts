@@ -4,7 +4,7 @@
  * dev 下 Vite base 为 '/' 无需 basename；子目录部署时与 createBrowserRouter 同源传 basename。
  * 端口引用保持稳定 → routing 键不变，宿主不重挂、不重复订阅。
  */
-import { createReactBridgeNavigation } from '@fulgurjs/federation/bridge/router/react'
+import { createReactBridgeNavigation } from '@fulgurjs/federation/react'
 
 export const BRIDGE_BASE_PATH = '/br-vue'
 

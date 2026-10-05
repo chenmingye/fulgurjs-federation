@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getAppContext } from '@fulgurjs/federation/runtime'
+import { getAppContext } from '@fulgurjs/federation/vue'
 import { pushRemoteTrace } from '../fulgurjs/trace'
 
 const count = ref(0)

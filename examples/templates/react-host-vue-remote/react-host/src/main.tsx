@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { clearAppContext } from '@fulgurjs/federation/react'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
 import { getLatestHostContext, login, logout } from './host-session'
 
 // 工厂选项：fallback（pending 占位）、error（节点或 (error, retry) => ReactNode）、
@@ -42,7 +42,7 @@ function Host() {
 
   return (
     <div style={{ fontFamily: 'sans-serif', padding: 16, maxWidth: 720 }}>
-      <h1>React 宿主 × Vue 子应用（@fulgurjs/federation/bridge/react）</h1>
+      <h1>React 宿主 × Vue 子应用（@fulgurjs/federation/react）</h1>
       <p data-testid="demo-session">{`会话：${sessionKey ?? '未登录'}（${userName || '—'}）· onReady 次数：${readyCount}`}</p>
       <p>
         <button data-testid="demo-switch" onClick={() => void switchUser()}>切换到 Bob（clearAppContext → 重挂）</button>

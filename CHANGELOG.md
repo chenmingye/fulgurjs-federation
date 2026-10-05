@@ -1,5 +1,56 @@
 # Changelog
 
+## 6.0.0
+
+**破坏性版本：公共入口统一为四类。** 应用开发者先选框架，再从同一个入口导入全部能力；内部 bridge/router/context 分层不再是用户必学的路径规则。
+
+### 破坏性变化（迁移指南：docs/zh/migration.md / docs/en/migration.md）
+
+- **公共入口收敛**：`/bridge`、`/bridge/vue`、`/bridge/react`、`/bridge/router/vue`、`/bridge/router/react` 公共入口移除。新合同：
+  - Vite 配置与插件类型 → `@fulgurjs/federation`（包根，不变）；
+  - Vue 应用代码 → `@fulgurjs/federation/vue`（运行时全量 + remoteComponent/createHostPages + defineBridgeApp/createVueBridgeApp + createVueBridgeNavigation/connectVueBridgeRouter）；
+  - React 应用代码 → `@fulgurjs/federation/react`（运行时全量 + React 适配 + defineBridgeApp/createReactBridgeApp + createReactBridgeNavigation/createReactBridgeRouter）；
+  - 框架无关浏览器模块 → `@fulgurjs/federation/runtime`（**不再导出** Vue 的 remoteComponent/createHostPages/defineBridgeApp——迁移到 /vue）。
+  - 桥接宿主与路由同步实现转为 `/internal/*`（bridge-host-{vue,react}.js、bridge-router-{core,vue,react}.js 新增 internal 导出；internal 不供应用代码导入，dev 门面引用所需）。
+- **`/runtime` 回归真正框架无关**：静态导入图零 vue/react/框架 router（runtime-entry-graph 测试守护）；此前 /runtime 实际携带 Vue 适配层。
+- **init `--template` 更名 `--out`**（与 create 的模板概念同名不同义；本轮仍接受 --template 并提示更名，后续版本移除）。
+
+### 可选依赖边界（统一入口不制造新负担）
+
+- **未安装 vue-router 的纯 Vue 组件工程**导入 /vue：dev、build、skipLibCheck:false 类型检查全部通过。bridge-router-vue 对 vue-router 仅类型导入（宿主导航端口参数为结构化 VueRouterLike，真实 Router 结构兼容可赋值）；cancelled 导航失败判定以内联常量等价（vue-router 4.x/5.x 公开枚举一致，回归以真实 vue-router 覆盖）。
+- **未安装 react-router-dom 的纯 React 组件工程**导入 /react：dev（Vite optional-peer-dep 干净拒绝）、build（Vite 8/rolldown throw-stub chunk）、类型检查全部通过。bridge-router-react 对 react-router-dom 仅类型导入 + 模块级按需预热（形状校验兜底空 chunk）；就绪时行为与历史逐行一致（含 element.props.router 同步内省），未就绪走惰性宿主（首次渲染等待，缺依赖在首次渲染时以清晰合同内错误暴露）。gzip 预算 4096→4352B（合同增量，实测 4143B）。
+- peerDependenciesMeta 五项（vue/react/react-dom/vue-router/react-router-dom）全部 optional（延续），不自动安装。
+
+### 修复
+
+- **修复（插件）：dev 桥接门面误绑 `{ createVueBridgeApp }`**——internal/bridge-host-vue.js 实际只导出 `createVueBridgeAppWithLoader`（绑定发生在 dist 生成壳）。5.9.x 的旧 /bridge 桥接门面存在同一误写，因 expose 目标从不导入宿主工厂而从未触发；6.0.0 /vue 门面承载完整入口面后被 dev 预构建放大为 MFU-001（ MESZC 实测）。修复为取 WithLoader 名并就地绑定 loadRemote；新增 tests/api-facade-bindings.test.ts 以 dist 真实导出面逐名核对门面导入（防回归）。
+- **doctor 不再猜默认应用**：`--apps` 必填（缺省 main 的静默行为移除）；支持 `.`（站点根）、完整 URL 条目（多 origin）；新增 `--entry <文件名>`（自定义入口）、`--no-entry`（纯宿主）、`--no-manifest`（合法关闭）、`--no-html`；`--json` 输出实际检查目标 mode。
+- **create 环境校验前置**：按模板真实 `engines.node`（>=20.19.0）与 pnpm 存在性在**写入前**校验，不满足即失败并给升级方法（此前在复制/安装后才警告）；输出 `cd` 路径加引号（空格/中文路径）；宿主入口按 dev.config.json 的 host 标记列出**全部**宿主（showcase 双宿主不再只显示一个）。
+
+### 新增
+
+- **CLI `fulgurjs port <应用> <新端口> [--write]`**：模板工程端口一处变更，默认预览（计划列出四个受影响文件与命中数），`--write` 才写入；词边界替换不误伤其他端口；README 端口表一并更新。
+- **init 按场景生成最小有效配置**：框架从 package.json 依赖判断（判断不了要求显式 `--framework vue|react`，TTY 询问）；`--role consumer|provider|dual` 区分纯消费/纯提供/双角色；shared 只列项目实际安装并跨应用共享的库，不再默认塞 vue-router/pinia/示例业务页。
+- **接入核对清单按角色生成**（UX-03）：expose 分类说明（普通组件/函数可直接 expose）、消费方式按需选择（普通组件不需要页面表/桥接）、独立 Router/store 的隔离设计明确为合法；explain/check-pages/doctor/create/help 输出同一合同。
+
+### 文档
+
+- **统一文档中心**（docs/README.md）：docs/zh/（guide×8 + reference×4 + troubleshooting×2 + migration）、docs/en/（逐文件镜像）、docs/maintainers/（architecture/testing/releasing + 通用技术文档）。API/配置/CLI/错误码（48 码）逐项对齐 6.0.0 实现；私有业务资料、任务书与验收记录全部移出公开文档（Git 历史/历史发布不改动，风险自察）。
+- 错误码防漂移门禁改读 docs/zh/reference/errors.md（节标题不变，48 码三方一致校验保持）。
+- npm 包携带文档更新为 zh/en reference（api/errors/migration）+ maintainers 技术文档；根 README 收敛为产品介绍 + 快速开始 + 文档中心导航。
+
+### 模板
+
+- 五模板全部改为统一入口用法（/vue、/react）；插件依赖钉 **6.0.0**（同批发布）；根 package.json 声明 `engines.node >=20.19.0`；dev.config.json 应用条目新增 host 标记（create 宿主入口展示的数据源）；vue-vue 模板远程 Router 记录从页面表派生（route+spec 唯一来源）。
+- showcase vue-host 的 routing.ts 使用公开导出的 `BridgeHostRouting` 类型（移除历史替代类型）。
+- 锁文件在 6.0.0 上 registry 后单阶段重生成（发布流程既定步骤）。
+
+### 质量
+
+- 插件单测 683/683（新增 api-facade-bindings、port、入口导出面/导入图守护更新）；test:examples 15/15；干净消费者验证（无 vue-router 的 Vue 工程、无 react-router-dom 的 React 工程 × Vite 6/8 dev+build+tsc）通过。
+- 版本 5.9.3 → 6.0.0。
+
+
 ## 5.9.3
 
 - **修复：hostPages keepAlive 页在 Vue 3.5 下永不缓存**——Vue 3.5 的 KeepAlive 对「已解析的异步组件」按 `__asyncResolved.name`（内层组件自身的 name）做 include 匹配，而 createHostPages 的保活白名单给的是包装名（`Fulgurjs_<remote>_<spec>`）：解析后两名不一致 → 白名单永不命中 → keepAlive 页每次进出都重挂（数据看板计数/表单输入丢失；pages-cli 实测 100% 复现）。修复：keepAlive 页的 loader 对解析结果做**浅克隆独立命名副本**（name 与包装一致，不改写共享模块导出对象——多页共享同一导出时改写会串名；非选项组件保持原样退化为旧行为）。回归：解析后内层与包装同名、共享模块导出保持原样、非 keepAlive 页不受影响（host-pages.test.ts 13/13，全量 675/675）。

@@ -21,7 +21,7 @@
 <script setup lang="ts">
 /** 卡片⑩：AppContext 提供 / 校验读取 / 函数引用直调 / 登出清理 */
 import { ref } from 'vue'
-import { clearAppContext, remoteComponent } from '@fulgurjs/federation/runtime'
+import { clearAppContext, remoteComponent } from '@fulgurjs/federation/vue'
 import DemoCard from './DemoCard.vue'
 import { provideDemoContext } from '../demo/appContextBridge'
 

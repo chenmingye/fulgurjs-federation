@@ -1,6 +1,9 @@
-/** Vue Router 4/5 的宿主导航端口与子应用 memory router 接线（按需入口）。 */
-import { isNavigationFailure, NavigationFailureType, type Router, type NavigationFailure } from 'vue-router'
-import type { BridgeChildRoute, BridgeHostNavigation, BridgeLocation, BridgeHostRouting } from './bridge-router-core'
+/** Vue Router 4/5 的宿主导航端口与子应用 memory router 接线（统一入口 /vue 提供）。 */
+// 仅类型导入：/vue 统一入口静态携带本模块，纯 Vue 组件工程（未安装 vue-router）导入
+// /vue 时不得被强制解析 vue-router。运行期所需的唯一值语义（cancelled 失败判定）以内联
+// 常量等价替代：NavigationFailureType.cancelled 在 vue-router 4.x/5.x 公开枚举均为 8
+// （本仓 4.6.4 与 5.3.1 实测一致）；bridge-router 测试以真实 vue-router 覆盖该分支。
+import type { BridgeChildRoute, BridgeHostNavigation, BridgeLocation, BridgeHostRouting, VueRouterLike } from './bridge-router-core'
 import { collapseConsecutiveReports, connectChildNavigation } from './bridge-router-sync'
 import { routingSyncError } from './bridge-errors'
 
@@ -11,12 +14,17 @@ export interface VueBridgeNavigationOptions {
   /** 保留配置兼容；Vue Router fullPath 已剥离 history base，不再二次剥离。 */
   routerBase?: string
 }
+/** NavigationFailureType.cancelled 的公开枚举值（vue-router 4.x/5.x 一致；见文件头说明） */
+const NAVIGATION_FAILURE_CANCELLED = 8
+const isCancelledNavigationFailure = (failure: unknown): boolean =>
+  !!failure && typeof failure === 'object' && (failure as { type?: number }).type === NAVIGATION_FAILURE_CANCELLED
+
 const locationFromPath = (path: string): BridgeLocation => {
   const raw = new URL(path || '/', 'http://f.invalid')
   return { pathname: raw.pathname, search: raw.search, hash: raw.hash }
 }
 
-export function createVueBridgeNavigation(router: Router, _options: VueBridgeNavigationOptions = {}): BridgeHostNavigation {
+export function createVueBridgeNavigation(router: VueRouterLike, _options: VueBridgeNavigationOptions = {}): BridgeHostNavigation {
   const toLogic = () => locationFromPath(router.currentRoute.value.fullPath)
   return {
     getLocation: toLogic,
@@ -44,7 +52,7 @@ export interface VueBridgeRouterConnection {
 }
 
 /** 接线限子应用自己的 memory router；dispose 恢复原始导航方法。 */
-export function connectVueBridgeRouter(routing: BridgeChildRoute, router: Router, options: { signal?: AbortSignal } = {}): VueBridgeRouterConnection {
+export function connectVueBridgeRouter(routing: BridgeChildRoute, router: VueRouterLike, options: { signal?: AbortSignal } = {}): VueBridgeRouterConnection {
   // 诊断 spec：宿主创建通道时携带真实远程名（RoutingChannel.spec）；自建通道缺省回退
   const spec = routing.spec ?? 'vue-router'
   const push = router.push
@@ -62,7 +70,7 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: Router
         // cancelled：子应用自己的新导航取代了本次广播应用——子应用自洽（通道稍后广播权威
         // 位置），属正常取消而非失步，不报 MFU-033（宿主守卫回滚期的连续广播曾产生重复的
         // 误导性同步失败诊断）。
-        if (isNavigationFailure(failure, NavigationFailureType.cancelled)) return
+        if (isCancelledNavigationFailure(failure)) return
         // 目标位置入诊断：不同目标的失步事件文本不同，连续同文折叠不会误吞不同失败
         throw routingSyncError(spec, `子应用守卫拒绝应用宿主确认的位置（目标 ${path}）；请在宿主侧设置取消守卫。`, [])
       }
@@ -85,14 +93,14 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: Router
   }).catch((cause) => {
     throw routingSyncError(spec, `初始路由准备失败：${cause instanceof Error ? cause.message : String(cause)}`, [], cause)
   })
-  const intercept = (native: Router['push'], action: 'push' | 'replace'): Router['push'] => (to) => {
+  const intercept = (native: VueRouterLike['push'], action: 'push' | 'replace'): VueRouterLike['push'] => (to) => {
     const task = (async () => {
-      let failure: NavigationFailure | void | undefined
+      let failure: unknown
       const result = await sync.enqueue(async () => {
         await ready
         failure = await native.call(router, to)
         return failure ? undefined : locationFromPath(router.currentRoute.value.fullPath)
-      }, typeof to === 'object' && to.replace ? 'replace' : action)
+      }, (typeof to === 'object' && (to as { replace?: boolean } | null)?.replace) ? 'replace' : action)
       if (failure) return failure
       if (result.status === 'cancelled') {
         const remove = router.beforeEach(() => false)

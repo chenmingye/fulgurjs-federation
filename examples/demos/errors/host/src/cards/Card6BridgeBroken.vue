@@ -37,7 +37,7 @@
  * 恢复：换 spec 切合法 bridge-good，:key 重建实例——onReady 计数 +1 即验证可用。
  */
 import { computed, ref, shallowRef, type Component } from 'vue'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import CardShell from '../components/CardShell.vue'
 import ErrorView from '../components/ErrorView.vue'
 import { createBridgeErrorCapture } from '../components/bridge-capture'

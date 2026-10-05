@@ -9,9 +9,14 @@ describe('runtime 物理入口类型', () => {
     const file = join(PKG, 'dist/runtime-entry.d.ts')
     expect(existsSync(file)).toBe(true)
     const text = readFileSync(file, 'utf8')
-    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteComponent', 'remoteSchema', 'RemoteInput', 'LoadRemoteOptions']) {
+    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteSchema', 'RemoteInput', 'LoadRemoteOptions']) {
       expect(text).toContain(name)
     }
+    // 6.0.0：/runtime 框架无关——Vue 适配符号不得再出现在导出绑定里（迁移到 /vue）
+    const exportNames = new Set(
+      [...text.matchAll(/\b(remoteComponent|createHostPages|defineBridgeApp)\s*[,}]/g)].map((m) => m[1]),
+    )
+    expect([...exportNames], '/runtime 导出绑定不应再含 Vue 适配符号').toEqual([])
   })
 
   it('package.json 不再导出 client 虚拟类型垫片', () => {
@@ -25,14 +30,13 @@ describe('runtime 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'BridgeApp', 'FgRuntime', 'HostPages', 'HostPagesOptions', 'LoadRemoteOptions', 'LoadShareOptions',
+      'AppContext', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
-      'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
+      'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
-      'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
-      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory',
+      'RuntimeHooks', 'RuntimePlugin',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap',
     ].sort())
-    expect(text).toContain('defineBridgeApp')
   })
 })
 
@@ -51,9 +55,11 @@ describe('/react 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'BridgeApp', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
+      'AppContext', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostRouting', 'FgRuntime',
+      'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
-      'ReactBridgeAppFactory', 'ReactHostPages', 'ReactHostPagesOptions', 'ReactRemoteComponentOptions',
+      'ReactBridgeAppFactory', 'ReactBridgeAppOptions', 'ReactBridgeCancelPolicy', 'ReactBridgeRouterConnection',
+      'ReactHostPages', 'ReactHostPagesOptions', 'ReactRemoteComponentOptions',
       'RemoteConfig', 'RemoteDebugInfo', 'RemoteErrorBoundaryProps', 'RemoteErrorFallback',
       'RemoteInput', 'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
@@ -61,6 +67,9 @@ describe('/react 物理入口类型', () => {
       'UseLoadRemoteOptions', 'UseLoadRemoteResult',
     ].sort())
     expect(text).toContain('defineBridgeApp')
+    expect(text).toContain('createReactBridgeApp')
+    expect(text).toContain('createReactBridgeNavigation')
+    expect(text).toContain('createReactBridgeRouter')
     // Vue 专属类型不得混入 React 入口（type HostPages, 与 type ReactHostPages, 区分）
     for (const vueOnly of ['type HostPagesOptions,', 'type RemoteComponentOptions,', 'type HostPages,', 'keepAliveNames', 'createHostPages']) {
       expect(text).not.toContain(vueOnly)
@@ -78,39 +87,45 @@ describe('/react 物理入口类型', () => {
   })
 })
 
-describe('/bridge 物理入口类型', () => {
-  it('三个入口声明文件真实存在且导出宿主工厂与契约类型', () => {
-    for (const file of ['dist/bridge.d.ts', 'dist/bridge-vue.d.ts', 'dist/bridge-react.d.ts']) {
-      expect(existsSync(join(PKG, file)), file).toBe(true)
+describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
+  it('声明文件真实存在且导出 Vue 全量能力（组件/页面/桥接/路由同步）', () => {
+    const file = join(PKG, 'dist/vue.d.ts')
+    expect(existsSync(file)).toBe(true)
+    const text = readFileSync(file, 'utf8')
+    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteComponent', 'createHostPages', 'defineBridgeApp', 'createVueBridgeApp', 'createVueBridgeNavigation', 'connectVueBridgeRouter', 'remoteSchema']) {
+      expect(text, name).toContain(name)
     }
-    const bridge = readFileSync(join(PKG, 'dist/bridge.d.ts'), 'utf8')
-    for (const name of ['createVueBridgeApp', 'createReactBridgeApp', 'BridgeApp', 'VueBridgeAppOptions', 'ReactBridgeAppOptions']) {
-      expect(bridge, name).toContain(name)
-    }
-    // 分离入口各只含自己的工厂
-    const bridgeVue = readFileSync(join(PKG, 'dist/bridge-vue.d.ts'), 'utf8')
-    expect(bridgeVue).toContain('createVueBridgeApp')
-    expect(bridgeVue).not.toContain('createReactBridgeApp')
-    const bridgeReact = readFileSync(join(PKG, 'dist/bridge-react.d.ts'), 'utf8')
-    expect(bridgeReact).toContain('createReactBridgeApp')
-    expect(bridgeReact).not.toContain('createVueBridgeApp')
+    // /vue 不得混入 React 适配绑定（JSDoc 散文提及不算导出）
+    const reactBindings = new Set(
+      [...text.matchAll(/\b(useLoadRemote|RemoteErrorBoundary|createReactBridgeApp|createReactBridgeRouter|createReactBridgeNavigation|createReactHostPages)\s*[,}]/g)].map((m) => m[1]),
+    )
+    expect([...reactBindings], '/vue 导出绑定不应含 React 适配符号').toEqual([])
   })
 
-  it('package.json 导出 /bridge 三入口与桥接 internals', () => {
+  it('type-only 导出面与批准清单相同', () => {
+    const text = readFileSync(join(PKG, 'dist/vue.d.ts'), 'utf8')
+    const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
+    const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
+    expect(names).toEqual([
+      'AppContext', 'BridgeApp', 'BridgeHostRouting', 'FgRuntime', 'HostPages', 'HostPagesOptions',
+      'LoadRemoteOptions', 'LoadShareOptions',
+      'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
+      'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
+      'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
+      'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppOptions',
+      'VueBridgeNavigationOptions', 'VueBridgeRouterConnection',
+    ].sort())
+  })
+
+  it('package.json 导出 /vue 与桥接 internals；/vue 浏览器 ESM 不承诺 require', () => {
     const pkg = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'))
-    expect(pkg.exports['./bridge'].import).toBe('./dist/bridge.js')
-    expect(pkg.exports['./bridge/vue'].import).toBe('./dist/bridge-vue.js')
-    expect(pkg.exports['./bridge/react'].import).toBe('./dist/bridge-react.js')
-    expect(pkg.exports['./internal/bridge-app-vue.js'].import).toBe('./dist/bridge-app-vue.js')
-    expect(pkg.exports['./internal/bridge-app-react.js'].import).toBe('./dist/bridge-app-react.js')
-    expect(pkg.exports['./internal/bridge-host-vue.js'].import).toBe('./dist/bridge-host-vue.js')
-    expect(pkg.exports['./internal/bridge-host-react.js'].import).toBe('./dist/bridge-host-react.js')
-    expect(pkg.typesVersions['*']['bridge/vue']).toEqual(['dist/bridge-vue.d.ts'])
-    expect(pkg.typesVersions['*']['bridge/react']).toEqual(['dist/bridge-react.d.ts'])
-    // 桥接入口与 /runtime、/react 一致：浏览器 ESM，不承诺 require
-    expect(pkg.exports['./bridge'].require).toBeUndefined()
-    expect(pkg.exports['./bridge/vue'].require).toBeUndefined()
-    expect(pkg.exports['./bridge/react'].require).toBeUndefined()
+    expect(pkg.exports['./vue'].import).toBe('./dist/vue.js')
+    expect(pkg.exports['./vue'].types).toBe('./dist/vue.d.ts')
+    expect(pkg.exports['./vue'].require).toBeUndefined()
+    expect(pkg.exports['./internal/bridge-router-vue.js'].import).toBe('./dist/bridge-router-vue.js')
+    expect(pkg.exports['./internal/bridge-router-react.js'].import).toBe('./dist/bridge-router-react.js')
+    expect(pkg.typesVersions['*'].vue).toEqual(['dist/vue.d.ts'])
   })
 })
 

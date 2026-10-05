@@ -6,7 +6,7 @@
  */
 import { createApp, defineComponent, h, ref } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, useRoute, useRouter } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
 /** props 类型：appProps 由宿主传入（label + 稳定回调 onReady） */
 export interface BridgeVueProps {

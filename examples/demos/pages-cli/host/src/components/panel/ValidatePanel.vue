@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { remoteSchema, validatePages, type PageRouteLike } from '@fulgurjs/federation/runtime'
+import { remoteSchema, validatePages, type PageRouteLike } from '@fulgurjs/federation/vue'
 import { pages, remotePrefixes } from '../../fulgurjs/pages.data'
 
 const RULES = ['R1', 'R2', 'R3', 'R4', 'R5'] as const

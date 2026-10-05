@@ -8,7 +8,7 @@
  */
 import { createApp } from 'vue'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 import App from './App.vue'
 import TicketList from './pages/TicketList.vue'
 import TicketDetail from './pages/TicketDetail.vue'

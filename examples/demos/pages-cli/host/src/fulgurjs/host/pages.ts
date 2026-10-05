@@ -1,4 +1,4 @@
-import { createHostPages, remoteSchema } from '@fulgurjs/federation/runtime'
+import { createHostPages, remoteSchema } from '@fulgurjs/federation/vue'
 import { pages, remotePrefixes } from '../pages.data'
 import PcSkeleton from '../../components/PcSkeleton.vue'
 import { pushTrace } from './trace'

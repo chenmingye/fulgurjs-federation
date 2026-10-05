@@ -225,16 +225,30 @@ describe('开发态内部 API 门面', () => {
     const resolve = pre.resolveId as (source: string) => unknown
     expect(resolve.call(pre, 'virtual:fulgurjs-api')).toBeNull()
   })
-  it('运行时代理与同步 Vue 适配层组合', async () => {
+  it('/runtime 门面：仅框架无关面（零 Vue/React 适配；6.0.0 统一入口合同）', async () => {
     const { genApiFacade } = await import('../src/virtual')
-    const code = genApiFacade()
+    const code = genApiFacade('runtime')
+    expect(code).toContain('from "virtual:fulgurjs-runtime-proxy"')
+    expect(code).not.toContain('from "virtual:fulgurjs-runtime";')
+    expect(code).not.toContain('vue-adapter')
+    expect(code).not.toContain('react-adapter')
+    expect(code).not.toContain('bridge-host')
+    expect(code).toContain('provideAppContext')
+  })
+  it('Vue 门面接 vue-adapter + 桥接宿主 + 路由同步（完整 /vue 面）', async () => {
+    const { genApiFacade } = await import('../src/virtual')
+    const code = genApiFacade('vue')
     expect(code).toContain('from "virtual:fulgurjs-runtime-proxy"')
     expect(code).not.toContain('from "virtual:fulgurjs-runtime";')
     expect(code).toContain('createRemoteComponent(__fulgurjs_loadRemote)')
     expect(code).toContain('@fulgurjs/federation/internal/vue-adapter.js')
+    expect(code).toContain("@fulgurjs/federation/internal/bridge-host-vue.js")
+    expect(code).toContain("@fulgurjs/federation/internal/bridge-router-vue.js")
+    expect(code).toContain('export { createVueBridgeNavigation, connectVueBridgeRouter };')
+    expect(code).not.toContain('react-adapter')
     expect(code).toContain('provideAppContext')
   })
-  it('React 门面接 react-adapter，不引入 Vue', async () => {
+  it('React 门面接 react-adapter + 桥接宿主 + 路由同步，不引入 Vue', async () => {
     const { genApiFacade } = await import('../src/virtual')
     const code = genApiFacade('react')
     expect(code).toContain('from "virtual:fulgurjs-runtime-proxy"')
@@ -243,13 +257,16 @@ describe('开发态内部 API 门面', () => {
     expect(code).toContain('createUseLoadRemote(__fulgurjs_loadRemote)')
     expect(code).toContain('export { RemoteErrorBoundary };')
     expect(code).toContain('__fulgurjs_rhp(options, __fulgurjs_loadRemote)')
+    expect(code).toContain("@fulgurjs/federation/internal/bridge-host-react.js")
+    expect(code).toContain("@fulgurjs/federation/internal/bridge-router-react.js")
+    expect(code).toContain('export { createReactBridgeNavigation, createReactBridgeRouter };')
     expect(code).not.toContain('vue-adapter')
     expect(code).toContain('provideAppContext')
   })
   it('parseSpec 同步直读单例', async () => {
     const { genApiFacade } = await import('../src/virtual')
     const { genRuntimeProxyModule } = await import('../src/virtual')
-    const serve = genApiFacade()
+    const serve = genApiFacade('vue')
     const proxy = genRuntimeProxyModule()
     // proxy 内 parseSpec 不在 promise 转发列表（同步语义）
     expect(proxy).toContain('export const parseSpec = (...a) => (globalThis).__FULGURJS_RUNTIME__.parseSpec(...a);')

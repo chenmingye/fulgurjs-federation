@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import type { ChangeEvent, ReactElement } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { createReactBridgeApp } from '@fulgurjs/federation/bridge/react'
+import { createReactBridgeApp } from '@fulgurjs/federation/react'
 import { BRIDGE_BASE_PATH, getBridgeRouting } from '../routing'
 import { handleChildEvent, logNav } from '../demo-log'
 import ObsPanel from '../ObsPanel'

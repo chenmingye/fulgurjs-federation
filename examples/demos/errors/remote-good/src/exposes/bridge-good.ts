@@ -4,7 +4,7 @@
  * 供宿主面板统计真实 mount 次数。
  */
 import { createApp, defineComponent, h, onMounted, ref, type PropType } from 'vue'
-import { defineBridgeApp } from '@fulgurjs/federation/runtime'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
 const BridgeGoodRoot = defineComponent({
   name: 'ErrGoodBridgeGoodRoot',

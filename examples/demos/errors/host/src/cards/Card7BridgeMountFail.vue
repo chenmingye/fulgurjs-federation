@@ -37,7 +37,7 @@
  * 展示与恢复结构与卡 6 一致（默认占位 + 捕获通道 + 换 spec 恢复）。
  */
 import { computed, ref, shallowRef, type Component } from 'vue'
-import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
+import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 import CardShell from '../components/CardShell.vue'
 import ErrorView from '../components/ErrorView.vue'
 import { createBridgeErrorCapture } from '../components/bridge-capture'

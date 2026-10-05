@@ -38,13 +38,13 @@ function mirrorFixtureToTmp() {
   mirror('src/context.ts')
   mirror('src/runtime/errors.ts')
   mirror('src/bridge-errors.ts')
-  fs.mkdirSync(path.join(dir, 'docs'), { recursive: true })
-  fs.copyFileSync(path.join(repoRoot, 'docs/API.md'), path.join(dir, 'docs/API.md'))
+  fs.mkdirSync(path.join(dir, 'docs/zh/reference'), { recursive: true })
+  fs.copyFileSync(path.join(repoRoot, 'docs/zh/reference/errors.md'), path.join(dir, 'docs/zh/reference/errors.md'))
   return {
     dir,
     script: path.join(pluginDir, scriptRel),
     registry: mirror('src/diagnostics.ts'),
-    readme: path.join(dir, 'docs/API.md'),
+    readme: path.join(dir, 'docs/zh/reference/errors.md'),
   }
 }
 
@@ -88,7 +88,7 @@ describe('错误码三方一致性（防漂移门禁）', () => {
     const readme = fs.readFileSync(f.readme, 'utf8')
     fs.writeFileSync(
       f.readme,
-      readme.replace(/(###\s*6\.\s*错误码总表[\s\S]*?)(\n###\s)/, '$1\n| | `MFU-099` | 注入测试条目 |$2'),
+      readme.replace(/(###\s*6\.\s*错误码总表[\s\S]*?)(\n##\s)/, '$1\n| | `MFU-099` | 注入测试条目 |$2'),
     )
 
     const { ok, output } = runGate(f.script)

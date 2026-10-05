@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "5.9.3",
+  "version": "6.0.0",
   "type": "module",
   "description": "Vite Module Federation for Vue and React: remote modules, shared dependencies and app bridges.",
   "license": "MIT",
@@ -13,6 +13,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js"
+    },
     "./runtime": {
       "types": "./dist/runtime-entry.d.ts",
       "import": "./dist/runtime-entry.js"
@@ -20,18 +24,6 @@
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
-    },
-    "./bridge": {
-      "types": "./dist/bridge.d.ts",
-      "import": "./dist/bridge.js"
-    },
-    "./bridge/vue": {
-      "types": "./dist/bridge-vue.d.ts",
-      "import": "./dist/bridge-vue.js"
-    },
-    "./bridge/react": {
-      "types": "./dist/bridge-react.d.ts",
-      "import": "./dist/bridge-react.js"
     },
     "./package.json": "./package.json",
     "./internal/context.js": {
@@ -74,37 +66,29 @@
       "types": "./dist/bridge-host-react.d.ts",
       "import": "./dist/bridge-host-react.js"
     },
-    "./bridge/router/vue": {
+    "./internal/bridge-router-core.js": {
+      "types": "./dist/bridge-router-core.d.ts",
+      "import": "./dist/bridge-router-core.js"
+    },
+    "./internal/bridge-router-vue.js": {
       "types": "./dist/bridge-router-vue.d.ts",
       "import": "./dist/bridge-router-vue.js"
     },
-    "./bridge/router/react": {
+    "./internal/bridge-router-react.js": {
       "types": "./dist/bridge-router-react.d.ts",
       "import": "./dist/bridge-router-react.js"
     }
   },
   "typesVersions": {
     "*": {
+      "vue": [
+        "dist/vue.d.ts"
+      ],
       "runtime": [
         "dist/runtime-entry.d.ts"
       ],
       "react": [
         "dist/react.d.ts"
-      ],
-      "bridge/vue": [
-        "dist/bridge-vue.d.ts"
-      ],
-      "bridge/react": [
-        "dist/bridge-react.d.ts"
-      ],
-      "bridge": [
-        "dist/bridge.d.ts"
-      ],
-      "bridge/router/vue": [
-        "dist/bridge-router-vue.d.ts"
-      ],
-      "bridge/router/react": [
-        "dist/bridge-router-react.d.ts"
       ]
     }
   },
@@ -116,15 +100,18 @@
     "CHANGELOG.md",
     "DESIGN.md",
     "examples",
-    "docs/迁移指南.md",
-    "docs/webpack-mf-对照与缺口.md",
-    "docs/沙箱边界审计.md",
-    "docs/P5-vite7-8兼容矩阵.md",
-    "docs/API.md",
-    "docs/API.en.md"
+    "docs/zh/reference/api.md",
+    "docs/zh/reference/errors.md",
+    "docs/zh/migration.md",
+    "docs/en/reference/api.md",
+    "docs/en/reference/errors.md",
+    "docs/en/migration.md",
+    "docs/maintainers/webpack-mf-对照与缺口.md",
+    "docs/maintainers/沙箱边界审计.md",
+    "docs/maintainers/P5-vite7-8兼容矩阵.md"
   ],
   "scripts": {
-    "build": "cp ../../README.md README.md && cp ../../README.en.md README.en.md && mkdir -p docs && cp ../../docs/API.md ../../docs/API.en.md ../../docs/迁移指南.md ../../docs/webpack-mf-对照与缺口.md ../../docs/沙箱边界审计.md ../../docs/P5-vite7-8兼容矩阵.md docs/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && node scripts/sync-package-examples.mjs && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/vue-adapter.ts src/react-adapter.ts src/context.ts src/bridge-core.ts src/bridge-errors.ts src/bridge-app-vue.ts src/bridge-app-react.ts src/bridge-host-vue.ts src/bridge-host-react.ts --format esm,cjs --dts --external vite --target node18 --clean && tsup src/runtime-entry.ts --format esm --dts --external vite,vue --target node18 && tsup src/react.ts --format esm --dts --external vite,react --target node18 && tsup src/bridge.ts src/bridge-vue.ts src/bridge-react.ts --format esm --dts --external vite,vue,react,react-dom --target node18 && tsup src/bridge-router-vue.ts --format esm --dts --external vite,vue,vue-router --target node18 && tsup src/bridge-router-react.tsx --format esm --dts --external vite,react,react-dom,react-router-dom --target node18 && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime-entry.mjs && node scripts/check-gzip.mjs && node scripts/check-manual-codes.mjs",
+    "build": "cp ../../README.md README.md && cp ../../README.en.md README.en.md && mkdir -p docs && mkdir -p docs/zh/reference docs/en/reference docs/maintainers && cp ../../docs/zh/reference/api.md ../../docs/zh/reference/errors.md docs/zh/reference/ && cp ../../docs/zh/migration.md docs/zh/ && cp ../../docs/en/reference/api.md ../../docs/en/reference/errors.md docs/en/reference/ && cp ../../docs/en/migration.md docs/en/ && cp ../../docs/maintainers/webpack-mf-对照与缺口.md ../../docs/maintainers/沙箱边界审计.md ../../docs/maintainers/P5-vite7-8兼容矩阵.md docs/maintainers/ && cp ../../CHANGELOG.md CHANGELOG.md && cp ../../DESIGN.md DESIGN.md && node scripts/sync-package-examples.mjs && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime.mjs && tsup src/index.ts src/pages.ts src/vue-adapter.ts src/react-adapter.ts src/context.ts src/bridge-core.ts src/bridge-errors.ts src/bridge-app-vue.ts src/bridge-app-react.ts src/bridge-host-vue.ts src/bridge-host-react.ts --format esm,cjs --dts --external vite --target node18 --clean && tsup src/runtime-entry.ts --format esm --dts --external vite --target node18 && tsup src/vue.ts --format esm --dts --external vite,vue,vue-router --target node18 && tsup src/react.ts --format esm --dts --external vite,react,react-dom,react-router-dom --target node18 && tsup src/bridge-router-vue.ts --format esm --dts --external vite,vue,vue-router --target node18 && tsup src/bridge-router-react.tsx --format esm --dts --external vite,react,react-dom,react-router-dom --target node18 && esbuild src/cli.ts --bundle --format=esm --target=node18 --platform=node --outfile=dist/cli.js && esbuild src/runtime/index.ts --bundle --format=esm --target=es2022 --minify --outfile=dist/runtime.js && node scripts/gen-runtime-entry.mjs && node scripts/check-gzip.mjs && node scripts/check-manual-codes.mjs",
     "dev": "tsup --watch",
     "test": "vitest run --dir tests",
     "typecheck": "tsc --noEmit",
