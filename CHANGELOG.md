@@ -8,7 +8,8 @@
 
 - **`RemoteSetupModule.globalComponents`**（setup 模块可选具名导出，`Record<注册名, 组件>`）：提供方声明其暴露面依赖的全局注册组件。运行时在**每次 `loadRemote`** 时把它们幂等注册到当次消费方 app（`app.component` 同名覆盖天然幂等）——按次而非按 setup 一次执行，桥接子应用每次挂载新建 app 实例也能拿到注册。非法导出类型（数组/非对象）按 MFU-011 三段式报错并支持重试。无声明、无消费方 app（手动 `loadRemote`）、或消费方 app 无 `component` 方法时零行为、零副作用。
 - **`LoadRemoteOptions.consumerApp`**（可选）：发起本次加载的消费方应用实例。由框架适配器自动传入（Vue 的 `remoteComponent` 在异步包装组件 setup 内同步捕获当前渲染 app），业务代码不需要手填；运行时只在当次调用内消费，不保存、不感知具体框架类型。React 无全局组件注册表，不参与该机制。
-- 单测：`tests/global-components.test.ts`（注册/换 app 重注册/幂等/跳过/MFU-011/失败清缓存/无声明零行为）+ `tests/vue.test.ts` V-9（jsdom 全链路：远程模板字符串标签经 globalComponents 解析为真实 DOM，不再残留字面自定义元素）。
+- **`globalComponents` 值支持零参 loader（`() => import('…')`，推荐形态）**：setup 模块自身保持零组件依赖，组件只在本框架消费方真实渲染时才加载——Vue 适配器注册时自动包 `defineAsyncComponent`。静态组件值仍支持（同框架消费一步到位）。实测教训（fixtures R12 回归拦截）：setup 若静态 import 框架组件，会把框架依赖图拖进**任意**加载该远程模块的页面（含跨框架纯 TS 消费方），dev 下模块内根相对 URL 在跨源页面解析断链。
+- 单测：`tests/global-components.test.ts`（注册/换 app 重注册/幂等/跳过/MFU-011/失败清缓存/无声明零行为）+ `tests/vue.test.ts` V-9/V-10（jsdom 全链路：远程模板字符串标签经 globalComponents 解析为真实 DOM；loader 形态惰性加载真实执行）。
 
 ### 修复
 

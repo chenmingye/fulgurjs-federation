@@ -315,12 +315,18 @@ export async function onSession(context: RemoteSetupContext) {
   writeToStores(data)
 }
 
-// 6.1.0 可选具名导出：暴露面依赖的「消费方全局注册组件」声明（键=注册名，值=组件）。
+// 6.1.0 可选具名导出：暴露面依赖的「消费方全局注册组件」声明
+// （键=注册名，值=组件对象或零参 loader）。
 // 适用场景：组件联邦（remoteComponent）把远程组件渲染进消费方 app，其模板里的字符串标签
 // （如 <a-divider>）按消费方全局注册表解析——消费方没注册就渲染成无样式死元素。
 // 运行时在每次 loadRemote 时把它们幂等注册到当次消费方 app；不声明则零行为。
 export const globalComponents: RemoteSetupModule['globalComponents'] = {
-  // ADivider: Divider,   // 注册名须与模板标签可解析对应（a-divider → ADivider）
+  // 推荐零参 loader 形态：setup 模块自身零组件依赖，组件只在本框架消费方真实渲染时
+  // 才加载（Vue 适配器注册时自动包 defineAsyncComponent）——跨框架消费方加载本远程
+  // 纯 TS 模块时不拖入框架依赖图。
+  ADivider: () => import('ant-design-vue').then((m) => m.Divider),
+  // 静态组件值同样支持（同框架消费一步到位）：
+  // AButton: Button,
 }
 ```
 

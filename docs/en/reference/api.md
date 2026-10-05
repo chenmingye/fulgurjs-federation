@@ -317,13 +317,20 @@ export async function onSession(context: RemoteSetupContext) {
 }
 
 // 6.1.0 optional named export: the "consumer-side globally registered components" the exposed
-// surface depends on (key = registered name, value = component). For component federation
-// (remoteComponent): the remote component renders inside the CONSUMER app, and string tags in
-// its templates (e.g. <a-divider>) resolve against the consumer's global registry — without
-// registration they render as unstyled literal custom elements. The runtime registers these
-// idempotently onto the current consumer app on every loadRemote; omit for zero behavior.
+// surface depends on (key = registered name, value = a component object or a zero-arg loader).
+// For component federation (remoteComponent): the remote component renders inside the CONSUMER
+// app, and string tags in its templates (e.g. <a-divider>) resolve against the consumer's
+// global registry — without registration they render as unstyled literal custom elements.
+// The runtime registers these idempotently onto the current consumer app on every loadRemote;
+// omit for zero behavior.
 export const globalComponents: RemoteSetupModule['globalComponents'] = {
-  // ADivider: Divider,   // registered names must resolve from template tags (a-divider → ADivider)
+  // Recommended zero-arg loader form: the setup module itself stays free of component imports,
+  // so components load only when actually rendered by a same-framework consumer (the Vue
+  // adapter wraps loaders with defineAsyncComponent at registration). Cross-framework
+  // consumers loading pure-TS modules never pull the framework graph.
+  ADivider: () => import('ant-design-vue').then((m) => m.Divider),
+  // Static component values also work (one step for same-framework consumers):
+  // AButton: Button,
 }
 ```
 

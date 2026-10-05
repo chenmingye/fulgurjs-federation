@@ -145,8 +145,25 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
     // consumerApp：当前渲染远程组件的 app 实例（异步包装组件 setup 内同步可得）。
     // 远程 setup 声明的 globalComponents 借它注册进消费方全局注册表——桥接子应用
     // 每次挂载新建 app 也能拿到；无组件上下文（重试等）时为 undefined，仅跳过注册。
+    // 注册器包装：globalComponents 值为「零参 loader（() => import(...)）」时包一层
+    // defineAsyncComponent——setup 模块因此可以完全惰性引用组件，不把框架依赖图
+    // 拖进非本框架消费页面（跨框架纯 TS 模块消费实测会因根相对 dev URL 断链）。
     const loader = (): Promise<any> => {
-      const consumerApp = getCurrentInstance()?.appContext.app
+      const app = getCurrentInstance()?.appContext.app
+      const consumerApp = app
+        ? {
+            component: (name: string, comp: unknown) => {
+              const wrapped =
+                typeof comp === 'function' && comp.length === 0
+                  ? defineAsyncComponent(async () => {
+                      const m = await (comp as () => Promise<any>)()
+                      return (m && typeof m === 'object' && 'default' in m ? m.default : m) as any
+                    })
+                  : comp
+              return app.component(name, wrapped)
+            },
+          }
+        : undefined
       return loadRemote(spec, { retries: opts.retries, consumerApp }).then(m => m.default ?? m)
     }
     return defineAsyncComponent({

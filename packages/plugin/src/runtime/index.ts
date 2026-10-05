@@ -128,11 +128,14 @@ export interface RemoteSetupModule {
   default: (ctx: RemoteSetupContext) => void | Promise<void>
   onSession?: (ctx: RemoteSetupContext) => void | Promise<void>
   /**
-   * 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象）：
+   * 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象或零参 loader）：
    * 组件联邦（remoteComponent）把远程组件渲染进消费方 app 上下文，模板里的
    * 字符串标签（如 <a-divider>）按消费方 app 的全局注册表解析——消费方没注册就
    * 渲染成死元素。提供方在此声明后，运行时在每次 loadRemote 时把它们幂等注册到
    * 当次传入的 consumerApp 上；无 consumerApp（无组件上下文的手动加载）时静默跳过。
+   * 值推荐「零参 loader（() => import('./X.vue')）」：setup 模块保持零重依赖，
+   * 组件只在本框架消费方真实渲染时才加载——Vue 适配器注册时自动包 defineAsyncComponent；
+   * 静态组件值仍支持（同框架消费场景一步到位）。运行时对值原样透传，不做形状校验。
    */
   globalComponents?: Record<string, unknown>
 }

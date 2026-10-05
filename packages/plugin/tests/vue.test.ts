@@ -111,6 +111,39 @@ describe('remoteComponent（@fulgurjs/federation/vue）', () => {
     expect(el.querySelector('remote-section')).toBeNull()
   })
 
+  it('V-10 globalComponents 零参 loader 形态：注册时包 defineAsyncComponent，组件惰性加载（6.1.0 跨框架安全形态）', async () => {
+    const rt = await import('../src/runtime/index')
+    let loaderCalls = 0
+    rt.registerRemote({
+      name: 'r10',
+      entry: '',
+      promise: async () => ({
+        name: 'r10',
+        __fulgurjsSetup: './__fulgurjs_setup__',
+        init: async () => {},
+        get: async (m: string) =>
+          m === './__fulgurjs_setup__'
+            ? {
+                default: () => {},
+                // 零参 loader：setup 模块自身不 import 组件（跨框架纯 TS 消费不拖框架依赖图）
+                globalComponents: { LazySection: async () => { loaderCalls++; return { default: { template: '<b class="lazy-ok">lazy-section</b>' } } } },
+              }
+            : { default: { template: '<lazy-section/>' } },
+      }),
+    })
+    const { remoteComponent } = await import('../src/vue')
+    const el = await mount(remoteComponent('r10/form'))
+    // 异步组件解析后渲染出组件 DOM（loader 真实执行过一次）
+    await new Promise((r) => setTimeout(r, 0))
+    await nextTick()
+    for (let i = 0; i < 20 && !el.querySelector('b.lazy-ok'); i++) {
+      await new Promise((r) => setTimeout(r, 10))
+      await nextTick()
+    }
+    expect(el.querySelector('b.lazy-ok')).toBeTruthy()
+    expect(loaderCalls).toBeGreaterThanOrEqual(1)
+  })
+
   it('V-4 加载失败 → 默认错误占位（错误码+根因+修法）+ fulgurjs:error 显式', async () => {
     const rt = await import('../src/runtime/index')
     rt.registerRemote({
