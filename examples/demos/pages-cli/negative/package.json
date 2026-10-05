@@ -7,7 +7,7 @@
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
-    "@fulgurjs/federation": "6.0.0"
+    "@fulgurjs/federation": "6.1.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

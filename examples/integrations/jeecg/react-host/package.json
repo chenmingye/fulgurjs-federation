@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fulgurjs/federation": "6.0.0",
+    "@fulgurjs/federation": "6.1.0",
     "dayjs": "^1.11.23",
     "pinia": "^4.0.3",
     "react": "^19.1.0",
