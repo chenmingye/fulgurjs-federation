@@ -107,7 +107,27 @@ for (const required of ['./vue']) {
   if (!/^>=18\.0\.0 <20$/.test(peers['react-dom'])) fail(`react-dom peer 范围异常：${peers['react-dom']}`)
   log('peers OK: vue/react/react-dom 均 optional；react 范围 >=18.0.0 <20')
 }
-fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), `import * as runtimeEntry from '@fulgurjs/federation/runtime'\nimport * as pluginEntry from '@fulgurjs/federation'\nimport * as reactEntry from '@fulgurjs/federation/react'\nif (!('loadRemote' in runtimeEntry && 'remoteComponent' in runtimeEntry && 'remoteSchema' in runtimeEntry)) process.exit(2)\nif ('loadRemote' in pluginEntry) process.exit(3)\nif (!('remoteComponent' in reactEntry && 'useLoadRemote' in reactEntry && 'RemoteErrorBoundary' in reactEntry && 'createReactHostPages' in reactEntry && 'remoteSchema' in reactEntry)) process.exit(4)\nif ('createHostPages' in reactEntry || 'keepAliveNames' in reactEntry) process.exit(5)\n`)
+fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), [
+  "import * as runtimeEntry from '@fulgurjs/federation/runtime'",
+  "import * as pluginEntry from '@fulgurjs/federation'",
+  "import * as reactEntry from '@fulgurjs/federation/react'",
+  "// 6.0.0：/runtime 框架无关（不含 remoteComponent）；/react 全量统一入口面",
+  "if (!('loadRemote' in runtimeEntry && 'remoteSchema' in runtimeEntry)) process.exit(2)",
+  "if ('remoteComponent' in runtimeEntry || 'createHostPages' in runtimeEntry || 'defineBridgeApp' in runtimeEntry) process.exit(21)",
+  "if ('loadRemote' in pluginEntry) process.exit(3)",
+  "if (!('remoteComponent' in reactEntry && 'useLoadRemote' in reactEntry && 'RemoteErrorBoundary' in reactEntry && 'createReactHostPages' in reactEntry && 'remoteSchema' in reactEntry)) process.exit(4)",
+  "if (!('createReactBridgeApp' in reactEntry && 'createReactBridgeNavigation' in reactEntry && 'createReactBridgeRouter' in reactEntry && 'defineBridgeApp' in reactEntry)) process.exit(41)",
+  "if ('createHostPages' in reactEntry || 'keepAliveNames' in reactEntry) process.exit(5)",
+  "try {",
+  "  const vueEntry = await import('@fulgurjs/federation/vue')",
+  "  if (!('remoteComponent' in vueEntry && 'createVueBridgeApp' in vueEntry && 'createVueBridgeNavigation' in vueEntry && 'connectVueBridgeRouter' in vueEntry && 'defineBridgeApp' in vueEntry && 'remoteSchema' in vueEntry)) process.exit(6)",
+  "  if ('useLoadRemote' in vueEntry || 'createReactBridgeApp' in vueEntry) process.exit(61)",
+  "} catch (e) {",
+  "  if (String(e).includes('vue')) process.exit(7) // /vue 导入需要 vue peer——缺 vue 的纯 React 消费者不导入 /vue 即可",
+  "  throw e",
+  "}",
+  "",
+].join('\n'))
 const esmCheck = spawnSync(process.execPath, ['check-runtime.mjs'], { cwd: consumer, encoding: 'utf8' })
 if (esmCheck.status !== 0) fail(`ESM 包路径导入失败：${esmCheck.stderr}`)
 let requireRejected = false
