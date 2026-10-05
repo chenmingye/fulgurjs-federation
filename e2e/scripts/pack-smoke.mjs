@@ -118,14 +118,17 @@ fs.writeFileSync(path.join(consumer, 'check-runtime.mjs'), [
   "if (!('remoteComponent' in reactEntry && 'useLoadRemote' in reactEntry && 'RemoteErrorBoundary' in reactEntry && 'createReactHostPages' in reactEntry && 'remoteSchema' in reactEntry)) process.exit(4)",
   "if (!('createReactBridgeApp' in reactEntry && 'createReactBridgeNavigation' in reactEntry && 'createReactBridgeRouter' in reactEntry && 'defineBridgeApp' in reactEntry)) process.exit(41)",
   "if ('createHostPages' in reactEntry || 'keepAliveNames' in reactEntry) process.exit(5)",
+  "let vueChecked = false",
   "try {",
   "  const vueEntry = await import('@fulgurjs/federation/vue')",
+  "  vueChecked = true",
   "  if (!('remoteComponent' in vueEntry && 'createVueBridgeApp' in vueEntry && 'createVueBridgeNavigation' in vueEntry && 'connectVueBridgeRouter' in vueEntry && 'defineBridgeApp' in vueEntry && 'remoteSchema' in vueEntry)) process.exit(6)",
   "  if ('useLoadRemote' in vueEntry || 'createReactBridgeApp' in vueEntry) process.exit(61)",
   "} catch (e) {",
-  "  if (String(e).includes('vue')) process.exit(7) // /vue 导入需要 vue peer——缺 vue 的纯 React 消费者不导入 /vue 即可",
-  "  throw e",
+  "  // 缺 vue peer 的纯 React 消费者：/vue 不可导入属可选依赖边界内的正常形态（不失败）",
+  "  if (!String(e).includes('vue')) throw e",
   "}",
+  "console.log('runtime entry check OK, vueChecked=' + vueChecked)",
   "",
 ].join('\n'))
 const esmCheck = spawnSync(process.execPath, ['check-runtime.mjs'], { cwd: consumer, encoding: 'utf8' })
@@ -140,13 +143,19 @@ let configRejected = false
 try { consumerRequire.resolve('@fulgurjs/federation/config') } catch { configRejected = true }
 if (!configRejected) fail('已删除的 /config 子路径（5.0.0 聚合配置链）仍可解析')
 const runtimeEntry = await import(pathToFileURL(path.join(consumer, 'node_modules/@fulgurjs/federation/dist/runtime-entry.js')).href)
-for (const name of ['loadRemote', 'remoteComponent', 'remoteSchema', 'clearAppContext', 'createHostPages']) {
+// 6.0.0：/runtime 框架无关——运行时面齐全且不含 Vue 适配符号
+for (const name of ['loadRemote', 'remoteSchema', 'clearAppContext', 'provideAppContext', 'definePages']) {
   if (!(name in runtimeEntry)) fail(`/runtime 缺少 ${name}`)
+}
+for (const gone of ['remoteComponent', 'createHostPages', 'defineBridgeApp']) {
+  if (gone in runtimeEntry) fail(`/runtime 不应再导出 ${gone}（6.0.0 迁移到 /vue）`)
 }
 log('types OK: . ./runtime；旧子路径（含 /config）已删除 ✓')
 
 const tsc = path.join(PLUGIN_DIR, 'node_modules/.bin/tsc')
-fs.writeFileSync(path.join(consumer, 'check-types.ts'), `import { loadRemote, definePages, remoteSchema } from '@fulgurjs/federation/runtime'\nimport type { RemoteInput } from '@fulgurjs/federation/runtime'\nimport { remoteComponent, useLoadRemote, RemoteErrorBoundary, createReactHostPages } from '@fulgurjs/federation/react'\nimport type { ReactRemoteComponentOptions, UseLoadRemoteResult } from '@fulgurjs/federation/react'\nimport { createElement } from 'react'\nconst remote: RemoteInput = { name: 'demo', entry: '/remoteEntry.js' }\ndefinePages([{ route: '/demo/list' }], { schema: remoteSchema })\nconst RC = remoteComponent<{ label: string }>('demo/Button', { fallback: createElement('p', null, 'loading') })\nconst hp = createReactHostPages({ pages: [], remotePrefixes: {} })\nconst opts: ReactRemoteComponentOptions = { retries: 1, timeout: 5000 }\nfunction useProbe(): UseLoadRemoteResult<{ v: number }> { return useLoadRemote('demo/utils') }\nvoid loadRemote; void remote; void RC; void hp; void opts; void useProbe; void RemoteErrorBoundary\n`)
+let vueTypeImports = ''
+try { consumerRequire.resolve('vue'); vueTypeImports = `import { remoteComponent as vueRemoteComponent, createHostPages } from '@fulgurjs/federation/vue'\n` } catch { /* 纯 React 消费者：/vue 类型检查跳过 */ }
+fs.writeFileSync(path.join(consumer, 'check-types.ts'), `import { loadRemote, definePages, remoteSchema } from '@fulgurjs/federation/runtime'\nimport type { RemoteInput } from '@fulgurjs/federation/runtime'\n${vueTypeImports}import { remoteComponent, useLoadRemote, RemoteErrorBoundary, createReactHostPages } from '@fulgurjs/federation/react'\nimport type { ReactRemoteComponentOptions, UseLoadRemoteResult } from '@fulgurjs/federation/react'\nimport { createElement } from 'react'\nconst remote: RemoteInput = { name: 'demo', entry: '/remoteEntry.js' }\ndefinePages([{ route: '/demo/list' }], { schema: remoteSchema })\nconst RC = remoteComponent<{ label: string }>('demo/Button', { fallback: createElement('p', null, 'loading') })\nconst hp = createReactHostPages({ pages: [], remotePrefixes: {} })\nconst opts: ReactRemoteComponentOptions = { retries: 1, timeout: 5000 }\nfunction useProbe(): UseLoadRemoteResult<{ v: number }> { return useLoadRemote('demo/utils') }\nvoid loadRemote; void remote; void RC; void hp; void opts; void useProbe; void RemoteErrorBoundary; void vueRemoteComponent; void createHostPages\n`)
 for (const [name, module, moduleResolution] of [['bundler', 'esnext', 'bundler'], ['node10', 'commonjs', 'node10']]) {
   const config = `tsconfig.${name}.json`
   fs.writeFileSync(path.join(consumer, config), JSON.stringify({ compilerOptions: { target: 'es2022', module, moduleResolution, strict: true, noEmit: true, skipLibCheck: true, types: [] }, files: ['check-types.ts'] }))
