@@ -77,9 +77,9 @@ for (const sub of ['.', './runtime', './react']) {
     fail(`类型文件缺失：exports["${sub}"].types = ${typesFile}`)
   }
 }
-// 历史破坏性断言：旧公开子路径必须已从 exports 删除（3.0.0：./pages ./context ./vue ./client；
-// 5.0.0：./config 聚合入口、./internal/vue.js 无消费者导出键——dist/vue.js 文件本身保留（runtime-entry 内核唯一再导出实体，相对路径内部引用不经 exports））
-for (const removed of ['./pages', './context', './vue', './client', './config', './internal/vue.js']) {
+// 历史破坏性断言：旧公开子路径必须已从 exports 删除（3.0.0：./pages ./context ./client；
+// 5.0.0：./config 聚合入口、./internal/vue.js；6.0.0：/bridge 族——注意 ./vue 在 6.0.0 起是统一入口，重新成为公开导出）
+for (const removed of ['./pages', './context', './client', './config', './internal/vue.js', './bridge', './bridge/vue', './bridge/react', './bridge/router/vue', './bridge/router/react']) {
   if (pkgJson.exports[removed] !== undefined) {
     fail(`破坏性收敛未落实：exports 仍暴露 ${removed}`)
   }
@@ -91,6 +91,10 @@ for (const removedDist of ['dist/config.js', 'dist/config.cjs', 'dist/config.d.t
 }
 if (pkgJson.exports['./runtime']?.require) fail('/runtime 必须只有 ESM import 条件')
 if (pkgJson.exports['./react']?.require) fail('/react 必须只有 ESM import 条件')
+if (pkgJson.exports['./vue']?.require) fail('/vue 必须只有 ESM import 条件（6.0.0 统一入口）')
+for (const required of ['./vue']) {
+  if (!pkgJson.exports[required]) fail(`6.0.0 统一入口缺失：exports["${required}"]`)
+}
 // D08：可选 peer 三件套核对（vue/react/react-dom 均声明且 optional）
 {
   const peers = pkgJson.peerDependencies ?? {}
