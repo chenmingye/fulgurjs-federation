@@ -1,5 +1,20 @@
 # Changelog
 
+## 6.1.3
+
+**npm 包内五模板升钉 6.1.2**（6.1.2 已发布并核验：integrity 与五模板 pnpm-lock registry 重生成一致，`minimumReleaseAgeExclude` 同步 `@6.1.2`）。`fulgurjs create` 生成工程从此携带 6.1.2 插件修复（transform 类型位置 import / bridge-router 重复前缀守卫）。
+
+### 修复
+
+- **bridge-router（Vue 子应用）：宿主广播应用的 `duplicated` 导航失败不再误报 `MFU-033`（终验 E）**。宿主广播字符串与子应用 fullPath 存在合法编码差异（中文 query：宿主持 `%E6%BC%94%E7%A4%BA`、vue-router fullPath 保持 `演示`），文本不等触发一次冗余 replace，vue-router 按路由级判定「已在目标位置」返回 `duplicated(16)`——此前 `apply()` 只豁免 `cancelled(8)`，把 duplicated 误报成「守卫拒绝」（无守卫子应用中枪，真实案例 showcase vue-remote 连报两次 MFU-033 且前进不同步）。现在 `duplicated` 按已同步处理（零误报、零宿主写入）；真实守卫拒绝（aborted≠duplicated）仍报 MFU-033。回归：`tests/bridge-router-regressions.test.ts`「广播应用 duplicated 失败不误报」2 例（中文 query push/replace/go 全程 + 真实拒绝不被吞）。
+- **类型：包根导出 `PageRouteLike`（四入口合同补齐）**。pages 表属于构建配置（`fulgurjs.config.ts` / `hostPages` 选项），配置文件按合同从包根取类型——此前该类型仅 `/vue`、`/react` 导出，配置文件从包根 `import type { PageRouteLike }` 必 TS2614。属既有类型按合同补齐导出位，不构成新功能面。回归：`tests/client-types.test.ts`「包根类型面」（dist/index.d.ts 含 FederationOptions 与 PageRouteLike）；同文件修正 /react 导出面断言的误触发（JSDoc 散文提及不再算导出，绑定级判定）。
+- **示例/模板（终验缺陷修复）**：五模板 tsconfig 补 `allowImportingTsExtensions`（`fulgurjs.config.ts` 以 `.ts` 后缀 import 页面数据，模板内 `tsc --noEmit` 此前报错；react-react/vue-vue 各 host+remote 共 4 份）；showcase react-remote `bridge.tsx` 改用 `routerReady` 就绪合同做初始位置上报（冷加载慢路径下 `element.props.router` 是惰性包装、同步读会静默跳过上报）；vue-host-react-remote `App.vue` `r(null)`→`r()`；pages-cli demo `ContractPanel.vue` 兼容 manifest v1 的 exposes **数组**形态（此前按 Record 解析导致对照永远不命中）并按 `remotePrefixes` 剥离远程名前缀。
+
+### 文档与测试
+
+- doctor 部署体检补单测（终验 F）：`tests/doctor.test.ts` 新增 9 场景（--no-entry/--no-manifest/--no-html/--entry/'.'/完整 URL/--dev/nginx 回退兜 HTML/坏 JSON/schemaVersion/缓存 WARN/shared 版本 skew）。
+- 文档 zh/en：globalComponents 消费方 app 捕获范围澄清（当前仅 Vue `remoteComponent` 自动捕获；页面/React/手动 loadRemote 不传，组件解析走宿主全局注册表）+「字符串标签成死元素」排查行；`devSharedSelf` 缺省口径注释与实现（按角色推断，`commands.ts`）对齐；`getLoadedShare` 注释改为「高级诊断用，公开导出」（导出面本就含它，仅注释失真）。
+
 ## 6.1.2
 
 **npm 包内五模板维持钉 6.1.0**（6.1.0 与 6.1.1 运行时代码一致，同为「最后已发布验证版本」；包内模板与 `examples/templates` 逐字节同步已核）。本版本含插件代码修复，发布后模板将升钉 6.1.2 并重生成锁文件；升钉前 `fulgurjs create` 生成工程的插件依赖仍是 6.1.0，需升级依赖以获得下列插件修复。
