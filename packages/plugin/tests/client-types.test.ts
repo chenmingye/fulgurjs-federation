@@ -70,10 +70,16 @@ describe('/react 物理入口类型', () => {
     expect(text).toContain('createReactBridgeApp')
     expect(text).toContain('createReactBridgeNavigation')
     expect(text).toContain('createReactBridgeRouter')
-    // Vue 专属类型不得混入 React 入口（type HostPages, 与 type ReactHostPages, 区分）
-    for (const vueOnly of ['type HostPagesOptions,', 'type RemoteComponentOptions,', 'type HostPages,', 'keepAliveNames', 'createHostPages']) {
-      expect(text).not.toContain(vueOnly)
+    // Vue 专属类型不得混入 React 入口（type HostPages, 与 type ReactHostPages, 区分）。
+    // 绑定级判定与 /vue 检查同型：JSDoc 散文提及不算导出（consumerApp 合同文档确实会
+    // 提到 createHostPages 不传 consumerApp——原始 substring 断言会被散文误触发）。
+    for (const vueOnlyType of ['HostPagesOptions', 'RemoteComponentOptions', 'HostPages', 'keepAliveNames']) {
+      expect(names).not.toContain(vueOnlyType)
     }
+    const vueOnlyBindings = new Set(
+      [...text.matchAll(/\bcreateHostPages\s*[,}]/g)].map((m) => m[0]),
+    )
+    expect([...vueOnlyBindings], '/react 导出绑定不应含 Vue 适配符号').toEqual([])
   })
 
   it('package.json 导出 /react 与内部 react-adapter', () => {
@@ -168,5 +174,13 @@ describe('dts 默认目录收敛到根目录点文件夹（src 零污染）', ()
     expect(resolveDtsDir(true, false)).toBe('.fulgurjs/types')
     expect(resolveDtsDir({ dir: 'types/federation' })).toBe('types/federation')
     expect(resolveDtsDir(false)).toBe('')
+  })
+})
+
+describe('包根类型面（模板 fulgurjs.config.ts 依赖）', () => {
+  it('包根导出 FederationOptions 与 PageRouteLike（配置文件按四入口合同从包根取类型；缺 TS2614）', () => {
+    const text = readFileSync(join(PKG, 'dist/index.d.ts'), 'utf8')
+    expect(text).toContain('FederationOptions')
+    expect(text).toContain('PageRouteLike')
   })
 })

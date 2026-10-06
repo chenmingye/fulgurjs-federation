@@ -1732,3 +1732,7 @@ export function federation(options: FederationOptions): Plugin[] {
 
 export default federation
 export type { FederationOptions } from './options'
+// 页面表元素类型：pages 表属于构建配置（fulgurjs.config.ts / hostPages 选项），
+// 配置文件按四入口合同从包根取类型（模板与快速开始的实际用法；此前仅 /vue、/react
+// 导出，配置文件从包根 import 必 TS2614）。
+export type { PageRouteLike } from './pages'
