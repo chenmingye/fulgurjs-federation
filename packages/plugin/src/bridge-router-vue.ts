@@ -16,8 +16,12 @@ export interface VueBridgeNavigationOptions {
 }
 /** NavigationFailureType.cancelled 的公开枚举值（vue-router 4.x/5.x 一致；见文件头说明） */
 const NAVIGATION_FAILURE_CANCELLED = 8
+/** NavigationFailureType.duplicated 的公开枚举值（同上口径；广播应用的目标与当前路由为同一路由） */
+const NAVIGATION_FAILURE_DUPLICATED = 16
 const isCancelledNavigationFailure = (failure: unknown): boolean =>
   !!failure && typeof failure === 'object' && (failure as { type?: number }).type === NAVIGATION_FAILURE_CANCELLED
+const isDuplicatedNavigationFailure = (failure: unknown): boolean =>
+  !!failure && typeof failure === 'object' && (failure as { type?: number }).type === NAVIGATION_FAILURE_DUPLICATED
 
 const locationFromPath = (path: string): BridgeLocation => {
   const raw = new URL(path || '/', 'http://f.invalid')
@@ -71,6 +75,11 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: VueRou
         // 位置），属正常取消而非失步，不报 MFU-033（宿主守卫回滚期的连续广播曾产生重复的
         // 误导性同步失败诊断）。
         if (isCancelledNavigationFailure(failure)) return
+        // duplicated：vue-router 按路由级（解析后）判定“已在目标位置”。宿主广播的字符串
+        // 形态与子应用 fullPath 存在合法编码差异（如中文 query：宿主持 %E6%BC%94%E7%A4%BA、
+        // 子应用 fullPath 保持演示），文本不等但同一路由——同步已完成，不是失步，更不是
+        // 守卫拒绝（真实案例：showcase vue-remote 无守卫仍报 MFU-033 两次）。
+        if (isDuplicatedNavigationFailure(failure)) return
         // 目标位置入诊断：不同目标的失步事件文本不同，连续同文折叠不会误吞不同失败
         throw routingSyncError(spec, `子应用守卫拒绝应用宿主确认的位置（目标 ${path}）；请在宿主侧设置取消守卫。`, [])
       }

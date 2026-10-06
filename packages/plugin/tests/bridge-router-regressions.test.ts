@@ -330,3 +330,81 @@ describe('URL 重复前缀守卫（MFU-032）', () => {
     expect(h.requests).toEqual([])
   })
 })
+
+// ── 终验 E：广播应用的 duplicated 失败不再误报 MFU-033 ─────────────────────────────
+// 缺陷：宿主广播字符串与子应用 fullPath 存在合法编码差异（中文 query：宿主持
+// %E6%BC%94%E7%A4%BA、vue-router fullPath 保持演示），文本不等触发冗余 replace →
+// vue-router 返回 duplicated(16)（路由级判定“已在目标位置”）→ apply() 只豁免
+// cancelled(8)，把 duplicated 误报成“守卫拒绝”（MFU-033 ×2，无守卫子应用中枪）。
+
+describe('广播应用 duplicated 失败不误报 MFU-033（终验 E）', () => {
+  /** 真实历史语义的宿主端口（共享 host() 的 go 是 vi.fn 空实现，不驱动历史） */
+  function historyHost(initial: BridgeLocation) {
+    let index = 0
+    const entries: BridgeLocation[] = [{ ...initial }]
+    const listeners = new Set<(l: BridgeLocation) => void>()
+    const port: BridgeHostNavigation = {
+      getLocation: () => entries[index],
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      async navigate(target, action) {
+        if (action === 'push') { entries.splice(index + 1, entries.length - index - 1, { ...target }); index++ }
+        else entries[index] = { ...target }
+        listeners.forEach((fn) => fn(entries[index]))
+        return { status: 'committed', location: entries[index] }
+      },
+      go(delta) {
+        const next = index + delta
+        if (next < 0 || next >= entries.length) return
+        index = next
+        listeners.forEach((fn) => fn(entries[index]))
+      },
+    }
+    const channel = new RoutingChannel('test-e', '/approval', port, 'remote/bridge')
+    cleanups.push(() => channel.dispose())
+    return { port, channel }
+  }
+
+  it('vue：push(中文 query)→replace→go(-1)/go(1) 全程零误报，位置两侧一致', async () => {
+    const h = historyHost(loc('/approval/orders'))
+    const router = vue()
+    router.beforeEach(() => {}) // 无拒绝守卫；占位证明报错与守卫无关
+    const conn = connectVueBridgeRouter(h.channel, router)
+    cleanups.push(conn.dispose)
+    await conn.ready
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a.map(String).join(' ')) })
+    try {
+      await router.push('/orders?q=演示&page=2') // 修复前：push Promise 本身拒绝 MFU-033
+      expect(router.currentRoute.value.fullPath).toBe('/orders?q=演示&page=2')
+      expect(h.port.getLocation().search).toBe('?q=%E6%BC%94%E7%A4%BA&page=2')
+      // POP 回退再前进：前进落点为宿主侧编码形态条目，广播目标与 child fullPath（解码显示）
+      // 文本不同——修复前 apply() 把冗余 replace 的 duplicated(16) 误报成守卫拒绝（MFU-033），
+      // 且子应用停在 /orders 不随前进同步。
+      h.port.go(-1)
+      await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/orders'))
+      h.port.go(1)
+      // 前进落点为不同路由 → 真实 replace，子应用采纳宿主侧文本形态（编码）——两处同一路由
+      await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/orders?q=%E6%BC%94%E7%A4%BA&page=2'))
+      await router.replace('/settings')
+      expect(router.currentRoute.value.fullPath).toBe('/settings')
+    } finally {
+      spy.mockRestore()
+    }
+    expect(errors.join('\n')).not.toContain('MFU-033')
+  })
+
+  it('真实守卫拒绝（aborted≠duplicated）仍报 MFU-033，不被本次修复吞掉', async () => {
+    const h = host()
+    const router = vue()
+    const conn = connectVueBridgeRouter(h.channel, router)
+    cleanups.push(conn.dispose)
+    await conn.ready
+    router.beforeEach((to) => String((to as { fullPath?: string }).fullPath ?? '').includes('denied') ? false : undefined)
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a.map(String).join(' ')) })
+    h.broadcast(loc('/approval/denied/x'))
+    await new Promise((r) => setTimeout(r, 40))
+    spy.mockRestore()
+    expect(errors.join('\n')).toContain('MFU-033')
+  })
+})
