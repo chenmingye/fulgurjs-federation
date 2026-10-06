@@ -1,5 +1,18 @@
 # Changelog
 
+## 6.1.2
+
+**npm 包内五模板维持钉 6.1.0**（6.1.0 与 6.1.1 运行时代码一致，同为「最后已发布验证版本」；包内模板与 `examples/templates` 逐字节同步已核）。本版本含插件代码修复，发布后模板将升钉 6.1.2 并重生成锁文件；升钉前 `fulgurjs create` 生成工程的插件依赖仍是 6.1.0，需升级依赖以获得下列插件修复。
+
+### 修复
+
+- **transform：TS 类型位置的动态 import 不再被误改写（发布阻塞修复）**。文档官方形态 `loadRemote<typeof import('remote-a/money')>('remote-a/money')` 与纯类型别名 `type M = typeof import('remote-a/money')` 此前被改写器当作真实导入：类型实参里被插入运行时调用，dev/prod 产出损坏代码（实测 esbuild 把内联形态误析成比较表达式 `loadRemote < typeof … > "remote-a/money"`、类型别名形态直接构建失败 `Expected ";" but found "("` exit 1）。现在改写器按紧邻 `typeof` 关键字跳过类型位置的 `import(...)`（`cond ? a : import('x')` 的 `:` 属合法运行时形态，不误伤）；类型别名形态整文件不再产生改写。回归：`tests/transform.test.ts`「TS 类型位置的动态 import 不改写」4 例（官方形态/纯类型别名/混用文件/运行时条件不误伤）。troubleshooting zh/en 补历史症状条目。
+- **bridge-router：URL 重复前缀在第一次宿主写入前显式拒绝（`MFU-032` 扩展）**。桥接子应用把宿主整段地址（含 basePath，如 `/approval/list`）当成自身逻辑路径导航时，宿主 URL 此前会叠加成 `/approval/approval/list`，且此后子/宿两侧自洽地保持错误前缀、难以后期发现。现在这类目标在触发任何宿主历史写入之前被拒绝：错误信息含当前目标、叠加后果与去掉前缀后应使用的目标；子应用停留在上一确认位置，宿主历史零污染；地址栏手工粘贴的双前缀 URL 仍以宿主为准广播、不回弹。文档：zh/en URL 同步指南新增「子应用逻辑路径不得包含 basePath」，错误码表/故障排查/API 参考 `MFU-032` 触发面同步。回归：`tests/bridge-router-regressions.test.ts`「URL 重复前缀守卫」4 例（vue/react 首写入证据、内核、宿主权威广播）。
+- **dts：dev 类型生成提示行不再把内部 setup 入口计入分母**。类型生成的控制台提示此前以 `manifest.exposes` 全量作分母，而内部 setup 生命周期入口不生成用户可导入的类型却计入计数，用户会看到「已收录 2/3」这类解释不了的缺口；现按剔除内部 setup 入口后的公开暴露模块数计数（`src/dts.ts`）。
+- **bridge 文档：`remoteComponent` 的 provide/inject（React Context）边界合同**。远程组件渲染在消费方组件树——提供方 app 根部的 `provide`（全局 AppProvider/prefixCls/主题/ConfigProvider）不随组件走，消费方祖先 provide 正常生效；依赖此类上下文的暴露面应在暴露入口组件内自 provide（单一来源）。zh/en 组件指南 Vue/React 两节同步补齐；未命中 inject 的典型症状（类名前缀 `undefined-xxx`）写入文档。
+- **示例（公开 Jeecg 集成 app-a/app-b）：`useForm` 实例就绪合同修复**。`getForm()` 此前只等一次 `nextTick` 即返回可能为 null 的实例，表单操作早于表单渲染发起时（联邦/异步组件首帧常见）直接 TypeError（"The form instance has not been obtained"，独立站与联邦站均偶发）。现在 `register()` 是唯一就绪事件：早于注册的调用等待注册后落到真实实例；useForm 归属组件卸载时挂起操作以明确错误结束（清理逻辑原挂在 register 内、无活跃实例、从未真正生效，已移入 useForm 所在 setup 的 onUnmounted）；卸载后的迟到调用显式失败，不写死实例、不吞错、无 setTimeout。回归：`e2e/scripts/reg-d38-form-ready.mjs`（node:test 5 例，含修复前逐字快照在同一首帧用例上复现原始 TypeError 的对照）。
+- **示例锁文件：demos 五族 13 个 npm 工程 package-lock.json 与 package.json 失配修复**（锁 6.0.0、package.json 要 6.1.0，`npm ci` 必失败——CI `bridge-versions` 双作业即因此 failure）。按 package.json 精准重生成：逐项 diff 仅 `@fulgurjs/federation` 条目 version/resolved/integrity 三行（6.0.0→6.1.0），零传递依赖漂移；13/13 `npm ci --dry-run` 通过、react-versions/host 实装 `npm ci` 通过。
+
 ## 6.1.1
 
 - **npm 包内五模板钉 6.1.0**（create 向导生成的工程与包版本一致；锁文件 registry 重生成、minimumReleaseAgeExclude 同步 @6.1.0）。插件代码无变化。
