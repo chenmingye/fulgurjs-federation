@@ -25,7 +25,7 @@ function handleReady(): void {
 }
 
 function nextFrame(): Promise<void> {
-  return new Promise((r) => requestAnimationFrame(() => r(null)))
+  return new Promise((r) => requestAnimationFrame(() => r()))
 }
 
 // 换账号推荐顺序（§4.3）：受控 prop 置 null → 等卸载 → clearAppContext 清 A 残留

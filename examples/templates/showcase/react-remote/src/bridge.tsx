@@ -4,7 +4,6 @@
  * 受控路由 = createReactBridgeRouter（memory data router）：工厂返回 RouterProvider 元素；
  * 根路径 / 经 loader redirect 规范化到 /orders，由插件以 replace 同步宿主（无新增历史条目）。
  */
-import type { ReactElement } from 'react'
 import { redirect } from 'react-router-dom'
 import { defineBridgeApp } from '@fulgurjs/federation/react'
 import { createReactBridgeRouter } from '@fulgurjs/federation/react'
@@ -40,15 +39,16 @@ export default defineBridgeApp((props, ctx) => {
   bindReporter(props)
   const init = ctx.routing.getLocation()
   const conn = createReactBridgeRouter(ctx.routing, routes, { signal: ctx.signal })
-  reportInitRedirect(conn.element as ReactElement<{ router?: MemoryRouterProbe }>, init.pathname + init.search + init.hash)
+  // 冷加载（模块级预热未落定的慢路径）时 element 是 LazyRouterProviderHost 包装、无 router
+  // prop——同步读 props.router 会静默跳过初始位置上报。routerReady 是就绪合同：fast 路径
+  // 同步已 resolve、slow 路径在惰性接线完成时 resolve，两条路径行为一致。
+  void conn.routerReady.then((router) => reportInitRedirect(router, init.pathname + init.search + init.hash))
   return conn.element
 }, { routing: true })
 
 /** 初始位置上报：createMemoryRouter 同步初始化，'/' 的 loader 重定向在微任务内落定，
  * 下一个宏任务读取即为最终初始位置（订阅式一次性上报会在首个用户导航时才误触发）。 */
-function reportInitRedirect(element: ReactElement<{ router?: MemoryRouterProbe }>, initPath: string): void {
-  const router = element.props.router
-  if (!router) return
+function reportInitRedirect(router: MemoryRouterProbe, initPath: string): void {
   setTimeout(() => {
     const current = router.state.location.pathname + router.state.location.search + router.state.location.hash
     reportNav(

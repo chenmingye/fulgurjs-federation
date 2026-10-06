@@ -7,6 +7,7 @@
     "jsx": "preserve",
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["vite/client"]
   },
   "include": ["src", "fulgurjs.config.ts", "vite.config.ts"]
