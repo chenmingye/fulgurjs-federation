@@ -10,29 +10,82 @@ export declare type ValidateFields = (nameList?: NamePath[], options?: ValidateO
 
 type Props = Partial<DynamicProps<FormProps>>;
 
+// 表单实例未就绪的两种口径：
+// 1) 未注册但组件仍在：等待 register（真实就绪事件），不靠一次 nextTick 碰运气；
+// 2) 组件已卸载仍未注册（异步离页/快速关闭）：挂起的操作显式失败，不吞错、不写死实例。
+const FORM_NOT_READY_WAITING_MESSAGE =
+  'The form instance has not been obtained, please make sure that the form has been rendered when performing the form operation! ' +
+  '本次调用已进入等待：表单组件注册（@register 触发）后操作会继续执行。' +
+  '若表单在 v-if 下永不渲染，操作会保持挂起，直到所属组件卸载时以明确错误结束。';
+const FORM_NOT_READY_UNMOUNTED_MESSAGE =
+  'The form instance has not been obtained: the component owning this useForm was unmounted before the form registered. ' +
+  '现象：表单操作早于表单渲染发起，且所属组件在表单注册前卸载（异步离页/快速关闭）。\n' +
+  '影响：本次表单操作被显式取消，不会写入任何实例。\n' +
+  '修法：组件卸载后不要再调用 useForm 方法；若表单在 v-if 下可能不渲染，调用前先确认渲染条件。';
+
 export function useForm(props?: Props): UseFormReturnType {
   const formRef = ref<Nullable<FormActionType>>(null);
   const loadedRef = ref<Nullable<boolean>>(false);
 
+  // D38 就绪合同：register() 是唯一就绪事件。
+  // onUnmounted 必须放在 useForm 所在的 setup 里（原实现挂在 register 内，
+  // 而 register 由子组件 emit 触发、无活跃实例，清理从未真正执行过）。
+  let isDisposed = false;
+  let hasReadyWaiters = false;
+  let resolveReady: ((form: FormActionType) => void) | null = null;
+  let rejectReady: ((reason: Error) => void) | null = null;
+  const readyPromise = new Promise<FormActionType>((resolve, reject) => {
+    resolveReady = (form) => {
+      hasReadyWaiters = false;
+      resolveReady = null;
+      rejectReady = null;
+      resolve(form);
+    };
+    rejectReady = (reason) => {
+      hasReadyWaiters = false;
+      resolveReady = null;
+      rejectReady = null;
+      reject(reason);
+    };
+  });
+
+  onUnmounted(() => {
+    isDisposed = true;
+    // 只在有等待者时 reject：无人等待的 promise 保持 pending（GC 随闭包回收），
+    // 避免制造 unhandledrejection 噪音；有等待者时必须显式失败，不能挂死。
+    if (hasReadyWaiters && rejectReady) {
+      rejectReady(new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE));
+    }
+    isProdMode() && ((formRef.value = null), (loadedRef.value = null));
+  });
+
   async function getForm() {
     const form = unref(formRef);
     if (!form) {
-      error('The form instance has not been obtained, please make sure that the form has been rendered when performing the form operation!');
+      // 诊断保留原文案（可被监控检索），语义从“报错后返回 null”改为“等待注册”。
+      error(FORM_NOT_READY_WAITING_MESSAGE);
+      const readyForm = await waitReadyForm();
+      await nextTick();
+      return readyForm;
     }
     await nextTick();
     return form as FormActionType;
   }
 
+  function waitReadyForm(): Promise<FormActionType> {
+    const registered = unref(formRef);
+    if (registered) return Promise.resolve(registered as FormActionType);
+    if (isDisposed) return Promise.reject(new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE));
+    hasReadyWaiters = true;
+    return readyPromise;
+  }
+
   function register(instance: FormActionType) {
-    isProdMode() &&
-      onUnmounted(() => {
-        formRef.value = null;
-        loadedRef.value = null;
-      });
     if (unref(loadedRef) && isProdMode() && instance === unref(formRef)) return;
 
     formRef.value = instance;
     loadedRef.value = true;
+    resolveReady?.(instance);
 
     watch(
       () => props,
