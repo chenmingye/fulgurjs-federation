@@ -179,5 +179,6 @@ For debugging, `(globalThis as any).__FULGURJS_RUNTIME__` gives direct access to
 | Requested module is not exposed | `MFU-006` | Verify `remoteName/exposes key` (do not repeat the remote name prefix in the spec) |
 | Unknown remote | `MFU-008` | Verify the `remotes` key matches the spec prefix |
 | Module has no exports at all | `MFU-009` | Check the exports of the expose target file |
+| Component renders, but string tags like `<a-divider>` stay as dead elements | — | The remote declares `globalComponents` in its setup module (auto-installed for `remoteComponent` consumers); see [API reference · setup/onSession](../reference/api.md#setup-on-session) |
 
 The full 48 codes: [error code table](../reference/errors.md); symptom-based troubleshooting: [troubleshooting index](../troubleshooting/README.md).

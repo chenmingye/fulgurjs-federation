@@ -27,6 +27,7 @@
 | Host/remote plugin version mismatch (`DEV-006`) | The @fulgurjs/federation version of each app | Unify versions |
 | Remote page opened standalone shows a white screen (`CC-002`) | The page was accessed bypassing the host | Load it through the host federation |
 | JS requests answered with HTML (doctor FAIL) | The nginx deep-link fallback is too broad | Add exact matching for static assets; [deployment guide · SPA fallback](../guide/deployment.md#spa-fallback-never-serve-html-for-a-js-request) |
+| A remote component renders, but string tags like `<a-divider>` stay as unstyled dead elements | The consumer app never registered that global component | The remote declares `globalComponents` in its setup module (auto-installed for `remoteComponent` consumers); [API reference · setup/onSession](../reference/api.md#setup-on-session) |
 | A kept-alive page remounts on every visit / loses state | The keepAlive include name mismatches the resolved component name (fixed in Vue 3.5) | Upgrade to 5.9.3+; verify keepAliveNames usage |
 
 ## Shared version conflicts

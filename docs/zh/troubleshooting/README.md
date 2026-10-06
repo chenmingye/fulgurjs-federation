@@ -27,6 +27,7 @@
 | 宿主/远程插件版本不一致（`DEV-006`） | 各应用 @fulgurjs/federation 版本 | 统一版本 |
 | 远程页面独立直开白屏（`CC-002`） | 页面被绕过宿主直接访问 | 经宿主联邦加载 |
 | JS 请求被兜成 HTML（doctor FAIL） | nginx 深链回退过宽 | 为静态资源加精确匹配；[部署指南 · SPA 回退](../guide/deployment.md#spa-回退绝不把-js-请求兜成-html) |
+| 远程组件渲染成功但字符串标签（如 `<a-divider>`）成无样式死元素 | 消费方 app 未注册该全局组件 | 远程在 setup 模块声明 `globalComponents`（`remoteComponent` 消费时自动安装）；[API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期) |
 | 保活页每次进出都重挂 / 状态丢失 | keepAlive include 名与解析后组件名不一致（Vue 3.5 已修复） | 升级到 5.9.3+；核对 keepAliveNames 用法 |
 
 ## 共享版本冲突

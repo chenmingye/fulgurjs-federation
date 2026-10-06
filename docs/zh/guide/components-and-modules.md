@@ -179,5 +179,6 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | 请求模块未被 exposes | `MFU-006` | 核对 `远程名/exposes 键`（spec 不要重复加远程名前缀） |
 | 未知远程 | `MFU-008` | 核对 `remotes` 键名与 spec 前缀一致 |
 | 模块没有任何导出 | `MFU-009` | 检查 expose 目标文件的导出 |
+| 组件渲染成功但字符串标签（如 `<a-divider>`）成死元素 | — | 远程在 setup 模块声明 `globalComponents`（`remoteComponent` 消费时自动安装），见 [API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期) |
 
 完整 48 码见[错误码总表](../reference/errors.md)；按症状排查见[排错目录](../troubleshooting/README.md)。

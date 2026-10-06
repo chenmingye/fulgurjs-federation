@@ -61,8 +61,10 @@ export interface LoadRemoteOptions {
   fallbackModule?: () => any
   /**
    * 发起本次加载的消费方应用实例（框架适配器自动传入，业务代码不用手填）：
-   * Vue 侧 remoteComponent/useLoadRemote 捕获当前渲染 app；远程 setup 声明的
+   * Vue 侧 remoteComponent 捕获当前渲染 app；远程 setup 声明的
    * globalComponents 会在每次加载时幂等注册到它（桥接子应用每次挂载新建 app 也能拿到注册）。
+   * 宿主页面适配器（createHostPages）、React 侧与手动 loadRemote 均不传——
+   * 页面场景组件解析走宿主自身全局注册表，React 无全局注册表概念。
    * 运行时只在当次调用内消费该引用，不保存、不感知具体框架类型。
    */
   consumerApp?: unknown
@@ -1378,7 +1380,7 @@ export const registerRemotes = runtime.registerRemotes
 export const registerRemote = runtime.registerRemote
 export const registerPlugins = runtime.registerPlugins
 export const loadShare = runtime.loadShare
-/** CJS 垫片专用同步查询（内部使用，不进公开入口壳清单） */
+/** 同步读取已就绪共享实例（高级诊断用，公开导出；CJS 垫片同源复用） */
 export const getLoadedShare = runtime.getLoadedShare
 /** 同步静态导入门面的统一协商入口（V8-SYNC-FACADE；内部使用，不进公开入口壳清单） */
 // 页面先加载旧版本内核时不能替换冻结的单例；用既有异步 API 完成准备，
