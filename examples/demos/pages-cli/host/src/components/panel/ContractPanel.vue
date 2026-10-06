@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import fulgurjsConfig from '../../../fulgurjs.config.ts'
-import { pages } from '../../fulgurjs/pages.data'
+import { pages, remotePrefixes } from '../../fulgurjs/pages.data'
 import { hostPages } from '../../fulgurjs/host/pages'
 
 type ManifestState = 'loading' | 'ready' | 'unreachable'
@@ -65,7 +65,12 @@ const manifestUrl = computed(() => {
 
 const rows = computed(() =>
   pages.map((page) => {
-    const spec = (hostPages.resolve(page.route)?.spec ?? '').replace(/^[./]+/, '')
+    // resolve().spec 是「远程名/spec」限定形态；对照远程 exposes 键时按 remotePrefixes 剥离远程名前缀
+    const qualified = (hostPages.resolve(page.route)?.spec ?? '').replace(/^[./]+/, '')
+    const spec = Object.values(remotePrefixes).reduce(
+      (s, name) => (s.startsWith(name + '/') ? s.slice(name.length + 1) : s),
+      qualified,
+    )
     return { route: page.route, spec, hit: exposes.value.includes(spec) }
   }),
 )
@@ -74,8 +79,12 @@ onMounted(async () => {
   try {
     const res = await fetch(manifestUrl.value)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const manifest = (await res.json()) as { exposes?: Record<string, unknown> }
-    exposes.value = Object.keys(manifest.exposes ?? {}).map((key) => key.replace(/^[./]+/, ''))
+    // manifest v1 的 exposes 是数组形态（{ name, src, file }[]）；兼容旧 Record 形态（键 → src）
+    const manifest = (await res.json()) as { exposes?: Record<string, unknown> | Array<{ name?: string }> }
+    const exposeList = Array.isArray(manifest.exposes)
+      ? manifest.exposes.map((entry) => String(entry?.name ?? ''))
+      : Object.keys(manifest.exposes ?? {})
+    exposes.value = exposeList.map((key) => key.replace(/^[./]+/, ''))
     state.value = 'ready'
   } catch {
     state.value = 'unreachable'
