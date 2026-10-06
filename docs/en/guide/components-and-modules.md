@@ -53,6 +53,7 @@ Semantics:
 - Internally equivalent to `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`, returning a standard Vue async component;
 - **Zero silent fallback**: a load failure explicitly enters the error state; when no `errorComponent` is passed, the built-in placeholder renders (error code + root cause + fix + "Retry load / Refresh page" buttons), and the `fulgurjs:error` window event is emitted as usual;
 - Multiple component instances with the same spec share `loadRemote`'s internal Promise cache — the container module loads only once.
+- **provide/inject does not cross from the provider's app root**: the remote component renders inside the **consumer's** component tree — `provide` calls at the provider app's root (`App.vue` etc., global `AppProvider`, prefixCls, theme, ConfigProvider) do not travel with the component, while the consumer's own ancestor provides apply as usual. When the exposed surface depends on such context, provide it **inside the exposed entry component** (single source, e.g. wrap `AppProvider` at the root of the exposed component's template); never require every host to re-register it. A missed inject shows up as default empty values (typically a class prefix like `undefined-xxx` or missing theme classes).
 
 **React** (`@fulgurjs/federation/react`):
 
@@ -79,6 +80,7 @@ React version notes:
 - Built-in pending placeholder, error placeholder, and error boundary; load failure and render errors are **recorded and displayed separately** (copy distinguishes "load failed" from "render error");
 - Failure recovery punches through the browser's ESM failure cache: after a failure, the entry URL and the container's expose loader get a changed URL on retry (`fulgurjs_retry=N`); concurrent failures advance a single retry generation;
 - **Known boundary**: if a static dependency chunk of an expose fails, same-page retry cannot recover (the browser's module map cached the failure for that dependency URL); a full page refresh is needed — the default placeholder's "Refresh page" is exactly that path (user click only, never an automatic refresh).
+- **Context does not cross from the provider's app root**: same as Vue — React Context created at the provider app's root is invisible inside the consumer tree; exposed surfaces depending on Context carry their own Provider inside the exposed entry component (single source).
 
 Complete runnable examples: the host home page of the [vue-vue](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) / [react-react](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) templates.
 

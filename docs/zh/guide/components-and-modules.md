@@ -53,6 +53,7 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 - 内部等价 `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件；
 - **零兜底**：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法 + 「重试加载 / 刷新页面重试」按钮），`window` 的 `fulgurjs:error` 事件照常发出；
 - 同 spec 多组件实例共享 `loadRemote` 内部 Promise 缓存，容器模块只加载一次。
+- **provide/inject 不跨提供方根部**：远程组件渲染在**消费方**的组件树里——提供方 app 根部（`App.vue` 等）的 `provide`（全局 `AppProvider`、prefixCls、主题、ConfigProvider 等）不会跟着组件走；消费方自己的祖先 provide 正常生效。暴露面依赖这类上下文时，在**暴露入口组件**内自 provide（单一来源，如把 `AppProvider` 包进暴露组件模板根），不要要求每个宿主重复注册。未命中 inject 的症状是取到默认空值（典型：类名前缀变成 `undefined-xxx`、主题类缺失）。
 
 **React**（`@fulgurjs/federation/react`）：
 
@@ -78,7 +79,8 @@ React 版要点：
 - **不用 `React.lazy`**：lazy 会缓存失败的 Promise，仅重置错误边界无法恢复；本实现的 retry 重建加载尝试（已成功模块走运行时缓存不重复下载）；
 - 内置 pending 占位、错误占位与错误边界；加载失败与渲染出错**分开记录与展示**（文案区分「加载失败」与「渲染出错」）；
 - 失败恢复穿透浏览器 ESM 失败缓存：对入口 URL 与容器 expose loader 在失败后的重试上变更 URL（`fulgurjs_retry=N`）；并发失败只推进一个重试代次；
-- **已知边界**：expose 的静态依赖 chunk 失败后同页重试不可恢复（浏览器 module map 缓存了该依赖 URL 的失败），需整页刷新——默认占位的「刷新页面重试」就是这条路径（仅用户点击，永不自动刷新）。
+- **已知边界**：expose 的静态依赖 chunk 失败后同页重试不可恢复（浏览器 module map 缓存了该依赖 URL 的失败），需整页刷新——默认占位的「刷新页面重试」就是这条路径（仅用户点击，永不自动刷新）；
+- **Context 不跨提供方根部**：与 Vue 同理，提供方 app 根部创建的 React Context 在消费方树里不可见；依赖 Context 的暴露面在暴露入口组件内自带 Provider（单一来源）。
 
 完整可运行示例：模板 [vue-vue](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) / [react-react](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) 的宿主首页。
 
