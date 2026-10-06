@@ -71,6 +71,7 @@
 | ts(2307) 找不到 `@fulgurjs/federation/*` | IDE TS 服务缓存旧包 | `Restart TS Server`（⌘⇧P）或重开窗口 |
 | VSCode 打开 `src/fulgurjs/types/*.d.ts` 大片红波浪线 | Volar 以推断项目检查工程外文件 | 仅编辑器显示问题（命令行检查与构建 0 错误）；根治用 `dts: { mode: 'shim' }`；[IDE 说明](../reference/api.md#ide-提示srcfulgurjs-目录的红波浪线) |
 | React 精确类型不生效 | 宿主 tsconfig 未配 paths | 按 `_paths.d.ts` 说明配置 `paths`；[React 的 dev 类型](../reference/api.md#react-的-dev-类型双轨) |
+| 旧版本：`loadRemote<typeof import('remote-a/X')>(...)` 运行时报 `"remote-a/X".then is not a function`，或 `type M = typeof import('remote-a/X')` 构建报 esbuild `Expected ";" but found "("` | 插件把 **TS 类型位置的动态 import** 误当真实导入改写（类型实参里被插入运行时调用） | 已修复（改写器跳过 `typeof import(...)`）；升级插件版本即可，官方形态见[快速开始](../guide/getting-started.md) |
 
 ## 桥接 / 会话
 

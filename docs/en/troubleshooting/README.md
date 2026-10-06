@@ -71,6 +71,7 @@
 | ts(2307) cannot find `@fulgurjs/federation/*` | The IDE TS service cached the old package | `Restart TS Server` (⌘⇧P) or reopen the window |
 | VSCode shows walls of red squiggles in `src/fulgurjs/types/*.d.ts` | Volar checks cross-project files with an inferred project | An editor-only display issue (command-line checks and builds report 0 errors); cure it with `dts: { mode: 'shim' }`; [IDE notes](../reference/api.md#ide-notes-red-squiggles-in-the-srcfulgurjs-directory) |
 | React precise types not working | The host tsconfig lacks paths | Configure `paths` per the `_paths.d.ts` instructions; [React dev types](../reference/api.md#react-dev-types-dual-track) |
+| Older versions: `loadRemote<typeof import('remote-a/X')>(...)` fails at runtime with `"remote-a/X".then is not a function`, or `type M = typeof import('remote-a/X')` fails the build with esbuild `Expected ";" but found "("` | The plugin mistook a **dynamic import in a TS type position** for a real import and rewrote it (a runtime call got inserted into the type grammar) | Fixed (the rewriter now skips `typeof import(...)`); upgrade the plugin version — documented form in [getting started](../guide/getting-started.md) |
 
 ## Bridge / session
 

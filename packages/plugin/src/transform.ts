@@ -549,6 +549,16 @@ export async function transformModule(
     const specExpr = code.slice(imp.s, imp.e).trim()
     const literal = specExpr.match(/^['"](.*)['"]$/s)
     if (!literal) continue
+    // TS 类型位置的动态 import（`typeof import('x')`）不是真实导入——运行时没有这次调用。
+    // 误改写会把运行时调用插进类型语法（如文档官方形态 loadRemote<typeof import('x')>('x')
+    // 变成 loadRemote<typeof __fulgurjs_loadRemote(...)>(...)），下游 esbuild 报语法错或产出
+    // 损坏代码。只按紧邻的 `typeof` 关键字判定；`cond ? a : import('x')` 的 `:` 属合法
+    // 运行时形态，不能作为跳过标记。
+    {
+      const importStart = code.lastIndexOf('import', d)
+      const before = code.slice(Math.max(0, importStart - 32), importStart)
+      if (/typeof\s*$/u.test(before)) continue
+    }
     const spec = remap(literal[1])
     const matched = matcher ? matchShared(spec, matcher) : null
     const shared =

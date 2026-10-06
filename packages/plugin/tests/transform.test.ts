@@ -393,3 +393,51 @@ describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
   })
 
 })
+
+describe('transform: TS 类型位置的动态 import 不改写（易用性审查·发布阻塞回归）', () => {
+  const REMOTES: FederationOptions = { name: 'host', remotes: { 'remote-a': 'http://localhost:5101' } }
+
+  it('文档官方形态 loadRemote<typeof import(...)>：类型位置的 import(...) 保持原样', async () => {
+    const r = await transformModule(
+      `import { loadRemote } from 'virtual:fulgurjs-runtime'\nconst { formatMoney } = await loadRemote<typeof import('remote-a/money')>('remote-a/money')\n`,
+      '/src/a.ts',
+      ctx(REMOTES),
+    )
+    // 修复前：类型位置的 import(...) 被改写成运行时调用（typeof __fulgurjs_loadRemote(...)），
+    // 下游 esbuild 语法错/运行时损坏。修复后整文件无需改写（字符串实参不是导入，交给运行时 loadRemote）。
+    expect(r).toBeNull()
+  })
+
+  it('纯类型别名 type M = typeof import(...)：整文件不改写（返回 null）', async () => {
+    const r = await transformModule(
+      `type M = typeof import('remote-a/money')\nexport type { M }\n`,
+      '/src/a.ts',
+      ctx(REMOTES),
+    )
+    expect(r).toBeNull()
+  })
+
+  it('同一文件混用：类型位置跳过，真实动态导入照常改写', async () => {
+    const r = await transformModule(
+      [
+        `import { loadRemote } from 'virtual:fulgurjs-runtime'`,
+        `type MoneyModule = typeof import('remote-a/money')`,
+        `const lazy = () => import('remote-a/Button')`,
+      ].join('\n'),
+      '/src/a.ts',
+      ctx(REMOTES),
+    )
+    expect(r?.code).toContain("type MoneyModule = typeof import('remote-a/money')")
+    expect(r?.code).toContain('__fulgurjs_loadRemote("remote-a/./Button")')
+    expect((r?.code.match(/__fulgurjs_loadRemote\(/g) || []).length).toBe(1)
+  })
+
+  it('运行时条件表达式的 `: import(...)` 不受 typeof 跳过影响（仍改写）', async () => {
+    const r = await transformModule(
+      `const m = cond ? null : await import('remote-a/money')\n`,
+      '/src/a.ts',
+      ctx(REMOTES),
+    )
+    expect(r?.code).toContain('__fulgurjs_loadRemote("remote-a/./money")')
+  })
+})
