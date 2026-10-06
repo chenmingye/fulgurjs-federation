@@ -560,6 +560,10 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
     fs.mkdirSync(preciseDir, { recursive: true })
     const preciseFiles: string[] = []
     let accepted = 0
+    // 提示行分母与循环口径一致：剔除内部 setup 入口，避免对用户显示「2/3」这类解释不了的缺口
+    const publicExposeCount = (manifest.exposes ?? []).filter(
+      (expose) => !(manifest.setup && expose.name === manifest.setup),
+    ).length
     for (const expose of manifest.exposes ?? []) {
       // 内部 setup 生命周期入口不生成用户可导入的类型声明（manifest.setup 标识；
       // 用户不直接 loadRemote 该键，其文件也不属于公开 API 面）
@@ -696,7 +700,7 @@ export async function generateDevTypes(options: NormalizedOptions, server: ViteD
       )
     }
     console.log(
-      `[fulgurjs] 类型生成：已生成 ${dir}/${remote.key}.d.ts（已收录 ${accepted}/${manifest.exposes?.length ?? 0} 个暴露模块，模式 ${mode}）。` +
+      `[fulgurjs] 类型生成：已生成 ${dir}/${remote.key}.d.ts（已收录 ${accepted}/${publicExposeCount} 个暴露模块，模式 ${mode}）。` +
         `请确保 tsconfig 的 include 包含 "${dir}"，以获得类型补全。`,
     )
   }
