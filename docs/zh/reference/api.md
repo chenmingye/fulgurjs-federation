@@ -428,7 +428,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue 宿主导航端口。Vue Router fullPath 已是逻辑路径，无需传部署 base。Vue Router 4，history/hash 模式皆可 |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React 宿主导航端口。**仅支持 data router**（`createBrowserRouter`/`createHashRouter` + `RouterProvider`）；declarative 模式（BrowserRouter）无取消语义，不支持。React Router ≥ 6.11。`canNavigate` 可选仅作提前拒绝；端口观察真实 blocker 状态，等待 `reset()` 返回 cancelled、`proceed()` 后实际位置提交返回 committed，不能只凭 navigate 的 Promise 落定判成功 |
 | `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue 子应用接线受控 memory 路由；`await …ready` 落定后再 `app.use(router)`（顺序不能反） |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同（6.0.0 起）：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dependency 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同（6.0.0 起）：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dom 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
 
 宿主传给桥接组件的通道参数：`routing: BridgeHostRouting = { basePath: '/approval', navigation }`；子应用契约第二参数声明 `{ routing: true }` 后从 `ctx.routing` 接收通道。两端接线第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用 `dispose()`。自定义 `BridgeHostNavigation.navigate(target, action, { signal })` 应在异步提交前复核可选 signal，已 aborted 时禁止迟到写入。
 
@@ -441,7 +441,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 - **导航与错误**：子应用 push/replace 保留原动作，go/back/forward 委托宿主历史；连续请求串行落定，外部导航作废旧的在飞与排队请求；守卫/加载器/端口执行异常拒绝 Promise（MFU-033，保留 cause），不伪装 cancelled；
 - **会话与生命周期**：`sessionKey→null` 作废旧通道——旧通道导航一律 cancelled、不写 URL、不复活子应用；unmount 后通道销毁（再订阅得 MFU-031）；KeepAlive 缓存离页实例暂停路由写入（激活重同步）；unmount 抛错的持久封锁不因路由绕过；
 - **协议校验**：宿主启用 routing 而子应用未声明 `{ routing: true }` → `MFU-031` 占位，**不静默退回 memory 假装深链成功**；
-- **非法导航与循环**：目标越界自身前缀（`../`、跨前缀）、非法 `go` 参数 → `MFU-032`；连续内部 replace 超过 5 次（重定向环）→ `MFU-033`（附目标链，不静默回入口）；
+- **非法导航与循环**：目标越界自身前缀（`../`、跨前缀）、目标已含 basePath（重复前缀）、非法 `go` 参数 → `MFU-032`；连续内部 replace 超过 5 次（重定向环）→ `MFU-033`（附目标链，不静默回入口）；
 - **按需加载**：`/vue`、`/react` 默认入口不引入任何路由库；路由同步 API 对路由库仅类型导入 + 模块级按需预热；
 - **不承诺**：SSR/RSC、跨浏览器窗口、嵌套多级桥接子应用路由代理、TanStack Router 及其他路由库（可经 `BridgeHostNavigation`/`BridgeChildRoute` 端口自定义扩展）。
 

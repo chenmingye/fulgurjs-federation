@@ -49,7 +49,7 @@
 | `/erp/erp/...` double prefix produced | Deployment base and bridge basePath layering confused | Vite base/Router base carry the deployment prefix; `basePath` only carries the business path |
 | After a guard rejection the URL changed / the sub app jumped | Cancellation semantics not in effect | The port observes the real NavigationFailure/blocker; `canNavigate` is only an early rejection |
 | `MFU-030` illegal basePath / overlapping prefixes | basePath empty/root/with query·hash·wildcard; same-page overlap | Static absolute paths; same-page instance prefixes must not overlap |
-| `MFU-032` illegal navigation | The sub app navigated outside its own prefix | The sub app only navigates locations inside its own basePath |
+| `MFU-032` illegal navigation | The sub app navigated outside its own prefix, or its target already contains the basePath (host URL shows a duplicated `/x/x/...` prefix) | The sub app only navigates **logical paths** inside its own basePath (without the basePath); the error message suggests the corrected target |
 | `MFU-033` sync failure / redirect loop | Guard errors or cyclic redirects in the sub app's routes | Fix the guards; audit the sub app's route definitions |
 | query/hash parameters lost | The adapter double decoded/encoded | Three-part location equality is a built-in contract; a custom navigation port must not double decode/encode |
 

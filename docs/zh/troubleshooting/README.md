@@ -49,7 +49,7 @@
 | 拼出 `/erp/erp/...` 双前缀 | 部署 base 与 bridge basePath 分层混淆 | Vite base/Router base 承担部署前缀，`basePath` 只写业务路径 |
 | 守卫拒绝后 URL 变了/子应用跳了 | 取消语义未生效 | 端口观察真实 NavigationFailure/blocker；`canNavigate` 只是提前拒绝 |
 | `MFU-030` basePath 非法/前缀重叠 | basePath 空/根/带 query·hash·通配；同页重叠 | 静态绝对路径；同页实例前缀不重叠 |
-| `MFU-032` 非法导航 | 子应用导航越界自身前缀 | 子应用只导航自己 basePath 内的位置 |
+| `MFU-032` 非法导航 | 子应用导航越界自身前缀，或目标已含 basePath（宿主 URL 出现 `/x/x/...` 重复前缀） | 子应用只导航自己 basePath 内的**逻辑路径**（不含 basePath）；错误信息给出应改用的目标 |
 | `MFU-033` 同步失败/重定向环 | 守卫异常或子应用路由循环重定向 | 修守卫；排查子应用路由定义 |
 | query/hash 参数丢失 | 适配器二次编解码 | 位置三段全等是内置契约；自定义导航端口不要二次 decode/encode |
 

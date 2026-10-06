@@ -124,6 +124,18 @@ export function assertChildTargetInScope(target: BridgeLocation, basePath: strin
   if (/[\x00-\x20\\?#]|%(?:2e|2f|5c)/i.test(target.pathname) || target.pathname.includes('//') || target.pathname.split('/').some((part) => part === '.' || part === '..')) {
     throw routingNavigationError(spec, `导航目标试图逃逸自身前缀：pathname "${target.pathname}"。跨前缀导航请通过宿主菜单等宿主能力完成。`)
   }
+  // 双前缀守卫（URL 重复前缀缺陷类）：子应用逻辑路径不得已包含本实例 basePath——
+  // 典型根因是子应用把宿主整段地址当成自身路径 push，宿主 URL 将叠加成
+  // /flowable/flowable/... 且此后子/宿两侧自洽地保持错误前缀，难以后期发现。
+  if (matchesBasePath(target.pathname, basePath)) {
+    throw routingNavigationError(
+      spec,
+      `导航目标 pathname "${target.pathname}" 已包含本实例前缀 "${basePath}"。\n` +
+        `  根因: 子应用把宿主视角的地址（含 basePath）当成了自身逻辑路径，宿主 URL 会叠加为 ${basePath}${target.pathname}。\n` +
+        `  修法: 子应用只使用自身逻辑路径——去掉 "${basePath}" 前缀后重试（如 router.push("${target.pathname.slice(basePath.length) || '/'}")）；` +
+        `若子应用确实存在以 "${basePath}/" 开头的路由，请更换宿主侧 basePath 消除歧义。`,
+    )
+  }
   const host = toHostLocation(target, basePath, spec)
   if (!matchesBasePath(host.pathname, basePath)) {
     throw routingNavigationError(spec, `导航目标 ${host.pathname} 不在前缀 ${basePath} 下。`)

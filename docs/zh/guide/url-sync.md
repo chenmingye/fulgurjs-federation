@@ -154,6 +154,10 @@ export default defineBridgeApp((_props, ctx) => {
 
 部署在 `/erp/` 时：Vite base 与宿主 Router base 是 `/erp/`，bridge `basePath` 仍是 `/approval`（Vue Router 已自动剥离 history base；React 端口传 `basename`）。适配器输出的逻辑路径不含部署前缀，不会拼出 `/erp/erp/...`。
 
+### 子应用逻辑路径不得包含 basePath
+
+子应用只使用自身逻辑路径（`/approval` 对应子应用 `/`）。若子应用把宿主整段地址当成自身路径导航（如 `router.push('/approval/list')`），宿主 URL 会叠加成 `/approval/approval/list`，且此后子/宿两侧自洽地保持错误前缀。这类目标会在**第一次宿主写入之前**被拒绝（`MFU-032`，错误信息附去掉前缀后应使用的目标），宿主历史零污染；子应用停留在上一确认位置。地址栏手工粘贴的 `/approval/approval/list` 仍以宿主为准广播（子应用收到 `/approval/list`），不会回弹。
+
 ### 位置三段全等
 
 search/hash **原样保留**：重复 query 键、编码、中文、片段不二次 decode/encode；仅参数变化也同步，且不重挂。
@@ -184,7 +188,7 @@ search/hash **原样保留**：重复 query 键、编码、中文、片段不二
 |---|---|---|
 | `MFU-030` | basePath 非法（空/根/带 query·hash·通配）或同页重叠前缀 | 配置期拒绝 |
 | `MFU-031` | 子应用未声明 `{ routing: true }` 却被宿主要求同步；或通道销毁后复用 | 占位报错，**不静默退回 memory 假装深链成功** |
-| `MFU-032` | 子应用导航目标越界自身前缀（`../`、跨前缀）、非法 `go` 参数、失效通道的请求 | 拒绝该次导航 |
+| `MFU-032` | 子应用导航目标越界自身前缀（`../`、跨前缀）、目标已含 basePath（重复前缀）、非法 `go` 参数、失效通道的请求 | 拒绝该次导航（宿主历史零污染） |
 | `MFU-033` | 路由准备/同步失败（重定向超限或导航异常，附目标链/cause） | 显式报错，不静默回退 |
 
 连续内部 replace 超过 5 次（重定向环）按 `MFU-033` 报告（附目标链，不静默回入口）。

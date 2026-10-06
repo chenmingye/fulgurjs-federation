@@ -154,6 +154,10 @@ The third argument of the wiring on both ends, `{ signal?: AbortSignal }`, defau
 
 When deployed under `/erp/`: Vite base and the host Router base are `/erp/`, while the bridge `basePath` remains `/approval` (Vue Router has already stripped the history base; the React port takes `basename`). The logical paths output by the adapter carry no deployment prefix, so `/erp/erp/...` can never be produced.
 
+### Sub app logical paths must not contain the basePath
+
+The sub app uses only its own logical paths (`/approval` corresponds to the sub app's `/`). If the sub app navigates with a host-style full path (e.g. `router.push('/approval/list')`), the host URL stacks into `/approval/approval/list` and both sides then self-consistently keep the wrong prefix. Such targets are rejected **before the first host history write** (`MFU-032`, with the de-prefixed target suggested in the error); the host history stays untouched and the sub app remains at its last confirmed location. A manually pasted `/approval/approval/list` in the address bar is still broadcast host-authoritatively (the sub app receives `/approval/list`) and never bounces.
+
 ### Three-part location equality
 
 search/hash are **preserved verbatim**: repeated query keys, encoding, non-ASCII characters, and fragments are never double decoded/encoded; parameter-only changes also sync, without a remount.
@@ -184,7 +188,7 @@ search/hash are **preserved verbatim**: repeated query keys, encoding, non-ASCII
 |---|---|---|
 | `MFU-030` | Illegal basePath (empty/root/with query·hash·wildcard) or overlapping prefixes on one page | Rejected at configuration time |
 | `MFU-031` | The host demands sync but the child app did not declare `{ routing: true }`; or the channel is reused after destruction | Placeholder error, **never silently falls back to memory while pretending the deep link worked** |
-| `MFU-032` | The sub app navigates outside its own prefix (`../`, across prefixes), an illegal `go` argument, or a request on a dead channel | That navigation is rejected |
+| `MFU-032` | The sub app navigates outside its own prefix (`../`, across prefixes), its target already contains the basePath (duplicated prefix), an illegal `go` argument, or a request on a dead channel | That navigation is rejected (host history stays untouched) |
 | `MFU-033` | Route preparation/sync failure (redirect overflow or a navigation error, with the target chain/cause attached) | Explicit error, no silent fallback |
 
 More than 5 consecutive internal replaces (a redirect loop) are reported as `MFU-033` (with the target chain attached; never silently back to the entry).

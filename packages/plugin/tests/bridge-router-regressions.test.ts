@@ -276,3 +276,57 @@ describe('URL 同步诊断降噪（MFU-033）', () => {
     expect(mfu033[0]).toContain('remote/bridge')
   })
 })
+
+// ── URL 重复前缀守卫（MFU-032 扩展）：子应用逻辑路径不得已包含 basePath ───────────────
+// 缺陷史：业务子应用把宿主整段地址（含 basePath）当成自身路径 push 时，宿主 URL 会
+// 叠加成 /flowable/flowable/...，且此后子/宿两侧自洽地保持错误前缀。守卫在第一次
+// history 写入之前拒绝（错误目标 + 修法入诊断），宿主历史零污染。
+
+describe('URL 重复前缀守卫（MFU-032）', () => {
+  it.each(['vue', 'react'])('%s：携带前缀的子应用 push 在第一次宿主写入前被拒绝，子应用回滚且通道可继续', async (framework) => {
+    const h = host()
+    // 首写入证据：宿主导航端口记录每次写入的目标与真实调用栈
+    const writes: { pathname: string; stack: string }[] = []
+    const native = h.port.navigate
+    h.port.navigate = async (target, action, context) => {
+      writes.push({ pathname: target.pathname, stack: new Error('first-write').stack ?? '' })
+      return native(target, action, context)
+    }
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errors.push(a.map(String).join(' ')) })
+    if (framework === 'vue') {
+      const router = vue(); const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose); await conn.ready
+      await expect(router.push('/approval/list')).rejects.toThrow(/MFU-032/)
+      expect(router.currentRoute.value.fullPath).toBe('/list')
+      await router.push('/two')
+      expect(router.currentRoute.value.fullPath).toBe('/two')
+    } else {
+      const router = reactChild(h.channel)
+      await expect(router.navigate('/approval/list')).rejects.toThrow(/MFU-032/)
+      expect(router.state.location.pathname).toBe('/list')
+      await router.navigate('/two')
+      expect(router.state.location.pathname).toBe('/two')
+    }
+    spy.mockRestore()
+    // 首次错误写入根本没有发生：宿主历史零污染（守卫前这里会写入 /approval/approval/list）
+    expect(writes.map((w) => w.pathname)).toEqual(['/approval/two'])
+    expect(writes[0]?.stack).toContain('first-write')
+    expect(errors.join('\n')).toContain('MFU-032')
+  })
+
+  it('内核：精确 basePath 与带前缀子路径都被拒绝并给出可执行修法', async () => {
+    const h = host()
+    await expect(h.channel.navigate(loc('/approval'), 'push')).rejects.toThrow(/router\.push\("\/"\)/)
+    await expect(h.channel.navigate(loc('/approval/list'), 'push')).rejects.toThrow(/router\.push\("\/list"\)/)
+    await expect(h.channel.navigate(loc('/approval/list'), 'push')).rejects.toThrow(/已包含本实例前缀 "\/approval"/)
+    expect(h.requests).toEqual([])
+  })
+
+  it('宿主地址栏粘贴的双前缀 URL 仍以宿主为准广播（不回弹、不循环）', async () => {
+    const h = host()
+    const router = vue(); const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose); await conn.ready
+    h.broadcast(loc('/approval/approval/list'))
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/approval/list'))
+    expect(h.requests).toEqual([])
+  })
+})
