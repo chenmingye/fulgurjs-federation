@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.1.5
+
+**npm 包内五模板升钉 6.1.4**（6.1.4 已发布并核验：integrity 与五模板 pnpm-lock registry 重生成一致，`minimumReleaseAgeExclude` 同步 `@6.1.4`；本版本插件运行时代码与 6.1.4 完全一致，无语义变化）。`fulgurjs create` 生成工程的插件依赖从 6.1.2 升至 6.1.4，携带 6.1.3/6.1.4 全部插件修复（bridge-router `duplicated` 误报豁免、`PageRouteLike` 包根导出、模板 `allowImportingTsExtensions`、Vue 远程组件跨 app 全局组件重注册、页面/KeepAlive 会话代次重跑、showcase 首次深链守卫等）。按发布口径，模板钉「最后已发布验证版本」。
+
 ## 6.1.4
 
 ### 修复

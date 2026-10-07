@@ -1,6 +1,6 @@
 # fulgurjs-federation 模板（examples/templates/）
 
-五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation@6.1.2`（精确版本 + pnpm 锁文件；6.0.0 起统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。
+五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation@6.1.4`（精确版本 + pnpm 锁文件；6.0.0 起统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。
 
 ## 获取模板的两种方式
 
