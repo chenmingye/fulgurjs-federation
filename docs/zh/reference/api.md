@@ -54,7 +54,7 @@ const Panel = await loadRemote('shop/Panel', {
 })
 ```
 
-`consumerApp` 选项由框架适配器自动传入（Vue `remoteComponent` 捕获当前渲染 app），业务代码不用手填：远程 setup 声明的 `globalComponents` 会在每次加载时幂等注册到它。手动 `loadRemote`（无组件上下文）不传该选项，跳过注册。
+`consumerApp` 选项由框架适配器自动传入（Vue `remoteComponent` / `createHostPages` 捕获当前渲染 app），业务代码不用手填：远程 setup 声明的 `globalComponents` 会在每次加载时幂等注册到它。手动 `loadRemote`（无组件上下文）不传该选项，跳过注册。
 
 调用时机与生命周期：`spec` 完整解析 → 容器加载（超时/重试/熔断）→ `init(shareScope)`（共享作用域收养）→ setup → onSession → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商。
 
@@ -339,7 +339,7 @@ export const globalComponents: RemoteSetupModule['globalComponents'] = {
 | 触发入口 | `loadRemote('remote/模块')` 是**统一入口**（`remoteComponent` 与宿主页面适配器同源）。`loadRemote('remote')`、`getContainer()`、`preloadRemote()`、直调 `container.get()` 都**不执行**初始化 |
 | 时序 | 取得容器 → `init(shareScope)`（共享作用域收养）→ **setup** → **onSession** → **globalComponents 安装** → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商 |
 | 执行次数（setup） | 每容器一次；并发调用共享同一 Promise；成功后不重复。`preloadRemote` 只预取资源不执行 |
-| 执行次数（globalComponents） | 声明提取随 setup 一次；**安装随每次 `loadRemote` 执行**（幂等，`app.component` 同名覆盖，后注册生效）——桥接子应用每次挂载新建 app 实例也能拿到注册。当前仅 Vue `remoteComponent` 自动捕获消费方 app；手动 `loadRemote`、`createHostPages` 页面加载与 React 侧均不传（页面/React 场景组件解析走宿主自身全局注册表，React 无全局注册表概念）——跳过安装，不报错。注册随消费方 app 生命周期驻留，无独立卸载 API |
+| 执行次数（globalComponents） | 声明提取随 setup 一次；**安装随每次 `loadRemote` 执行**（幂等，`app.component` 同名覆盖，后注册生效）——桥接子应用每次挂载新建 app 实例也能拿到注册。Vue `remoteComponent` 和 `createHostPages` 自动捕获消费方 app；手动 `loadRemote` 与 React 侧不自动传入（React 无 Vue 全局注册表）——跳过安装，不报错。注册随消费方 app 生命周期驻留，无独立卸载 API |
 | 执行次数（onSession） | 按非敏感 `sessionKey` 去重：同一登录代次一次；新代次先作废旧 `signal`，再按远程**串行**衔接旧调用与新调用（防两账号异步写入交错）；`clearAppContext()` 失效去重状态，下次登录必须重跑。应用级 setup 不因退出/换代重复执行 |
 | sessionKey | 宿主登录流程每次成功登录/重登生成新代次（非敏感 ID，禁止用 token）；token 刷新但会话未变时沿用。**有 onSession 却缺 sessionKey → MFU-013**，不凭用户对象引用猜测身份；无 onSession 的远程无需 sessionKey |
 | 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）。违反 → MFU-011（报实际类型/预期签名/修法） |

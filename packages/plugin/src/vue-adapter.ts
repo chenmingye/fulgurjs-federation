@@ -1,5 +1,5 @@
 /** Vue 适配层只接收加载函数，不静态引用运行时内核。 */
-import { defineAsyncComponent, defineComponent, getCurrentInstance, h, ref, type Component, type PropType } from 'vue'
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, ref, shallowRef, onActivated, onUnmounted, type App, type Component, type PropType } from 'vue'
 import type { PageRouteLike, RemoteSchemaEntry } from './pages'
 import {
   cleanCompName,
@@ -140,6 +140,76 @@ function createRecoverableErrorPlaceholder(
   })
 }
 
+function consumerRegistry(app: App | undefined) {
+  return app ? {
+    component(name: string, comp: unknown) {
+      const wrapped = typeof comp === 'function' && comp.length === 0
+        ? defineAsyncComponent(async () => {
+            const mod = await (comp as () => Promise<any>)()
+            return mod?.default ?? mod
+          })
+        : comp
+      return app.component(name, wrapped as Component)
+    },
+  } : undefined
+}
+
+/** 异步组件解析后仍会跨挂载复用；每个消费方及登录代次须重新完成初始化。 */
+function sessionComponent(
+  inner: Component, name: string | undefined, initialApp: App | undefined,
+  initialSession: string | undefined, load: (app: App | undefined) => Promise<Component>,
+  spec: string, loadingComponent?: Component, errorComponent?: Component,
+): Component {
+  return defineComponent({
+    name, inheritAttrs: false,
+    setup(_, { attrs, slots }) {
+      const app = getCurrentInstance()?.appContext.app
+      const current = shallowRef<Component>()
+      const failure = shallowRef<unknown>()
+      let session = initialSession
+      let generation = 0
+      let disposed = false
+      let pending = false
+      const refresh = async () => {
+        if (pending) return
+        pending = true
+        const requestedSession = readSessionKey()
+        const request = ++generation
+        current.value = undefined
+        failure.value = undefined
+        try {
+          const result = await load(app)
+          if (disposed || request !== generation) return
+          if (shouldResetSessionCache(readSessionKey(), requestedSession)) {
+            queueMicrotask(() => { void refresh() })
+            return
+          }
+          session = requestedSession
+          current.value = result
+        } catch (error) {
+          if (!disposed && request === generation) failure.value = error
+        } finally {
+          pending = false
+        }
+      }
+      if (app === initialApp && !shouldResetSessionCache(readSessionKey(), initialSession)) {
+        current.value = inner
+      } else {
+        void refresh()
+      }
+      onActivated(() => {
+        if (shouldResetSessionCache(readSessionKey(), session)) void refresh()
+      })
+      onUnmounted(() => { disposed = true; generation++ })
+      const ErrorView = createRecoverableErrorPlaceholder(() => load(app), spec, errorComponent)
+      return () => current.value
+        ? h(current.value, { ...attrs, key: generation }, slots)
+        : failure.value ? h(ErrorView, { ...attrs, error: failure.value }, slots)
+        : loadingComponent ? h(loadingComponent) : null
+    },
+  })
+}
+
 export function createRemoteComponent(loadRemote: (spec: string, opts?: { retries?: number; consumerApp?: unknown }) => Promise<any>) {
   return function remoteComponent(spec: string, opts: RemoteComponentOptions = {}): Component {
     // consumerApp：当前渲染远程组件的 app 实例（异步包装组件 setup 内同步可得）。
@@ -148,23 +218,16 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
     // 注册器包装：globalComponents 值为「零参 loader（() => import(...)）」时包一层
     // defineAsyncComponent——setup 模块因此可以完全惰性引用组件，不把框架依赖图
     // 拖进非本框架消费页面（跨框架纯 TS 模块消费实测会因根相对 dev URL 断链）。
-    const loader = (): Promise<any> => {
-      const app = getCurrentInstance()?.appContext.app
-      const consumerApp = app
-        ? {
-            component: (name: string, comp: unknown) => {
-              const wrapped =
-                typeof comp === 'function' && comp.length === 0
-                  ? defineAsyncComponent(async () => {
-                      const m = await (comp as () => Promise<any>)()
-                      return (m && typeof m === 'object' && 'default' in m ? m.default : m) as any
-                    })
-                  : comp
-              return app.component(name, wrapped)
-            },
-          }
-        : undefined
-      return loadRemote(spec, { retries: opts.retries, consumerApp }).then(m => m.default ?? m)
+    const load = (app: App | undefined): Promise<any> => loadRemote(spec, {
+      retries: opts.retries, consumerApp: consumerRegistry(app),
+    }).then(m => m.default ?? m)
+    let initialApp: App | undefined
+    const loader = async (): Promise<any> => {
+      const app = getCurrentInstance()?.appContext.app ?? initialApp
+      initialApp = app
+      const session = readSessionKey()
+      const inner = await load(app)
+      return sessionComponent(inner, undefined, app, session, load, spec, opts.loadingComponent, opts.errorComponent)
     }
     return defineAsyncComponent({
       loader,
@@ -209,7 +272,7 @@ export interface HostPages {
 
 export function createHostPages(
   options: HostPagesOptions,
-  load: (spec: string, opts?: { retries?: number }) => Promise<any>,
+  load: (spec: string, opts?: { retries?: number; consumerApp?: unknown }) => Promise<any>,
 ): HostPages {
   const { beforeLoad, loadingComponent, errorComponent, delay } = options
   const core = createHostPagesCore(options)
@@ -238,9 +301,9 @@ export function createHostPages(
       // 页面 loader 与可恢复占位共用同一闭包：重试重跑 beforeLoad + load，
       // 与首载语义完全一致（会话 context、导出校验零差异）。
       const keepAlivePage = core.pages.some((p) => p.keepAlive && core.specOf(p) === spec)
-      const pageLoader = async (): Promise<any> => {
+      const loadPage = async (app: App | undefined): Promise<any> => {
         await beforeLoad?.()
-        const mod = await load(spec)
+        const mod = await load(spec, { consumerApp: consumerRegistry(app) })
         let inner = mod?.default ?? mod
         if (!inner) {
           throw noRenderableExportError(spec, inner)
@@ -254,6 +317,14 @@ export function createHostPages(
           inner = Object.defineProperties({ ...inner }, { name: { value: name, configurable: true } })
         }
         return inner
+      }
+      let initialApp: App | undefined
+      const pageLoader = async (): Promise<any> => {
+        const app = getCurrentInstance()?.appContext.app ?? initialApp
+        initialApp = app
+        const session = readSessionKey()
+        const inner = await loadPage(app)
+        return sessionComponent(inner, keepAlivePage ? name : inner.name, app, session, loadPage, spec, loadingComponent, errorComponent)
       }
       const asyncComp: Component = defineAsyncComponent({
         loader: pageLoader,

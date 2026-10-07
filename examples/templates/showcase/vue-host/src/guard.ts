@@ -33,7 +33,14 @@ function invalidatePending(): void {
 }
 
 export function installGuard(router: Router): void {
+  // 守卫只拦截本会话内发起的导航：首跳（含整页刷新的深链恢复）不弹人工确认——
+  // 与 react-host 的 useBlocker 语义对齐（blocker 随组件挂载生效，初始导航天然不在拦截面），
+  // 也与 README 操作 15「整页刷新后子应用直接恢复」的承诺一致。beforeEach 先于初始导航
+  // 注册，用 isReady 解除首跳武装；isReady 落定后的任何导航（含 POP 回 locked）照常拦截。
+  let armed = false
+  void router.isReady().then(() => { armed = true })
   router.beforeEach(async (to) => {
+    if (!armed) return true
     // 任何新导航开始都作废旧待确认（含非 locked 目标，如守卫等待期间的 go(1)）
     invalidatePending()
     if (!to.path.startsWith(`${BRIDGE_BASE_PATH}/locked`)) return true

@@ -85,7 +85,7 @@ export const hostPagesRuntime = createHostPages({
 |---|---|
 | `pages` | 原页面记录（不经改写，宿主路由注册直接用） |
 | `resolve(path)` | `{ page, remote, spec, params } \| null`——兼容 base 前缀与深链；参数解码失败只让该次匹配失败（console 提示）不抛错 |
-| `component(spec)` | 异步页面组件（`<remote>/<exposes键>` 完整 spec）；同 spec 复用；**会话感知**：`AppContext.sessionKey` 变化后自动重建组件，下一次渲染重新走 `beforeLoad → loadRemote`，触发新代次 `onSession`（模块本体经缓存复用不重复下载） |
+| `component(spec)` | 异步页面组件（`<remote>/<exposes键>` 完整 spec）；同 spec 复用；**会话感知**：新的非空 `AppContext.sessionKey` 出现后，页面下次挂载或从 KeepAlive 恢复时重新走 `beforeLoad → loadRemote`；静态注册的路由无需再次调用 `component()`，触发新代次 `onSession`（模块本体经缓存复用不重复下载） |
 | `keepAliveNames` | `keepAlive: true` 页面的组件名，直接绑 `<keep-alive :include>` |
 
 行为契约：

@@ -89,7 +89,7 @@ Returned members:
 |---|---|
 | `pages` | The original page records (unmodified; use directly for host route registration) |
 | `resolve(path)` | `{ page, remote, spec, params } \| null` — aware of the base prefix and deep links; a param decoding failure only fails that match (console hint), never throws |
-| `component(spec)` | Async page component (full `<remote>/<exposes key>` spec); reused per spec; **session-aware**: when `AppContext.sessionKey` changes, the component is rebuilt automatically and the next render goes through `beforeLoad → loadRemote` again, triggering a new `onSession` generation (the module itself is reused from cache, no re-download) |
+| `component(spec)` | Async page component (full `<remote>/<exposes key>` spec); reused per spec; **session-aware**: after a new non-empty `AppContext.sessionKey`, the next mount or KeepAlive activation runs `beforeLoad → loadRemote` again; static route records do not need another `component()` call, triggering a new `onSession` generation (the module itself is reused from cache, no re-download) |
 | `keepAliveNames` | Component names of pages with `keepAlive: true`, bind directly to `<keep-alive :include>` |
 
 Behavior contract:

@@ -98,7 +98,7 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 - **vue-remote 的 vue-router 双实例防护**：`resolve.dedupe: ['vue', 'vue-router']` + `optimizeDeps.exclude: ['vue-router']`（vue-router 纯 ESM，exclude 后其 vue 导入被插件 dev 改写到 shared 门面；同 `fixtures/remote-a`）。
 - **react-remote 的 react-router-dom 必须正常进预构建**（同 e2e 实测的 `fixtures/remote-react`：不 exclude、不 alias）：其传递依赖 cookie 是 CJS-only 包，exclude 后浏览器报 `does not provide an export named 'parse'`；预构建内的 react 导入不会双实例——插件 dev 会向预构建注入 shared 键外部化 resolver（`fulgurjs:optimize-shared-external`）。
 - **dev 类型生成**：宿主 dev 启动时插件生成 `src/fulgurjs/types/<remote>.d.ts`（零配置轨，ambient `any`）与 `src/fulgurjs/types/<remote>.d/`（精确轨，需在 tsconfig 配 `paths` 才启用）。跨框架精确轨（React 宿主 tsc 消费 Vue 远程源码）需排除精确轨目录，见 `react-host/tsconfig.json` 的 `exclude: ["src/fulgurjs/types/vue-remote.d"]`。
-- **守卫与 go 的交互**：守卫按目标路径拦截（不区分触发方式），子应用 `go(-1)` 回到受守卫页面同样会弹确认；Vue 宿主守卫在任何新导航开始时自动作废旧待确认（`vue-host/src/guard.ts` 的 `invalidatePending`），避免确认横幅悬挂。
+- **守卫与 go 的交互**：守卫按目标路径拦截（不区分会话内触发方式），子应用 `go(-1)` 回到受守卫页面同样会弹确认；Vue 宿主守卫在任何新导航开始时自动作废旧待确认（`vue-host/src/guard.ts` 的 `invalidatePending`），避免确认横幅悬挂。两宿主守卫都**不拦截本会话的首跳**：整页刷新的深链恢复直接渲染（操作 15），Vue 宿主以 `router.isReady()` 解除首跳武装，与 React 宿主 `useBlocker` 随组件挂载生效的语义对齐。
 
 ## 构建 / 类型检查
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.1.4
+
+### 修复
+
+- Vue 远程组件及页面：已解析的异步组件重挂到另一 app 时，重新完成该 app 的全局组件注册；页面固定在路由表中也能在新会话挂载或 KeepAlive 激活时重跑初始化，同会话保活状态不重置。迟到加载不会写入卸载实例，加载失败保留重试入口。
+- `createHostPages` 与 `remoteComponent` 统一自动传入消费方注册器；零参组件 loader 的失败正常传播给 Vue 错误处理器。无需新增配置或导入路径。
+- showcase Vue 宿主守卫：首次深链恢复不弹交互确认，后续导航仍执行权限确认。
+
+### 局部验证
+
+- Vue 适配、错误恢复、页面保活、跨 app 注册和会话切换定向回归。
+
 ## 6.1.3
 
 **npm 包内五模板升钉 6.1.2**（6.1.2 已发布并核验：integrity 与五模板 pnpm-lock registry 重生成一致，`minimumReleaseAgeExclude` 同步 `@6.1.2`）。`fulgurjs create` 生成工程从此携带 6.1.2 插件修复（transform 类型位置 import / bridge-router 重复前缀守卫）。
