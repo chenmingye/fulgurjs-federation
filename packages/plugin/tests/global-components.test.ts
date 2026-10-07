@@ -70,6 +70,22 @@ describe('setup globalComponents（组件联邦全局注册安装）', () => {
     expect(b.registered.get('ADivider')).toBe(Divider)
   })
 
+  it('两个消费方并发加载：setup 单飞但注册各自完成', async () => {
+    const Divider = { name: 'ADivider' }
+    const setup = vi.fn(async () => { await new Promise(resolve => setTimeout(resolve, 5)) })
+    await registerFake(rt, 'concurrent-form', makeContainer('concurrent-form', {
+      default: setup, globalComponents: { ADivider: Divider },
+    }))
+    const a = makeFakeApp(), b = makeFakeApp()
+    await Promise.all([
+      rt.loadRemote('concurrent-form/form', { consumerApp: a.app }),
+      rt.loadRemote('concurrent-form/form', { consumerApp: b.app }),
+    ])
+    expect(setup).toHaveBeenCalledTimes(1)
+    expect(a.registered.get('ADivider')).toBe(Divider)
+    expect(b.registered.get('ADivider')).toBe(Divider)
+  })
+
   it('同一 app 重复加载幂等：同名覆盖不抛错', async () => {
     const c = makeContainer('form-r3', { default: () => {}, globalComponents: { ASelect: { name: 'ASelect' } } })
     await registerFake(rt, 'form-r3', c)

@@ -263,3 +263,13 @@ remoteSchema = {}
   用于演示「模块可加载 ≠ 生命周期执行」——初始化只由 `federation({ setup })` 声明驱动（README §10）。
 - 除 `npm run verify` 的预期编译失败外，两工程 `npm run build` / `npm run typecheck` 全过；
   CLI 脚本退出码 0（其中「无法验证」「doctor FAIL」为被注释说明的预期语义采样）。
+
+## 生产产物演示
+
+先在本场景各工程执行 `npm run build`，再从仓库根运行：
+
+```bash
+node examples/scripts/serve-prod.mjs --scenario pages-cli --port 6391
+```
+
+打开 `http://localhost:6391/`。宿主和远程都使用该服务器的生产产物，资源不存在时返回真实 404。

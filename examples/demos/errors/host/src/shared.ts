@@ -3,13 +3,17 @@
  */
 
 /** remote-good 正确的容器入口（各故障卡的恢复目标） */
-export const ERR_GOOD_ENTRY = 'http://localhost:5352/err-good/@fulgurjs-entry.js'
+export const ERR_GOOD_ENTRY = import.meta.env.DEV
+  ? 'http://localhost:5352/err-good/@fulgurjs-entry.js'
+  : '/err-good/fulgurjs-remoteEntry.js'
 
 /** 卡 1：连接拒绝地址（5999 端口无任何监听） */
 export const UNREACHABLE_ENTRY = 'http://localhost:5999/err-unreachable/@fulgurjs-entry.js'
 
 /** 卡 3：宿主自身 vite 挂起中间件地址（TCP 可达、响应永不到达） */
-export const HANG_ENTRY = 'http://localhost:5353/fulgurjs-hang-entry.js'
+export const HANG_ENTRY = import.meta.env.DEV
+  ? 'http://localhost:5353/fulgurjs-hang-entry.js'
+  : '/fulgurjs-hang-entry.js'
 
 /** 卡 5 恢复用本地副本的值（与远程 utils.DEMO_ANSWER 同值，演示 fallback 本地副本） */
 export const DEMO_ANSWER = 42

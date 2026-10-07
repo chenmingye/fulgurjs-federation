@@ -31,6 +31,7 @@
  * - pinLoadedShare：登记本地实例后 loadShare 收敛到同一份（严格相等）。
  * - clearSessionState：清空 setup 会话代次——配合 remote-a 的 onSession 记录观测新代次重跑。
  */
+import { remoteEntry } from '../demo/meta'
 import { ref } from 'vue'
 import {
   clearSessionState,
@@ -69,7 +70,7 @@ interface SetupLogEntry { phase: string; sessionKey?: string; at: string }
 async function runRegisterRemotes(): Promise<void> {
   busy.value = true
   try {
-    registerRemotes([{ name: 'sh-remote-b', entry: 'http://localhost:5345/@fulgurjs-entry.js', timeout: 8000, retries: 1 }])
+    registerRemotes([{ name: 'sh-remote-b', entry: remoteEntry('sh-remote-b'), timeout: 8000, retries: 1 }])
     const mod = (await loadRemote('sh-remote-b/info')) as { name?: string; version?: string }
     const value = typeof mod === 'object' ? JSON.stringify(mod).slice(0, 60) : String(mod)
     say('ok', `registerRemotes 批量注册/刷新 sh-remote-b → loadRemote('sh-remote-b/info') 走通：${String(value)}`)

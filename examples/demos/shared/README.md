@@ -214,3 +214,13 @@ npm run build       # vite build（三工程全部通过）
 - dev 冷启动首轮有 30~60s 的 vite 预构建窗口（DEV-010，插件提示语），首轮打开后自行恢复，非故障；
 - 三端各自首页/入口只是独立开发态入口；被宿主消费时走 `@fulgurjs-entry.js`（dev）或
   `fulgurjs-remoteEntry.js`（prod），与独立入口无关。
+
+## 生产产物演示
+
+先在本场景各工程执行 `npm run build`，再从仓库根运行：
+
+```bash
+node examples/scripts/serve-prod.mjs --scenario shared --port 6391
+```
+
+打开 `http://localhost:6391/`。宿主和远程都使用该服务器的生产产物，资源不存在时返回真实 404。

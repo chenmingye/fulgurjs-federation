@@ -24,7 +24,7 @@ import { ref } from 'vue'
 import { loadRemote, parseSpec, registerRemote } from '@fulgurjs/federation/runtime'
 import DemoCard from './DemoCard.vue'
 import { errorSummary, formatError } from '../demo/format'
-import { REMOTE_ENTRY_BASES } from '../demo/meta'
+import { REMOTE_ENTRY_BASES, remoteEntry } from '../demo/meta'
 
 const spec = ref('sh-remote-a/utils')
 const busy = ref(false)
@@ -42,7 +42,7 @@ async function registerAndLoad(): Promise<void> {
       throw new Error(`本演示未知的远程名 "${remote}"（仅支持 sh-remote-a / sh-remote-b）`)
     }
     // runtime registerRemote 的 entry 是完整入口地址（配置文件写法才会自动拼接 @fulgurjs-entry.js）
-    registerRemote({ name: remote, entry: `${base}/@fulgurjs-entry.js`, shareScope: 'default' })
+    registerRemote({ name: remote, entry: remoteEntry(remote), shareScope: 'default' })
     const ns = await loadRemote(spec.value) as Record<string, unknown>
     resultText.value = Object.keys(ns).join('、')
   } catch (err) {

@@ -227,7 +227,7 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
       initialApp = app
       const session = readSessionKey()
       const inner = await load(app)
-      return sessionComponent(inner, undefined, app, session, load, spec, opts.loadingComponent, opts.errorComponent)
+      return sessionComponent(inner, inner?.name, app, session, load, spec, opts.loadingComponent, opts.errorComponent)
     }
     return defineAsyncComponent({
       loader,

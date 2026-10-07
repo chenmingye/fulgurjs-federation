@@ -107,3 +107,13 @@ cd host        && npm run build && npm run typecheck
   err-unreachable / err-hang 名下——promise remote 仅 warn 不阻断，属文档化语义。
 - **dev 类型生成**：宿主 dev 启动会生成 `src/fulgurjs/types/err-good.d.ts`（插件 dts 直连产物，
   勿手改）；`npm run typecheck` 在生成物存在与否均 0 错误。
+
+## 生产产物演示
+
+先在本场景各工程执行 `npm run build`，再从仓库根运行：
+
+```bash
+node examples/scripts/serve-prod.mjs --scenario errors --port 6391
+```
+
+打开 `http://localhost:6391/`。宿主和远程都使用该服务器的生产产物，资源不存在时返回真实 404。超时卡由此服务器提供挂起入口；故障注入和恢复都不会连接 dev server。

@@ -3,8 +3,12 @@
  * 声明版本必须与各工程 package.json 人工保持一致（remote-b 固定旧版本用于协商演示）。
  */
 export const REMOTE_ENTRY_BASES: Record<string, string> = {
-  'sh-remote-a': 'http://localhost:5343',
-  'sh-remote-b': 'http://localhost:5345',
+  'sh-remote-a': import.meta.env.DEV ? 'http://localhost:5343' : '/sh-remote-a',
+  'sh-remote-b': import.meta.env.DEV ? 'http://localhost:5345' : '/sh-remote-b',
+}
+
+export function remoteEntry(remote: string): string {
+  return `${REMOTE_ENTRY_BASES[remote]}/${import.meta.env.DEV ? '@fulgurjs-entry.js' : 'fulgurjs-remoteEntry.js'}`
 }
 
 export interface DeclaredVersion {
