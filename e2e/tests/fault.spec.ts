@@ -130,6 +130,52 @@ test.describe('容错专项（B-15 完整链路）', () => {
       if (child) stopRemote(child)
     }
   })
+
+  // DEV-RETRY-CHAIN：入口内部依赖（virtual:fulgurjs-runtime）的 import 失败被浏览器
+  // module map 按同 URL 缓存——宿主 importEntry 换 fulgurjs_retry=N 新入口 URL 重试时，
+  // 入口内的静态依赖若仍是原 URL 就永远秒失败（修复前实测，同页重试无法恢复）。
+  // 本用例固定该修复：远程 dev server 的 runtime 虚拟模块 503 → MFU-001 → 解除故障 →
+  // 同页重试必须穿透失败缓存恢复真实模块，且宿主页不整页刷新。
+  test('dev 入口内部依赖 503 → 解除 → 同页重试穿透失败缓存恢复（不整页刷新）', async ({ page }) => {
+    let child: ReturnType<typeof spawn> | undefined
+    try {
+      child = await startRemote()
+      await page.goto(`${HOST}/#/`)
+      const noReloadMarker = await page.evaluate(() => ((window as any).__fgNoReload = Date.now()))
+      // 注入：只打挂远程 dev server 的 runtime 虚拟模块（入口与 provides 不受影响，
+      // 构造"入口 fetch 成功、内部依赖失败"的精确场景）
+      await page.route(`**:${PORT}/@id/virtual:fulgurjs-runtime*`, (r) =>
+        r.fulfill({ status: 503, body: 'injected runtime unavailable' }),
+      )
+      // entry 带一次性 query：确保走真实网络链而不是复用宿主此前可能加载过的入口记录
+      const entryUrl = `http://localhost:${PORT}/@fulgurjs-entry.js?probe=${Date.now()}`
+      const err = await page.evaluate(async (entry) => {
+        const rt = (window as any).__FULGURJS_RUNTIME__
+        rt.registerRemote({ name: 'remote-a-sa', entry })
+        try {
+          await rt.loadRemote('remote-a-sa/utils')
+          return 'NO ERROR (unexpected)'
+        } catch (e: any) {
+          return `${e.code ?? 'UNKNOWN'}`
+        }
+      }, entryUrl)
+      expect(err).toBe('MFU-001')
+      await shot(page, 'dev-fault-runtime-503-mfu001')
+
+      // 解除故障 → 同页重试：必须恢复（修复前此处秒失败——module map 缓存 runtime 失败）
+      await page.unroute(`**:${PORT}/@id/virtual:fulgurjs-runtime*`)
+      const recovered = await page.evaluate(async () => {
+        const m = await (window as any).__FULGURJS_RUNTIME__.loadRemote('remote-a-sa/utils')
+        return m.ANSWER
+      })
+      expect(recovered).toBe(42)
+      // 宿主页未整页刷新（标记仍在）= 恢复发生在当前页面会话内
+      expect(await page.evaluate(() => (window as any).__fgNoReload)).toBe(noReloadMarker)
+      await shot(page, 'dev-fault-runtime-retry-recovered')
+    } finally {
+      if (child) stopRemote(child)
+    }
+  })
 })
 
 test.describe('HMR L3：编译报错 → 覆盖层 → 修复自动恢复', () => {

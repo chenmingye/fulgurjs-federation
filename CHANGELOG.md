@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.1.6
+
+### 修复
+
+- **dev 远程入口内部依赖失败后，同页「重试加载」现在能真实恢复（不再要求整页刷新）**。此前宿主 `importEntry` 失败后用 `fulgurjs_retry=N` 新入口 URL 重试，但 dev 容器入口对 `@vite/client` / `virtual:fulgurjs-runtime` / `virtual:fulgurjs-provides` 是静态 import——浏览器按 ESM 规范把依赖的 import 失败缓存进 module map（同 URL 再 import 直接拒绝、零网络请求），远程 dev server 恢复后同页重试永远秒失败，只能整页刷新。现在这三项依赖改为并行动态 import：先用原 URL（正常路径与静态 import 同 URL、同模块记录，行为与性能不变）；仅当原 URL 失败且本次是重试代次时，才用带 `fulgurjs_retry` 的新 URL 穿透失败缓存。runtime 副本经 `globalThis.__FULGURJS_RUNTIME__` 单例幂等（不分裂共享注册表），provides 是纯声明模块，二次求值安全；`@vite/client` 仅在失败路径才换 URL，不会产生重复 HMR 客户端。生产链路（remoteEntry 手动 fetch）不受影响。回归：`e2e/tests/fault.spec.ts`「dev 入口内部依赖 503 → 解除 → 同页重试穿透失败缓存恢复（不整页刷新）」。
+- 模板依赖维持 6.1.4（6.1.6 发布时 6.1.6 尚不可锁，按发布口径模板钉「最后已发布验证版本」；下一版本升钉并重锁）。
+
 ## 6.1.5
 
 **npm 包内五模板升钉 6.1.4**（6.1.4 已发布并核验：integrity 与五模板 pnpm-lock registry 重生成一致，`minimumReleaseAgeExclude` 同步 `@6.1.4`；本版本插件运行时代码与 6.1.4 完全一致，无语义变化）。`fulgurjs create` 生成工程的插件依赖从 6.1.2 升至 6.1.4，携带 6.1.3/6.1.4 全部插件修复（bridge-router `duplicated` 误报豁免、`PageRouteLike` 包根导出、模板 `allowImportingTsExtensions`、Vue 远程组件跨 app 全局组件重注册、页面/KeepAlive 会话代次重跑、showcase 首次深链守卫等）。按发布口径，模板钉「最后已发布验证版本」。

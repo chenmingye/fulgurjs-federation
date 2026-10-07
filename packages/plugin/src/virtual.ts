@@ -565,14 +565,33 @@ export function genReactRefreshPublisherScript(): string {
  * init(shareScopeMap) 按引用收养 scope map 并注册 provides——对齐 webpack 容器协议。
  * 顶层注册自身 remotes：远程页面被宿主加载后可能再消费其他远程（双向联邦/嵌套联邦），
  * 页面级运行时经 globalThis.__FULGURJS_RUNTIME__ 单例，跨源模块副本共享同一注册表。
+ *
+ * 入口重试的失败缓存穿透（DEV-RETRY-CHAIN）：宿主 importEntry 失败后用
+ * fulgurjs_retry=N 的新入口 URL 重试，但浏览器 module map 会把入口内部依赖
+ * （@vite/client / virtual:fulgurjs-runtime / virtual:fulgurjs-provides）的 import
+ * 失败按同 URL 缓存，静态 import 无法换 URL → 远程恢复后同页重试永远秒失败。
+ * 故三依赖改为并行动态 import：先用原 URL（正常路径与静态 import 同 URL、同模块
+ * 记录、零额外求值）；仅当原 URL 失败且本次是重试代次时，才用带 fulgurjs_retry
+ * 的新 URL 穿透失败缓存。runtime 副本经 globalThis 单例幂等（不分裂状态），
+ * provides 是纯声明模块（无求值副作用），二次求值安全。
  */
 export function genDevRemoteEntry(options: NormalizedOptions, base: string): string {
   const b = base.endsWith('/') ? base : `${base}/`
   const remoteLines = registerRemotesLines(options, 'serve')
-  return `import ${JSON.stringify(`${b}@vite/client`)};
-import { prepareShares as __fulgurjs_prepare } from ${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)};
-import { name as _fulgurjs_name, exposes, provides } from ${JSON.stringify(`${b}@id/__x00__virtual:fulgurjs-provides`)};
-${remoteLines.length > 0 ? `import { registerRemotes } from ${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)};\n${remoteLines.join('\n')}` : ''}
+  return `const __fgGen = new URL(import.meta.url).searchParams.get('fulgurjs_retry');
+const __fgQ = __fgGen === null || __fgGen === '' ? '' : '?fulgurjs_retry=' + encodeURIComponent(__fgGen);
+const __fgImp = (u) => import(u).catch((e) => (__fgQ ? import(u + __fgQ) : Promise.reject(e)));
+const [__fgVite, __fgRT, __fgP] = await Promise.all([
+  __fgImp(${JSON.stringify(`${b}@vite/client`)}),
+  __fgImp(${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)}),
+  __fgImp(${JSON.stringify(`${b}@id/__x00__virtual:fulgurjs-provides`)}),
+]);
+const __fulgurjs_prepare = __fgRT.prepareShares;
+const registerRemotes = __fgRT.registerRemotes;
+const _fulgurjs_name = __fgP.name;
+const exposes = __fgP.exposes;
+const provides = __fgP.provides;
+${remoteLines.join('\n')}
 
 export const name = _fulgurjs_name;
 ${setupMetaLine(options)}
