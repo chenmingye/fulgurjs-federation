@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter, isNavigationFailure, NavigationFailu
 import { createMemoryRouter, redirect } from 'react-router-dom'
 import { RoutingChannel, normalizeBasePath, type BridgeLocation, type BridgeHostNavigation } from '../src/bridge-router-core'
 import { createVueBridgeNavigation, connectVueBridgeRouter } from '../src/bridge-router-vue'
-import { createReactBridgeNavigation, createReactBridgeRouter } from '../src/bridge-router-react'
+import { __reactRouterDomReady, createReactBridgeNavigation, createReactBridgeRouter } from '../src/bridge-router-react'
 const loc = (pathname: string): BridgeLocation => ({ pathname, search: '', hash: '' })
 const cleanups: (() => void)[] = []
 afterEach(() => { cleanups.splice(0).reverse().forEach((fn) => fn()) })
@@ -40,6 +40,7 @@ describe('URL 同步回归', () => {
       await router.push('/one'); await router.push({ path: '/two', replace: true })
       router.back(); router.forward(); router.go(-2)
     } else {
+      await __reactRouterDomReady()
       const router = reactChild(h.channel)
       await router.navigate('/one'); await router.navigate('/two', { replace: true })
       await router.navigate(-1); await router.navigate(1); await router.navigate(-2)
@@ -301,6 +302,7 @@ describe('URL 重复前缀守卫（MFU-032）', () => {
       await router.push('/two')
       expect(router.currentRoute.value.fullPath).toBe('/two')
     } else {
+      await __reactRouterDomReady()
       const router = reactChild(h.channel)
       await expect(router.navigate('/approval/list')).rejects.toThrow(/MFU-032/)
       expect(router.state.location.pathname).toBe('/list')

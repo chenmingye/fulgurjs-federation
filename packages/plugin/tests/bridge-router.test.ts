@@ -6,7 +6,7 @@
  * 适配：connectVueBridgeRouter（真实 vue-router memory）/ createReactBridgeRouter
  * （真实 react-router-dom memory）+ 宿主端口（真实取消语义）。
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createApp, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterLink, RouterView } from 'vue-router'
 import { createElement } from 'react'
@@ -27,7 +27,7 @@ import {
   type BridgeNavigationResult,
 } from '../src/bridge-router-core'
 import { connectVueBridgeRouter } from '../src/bridge-router-vue'
-import { createReactBridgeRouter } from '../src/bridge-router-react'
+import { __reactRouterDomReady, createReactBridgeRouter } from '../src/bridge-router-react'
 import { defineBridgeApp as defineVueBridgeApp } from '../src/bridge-app-vue'
 import { defineBridgeApp as defineReactBridgeApp } from '../src/bridge-app-react'
 
@@ -341,6 +341,7 @@ describe('bridge-router-vue: connectVueBridgeRouter（真实 vue-router memory�
 })
 
 describe('bridge-router-react: createReactBridgeRouter（真实 react-router memory）', () => {
+  beforeAll(async () => { await __reactRouterDomReady() })
   it('深链初始位置 → useNavigate push 桥为通道请求 → 宿主取消回滚', async () => {
     const h = fakeHost(loc(BASE + '/detail/123', '?tab=history'))
     const ch = track(new RoutingChannel('cr', BASE, h.host, 'remote/bridge'))

@@ -1,11 +1,13 @@
 /** React Router data router 的宿主导航端口与子应用 memory router 接线（统一入口 /react 提供）。 */
 // react-router-dom 是 /react 的**可选**依赖边界：纯 React 组件工程（未安装 react-router-dom）
 // 导入 /react 时不得被强制解析它。因此本文件对 react-router-dom 只保留 type 导入
-// （RouteObject），运行期取值一律走下方模块级按需预热 + 就绪判定：
+// （RouteObject），运行期取值一律走下方「首次使用才 import」的惰性探测 + 就绪判定：
 // - dev：Vite 将依赖内缺失的动态导入改写为 optional-peer-dep 错误模块（200 + 描述性 throw），
-//   预热的拒绝被捕获，零噪声；装了 react-router-dom 的工程照常解析。
+//   探测的拒绝被捕获，零噪声；装了 react-router-dom 的工程照常解析。
 // - prod：缺依赖时 rollup 产出空 chunk（import 成功但形状为空）——按形状校验兜底。
-// 就绪前调用 createReactBridgeRouter 走惰性宿主（首次渲染等待预热落定）；就绪后与
+// - 探测不得是模块级无条件预热：prod 里裸导入会被解析进消费方 chunk 图，命中带顶层
+//   副作用的 chunk（如独立运行壳）就会在宿主页连带执行（same-frame 实测回归）。
+// 就绪前调用 createReactBridgeRouter 走惰性宿主（首次渲染等待探测落定）；就绪后与
 // 历史行为完全一致：同步创建 memory router，element.props.router 可被宿主内省。
 import { createElement, useEffect, useState, type ReactElement } from 'react'
 import type { RouterProvider, createMemoryRouter, RouteObject } from 'react-router-dom'
@@ -26,30 +28,40 @@ export interface ReactDataRouterLike {
   navigate(to: string | number, opts?: { replace?: boolean }): void | Promise<void>
 }
 
-// ---- react-router-dom 模块级按需预热（可选依赖边界，见文件头） ----
+// ---- react-router-dom 按需探测（可选依赖边界，见文件头） ----
 type ReactRouterModule = { createMemoryRouter: typeof createMemoryRouter; RouterProvider: typeof RouterProvider }
 let routerDomModule: ReactRouterModule | null = null
 let routerDomFailure: unknown = null
-const routerDomReady: Promise<void> = import('react-router-dom').then(
-  (m) => {
-    // prod 缺依赖：rollup 产出空 chunk——import 成功但缺成员，按形状判定为不可用
-    const candidate = m as Partial<ReactRouterModule> | null
-    if (candidate && typeof candidate.createMemoryRouter === 'function' && typeof candidate.RouterProvider === 'function') {
-      routerDomModule = candidate as ReactRouterModule
-    } else {
-      routerDomFailure = new Error(
-        '[fulgurjs] react-router-dom 未安装或不可用（createMemoryRouter/RouterProvider 缺失）。' +
-          'createReactBridgeRouter（URL 同步受控路由）需要 react-router-dom ≥6.11；' +
-          '不使用路由同步的纯 React 组件工程无需安装。',
-      )
-    }
-  },
-  (e) => {
-    routerDomFailure = e
-  },
-)
-/** 内部时序缝隙：等待模块级预热落定（仅测试使用；生产代码不需要等待——未就绪时走惰性宿主） */
-export const __reactRouterDomReady = routerDomReady
+let routerDomProbe: Promise<void> | null = null
+// 探测必须是「首次使用才 import」的惰性形态，不能做成模块级无条件预热：
+// prod 构建会把这条裸导入解析进消费方 chunk 图——若命中的 chunk 带顶层副作用
+// （典型：消费方的独立运行壳在模块顶层 createBrowserRouter + render），宿主
+// 加载桥接就会连带执行它们（same-frame react 对 prod 实测回归）。惰性化后，
+// 纯组件桥接消费方（不启用 URL 同步）零导入、零副作用；启用同步的宿主在
+// 首次渲染时才探测，行为与原预热路径一致。
+function probeRouterDom(): Promise<void> {
+  routerDomProbe ??= import('react-router-dom').then(
+    (m) => {
+      // prod 缺依赖：rollup 产出空 chunk——import 成功但缺成员，按形状判定为不可用
+      const candidate = m as Partial<ReactRouterModule> | null
+      if (candidate && typeof candidate.createMemoryRouter === 'function' && typeof candidate.RouterProvider === 'function') {
+        routerDomModule = candidate as ReactRouterModule
+      } else {
+        routerDomFailure = new Error(
+          '[fulgurjs] react-router-dom 未安装或不可用（createMemoryRouter/RouterProvider 缺失）。' +
+            'createReactBridgeRouter（URL 同步受控路由）需要 react-router-dom ≥6.11；' +
+            '不使用路由同步的纯 React 组件工程无需安装。',
+        )
+      }
+    },
+    (e) => {
+      routerDomFailure = e
+    },
+  )
+  return routerDomProbe
+}
+/** 内部时序缝隙：等待探测落定（仅测试使用；生产代码不需要等待——未就绪时走惰性宿主） */
+export const __reactRouterDomReady = probeRouterDom
 
 /** canNavigate 是可选预判；最终结果同时核对真实 blocker 与已提交位置。 */
 export function createReactBridgeNavigation(
@@ -213,7 +225,7 @@ function LazyRouterProviderHost(props: {
   useEffect(() => {
     if (wired || failure !== null) return
     let alive = true
-    void routerDomReady.then(
+    void probeRouterDom().then(
       () => {
         if (!alive) return
         if (routerDomFailure) { setFailure(routerDomFailure); return }
@@ -258,7 +270,7 @@ export function createReactBridgeRouter(routing: BridgeChildRoute, routes: Route
   let wireResolve: (r: WiredRouter['router']) => void = () => {}
   const routerReady = new Promise<WiredRouter['router']>((resolve, reject) => {
     wireResolve = resolve
-    void routerDomReady.then(() => {
+    void probeRouterDom().then(() => {
       if (routerDomFailure && !routerDomModule) reject(routerDomFailure)
     }, (e) => reject(e))
   })
