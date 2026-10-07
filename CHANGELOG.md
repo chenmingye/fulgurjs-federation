@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.1.9
+
+### 修复
+
+- **React URL 同步桥接的可选依赖探测改为「首次使用才 import」**。此前 `bridge-router-react` 在模块求值期无条件预热 `import('react-router-dom')`（可选依赖形状探测）；prod 构建会把这条裸导入解析进消费方 chunk 图——若命中的 chunk 带模块级顶层副作用（典型：子应用的独立运行壳 `main.tsx` 在顶层 `createBrowserRouter(...)` + `render(...)`），宿主加载桥接就会连带执行它们：在宿主页里创建浏览器路由并抢占渲染，子应用 memory 路由的位置还会被 replaceState 写进宿主 URL（丢失 base 前缀）。same-frame react 对 prod 实测复现（dev 正常、prod URL 被 `/tickets` 劫持）。现在探测惰性化：纯组件桥接消费方（不启用 URL 同步）零导入、零副作用；启用 `createReactBridgeRouter`/`routing` 的宿主在首次渲染时探测，行为与原预热一致（fast/slow 双路径不变）。vue 侧无此预热，不受影响。
+
+### 模板
+
+- 五模板插件依赖升钉 **6.1.8**（最后已发布验证版本；运行时无语义差异）并重生成锁文件，`minimumReleaseAgeExclude` 同步 `@6.1.8`；冻结安装逐模板验证。
+
 ## 6.1.8
 
 **npm 包内五模板升钉 6.1.7**（6.1.7 已发布并核验；本版本插件运行时代码与 6.1.7 完全一致，仅模板依赖与锁文件变化）。`fulgurjs create` 生成工程从此携带 6.1.6/6.1.7 的 dev 入口重试修复（入口内部依赖失败缓存穿透 + 业务模块树 runtime URL 隔离）。模板 `minimumReleaseAgeExclude` 同步 `@6.1.7`。
