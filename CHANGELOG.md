@@ -1,5 +1,11 @@
 # Changelog
 
+## 6.1.7
+
+### 修复
+
+- **dev 入口重试修复补全：业务模块树的 runtime import 不再被入口失败污染**。6.1.6 已让入口直接依赖可穿透失败缓存，但业务模块树（远程页面的 shared facade、runtime-proxy）import 的是经 Vite 重写的**无 query** `virtual:fulgurjs-runtime` URL——入口链失败同样污染该 URL，重试后整棵业务树被浏览器 module map 秒拒（实测：MESZC dev 桥接重试，`./bridge` 模块树因 `virtual:fulgurjs-shared:vue-router` facade 的 runtime 静态 import 失败而无法恢复）。现在入口改用专用变体 URL（`?fulgurjs_entry=1`）加载 runtime/provides，与业务树的无 query URL 隔离为不同模块记录；两个变体经 `globalThis.__FULGURJS_RUNTIME__` 单例幂等收敛为同一运行时实例，不分裂共享注册表。`@vite/client` 不隔离（HMR 客户端不可重复求值），维持失败驱动换 URL 穿透。回归：`e2e/tests/fault.spec.ts` 同用例升级为 `Button`（Vue 组件树经 shared facade 覆盖该链路）。
+
 ## 6.1.6
 
 ### 修复

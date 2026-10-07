@@ -164,11 +164,13 @@ test.describe('容错专项（B-15 完整链路）', () => {
 
       // 解除故障 → 同页重试：必须恢复（修复前此处秒失败——module map 缓存 runtime 失败）
       await page.unroute(`**:${PORT}/@id/virtual:fulgurjs-runtime*`)
+      // 用 Button（Vue 组件）：其模块树经 shared:vue facade 静态 import 无 query 的
+      // virtual:fulgurjs-runtime——正是被入口失败污染后会秒拒的链路；恢复必须穿透它
       const recovered = await page.evaluate(async () => {
-        const m = await (window as any).__FULGURJS_RUNTIME__.loadRemote('remote-a-sa/utils')
-        return m.ANSWER
+        const m = await (window as any).__FULGURJS_RUNTIME__.loadRemote('remote-a-sa/Button')
+        return typeof m.default
       })
-      expect(recovered).toBe(42)
+      expect(recovered).toBe('object')
       // 宿主页未整页刷新（标记仍在）= 恢复发生在当前页面会话内
       expect(await page.evaluate(() => (window as any).__fgNoReload)).toBe(noReloadMarker)
       await shot(page, 'dev-fault-runtime-retry-recovered')

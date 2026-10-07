@@ -570,21 +570,30 @@ export function genReactRefreshPublisherScript(): string {
  * fulgurjs_retry=N 的新入口 URL 重试，但浏览器 module map 会把入口内部依赖
  * （@vite/client / virtual:fulgurjs-runtime / virtual:fulgurjs-provides）的 import
  * 失败按同 URL 缓存，静态 import 无法换 URL → 远程恢复后同页重试永远秒失败。
- * 故三依赖改为并行动态 import：先用原 URL（正常路径与静态 import 同 URL、同模块
- * 记录、零额外求值）；仅当原 URL 失败且本次是重试代次时，才用带 fulgurjs_retry
- * 的新 URL 穿透失败缓存。runtime 副本经 globalThis 单例幂等（不分裂状态），
- * provides 是纯声明模块（无求值副作用），二次求值安全。
+ * 故三依赖改为并行动态 import，且 runtime/provides 走入口专用变体 URL
+ * （?fulgurjs_entry=1）：业务模块树（shared facade、runtime-proxy）import 的是
+ * 经 Vite 重写的无 query runtime URL，与入口变体隔离——入口链的失败不污染业务树，
+ * 重试后整棵树才能加载（实测：MESZC dev 桥接重试，bridge.ts 树因 shared facade
+ * 的 runtime 静态 import 被秒拒而无法恢复）。两份变体经 globalThis 单例幂等
+ * （不分裂状态），provides 是纯声明模块（无求值副作用），二次求值安全。
  */
 export function genDevRemoteEntry(options: NormalizedOptions, base: string): string {
   const b = base.endsWith('/') ? base : `${base}/`
   const remoteLines = registerRemotesLines(options, 'serve')
   return `const __fgGen = new URL(import.meta.url).searchParams.get('fulgurjs_retry');
 const __fgQ = __fgGen === null || __fgGen === '' ? '' : '?fulgurjs_retry=' + encodeURIComponent(__fgGen);
+// runtime/provides 用入口专用变体 URL（?fulgurjs_entry=1）：与业务模块树经 Vite 重写的
+// 无 query URL 隔离为不同模块记录。故障只污染入口变体；业务树里的 shared facade /
+// runtime-proxy import 的无 query runtime 保持零失败记录，重试后才能真实恢复（否则整棵
+// 业务模块树被浏览器 module map 的同 URL 失败缓存秒拒）。两个变体经 globalThis
+// .__FULGURJS_RUNTIME__ 单例幂等收敛为同一运行时实例，provides 是纯声明模块，均无分裂。
+// @vite/client 不隔离——HMR 客户端不可重复求值，维持失败驱动换 retry URL 穿透。
+const __fgIso = (u) => import(u + '?fulgurjs_entry=1').catch((e) => (__fgQ ? import(u + __fgQ) : Promise.reject(e)));
 const __fgImp = (u) => import(u).catch((e) => (__fgQ ? import(u + __fgQ) : Promise.reject(e)));
 const [__fgVite, __fgRT, __fgP] = await Promise.all([
   __fgImp(${JSON.stringify(`${b}@vite/client`)}),
-  __fgImp(${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)}),
-  __fgImp(${JSON.stringify(`${b}@id/__x00__virtual:fulgurjs-provides`)}),
+  __fgIso(${JSON.stringify(`${b}@id/virtual:fulgurjs-runtime`)}),
+  __fgIso(${JSON.stringify(`${b}@id/__x00__virtual:fulgurjs-provides`)}),
 ]);
 const __fulgurjs_prepare = __fgRT.prepareShares;
 const registerRemotes = __fgRT.registerRemotes;
