@@ -4,7 +4,6 @@ import type { DynamicProps } from '/#/utils';
 import { handleRangeValue } from '../utils/formUtils';
 import { ref, onUnmounted, unref, nextTick, watch } from 'vue';
 import { isProdMode } from '/@/utils/env';
-import { error } from '/@/utils/log';
 import { getDynamicProps, getValueType, getValueTypeBySchema } from '/@/utils';
 export declare type ValidateFields = (nameList?: NamePath[], options?: ValidateOptions) => Promise<Recordable>;
 
@@ -13,10 +12,6 @@ type Props = Partial<DynamicProps<FormProps>>;
 // 表单实例未就绪的两种口径：
 // 1) 未注册但组件仍在：等待 register（真实就绪事件），不靠一次 nextTick 碰运气；
 // 2) 组件已卸载仍未注册（异步离页/快速关闭）：挂起的操作显式失败，不吞错、不写死实例。
-const FORM_NOT_READY_WAITING_MESSAGE =
-  'The form instance has not been obtained, please make sure that the form has been rendered when performing the form operation! ' +
-  '本次调用已进入等待：表单组件注册（@register 触发）后操作会继续执行。' +
-  '若表单在 v-if 下永不渲染，操作会保持挂起，直到所属组件卸载时以明确错误结束。';
 const FORM_NOT_READY_UNMOUNTED_MESSAGE =
   'The form instance has not been obtained: the component owning this useForm was unmounted before the form registered. ' +
   '现象：表单操作早于表单渲染发起，且所属组件在表单注册前卸载（异步离页/快速关闭）。\n' +
@@ -56,19 +51,22 @@ export function useForm(props?: Props): UseFormReturnType {
     if (hasReadyWaiters && rejectReady) {
       rejectReady(new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE));
     }
-    isProdMode() && ((formRef.value = null), (loadedRef.value = null));
+    formRef.value = null;
+    loadedRef.value = null;
   });
 
   async function getForm() {
+    if (isDisposed) throw new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE);
     const form = unref(formRef);
     if (!form) {
-      // 诊断保留原文案（可被监控检索），语义从“报错后返回 null”改为“等待注册”。
-      error(FORM_NOT_READY_WAITING_MESSAGE);
+      // 未注册属于初始化窗口；等待 register，不调用会抛异常的 error()。
       const readyForm = await waitReadyForm();
       await nextTick();
+      if (isDisposed) throw new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE);
       return readyForm;
     }
     await nextTick();
+    if (isDisposed) throw new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE);
     return form as FormActionType;
   }
 
@@ -81,6 +79,7 @@ export function useForm(props?: Props): UseFormReturnType {
   }
 
   function register(instance: FormActionType) {
+    if (isDisposed) return;
     if (unref(loadedRef) && isProdMode() && instance === unref(formRef)) return;
 
     formRef.value = instance;

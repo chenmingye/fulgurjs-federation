@@ -3,7 +3,7 @@
 // 被测对象：公开 Jeecg 集成的真实 useForm.ts（app-a 与 app-b 同一份代码）：
 //   examples/integrations/jeecg/app-b/src/components/Form/src/hooks/useForm.ts
 // 旧实现 getForm() 只等一次 nextTick 后返回可能为 null 的实例 → 首帧调用
-// setFieldsValue 直接 TypeError（"form instance has not been obtained" +
+// setFieldsValue 在 error() 诊断处直接抛错（"form instance has not been obtained" +
 // 微前端 PromiseRejectionEvent；独立站对照亦复现，属业务 hook 固有时序缺陷）。
 //
 // 同一条首帧用例同时驱动两份实现：
@@ -79,7 +79,7 @@ export function useForm(props) {
 `;
 
 const envShim = `let prodMode = true;\nexport const isProdMode = () => prodMode;\n`;
-const logShim = `const errors = [];\nif (typeof window !== 'undefined') window.__d38errors = errors;\nexport const error = (...args) => { errors.push(args.join(' ')); };\n`;
+const logShim = `const errors = [];\nif (typeof window !== 'undefined') window.__d38errors = errors;\nexport const error = (...args) => { const message = args.join(' '); errors.push(message); throw new Error(message); };\n`;
 const utilsShim = `export const getDynamicProps = (props) => props;\nexport const getValueType = () => 'string';\nexport const getValueTypeBySchema = () => 'string';\n`;
 const formUtilsShim = `// 依赖 shim（非被测对象）：validate 结果区间值后处理，本回归直通。\nexport const handleRangeValue = (props, values) => values;\n`;
 const dateUtilShim = `export const dateUtil = () => { throw new Error('not used in this regression'); };\n`;
@@ -194,14 +194,14 @@ async function withMountedPage(bundle, registerMode, fn) {
   }
 }
 
-test('D38-① 首帧竞态：修复前实现在同一用例上必须复现原始 TypeError；修复后等待 register 正常完成', { timeout: 20000 }, async () => {
+test('D38-① 首帧竞态：修复前实现在同一用例上必须复现真实 error() 抛错；修复后等待 register 正常完成', { timeout: 20000 }, async () => {
   const legacy = await bundleUseForm('legacy');
   await assert.rejects(
     withMountedPage(legacy, 'auto', async ({ earlyCalls }) => {
       await Promise.all(earlyCalls);
     }),
-    /Cannot read properties of (null|undefined)/,
-    '旧实现（nextTick 后返回 null）应复现原始失败'
+    /The form instance has not been obtained/,
+    '旧实现 error() 会抛错，等待注册无法完成'
   );
 
   const fixed = await bundleUseForm('fixed');
@@ -244,21 +244,16 @@ test('D38-④ 注册后卸载再调用：显式失败而不是写死实例', { t
   );
 });
 
-test('D38-⑤ 诊断文案保留可检索原文；无 unhandledRejection 噪音', { timeout: 20000 }, async () => {
+test('D38-⑤ 正常等待不抛诊断错误，卸载后等待者收到明确失败', { timeout: 20000 }, async () => {
+  globalThis.window.__d38errors = [];
   const fixed = await bundleUseForm('fixed');
-  await withMountedPage(fixed, 'never', async ({ earlyCalls, unhandled }) => {
+  await withMountedPage(fixed, 'never', async ({ capture, earlyCalls, unhandled }) => {
+    const observed = Promise.allSettled(earlyCalls);
     await new Promise((r) => setTimeout(r, 20));
-    assert.equal(unhandled.length, 0, '不应产生 unhandledRejection: ' + unhandled.join(' | '));
-    const errors = globalThis.window.__d38errors || [];
-    assert.equal(
-      errors.some((m) => m.includes('The form instance has not been obtained')),
-      true,
-      '等待时必须保留原始诊断文案（可被业务监控检索）'
-    );
-    assert.equal(
-      errors.some((m) => m.includes('等待') || m.includes('挂起')),
-      true,
-      '诊断必须说明已进入等待语义'
-    );
+    assert.equal(unhandled.length, 0);
+    assert.equal((globalThis.window.__d38errors || []).length, 0);
+    capture.app.unmount();
+    const outcomes = await observed;
+    assert.ok(outcomes.every((x) => x.status === 'rejected' && /was unmounted/.test(x.reason.message)));
   });
 });
