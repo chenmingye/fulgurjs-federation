@@ -50,10 +50,12 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 Semantics:
 
-- Internally equivalent to `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`, returning a standard Vue async component;
+- Returns a standard Vue async component that renders the remote default export (or the module itself). KeepAlive state is retained within a session. When mounted or activated after a session change, the new session initializes before the page renders;
 - **Zero silent fallback**: a load failure explicitly enters the error state; when no `errorComponent` is passed, the built-in placeholder renders (error code + root cause + fix + "Retry load / Refresh page" buttons), and the `fulgurjs:error` window event is emitted as usual;
 - Multiple component instances with the same spec share `loadRemote`'s internal Promise cache — the container module loads only once.
 - **provide/inject does not cross from the provider's app root**: the remote component renders inside the **consumer's** component tree — `provide` calls at the provider app's root (`App.vue` etc., global `AppProvider`, prefixCls, theme, ConfigProvider) do not travel with the component, while the consumer's own ancestor provides apply as usual. When the exposed surface depends on such context, provide it **inside the exposed entry component** (single source, e.g. wrap `AppProvider` at the root of the exposed component's template); never require every host to re-register it. A missed inject shows up as default empty values (typically a class prefix like `undefined-xxx` or missing theme classes).
+
+- **State injection belongs to the consumer too**: a remote component using injected Pinia may resolve a consumer store with the same ID. When provider-owned state is required, pass the provider Pinia instance explicitly. A complete application requiring its own router, stores and lifecycle should use [app bridging](app-bridge.md).
 
 **React** (`@fulgurjs/federation/react`):
 

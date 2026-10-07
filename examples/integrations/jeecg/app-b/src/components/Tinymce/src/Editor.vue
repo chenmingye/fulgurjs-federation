@@ -44,7 +44,7 @@
   import { useDesign } from '/@/hooks/web/useDesign';
   import { isNumber } from '/@/utils/is';
   import { useLocale } from '/@/locales/useLocale';
-  import { useAppStore } from '/@/store/modules/app';
+  import { useAppStoreWithOut } from '/@/store/modules/app';
   import { uploadFile } from '/@/api/common/api';
   import { getFileAccessHttpUrl } from '/@/utils/common/compUtils';
   import { ThemeEnum } from '/@/enums/appEnum';
@@ -118,7 +118,7 @@
 
       const { prefixCls } = useDesign('tinymce-container');
 
-      const appStore = useAppStore();
+      const appStore = useAppStoreWithOut();
 
       const tinymceContent = computed(() => props.modelValue);
 

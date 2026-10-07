@@ -50,10 +50,12 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 语义要点：
 
-- 内部等价 `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件；
+- 返回标准 Vue 异步组件，加载完成后渲染远程默认导出（或模块本身）。同会话的保活状态保留；换会话后重新挂载或激活时，先执行新会话初始化，再渲染页面；
 - **零兜底**：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法 + 「重试加载 / 刷新页面重试」按钮），`window` 的 `fulgurjs:error` 事件照常发出；
 - 同 spec 多组件实例共享 `loadRemote` 内部 Promise 缓存，容器模块只加载一次。
 - **provide/inject 不跨提供方根部**：远程组件渲染在**消费方**的组件树里——提供方 app 根部（`App.vue` 等）的 `provide`（全局 `AppProvider`、prefixCls、主题、ConfigProvider 等）不会跟着组件走；消费方自己的祖先 provide 正常生效。暴露面依赖这类上下文时，在**暴露入口组件**内自 provide（单一来源，如把 `AppProvider` 包进暴露组件模板根），不要要求每个宿主重复注册。未命中 inject 的症状是取到默认空值（典型：类名前缀变成 `undefined-xxx`、主题类缺失）。
+
+- **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
 **React**（`@fulgurjs/federation/react`）：
 

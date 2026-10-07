@@ -3,7 +3,7 @@
   import { createAppProviderContext } from './useAppContext';
   import { createBreakpointListen } from '/@/hooks/event/useBreakpoint';
   import { prefixCls } from '/@/settings/designSetting';
-  import { useAppStore } from '/@/store/modules/app';
+  import { useAppStoreWithOut } from '/@/store/modules/app';
   import { MenuModeEnum, MenuTypeEnum } from '/@/enums/menuEnum';
 
   const props = {
@@ -21,7 +21,7 @@
       const isMobile = ref(false);
       const isSetState = ref(false);
 
-      const appStore = useAppStore();
+      const appStore = useAppStoreWithOut();
 
       // Monitor screen breakpoint information changes
       createBreakpointListen(({ screenMap, sizeEnum, width }) => {
