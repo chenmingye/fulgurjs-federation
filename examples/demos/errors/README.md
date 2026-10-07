@@ -4,7 +4,7 @@
 真实错误码、真实错误对象与真实恢复路径（README §6 错误码总表、§8 remoteComponent 占位语义、
 §8.2 桥接错误占位与容器封锁语义、§10 setup 生命周期）。
 
-两个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `5.4.3` + lockfile），
+两个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.4` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 | 说明 |
@@ -77,9 +77,9 @@ cd host        && npm run build && npm run typecheck
 | `registerRemote`（promise remote / 动态地址、重复注册刷新、timeout/retries） | `@fulgurjs/federation/runtime` | [host/src/cards/Card1Unreachable.vue](host/src/cards/Card1Unreachable.vue)、[Card3Timeout.vue](host/src/cards/Card3Timeout.vue)、[Card9SetupFail.vue](host/src/cards/Card9SetupFail.vue) | `runtime/index.ts`（registerRemotes / assertRemoteParams / acquireContainer） |
 | `loadRemote`（spec 解析、带 code 领域错误穿透、重试换 URL） | `@fulgurjs/federation/runtime` | 卡 1/2/3/9/10 | `runtime/index.ts`（loadRemote）+ `virtual.ts`（dev 容器 get 的 MFU-006） |
 | `loadShare`（requiredVersion/singleton/strictVersion/fallback） | `@fulgurjs/federation/runtime` | [host/src/cards/Card5StrictVersion.vue](host/src/cards/Card5StrictVersion.vue) | `runtime/index.ts`（selectShareEntry：`MFU-003` / `MFU-004`） |
-| `remoteComponent` 默认错误占位（错误码 + 根因 + 重试加载/刷新页面重试） | `@fulgurjs/federation/runtime` | [host/src/cards/Card4ModuleError.vue](host/src/cards/Card4ModuleError.vue)（DOM 证据读取）、Card10Normal.vue | `vue-adapter.ts`（RemoteErrorPlaceholder + createRecoverableErrorPlaceholder） |
+| `remoteComponent` 默认错误占位（错误码 + 根因 + 重试加载/刷新页面重试） | `@fulgurjs/federation/vue` | [host/src/cards/Card4ModuleError.vue](host/src/cards/Card4ModuleError.vue)（DOM 证据读取）、Card10Normal.vue | `vue-adapter.ts`（RemoteErrorPlaceholder + createRecoverableErrorPlaceholder） |
 | `createVueBridgeApp`（MFU-015 契约校验 / MFU-016 生命周期 / 自定义 errorComponent 只收 error prop） | `@fulgurjs/federation/vue` | Card6BridgeBroken.vue、Card7BridgeMountFail.vue、[Card8BridgeUnmountFail.vue](host/src/cards/Card8BridgeUnmountFail.vue)、[host/src/components/bridge-capture.ts](host/src/components/bridge-capture.ts) | `bridge-host-vue.ts` + `bridge-core.ts`（assertBridgeContract / invalidate 容器封锁 BN09） |
-| `defineBridgeApp`（mount 抛错包装 / unmount 抛错包装 / 容器占用） | `@fulgurjs/federation/runtime` | [remote-good/src/exposes/bridge-good.ts](remote-good/src/exposes/bridge-good.ts)、bridge-mount-fail.ts、bridge-unmount-fail.ts | `bridge-app-vue.ts` |
+| `defineBridgeApp`（mount 抛错包装 / unmount 抛错包装 / 容器占用） | `@fulgurjs/federation/vue` | [remote-good/src/exposes/bridge-good.ts](remote-good/src/exposes/bridge-good.ts)、bridge-mount-fail.ts、bridge-unmount-fail.ts | `bridge-app-vue.ts` |
 | `federation({ setup })` 生命周期（应用级一次、失败清缓存可重试、debug.setup 状态） | Vite 插件选项 | [remote-good/src/fulgurjs/setup.ts](remote-good/src/fulgurjs/setup.ts)、[remote-good/fulgurjs.config.ts](remote-good/fulgurjs.config.ts)、Card9SetupFail.vue | `runtime/index.ts`（runSetupPhase / ensureLifecycle）+ `virtual.ts`（容器 `__fulgurjsSetup` 元数据） |
 | `window.fulgurjs:error` 事件 / `window.__FULGURJS_INFO__` 调试面 | 免配置 | [host/src/error-monitor.ts](host/src/error-monitor.ts)（事件登记）、Card9SetupFail.vue（setup 状态读取） | `runtime/index.ts`（emitError / 调试出口挂载） |
 | 挂起中间件（故障注入面） | Vite `Plugin.configureServer` | [host/vite.config.ts](host/vite.config.ts)（createHangEntryPlugin） | —（演示自有代码） |
@@ -89,7 +89,7 @@ cd host        && npm run build && npm run typecheck
 
 | 依赖 | 版本 | 备注 |
 |---|---|---|
-| `@fulgurjs/federation` | `5.4.3`（精确） | 两工程一致；lockfile 随仓库提交（`npm ci` 复现） |
+| `@fulgurjs/federation` | `6.1.4`（精确） | 两工程一致；lockfile 随仓库提交（`npm ci` 复现） |
 | `vue` | `^3.5.13` | 两工程（runtime 的 `remoteComponent` 要求页面侧安装 vue） |
 | `vite` / `@vitejs/plugin-vue` | `^6.3.5` / `^5.2.1` | |
 | `typescript` / `vue-tsc` | `^5.8.0` / `^2.2.10` | `npm run typecheck`（vue-tsc --noEmit） |

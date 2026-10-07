@@ -3,7 +3,7 @@
 `createHostPages` 页面适配器 + `definePages`/`validatePages` 页面表校验 + `fulgurjs` CLI
 （init / explain / check-pages / doctor）的一站式演示（README 路径②、§3、§4、§5、§9、§10）。
 
-三个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `5.4.3` + lockfile），
+三个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.4` + lockfile），
 不使用 workspace / file: / link: 引用。`negative/` 是负向校验工程——**不启动、不构建**，由
 `npm run verify` 管理（详见[下文](#负向工程-negative长期预期编译失败)）。
 
@@ -84,7 +84,7 @@ cd negative && npm install && npm run verify
 ## CLI 检查脚本与真实输出
 
 `scripts/run-cli-checks.sh`（`set -uo pipefail`，每步分隔标题；「预期失败采样」不中断，
-断言失败才 exit 1）。以下输出摘自真实运行（5.4.3，macOS，dev server 运行中）。
+断言失败才 exit 1）。以下输出摘自历史真实运行（5.4.3，macOS，dev server 运行中）。
 
 ### 1) `fulgurjs --help`（退出码 0）
 
@@ -200,14 +200,14 @@ remoteSchema = {}
 | API（README 锚点） | 导出入口 | 本 demo 使用位置 | 插件源码（packages/plugin/src） |
 |---|---|---|---|
 | `definePages` / `validatePages`（§3） | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/pages.data.ts](host/src/fulgurjs/pages.data.ts)（数据源）、ValidatePanel.vue（违例渲染） | `pages.ts` |
-| `createHostPages`（§10.1） | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（beforeLoad/loadingComponent/delay/schema 全参接线）、[host/src/main.ts](host/src/main.ts)（路由注册） | `vue-adapter.ts` + `host-pages-core.ts` |
-| `remoteSchema`（§路径②） | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（R3 数据源）、RemoteSchemaPanel.vue（JSON 视图） | `remote-schema.ts` + `virtual.ts` |
+| `createHostPages`（§10.1） | `@fulgurjs/federation/vue` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（beforeLoad/loadingComponent/delay/schema 全参接线）、[host/src/main.ts](host/src/main.ts)（路由注册） | `vue-adapter.ts` + `host-pages-core.ts` |
+| `remoteSchema`（§路径②） | `@fulgurjs/federation/vue` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（R3 数据源）、RemoteSchemaPanel.vue（JSON 视图） | `remote-schema.ts` + `virtual.ts` |
 | `provideAppContext` / `clearAppContext` / `getAppContext`（§9） | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/host/bridge.ts](host/src/fulgurjs/host/bridge.ts)、ContextPanel.vue | `context.ts` |
 | `requireAppContext`（§9，CC-001） | `@fulgurjs/federation/runtime` | [remote/src/pages/Orders.vue](remote/src/pages/Orders.vue)（缺键捕获展示） | `context.ts` |
 | `federation({ setup })` + `onSession`（§10.2） | Vite 插件选项 + 生命周期约定 | [remote/src/fulgurjs/setup.ts](remote/src/fulgurjs/setup.ts)（记录到 `globalThis.__PC_SETUP_LOG__`）、[remote/fulgurjs.config.ts](remote/fulgurjs.config.ts) | `transform.ts` + runtime 生命周期段 |
 | `keepAlive`（§9.1.1） | 页面表条目字段 | [host/src/App.vue](host/src/App.vue)（`<KeepAlive :include="hostPages.keepAliveNames">`）、[remote/src/pages/Dashboard.vue](remote/src/pages/Dashboard.vue) | `host-pages-core.ts`（keepAliveNames） |
 | `loadingComponent` + `delay`（§9.1.2） | `createHostPages` 选项 | [host/src/components/PcSkeleton.vue](host/src/components/PcSkeleton.vue) + TracePanel.vue（loading→ready 时序） | `vue-adapter.ts` |
-| `remoteComponent`（§8） | `@fulgurjs/federation/runtime` | WidgetPanel.vue（`pc-remote/widgets/stat-card` 直渲染） | `vue-adapter.ts` |
+| `remoteComponent`（§8） | `@fulgurjs/federation/vue` | WidgetPanel.vue（`pc-remote/widgets/stat-card` 直渲染） | `vue-adapter.ts` |
 | `hostPages` 具名导出（§4，CLI 数据源） | `fulgurjs.config.ts` 具名导出 | [host/fulgurjs.config.ts](host/fulgurjs.config.ts)、[remote/fulgurjs.config.ts](remote/fulgurjs.config.ts)（远程侧同构对照） | `app-config.ts` + `commands.ts` |
 | `fulgurjs init/explain/check-pages/doctor`（§5） | `fulgurjs` bin | [scripts/run-cli-checks.sh](scripts/run-cli-checks.sh)（真实采样） | `cli.ts` / `init.ts` / `commands.ts` / `doctor.ts` |
 
@@ -245,7 +245,7 @@ remoteSchema = {}
 
 | 依赖 | 版本 | 备注 |
 |---|---|---|
-| `@fulgurjs/federation` | `5.4.3`（精确） | 三个工程一致；lockfile 随仓库提交 |
+| `@fulgurjs/federation` | `6.1.4`（精确） | 三个工程一致；lockfile 随仓库提交 |
 | `vue` / `vue-router` | `^3.5.13` / `^4.5.0` | host 双装；remote 仅 vue |
 | `vite` / `@vitejs/plugin-vue` | `^6.3.5` / `^5.2.1` | |
 | `typescript` / `vue-tsc` | `^5.8.0` / `^2.2.10` | negative 仅 typescript |
