@@ -14,7 +14,7 @@ export default {
   remotes: {
     'sf-vue-host': {
       dev: 'http://localhost:5324',
-      prod: '/',
+      prod: '/sf-vue-host',
     },
   },
   exposes: {

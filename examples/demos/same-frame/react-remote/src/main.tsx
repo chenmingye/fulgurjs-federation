@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { RouterProvider, createBrowserRouter } from 'react-router-dom'
-import { childRoutes } from './bridge'
+import { childRoutes } from './routes'
 import './demo.css'
 
 // 独立运行入口：单独开发/调试子应用自身（web router 便于直接浏览）。

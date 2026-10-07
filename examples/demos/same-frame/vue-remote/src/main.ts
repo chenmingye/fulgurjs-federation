@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
-import { childRoutes } from './bridge'
+import { childRoutes } from './routes'
 import './demo.css'
 
 // 独立运行入口：单独开发/调试子应用自身（web history 便于直接浏览）。

@@ -4,7 +4,7 @@
 三方都依赖真实第三方小包 **nanostores** 并以同一份 shared 配置参与协商（remote-b 故意固定旧版本），
 宿主页面用 11 张卡片逐项演示运行时能力的真实行为——每个按钮都是真实调用，结果与错误均为运行时真实返回。
 
-三个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.4` + lockfile），
+三个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.9` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 | nanostores 声明版本 |

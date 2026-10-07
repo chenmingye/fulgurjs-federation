@@ -7,13 +7,10 @@
  * 子应用一切注册都发生在这个新 app 上（控制台纪律：无重复注册警告）。
  */
 import { createApp } from 'vue'
-import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { defineBridgeApp } from '@fulgurjs/federation/vue'
 import App from './App.vue'
-import TicketList from './pages/TicketList.vue'
-import RemoteForm from './pages/RemoteForm.vue'
-import TicketDetail from './pages/TicketDetail.vue'
-import TicketEdit from './pages/TicketEdit.vue'
+import { childRoutes } from './routes'
 import './demo.css'
 
 /** appProps：宿主传入的业务 props（label + 稳定回调 onReady/onGone，供宿主诊断计数）；
@@ -24,17 +21,6 @@ export interface BridgeChildProps {
   onGone?: () => void
   [key: string]: unknown
 }
-
-/** 子应用内部路由（memory history 由各工厂调用创建，路由表共用） */
-export const childRoutes: RouteRecordRaw[] = [
-  { path: '/', redirect: '/tickets' },
-  { path: '/tickets', component: TicketList },
-  { path: '/tickets/:id', component: TicketDetail, props: true },
-  { path: '/tickets/:id/edit', component: TicketEdit, props: true },
-  { path: '/remote-form', component: RemoteForm },
-  { path: '/remote-form/:id', component: RemoteForm, props: false },
-  { path: '/:pathMatch(.*)*', redirect: '/tickets' },
-]
 
 export default defineBridgeApp((props) => {
   const childProps = props as BridgeChildProps

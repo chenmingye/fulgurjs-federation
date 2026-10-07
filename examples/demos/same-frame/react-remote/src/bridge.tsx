@@ -7,12 +7,9 @@
  * createRoot/首次提交探测/unmount 由 defineBridgeApp 契约负责（react-dom/client 实际 mount 时按需加载）。
  */
 import { createContext, useContext } from 'react'
-import { Navigate, RouterProvider, createMemoryRouter, type RouteObject } from 'react-router-dom'
+import { RouterProvider, createMemoryRouter } from 'react-router-dom'
 import { defineBridgeApp } from '@fulgurjs/federation/react'
-import ChildLayout from './ChildLayout'
-import TicketList from './pages/TicketList'
-import TicketDetail from './pages/TicketDetail'
-import TicketEdit from './pages/TicketEdit'
+import { childRoutes } from './routes'
 import './demo.css'
 
 /** appProps：宿主传入的业务 props（label + 稳定回调 onReady/onGone，供宿主诊断计数）；
@@ -30,21 +27,6 @@ const BridgePropsContext = createContext<BridgeChildProps>({})
 export function useBridgeProps(): BridgeChildProps {
   return useContext(BridgePropsContext)
 }
-
-/** 子应用内部路由表（memory router 由各工厂调用创建，路由表共用） */
-export const childRoutes: RouteObject[] = [
-  {
-    path: '/',
-    element: <ChildLayout />,
-    children: [
-      { index: true, element: <Navigate to="/tickets" replace /> },
-      { path: 'tickets', element: <TicketList /> },
-      { path: 'tickets/:id', element: <TicketDetail /> },
-      { path: 'tickets/:id/edit', element: <TicketEdit /> },
-      { path: '*', element: <Navigate to="/tickets" replace /> },
-    ],
-  },
-]
 
 export default defineBridgeApp((props) => {
   const router = createMemoryRouter(childRoutes, { initialEntries: ['/tickets'] })

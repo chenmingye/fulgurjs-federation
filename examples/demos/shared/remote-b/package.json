@@ -10,7 +10,7 @@
     "typecheck": "vue-tsc --noEmit --skipLibCheck"
   },
   "dependencies": {
-    "@fulgurjs/federation": "6.1.4",
+    "@fulgurjs/federation": "6.1.9",
     "nanostores": "0.6.0",
     "vue": "^3.5.13"
   },
