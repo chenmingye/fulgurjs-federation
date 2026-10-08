@@ -116,4 +116,10 @@ pnpm run build
 2. 宿主 `fulgurjs.config.ts` 里 `remotes` 的 dev 地址（`vue-host` 指向 react-remote 的 5333；`react-host` 指向 vue-remote 的 5335）；
 3. 根 `scripts/dev.config.json` 里该应用的 `port`（**必改**：启动器预检/探活都读它）。
 
+生产部署形态（重要）：两个宿主的路由都没有配置 base，**不能部署到同一站点的根**（两份 `index.html` 会互相覆盖）。按两个站点部署——
+
+- 站点 A：`vue-host/dist` 部署在根，`react-remote/dist` 部署在同站 `/react-remote/` 子路径（vue-host 的 prod 地址）；
+- 站点 B：`react-host/dist` 部署在另一个站点的根，`vue-remote/dist` 部署在该站 `/vue-remote/` 子路径（react-host 的 prod 地址）；
+- 两个站点都要为 `fulgurjs-remoteEntry.js` 配 no-cache 与正确 Content-Type，SPA 回退不得吞 JS（参考各子应用 README 与 [部署指南](../../../docs/zh/guide/deployment.md)）。
+
 生产部署地址（各应用 `prod`）是站点路径，与 dev 端口无关，改端口不要动它。改完自查：`grep -rn "533" --include="*.json" --include="*.ts" .` 不应再出现旧端口。

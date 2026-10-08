@@ -27,6 +27,7 @@
 | 宿主/远程插件版本不一致（`DEV-006`） | 各应用 @fulgurjs/federation 版本 | 统一版本 |
 | 远程页面独立直开白屏（`CC-002`） | 页面被绕过宿主直接访问 | 经宿主联邦加载 |
 | JS 请求被兜成 HTML（doctor FAIL） | nginx 深链回退过宽 | 为静态资源加精确匹配；[部署指南 · SPA 回退](../guide/deployment.md#spa-回退绝不把-js-请求兜成-html) |
+| 宿主白屏，console 见远程组件 setup/render 抛错（Vue） | 远程组件**渲染期**错误按 Vue 语义向宿主组件树传播——`remoteComponent` 的错误占位只覆盖**加载期**失败，不吞渲染错误 | 修复远程组件自身；宿主可配 `app.config.errorHandler` 或在外层 `onErrorCaptured` 做应用级兜底（React 侧由 `RemoteErrorBoundary`/内置边界承担该层） |
 | 远程组件渲染成功但字符串标签（如 `<a-divider>`）成无样式死元素 | 消费方 app 未注册该全局组件 | 远程在 setup 模块声明 `globalComponents`（`remoteComponent` 消费时自动安装）；[API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期) |
 | 给 shared 依赖加 ESM 别名后构建报 `xxx.default.extend is not a function` | prod rollup 双重 interop | **build 必删**该别名；dev 侧若该依赖已移出预构建，其 CJS 子路径需 dev 专用别名兜住（`command==='serve'` 才注入） |
 | 远程页面（exposes 目标文件）静态导入运行时，担心双实例 | — | 直接静态导入即可——插件自动改写为惰性单例代理，远程与宿主写法完全一致 |
