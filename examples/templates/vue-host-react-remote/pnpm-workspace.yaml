@@ -2,7 +2,7 @@ packages:
   - vue-host
   - react-remote
 minimumReleaseAgeExclude:
-  - '@fulgurjs/federation@6.3.0'
+  - '@fulgurjs/federation@6.4.1'
 # pnpm >=12 构建脚本批准（12 起弃用 onlyBuiltDependencies；pnpm 9-11 忽略本键：
 # esbuild >=0.16 二进制经 optionalDependencies 平台包分发，postinstall 仅校验，不阻塞安装）
 allowBuilds:

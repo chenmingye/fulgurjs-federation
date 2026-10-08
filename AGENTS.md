@@ -34,7 +34,7 @@
 | `examples/integrations/` | 大型公开集成，例如 Jeecg 自嵌套 |
 | `examples/portal/`、`examples/scripts/` | 展示门户与统一管理脚本 |
 | `examples/scenarios.json` | 场景目录、端口、启动顺序、包管理器和安装目录的统一登记表 |
-| `docs/README.md` | 文档中心总入口：zh/ guide+reference+troubleshooting、en/ 镜像、maintainers/（含 API 手册 zh/reference/api.md 与错误码 zh/reference/errors.md） |
+| `docs/README.md` | 文档中心总入口：zh/ guide+reference+troubleshooting、en/ 镜像、maintainers/（含 API 手册 zh/reference/api.md 与公开类型字段 zh/reference/types.md、错误码 zh/reference/errors.md） |
 | `.github/workflows/` | 实际 CI 与正式发布流程 |
 | `testbed/` | 本机私有验收目录（Git 忽略）：runs/ 为各轮验收现场，private-docs/ 为任务书/报告/私有规则 |
 

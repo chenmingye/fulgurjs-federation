@@ -524,3 +524,24 @@ Import from: `@fulgurjs/federation/react`.
 export type ReactBridgeAppFactory = (props: Record<string, unknown>, ctx?: ReactBridgeAppContext) => ReactElement
 ```
 
+## ReactBridgeCancelPolicy
+
+```ts
+import type { ReactBridgeCancelPolicy } from '@fulgurjs/federation/react'
+```
+
+Synchronous host navigation predicate: `(next: BridgeLocation) => boolean`. Return `true` to allow navigation, `false` to reject it. Pass it to `createReactBridgeNavigation(router, { canNavigate })`; do not supply an async function.
+
+## ReactBridgeRouterConnection
+
+```ts
+import type { ReactBridgeRouterConnection } from '@fulgurjs/federation/react'
+```
+
+Return value of `createReactBridgeRouter`.
+
+| Field | Type | Usage |
+|---|---|---|
+| `element` | `ReactElement` | Return as the child application's root from the bridge factory. |
+| `routerReady` | `Promise<Router>` | Resolves when the memory router is wired; rejects if dependencies cannot load. Await this promise instead of assuming `element.props.router` exists synchronously. |
+| `dispose` | `() => void` | Release routing subscriptions and wiring during bridge cleanup. |

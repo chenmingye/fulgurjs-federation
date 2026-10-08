@@ -524,3 +524,24 @@ React 页面解析和组件创建对象.
 export type ReactBridgeAppFactory = (props: Record<string, unknown>, ctx?: ReactBridgeAppContext) => ReactElement
 ```
 
+## ReactBridgeCancelPolicy
+
+```ts
+import type { ReactBridgeCancelPolicy } from '@fulgurjs/federation/react'
+```
+
+宿主导航预判函数：`(next: BridgeLocation) => boolean`。返回 `true` 允许进入下一地址，`false` 拒绝；不要把异步函数传给此同步预判。传给 `createReactBridgeNavigation(router, { canNavigate })`。
+
+## ReactBridgeRouterConnection
+
+```ts
+import type { ReactBridgeRouterConnection } from '@fulgurjs/federation/react'
+```
+
+`createReactBridgeRouter` 的返回值。
+
+| 字段 | 类型 | 用法 |
+|---|---|---|
+| `element` | `ReactElement` | 返回给桥接工厂，作为子应用根节点。 |
+| `routerReady` | `Promise<Router>` | 等待 memory router 完成接线；依赖缺失会 reject。需要访问 router 时等待此 Promise，不假设 `element.props.router` 同步存在。 |
+| `dispose` | `() => void` | 卸载时解除路由订阅与接线。与桥接生命周期清理一起调用。 |

@@ -61,7 +61,7 @@ docs/
 - 发布流程（Release → publish.yml → 核验）：[maintainers/releasing.md](maintainers/releasing.md)
 - 能力对照与边界：[maintainers/webpack-mf-对照与缺口.md](maintainers/webpack-mf-对照与缺口.md)
 - 沙箱边界审计：[maintainers/沙箱边界审计.md](maintainers/沙箱边界审计.md)
-- Vite 7/8 兼容矩阵：[maintainers/compatibility-testing.md](maintainers/compatibility-testing.md)
+- Vite 兼容性验证：[maintainers/compatibility-testing.md](maintainers/compatibility-testing.md)
 
 - [公共类型参考](zh/reference/types.md)
 
