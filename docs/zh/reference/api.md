@@ -547,3 +547,7 @@ const PREFETCH_REMOTES: string[] = []
 - 48 个错误码：[错误码总表](errors.md)
 - 产物端点与部署规则：[部署指南](../guide/deployment.md)
 - 完整可运行工程：[examples](../../../examples/README.md)
+
+## 完整公共类型
+
+[公共类型参考](types.md) 按当前入口列出全部公开类型及字段。

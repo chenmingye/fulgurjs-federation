@@ -64,3 +64,5 @@
 | [webpack MF 对照](../maintainers/webpack-mf-对照与缺口.md) | 与 webpack ModuleFederationPlugin 的能力对照与边界 |
 | [沙箱边界审计](../maintainers/沙箱边界审计.md) | CSS / 全局变量 / 公共依赖的同 realm 结论 |
 | [Vite 7/8 兼容矩阵](../maintainers/compatibility-testing.md) | fixtures 全版本 e2e 矩阵 |
+
+- [公共类型参考](reference/types.md)

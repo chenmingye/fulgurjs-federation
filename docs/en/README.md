@@ -64,3 +64,5 @@
 | [webpack MF comparison](../maintainers/webpack-mf-对照与缺口.md) | Capability comparison and boundaries versus webpack ModuleFederationPlugin |
 | [Sandbox boundary audit](../maintainers/沙箱边界审计.md) | Same-realm conclusions for CSS / global variables / public dependencies |
 | [Vite 7/8 compatibility matrix](../maintainers/compatibility-testing.md) | Full-version e2e fixture matrix |
+
+- [Public type reference](reference/types.md)

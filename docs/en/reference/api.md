@@ -551,3 +551,7 @@ A project can build its own runtime diagnostics page (route `meta.ignoreAuth`), 
 - All 48 error codes: [error code table](errors.md)
 - Artifact endpoints and deployment rules: [deployment guide](../guide/deployment.md)
 - Complete runnable projects: [examples](../../../examples/README.md)
+
+## Complete public types
+
+The [public type reference](types.md) lists every exported type and its fields by current import location.
