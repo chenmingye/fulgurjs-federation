@@ -66,6 +66,6 @@ pnpm test:prod   # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 
 ## 调试建议
 
-- 配置类问题先跑 `npx fulgurjs doctor`（部署面）与 `npx fulgurjs explain`（有效配置），多数问题能直接定位；
+- 配置类问题先跑 `npx @fulgurjs/federation doctor`（部署面）与 `npx @fulgurjs/federation explain`（有效配置），多数问题能直接定位；
 - 报错按错误码查[错误码总表](../zh/reference/errors.md)；
 - dev 下改了插件源码要重启 dev server（缓存自动清，但仍需重启进程）。

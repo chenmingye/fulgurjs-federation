@@ -245,7 +245,7 @@ export function formatCreateResult(result: CreateResult): string {
       hostList.map((a) => `http://localhost:${a.port}/（${a.name}）`).join('  '),
   )
   lines.push('  pnpm build              # 各子应用生产构建（远程生成 fulgurjs-remoteEntry.js / fulgurjs-manifest.json）')
-  lines.push('  部署规则（no-cache / SPA 回退 / base 对齐）见模板内各子应用 README；部署后可用 npx fulgurjs doctor --base <站点> --apps <部署子目录> 体检')
+  lines.push('  部署规则（no-cache / SPA 回退 / base 对齐）见模板内各子应用 README；部署后可用 npx @fulgurjs/federation doctor --base <站点> --apps <部署子目录> 体检')
   lines.push('  改端口（四处同步，漏一处启动器会被旧端口卡住）：')
   lines.push('    1. 各应用 package.json 的 dev 与 preview 脚本 --port')
   lines.push('    2. 宿主 fulgurjs.config.ts 里 remotes 的 dev 地址')

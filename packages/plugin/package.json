@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "6.2.0",
+  "version": "6.3.0",
   "type": "module",
   "description": "Vite Module Federation for Vue and React: remote modules, shared dependencies and app bridges.",
   "license": "MIT",
