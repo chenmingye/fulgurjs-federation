@@ -5,6 +5,34 @@ import pkg from '../../package.json';
 import { getConfigFileName } from '../../build/getConfigFileName';
 import { getGlobal } from "@/qiankun/micro";
 
+// 子应用环境快照兜底（跨框架宿主支持）：_app.config.js 只在本实例独立 index.html
+// 加载；作为桥接子应用在非 Jeecg 宿主页（如 react-host）内初始化时，window 上没有
+// 本实例的 __PRODUCTION__<SHORT_NAME>__CONF__ 全局，getAppEnvConfig() 解构即抛错。
+// 守卫必须放在本模块顶层（本模块是全部调用方的依赖，求值先于任何 getAppEnvConfig
+// 调用）：全局缺失时用构建期 .env 内联的同源快照补齐；宿主页面自己加载过
+// _app.config.js 时以宿主侧为准，兜底不生效。dev 构建直接读 import.meta.env，无需兜底。
+const __bridgeEnvName = getConfigFileName(import.meta.env);
+const __bridgeGlobal = getGlobal() as unknown as Record<string, unknown>;
+if (import.meta.env.PROD && __bridgeGlobal[__bridgeEnvName] === undefined) {
+  __bridgeGlobal[__bridgeEnvName] = {
+    VITE_GLOB_APP_TITLE: import.meta.env.VITE_GLOB_APP_TITLE,
+    VITE_GLOB_API_URL: import.meta.env.VITE_GLOB_API_URL,
+    VITE_USE_MOCK: import.meta.env.VITE_USE_MOCK,
+    VITE_GLOB_APP_SHORT_NAME: import.meta.env.VITE_GLOB_APP_SHORT_NAME,
+    VITE_GLOB_API_URL_PREFIX: import.meta.env.VITE_GLOB_API_URL_PREFIX,
+    VITE_GLOB_APP_OPEN_SSO: import.meta.env.VITE_GLOB_APP_OPEN_SSO,
+    VITE_GLOB_APP_OPEN_QIANKUN: import.meta.env.VITE_GLOB_APP_OPEN_QIANKUN,
+    VITE_GLOB_APP_CAS_BASE_URL: import.meta.env.VITE_GLOB_APP_CAS_BASE_URL,
+    VITE_GLOB_DOMAIN_URL: import.meta.env.VITE_GLOB_DOMAIN_URL,
+    VITE_GLOB_ONLINE_VIEW_URL: import.meta.env.VITE_GLOB_ONLINE_VIEW_URL,
+    VITE_GLOB_HIDE_LAYOUT_TYPES: import.meta.env.VITE_GLOB_HIDE_LAYOUT_TYPES,
+    VITE_GLOB_RUN_PLATFORM: import.meta.env.VITE_GLOB_RUN_PLATFORM,
+    VITE_GLOB_QIANKUN_MICRO_APP_NAME: import.meta.env.VITE_GLOB_QIANKUN_MICRO_APP_NAME,
+    VITE_GLOB_QIANKUN_MICRO_APP_ENTRY: import.meta.env.VITE_GLOB_QIANKUN_MICRO_APP_ENTRY,
+    VITE_GLOB_ONLINE_DOCUMENT_VERSION: import.meta.env.VITE_GLOB_ONLINE_DOCUMENT_VERSION,
+  };
+}
+
 export function getCommonStoragePrefix() {
   const { VITE_GLOB_APP_SHORT_NAME } = getAppEnvConfig();
   return `${VITE_GLOB_APP_SHORT_NAME}__${getEnv()}`.toUpperCase();

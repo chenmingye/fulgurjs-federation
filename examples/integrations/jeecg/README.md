@@ -35,7 +35,7 @@ cd examples/integrations/jeecg/react-host && npm ci && npm run dev   # 5374
 - **嵌入 Jeecg-B（自嵌套）**：A 布局内挂载 B 的完整布局（自己的菜单/页签/主题）；B 内菜单/页签/路由变化实时写入 A 的浏览器地址（`/fed/bridge/...`）；会话切换（alice→bob→登出）演示受控换代：卸载 → 清 context → 新代次重挂（挂载计数可见）；「卸载后重挂」按钮同理。
 - **嵌入 React-C（跨框架）**：A 嵌 React 19 完整子应用；C 的 Link/筛选/分页写入 A 的地址（`/fed/react/orders?...`，中文 query 原样保留）。
 - **三层嵌套**：进 B 的「嵌入 React-C（三层嵌套）」——地址变为 `/fed/bridge/fed/inner/orders`，即 C 的 `/orders` 经 B（`/fed/inner`）逐层同步到 A（`/fed/bridge`）；depth ≥ 2 时 B 拒绝继续嵌套（防递归）。
-- **React 宿主**：http://localhost:5374 → `/jeecg-b`，B 的完整布局在 React 页内运行。
+- **React 宿主**：http://localhost:5374 → `/jeecg-b`，B 的完整布局在 React 页内运行。B 的生产配置由 `_app.config.js` 提供（仅独立页面加载）；在非 Jeecg 宿主页内初始化时，`src/utils/env.ts` 顶层的构建期快照兜底会补齐缺失的配置全局（宿主页面已加载过配置时以宿主侧为准）。
 
 登录账号：`admin / 123456`（验证码任意；演示数据服务按 jeecg AES-CBC 契约解密比对），另有 `jeecg / 123456`。
 
