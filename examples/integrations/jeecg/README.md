@@ -13,7 +13,7 @@
 | commit | `e3b9dc0aefe1943d9772b026f64ed671a7c82802`（fetch 脚本校验） |
 | 前端目录 | `jeecgboot-vue3/`（vue 3.5 / vue-router 5 / pinia 3 / antd 4；演示实例 vite 锁 6.4.3，见下方说明） |
 | 上游许可证 | MIT 原文随实例源码保留（上游文件未删改）；对上游的全部改动见 `patches/app-{a,b}.patch`（可审查的完整 diff） |
-| 插件版本 | 四工程统一 `@fulgurjs/federation` 精确 `6.1.9`（npm registry 安装） |
+| 插件版本 | 四工程统一 `@fulgurjs/federation` 精确 `6.4.2`（npm registry 安装） |
 
 ## 快速开始（clone / ZIP 后直接跑）
 

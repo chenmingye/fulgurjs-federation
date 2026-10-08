@@ -19,6 +19,7 @@ const {
   defineComponent,
   h,
   ref,
+  shallowRef,
   unref,
   nextTick,
   onMounted,
@@ -46,6 +47,14 @@ const blocks = files.map((p) => {
   return source.slice(source.indexOf('      let editorGeneration ='), source.indexOf('      function initSetup(e)'));
 });
 assert.equal(blocks[0], blocks[1]);
+const editorRefDeclarations = files.map((p) => fs.readFileSync(p, 'utf8').match(/const editorRef = [^;]+;/)[0]);
+assert.equal(editorRefDeclarations[0], editorRefDeclarations[1]);
+const createEditorRef = new Function(
+  'ref',
+  'shallowRef',
+  transformSync(editorRefDeclarations[0], { loader: 'ts' }).code + ';return editorRef;',
+);
+
 const run = new Function(
   'onMountedOrActivated',
   'onBeforeUnmount',
@@ -78,7 +87,7 @@ function mount(keep = false) {
     name: 'TestEditor',
     setup() {
       const el = ref(null),
-        editorRef = ref(null),
+        editorRef = createEditorRef(ref, shallowRef),
         id = ref('initial'),
         options = ref({
           inline: false,
@@ -105,9 +114,8 @@ function mount(keep = false) {
               initialized: false,
               removed: false,
               removes: 0,
-              premature: 0,
               remove() {
-                if (!this.initialized) this.premature++;
+                assert.equal(this, editor, 'TinyMCE 释放必须使用原始实例身份');
                 this.removed = true;
                 this.removes++;
               },
@@ -161,7 +169,6 @@ test('正常初始化仅一次，显式目标与只读设置正确，完成后�
   assert.equal(t.events[0][0], 'inited');
   t.dispose();
   assert.equal(c.editor.removes, 1);
-  assert.equal(c.editor.premature, 0);
 });
 test('nextTick/延迟回调前卸载，不启动已失效初始化', async () => {
   const t = mount();
@@ -169,16 +176,15 @@ test('nextTick/延迟回调前卸载，不启动已失效初始化', async () =>
   await pause();
   assert.equal(t.calls.length, 0);
 });
-test('初始化未完成时卸载，不清空内部容器；迟到完成仅释放，不发就绪事件', async () => {
+test('初始化未完成时立即取消；迟到完成不重复释放或发就绪事件', async () => {
   const t = mount();
   await pause();
   const c = t.calls[0];
   t.dispose();
-  assert.equal(c.editor.removes, 0);
+  assert.equal(c.editor.removes, 1);
   c.resolve();
   await flush();
   assert.equal(c.editor.removes, 1);
-  assert.equal(c.editor.premature, 0);
   assert.equal(t.events.length, 0);
 });
 test('卸载后的拒绝已处理，不向失效组件发错误事件', async () => {
@@ -208,7 +214,7 @@ test('KeepAlive 旧代次迟到不影响新实例，新旧实例各释放一次'
   const old = t.calls[0];
   t.active.value = false;
   await nextTick();
-  assert.equal(old.editor.removes, 0);
+  assert.equal(old.editor.removes, 1);
   t.active.value = true;
   await nextTick();
   await pause();
@@ -224,4 +230,72 @@ test('KeepAlive 旧代次迟到不影响新实例，新旧实例各释放一次'
   assert.equal(t.events.length, 1);
   t.dispose();
   assert.equal(current.editor.removes, 1);
+});
+
+// 从 pnpm 补丁的真实 TinyMCE 初始化函数执行正常与取消两条路径。
+const vendorPatch = fs.readFileSync(root + '/examples/integrations/jeecg/patches/tinymce-6.6.2.patch', 'utf8');
+const patchedContext = vendorPatch
+  .split('\n')
+  .filter((line) => (line.startsWith(' ') || line.startsWith('+')) && !line.startsWith('+++'))
+  .map((line) => line.slice(1))
+  .join('\n');
+const vendorInit = patchedContext.match(/const init = async editor => \{[\s\S]+?\n    \};/)[0];
+function vendorHarness(cancelGuard = true) {
+  let complete;
+  const pending = new Promise((resolve) => {
+    complete = resolve;
+  });
+  const calls = [];
+  const body = cancelGuard
+    ? vendorInit
+    : vendorInit.replace(/      if \(editor.removed\) \{\n        return;\n      \}\n/, '');
+  const init = new Function(
+    'initIcons',
+    'initTheme',
+    'initModel',
+    'initPlugins',
+    'renderThemeUi',
+    'augmentEditorUiApi',
+    'Optional',
+    'appendContentCssFromSettings',
+    'contentBodyLoaded',
+    'init$1',
+    body + ';return init;',
+  )(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => pending,
+    () => calls.push('ui'),
+    { from: (value) => ({ getOr: (fallback) => value ?? fallback }) },
+    () => calls.push('css'),
+    () => calls.push('body'),
+    (_editor, info) => {
+      if (!info.iframeContainer) throw new Error('Node cannot be null or undefined');
+      calls.push('iframe');
+    },
+  );
+  return { init, complete, calls };
+}
+test('TinyMCE 正常异步初始化继续建立 UI 与 iframe', async () => {
+  const h = vendorHarness();
+  const editor = { removed: false, inline: false, dispatch() {} };
+  const pending = h.init(editor);
+  h.complete({ api: {}, editorContainer: {}, iframeContainer: {} });
+  await pending;
+  assert.deepEqual(h.calls, ['ui', 'css', 'iframe']);
+});
+test('TinyMCE await 期间移除后停止初始化；去掉补丁可复现空容器错误', async () => {
+  const h = vendorHarness();
+  const editor = { removed: false, inline: false, dispatch() {} };
+  const pending = h.init(editor);
+  editor.removed = true;
+  h.complete({ api: {}, editorContainer: null, iframeContainer: null });
+  await pending;
+  assert.deepEqual(h.calls, []);
+  const old = vendorHarness(false);
+  const failed = old.init(editor);
+  old.complete({ api: {}, editorContainer: null, iframeContainer: null });
+  await assert.rejects(failed, /Node cannot be null or undefined/);
 });

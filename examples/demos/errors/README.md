@@ -4,7 +4,7 @@
 真实错误码、真实错误对象与真实恢复路径（README §6 错误码总表、§8 remoteComponent 占位语义、
 §8.2 桥接错误占位与容器封锁语义、§10 setup 生命周期）。
 
-两个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.9` + lockfile），
+两个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.4.2` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 | 说明 |
@@ -89,7 +89,7 @@ cd host        && npm run build && npm run typecheck
 
 | 依赖 | 版本 | 备注 |
 |---|---|---|
-| `@fulgurjs/federation` | `6.1.9`（精确） | 两工程一致；lockfile 随仓库提交（`npm ci` 复现） |
+| `@fulgurjs/federation` | `6.4.2`（精确） | 两工程一致；lockfile 随仓库提交（`npm ci` 复现） |
 | `vue` | `^3.5.13` | 两工程（runtime 的 `remoteComponent` 要求页面侧安装 vue） |
 | `vite` / `@vitejs/plugin-vue` | `^6.3.5` / `^5.2.1` | |
 | `typescript` / `vue-tsc` | `^5.8.0` / `^2.2.10` | `npm run typecheck`（vue-tsc --noEmit） |

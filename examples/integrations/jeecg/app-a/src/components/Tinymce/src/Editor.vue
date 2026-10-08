@@ -34,7 +34,7 @@
   import 'tinymce/plugins/preview';
   import 'tinymce/plugins/image';
   import 'tinymce/plugins/media';
-  import { defineComponent, computed, nextTick, ref, unref, watch, onDeactivated, onBeforeUnmount, onMounted } from 'vue';
+  import { defineComponent, computed, nextTick, ref, shallowRef, unref, watch, onDeactivated, onBeforeUnmount, onMounted } from 'vue';
   import ImgUpload from './ImgUpload.vue';
   import ProcessMask from './ProcessMask.vue';
   import {simpleToolbar, menubar, simplePlugins} from './tinymce';
@@ -107,7 +107,7 @@
     setup(props, { emit, attrs }) {
       console.log("---Tinymce---初始化---")
 
-      const editorRef = ref<Nullable<any>>(null);
+      const editorRef = shallowRef<Nullable<TinyMceEditor>>(null);
       const fullscreen = ref(false);
       const tinymceId = ref<string>(buildShortUUID('tiny-vue'));
       const elRef = ref<Nullable<HTMLElement>>(null);
@@ -355,7 +355,7 @@
         }
       );
 
-      // 只由本组件初始化一次；卸载时不提前销毁仍在异步创建 iframe 的编辑器。
+      // 只由本组件初始化一次；使用原始编辑器实例，避免深层代理破坏 TinyMCE 管理器身份。
       let editorGeneration = 0;
       let editorActive = false;
       let initTimer: ReturnType<typeof setTimeout> | undefined;
@@ -385,9 +385,8 @@
         initTimer = undefined;
         const editor = unref(editorRef);
         editorRef.value = null;
-        // TinyMCE 初始化内部有 await；提前 remove 会清空它稍后仍要访问的容器。
-        // 未就绪实例由 init 的完成回调清理，已就绪实例立即释放。
-        if (editor?.initialized && !editor.removed) editor.remove();
+        // 对应 TinyMCE 补丁会在异步恢复后检查 removed，初始化期间也可安全取消。
+        if (editor && !editor.removed) editor.remove();
       }
 
       function initEditor(generation: number) {

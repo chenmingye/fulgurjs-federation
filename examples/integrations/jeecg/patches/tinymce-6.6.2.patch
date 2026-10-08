@@ -1,0 +1,67 @@
+diff --git a/tinymce.js b/tinymce.js
+--- a/tinymce.js
++++ b/tinymce.js
+@@ -28509,60 +28509,63 @@
+         return renderFromLoadedTheme(editor);
+       } else if (isFunction(getTheme(editor))) {
+         return renderFromThemeFunc(editor);
+       } else {
+         return renderThemeFalse(editor);
+       }
+     };
+     const augmentEditorUiApi = (editor, api) => {
+       const uiApiFacade = {
+         show: Optional.from(api.show).getOr(noop),
+         hide: Optional.from(api.hide).getOr(noop),
+         isEnabled: Optional.from(api.isEnabled).getOr(always),
+         setEnabled: state => {
+           if (!editor.mode.isReadOnly()) {
+             Optional.from(api.setEnabled).each(f => f(state));
+           }
+         }
+       };
+       editor.ui = {
+         ...editor.ui,
+         ...uiApiFacade
+       };
+     };
+     const init = async editor => {
+       editor.dispatch('ScriptsLoaded');
+       initIcons(editor);
+       initTheme(editor);
+       initModel(editor);
+       initPlugins(editor);
+       const renderInfo = await renderThemeUi(editor);
++      if (editor.removed) {
++        return;
++      }
+       augmentEditorUiApi(editor, Optional.from(renderInfo.api).getOr({}));
+       editor.editorContainer = renderInfo.editorContainer;
+       appendContentCssFromSettings(editor);
+       if (editor.inline) {
+         contentBodyLoaded(editor);
+       } else {
+         init$1(editor, {
+           editorContainer: renderInfo.editorContainer,
+           iframeContainer: renderInfo.iframeContainer
+         });
+       }
+     };
+ 
+     const DOM$3 = DOMUtils.DOM;
+     const hasSkipLoadPrefix = name => name.charAt(0) === '-';
+     const loadLanguage = (scriptLoader, editor) => {
+       const languageCode = getLanguageCode(editor);
+       const languageUrl = getLanguageUrl(editor);
+       if (!I18n.hasCode(languageCode) && languageCode !== 'en') {
+         const url = isNotEmpty(languageUrl) ? languageUrl : `${ editor.editorManager.baseURL }/langs/${ languageCode }.js`;
+         scriptLoader.add(url).catch(() => {
+           languageLoadError(editor, url, languageCode);
+         });
+       }
+     };
+     const loadTheme = (editor, suffix) => {
+       const theme = getTheme(editor);
+       if (isString(theme) && !hasSkipLoadPrefix(theme) && !has$2(ThemeManager.urls, theme)) {
+         const themeUrl = getThemeUrl(editor);
+         const url = themeUrl ? editor.documentBaseURI.toAbsolute(themeUrl) : `themes/${ theme }/theme${ suffix }.js`;

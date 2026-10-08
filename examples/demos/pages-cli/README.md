@@ -3,7 +3,7 @@
 `createHostPages` 页面适配器 + `definePages`/`validatePages` 页面表校验 + `fulgurjs` CLI
 （init / explain / check-pages / doctor）的一站式演示（README 路径②、§3、§4、§5、§9、§10）。
 
-三个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.9` + lockfile），
+三个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.4.2` + lockfile），
 不使用 workspace / file: / link: 引用。`negative/` 是负向校验工程——**不启动、不构建**，由
 `npm run verify` 管理（详见[下文](#负向工程-negative长期预期编译失败)）。
 
@@ -245,7 +245,7 @@ remoteSchema = {}
 
 | 依赖 | 版本 | 备注 |
 |---|---|---|
-| `@fulgurjs/federation` | `6.1.9`（精确） | 三个工程一致；lockfile 随仓库提交 |
+| `@fulgurjs/federation` | `6.4.2`（精确） | 三个工程一致；lockfile 随仓库提交 |
 | `vue` / `vue-router` | `^3.5.13` / `^4.5.0` | host 双装；remote 仅 vue |
 | `vite` / `@vitejs/plugin-vue` | `^6.3.5` / `^5.2.1` | |
 | `typescript` / `vue-tsc` | `^5.8.0` / `^2.2.10` | negative 仅 typescript |

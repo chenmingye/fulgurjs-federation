@@ -4,7 +4,7 @@ Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（README §8.
 每个子应用是一个**自带路由与状态、可整站挂载/卸载**的完整业务系统（工单中心），
 每个宿主以三页对照呈现「组件级联邦 vs 应用级桥接」的差异与各自适用场景。
 
-四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.1.9` + lockfile），
+四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.4.2` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 |
@@ -116,7 +116,7 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 | 子应用路由 | memory 路由两个页面（首页/关于） | Vue 侧 vue-router `createMemoryHistory`、React 侧 `createMemoryRouter` 自包含（列表/详情/编辑带参路由） |
 | 组件级对照项 | 无（bridge 专属示例） | 每宿主页面1 用 `remoteComponent` 直渲染远程组件，与页面2 形成显式对照 |
 | 诊断能力 | 页面级 onReady 计数 | 每页 `<details>` 诊断面板：mount/unmount/会话切换计数 + 真实事件日志（含 `fulgurjs:error` 监听）+ AppContext 快照 JSON |
-| 版本 / 端口 | 5.3.3；5303/5313 + 5314/5304 | **6.1.9**（registry 精确版本 + lockfile）；5323/5324 + 5325/5326 |
+| 版本 / 端口 | 5.3.3；5303/5313 + 5314/5304 | **6.4.2**（registry 精确版本 + lockfile）；5323/5324 + 5325/5326 |
 | 相同点 | 同一套 `/bridge` 契约、同一套受控 sessionKey 顺序（null → clearAppContext → 新快照 → 新 key）、同一套 MFU-015/016/017 错误语义 | |
 
 ## 构建 / 类型检查 / 部署
