@@ -5,7 +5,8 @@
   "scripts": {
     "test:dev": "playwright test --project=dev --project=fault --project=react-dev --project=react-fault",
     "test:prod": "playwright test --project=prod --project=prod-react",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "test:editor-lifecycle": "node scripts/reg-tinymce-lifecycle.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.53.0",

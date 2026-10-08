@@ -17,7 +17,7 @@
 </template>
 
 <script lang="ts">
-  import type { RawEditorOptions } from 'tinymce';
+  import type { RawEditorOptions, Editor as TinyMceEditor } from 'tinymce';
   // update-begin--author:copilot---date:20260711---for:【依赖升级排查】修复 Rolldown 严格 CJS 互操作导致 tinymce 全局未挂载
   import tinymce from '/@/utils/tinymceGlobalShim';
   // update-end--author:copilot---date:20260711---for:【依赖升级排查】修复 Rolldown 严格 CJS 互操作导致 tinymce 全局未挂载
@@ -355,50 +355,73 @@
         }
       );
 
+      // 只由本组件初始化一次；卸载时不提前销毁仍在异步创建 iframe 的编辑器。
+      let editorGeneration = 0;
+      let editorActive = false;
+      let initTimer: ReturnType<typeof setTimeout> | undefined;
+
       onMountedOrActivated(() => {
+        editorActive = true;
+        const generation = ++editorGeneration;
         if (!initOptions.value.inline) {
           tinymceId.value = buildShortUUID('tiny-vue');
         }
         nextTick(() => {
-          setTimeout(() => {
-            initEditor();
+          if (!editorActive || generation !== editorGeneration) return;
+          initTimer = setTimeout(() => {
+            initTimer = undefined;
+            initEditor(generation);
           }, 30);
         });
       });
 
-      onBeforeUnmount(() => {
-        destory();
-      });
+      onBeforeUnmount(destroyEditor);
+      onDeactivated(destroyEditor);
 
-      onDeactivated(() => {
-        destory();
-      });
-
-      function destory() {
-        if (tinymce !== null) {
-          tinymce?.remove?.(unref(initOptions).selector!);
-        }
+      function destroyEditor() {
+        editorActive = false;
+        ++editorGeneration;
+        clearTimeout(initTimer);
+        initTimer = undefined;
+        const editor = unref(editorRef);
+        editorRef.value = null;
+        // TinyMCE 初始化内部有 await；提前 remove 会清空它稍后仍要访问的容器。
+        // 未就绪实例由 init 的完成回调清理，已就绪实例立即释放。
+        if (editor?.initialized && !editor.removed) editor.remove();
       }
 
-      function initEditor() {
+      function initEditor(generation: number) {
+        if (!editorActive || generation !== editorGeneration) return;
+        const options = unref(initOptions);
         const el = unref(elRef);
-        if (el && el?.style && el?.style?.visibility) {
-          el.style.visibility = '';
-        }
-        tinymce
-          .init(unref(initOptions))
-          .then((editor) => {
-            changeColor();
-            emit('inited', editor);
-          })
-          .catch((err) => {
-            emit('init-error', err);
-          });
+        if (!options.inline && !el?.isConnected) return;
+        if (el?.style) el.style.visibility = '';
+        let initializingEditor: TinyMceEditor | undefined;
+        tinymce.init({
+          ...options,
+          ...(options.inline ? {} : { target: el! }),
+          readonly: unref(disabled),
+          setup(editor) {
+            initializingEditor = editor;
+            if (editorActive && generation === editorGeneration) options.setup?.(editor);
+          },
+        }).then((editors) => {
+          if (!editorActive || generation !== editorGeneration) {
+            editors.forEach((editor) => { if (!editor.removed) editor.remove(); });
+            return;
+          }
+          changeColor();
+          emit('inited', editors);
+        }).catch((error) => {
+          if (initializingEditor && !initializingEditor.removed) initializingEditor.remove();
+          if (editorRef.value === initializingEditor) editorRef.value = null;
+          if (editorActive && generation === editorGeneration) emit('init-error', error);
+        });
       }
 
       function initSetup(e) {
         const editor = unref(editorRef);
-        if (!editor) {
+        if (!editorActive || !editor || e.target !== editor) {
           return;
         }
         const value = props.modelValue || '';

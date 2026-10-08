@@ -54,3 +54,7 @@ pnpm test:prod  # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 公开使用工程统一放在 `examples/`：可复制模板在 `templates/`，API 演示在 `demos/`，大型应用集成在 `integrations/`。基础工程由模板与门户共用，避免再维护相同源码的副本。
 
 新增或移动工程时同步 `examples/scenarios.json` 的目录、包管理器、workspace 安装目录和端口，然后执行 `npm run test:examples`。模板须带有效锁文件，使用 npm registry 正式包，在不含 node_modules/dist 的独立目录中验证冻结安装和构建。
+
+### Jeecg 富文本编辑器生命周期
+
+修改公开 Jeecg 示例的 TinyMCE 初始化/卸载时，运行 `npm --prefix e2e run test:editor-lifecycle`。依赖使用上文安装好的插件与 host-vue fixture。此回归执行实际组件的生命周期代码，覆盖延迟初始化、卸载、迟到完成/失败与 KeepAlive 换代；生产浏览器还需核对编辑器显示、只读和快速离开。
