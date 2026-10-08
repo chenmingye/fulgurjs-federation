@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.3.1
+
+两阶段发布的最终交付版本：插件运行时代码与 6.3.0 完全一致，唯一内容差异是包内五模板资产升钉 6.3.0（依赖声明、`minimumReleaseAgeExclude` 与锁文件，已逐模板冻结安装与构建验证）。`fulgurjs create` 生成的工程从此依赖 6.3.0，与 GitHub 模板逐字节同源。规则见 docs/maintainers/releasing.md「模板依赖与两阶段发布」。
+
 ## 6.3.0
 
 ### 变更
