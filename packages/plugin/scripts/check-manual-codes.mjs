@@ -29,9 +29,9 @@ for (const m of bridge.matchAll(/'([A-Z]{2,4}-\d{3})'/g)) defined.add(m[1])
 const registered = new Set([...diag.matchAll(/code: '([A-Z]{2,4}-\d{3})'/g)].map((m) => m[1]))
 
 // ③ 文档（只取码表节内条目；节外散文提及不参与校验）
-const section = readme.match(/###\s*6\.\s*错误码总表[\s\S]*?(?=\n##\s|\n###\s(?!\s*6\.))/)
+const section = readme.match(/^#\s*错误码总表[\s\S]*?(?=\n##\s)/m)
 if (!section) {
-  console.error('[fulgurjs] API 手册未找到「6. 错误码总表」节——节标题被改动或删除，防漂移校验无法进行')
+  console.error('[fulgurjs] API 手册未找到「错误码总表」节——节标题被改动或删除，防漂移校验无法进行')
   process.exit(1)
 }
 const documented = new Set(section[0].match(/[A-Z]{2,4}-\d{3}/g) ?? [])

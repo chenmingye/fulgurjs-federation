@@ -4,7 +4,7 @@
  *
  * 子命令（单项目 fulgurjs.config.ts 唯一形态；命令默认读 ./fulgurjs.config.ts）：
  * - fulgurjs create [模板] [--dir <路径>] ...                        从已安装的 npm 包复制完整模板工程（新项目入口）
- * - fulgurjs init [--template <path>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出（已有项目用）
+ * - fulgurjs init [--out <路径>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出（已有项目用）
  * - fulgurjs explain [--config <path>] [--json]                    配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
  * - fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<p|URL>]... [--require-verified] [--json]
  * - fulgurjs doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
@@ -32,8 +32,7 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs init [--out <路径>] [--framework vue|react] [--role consumer|provider|dual] [--force]
                                                    生成单项目 fulgurjs.config.ts 起步模板（最小有效配置）：
                                                    框架默认从 package.json 依赖判断（判断不了要求显式 --framework）；
-                                                   角色缺省 dual；--out 是输出路径（默认 ./fulgurjs.config.ts；
-                                                   旧 --template 写法仍接受，见迁移指南）；--force 覆盖已存在的模板
+                                                   角色缺省 dual；--out 是输出路径（默认 ./fulgurjs.config.ts）；--force 覆盖已存在的模板
   fulgurjs init --config <path>                    校验配置；输出 federation(fulgurjsConfig) 接入块
                                                  与按角色的接入核对清单
   fulgurjs explain [--config <path>] [--json]      解释本应用有效联邦形态与加载链（纯本地，无网络）
@@ -108,10 +107,11 @@ async function main(): Promise<number> {
     }
     if (has('--template')) {
       console.error(
-        '[fulgurjs:init] --template 已更名 --out（输出路径）\n' +
-          '根因：--template 在 create 里指模板名，在 init 里却是输出路径——同名不同义（6.0.0 参数收敛）\n' +
-          '修法：fulgurjs init --out <路径>（本轮仍接受 --template 但按 --out 解释，后续版本移除）',
+        '[fulgurjs:init] 不支持的选项 --template\n' +
+          '根因：--template 在 create 里指模板名，在 init 里却是输出路径——同名不同义\n' +
+          '修法：fulgurjs init --out <路径>',
       )
+      return 2
     }
     // UX-02：框架从 package.json 依赖判断；判断不了不猜——TTY 询问，非 TTY 报错要求显式 --framework
     const roleArg = argOf('--role') ?? 'dual'
@@ -151,7 +151,7 @@ async function main(): Promise<number> {
         return 2
       }
     }
-    const target = resolve(argOf('--out') ?? argOf('--template') ?? 'fulgurjs.config.ts')
+    const target = resolve(argOf('--out') ?? 'fulgurjs.config.ts')
     const result = await writeConfigTemplate(target, has('--force'), { framework: framework as 'vue' | 'react', role: roleArg as 'consumer' | 'provider' | 'dual' })
     if (result === 'exists') {
       console.error(`[fulgurjs:init] ${target} 已存在，拒绝覆盖（--force 强制覆盖）`)
@@ -165,12 +165,12 @@ async function main(): Promise<number> {
        import federation from '@fulgurjs/federation'
        import fulgurjsConfig from './fulgurjs.config'
        // plugins: [ ...原有插件, federation(fulgurjsConfig) ]
-  3. npx fulgurjs explain   # 核对有效形态与加载链
-  4. 部署后：npx fulgurjs doctor --base <URL> --apps <部署子目录>
+  3. npx @fulgurjs/federation explain   # 核对有效形态与加载链
+  4. 部署后：npx @fulgurjs/federation doctor --base <URL> --apps <部署子目录>
      （--apps 是站点根下的部署子目录，如远程部署在 /my-remote/ 就写 my-remote，不是容器名）
 应用代码 API 入口：${entry}（框架无关模块用 /runtime；说明见模板头注释与 docs 文档中心）。
 说明：加载普通组件/模块不需要页面表。只有当宿主用「页面路由表 → 远程页面」方式逐页接入时，
-才在 fulgurjs.config.ts 追加具名导出 hostPages，并运行 npx fulgurjs check-pages --site <站点> 核对；
+才在 fulgurjs.config.ts 追加具名导出 hostPages，并运行 npx @fulgurjs/federation check-pages --site <站点> 核对；
 完整子应用桥接不逐页登记内部页面，业务菜单与 Router 归应用自己管理。`)
     return 0
   }

@@ -34,6 +34,20 @@ describe('发布清单：exports ↔ typesVersions ↔ 磁盘 d.ts 一致', () =
     }
   })
 
+  it('每个 exports 子路径的 import/types 目标都能在磁盘解析（发布完整性，./package.json 除外）', () => {
+    const missing: string[] = []
+    for (const [sub, entry] of Object.entries(pkg.exports as Record<string, Record<string, string>>)) {
+      if (sub === './package.json') continue
+      for (const field of ['import', 'types'] as const) {
+        const target = entry[field]
+        if (target && !fs.existsSync(path.join(pkgRoot, target))) {
+          missing.push(`${sub} ${field} -> ${target}`)
+        }
+      }
+    }
+    expect(missing, `exports 声明了磁盘上不存在的产物（消费方解析必失败）：\n${missing.join('\n')}`).toEqual([])
+  })
+
   it('typesVersions 映射的值与 exports.types 不漂移（守未来新增子路径）', () => {
     const typedSubpaths = Object.keys(pkg.exports).filter(
       (k) => k.startsWith('./') && pkg.exports[k]?.types,

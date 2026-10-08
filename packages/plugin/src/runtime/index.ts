@@ -49,12 +49,6 @@ export interface RemoteConfig {
   manifestUrl?: string
 }
 
-/** @deprecated 兼容旧版公开类型；新代码使用 RemoteConfig。 */
-export interface RemoteInput extends RemoteConfig {
-  container?: unknown
-  containerPromise?: Promise<unknown>
-}
-
 export interface LoadRemoteOptions {
   shareScope?: string
   retries?: number

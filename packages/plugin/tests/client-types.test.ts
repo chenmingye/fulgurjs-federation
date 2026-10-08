@@ -9,7 +9,7 @@ describe('runtime 物理入口类型', () => {
     const file = join(PKG, 'dist/runtime-entry.d.ts')
     expect(existsSync(file)).toBe(true)
     const text = readFileSync(file, 'utf8')
-    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteSchema', 'RemoteInput', 'LoadRemoteOptions']) {
+    for (const name of ['loadRemote', 'provideAppContext', 'definePages', 'remoteSchema', 'RemoteConfig', 'LoadRemoteOptions']) {
       expect(text).toContain(name)
     }
     // 6.0.0：/runtime 框架无关——Vue 适配符号不得再出现在导出绑定里（迁移到 /vue）
@@ -32,7 +32,7 @@ describe('runtime 物理入口类型', () => {
     expect(names).toEqual([
       'AppContext', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
-      'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
+      'RemoteConfig', 'RemoteDebugInfo',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'RuntimeHooks', 'RuntimePlugin',
       'ShareEntry', 'ShareScope', 'ShareScopeMap',
@@ -61,7 +61,7 @@ describe('/react 物理入口类型', () => {
       'ReactBridgeAppFactory', 'ReactBridgeAppOptions', 'ReactBridgeCancelPolicy', 'ReactBridgeRouterConnection',
       'ReactHostPages', 'ReactHostPagesOptions', 'ReactRemoteComponentOptions',
       'RemoteConfig', 'RemoteDebugInfo', 'RemoteErrorBoundaryProps', 'RemoteErrorFallback',
-      'RemoteInput', 'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
+      'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
       'ShareEntry', 'ShareScope', 'ShareScopeMap',
       'UseLoadRemoteOptions', 'UseLoadRemoteResult',
@@ -116,7 +116,7 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'AppContext', 'BridgeApp', 'BridgeHostRouting', 'FgRuntime', 'HostPages', 'HostPagesOptions',
       'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
-      'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo', 'RemoteInput',
+      'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
       'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppOptions',

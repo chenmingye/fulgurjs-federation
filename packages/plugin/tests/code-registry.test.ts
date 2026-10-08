@@ -88,7 +88,7 @@ describe('错误码三方一致性（防漂移门禁）', () => {
     const readme = fs.readFileSync(f.readme, 'utf8')
     fs.writeFileSync(
       f.readme,
-      readme.replace(/(###\s*6\.\s*错误码总表[\s\S]*?)(\n##\s)/, '$1\n| | `MFU-099` | 注入测试条目 |$2'),
+      readme.replace(/(###\s*CFG 配置期[\s\S]*?)(\n###\s)/, '$1\n| | `MFU-099` | 注入测试条目 |$2'),
     )
 
     const { ok, output } = runGate(f.script)

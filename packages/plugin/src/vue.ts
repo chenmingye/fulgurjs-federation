@@ -19,7 +19,7 @@ export {
   clearSessionState,
 } from './runtime/index'
 export type {
-  ShareEntry, ShareScope, ShareScopeMap, RemoteConfig, RemoteInput,
+  ShareEntry, ShareScope, ShareScopeMap, RemoteConfig,
   LoadShareOptions, LoadRemoteOptions, PreloadRemoteOptions,
   RuntimePlugin, RuntimeHooks, RemoteDebugInfo, FgRuntime,
   RemoteSetupContext, RemoteSetupModule,
