@@ -33,13 +33,13 @@ import { loadRemote } from './runtime/index'
 import { createRemoteComponent, createHostPages as createHostPagesWithLoader } from './vue-adapter'
 import { defineBridgeApp as defineVueBridgeApp } from './bridge-app-vue'
 import { createVueBridgeAppWithLoader } from './bridge-host-vue'
-import { createVueBridgeNavigation, connectVueBridgeRouter, type VueBridgeNavigationOptions, type VueBridgeRouterConnection } from './bridge-router-vue'
+import { createVueBridgeNavigation, connectVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
 import type { BridgeHostRouting } from './bridge-router-core'
 
 export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage } from './vue-adapter'
 export type { BridgeApp, VueBridgeAppFactory } from './bridge-app-vue'
 export type { VueBridgeAppOptions } from './bridge-host-vue'
-export type { VueBridgeNavigationOptions, VueBridgeRouterConnection, BridgeHostRouting }
+export type { VueBridgeRouterConnection, BridgeHostRouting }
 
 export const remoteComponent = createRemoteComponent(loadRemote)
 /** 宿主页面适配器（绑定本包运行时的 loadRemote；选项与返回值类型见 vue-adapter） */

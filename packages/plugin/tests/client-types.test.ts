@@ -120,7 +120,7 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
       'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppOptions',
-      'VueBridgeNavigationOptions', 'VueBridgeRouterConnection',
+      'VueBridgeRouterConnection',
     ].sort())
   })
 

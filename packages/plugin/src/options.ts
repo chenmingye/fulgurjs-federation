@@ -108,8 +108,6 @@ export interface NormalizedOptions {
   remotes: NormalizedRemote[]
   shared: NormalizedShared[]
   shareScope: string
-  runtime?: string | false
-  runtimeChunk?: boolean | 'single'
   manifest: boolean
   runtimePlugins: string[]
   dts: boolean | { dir?: string; mode?: 'source' | 'shim' }
@@ -141,8 +139,6 @@ export interface FederationOptions {
   remotes?: Record<string, string | RemoteEntryConfig | (() => Promise<any>)>
   shared?: SharedConfig
   shareScope?: string
-  runtime?: string | false
-  runtimeChunk?: boolean | 'single'
   manifest?: boolean | Record<string, unknown>
   runtimePlugins?: string[]
   dts?: boolean | { dir?: string; mode?: 'source' | 'shim' }
@@ -682,8 +678,6 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     remotes,
     shared,
     shareScope: shareScopeDefault,
-    runtime: options.runtime,
-    runtimeChunk: options.runtimeChunk,
     manifest: options.manifest === undefined ? true : !!options.manifest,
     runtimePlugins: (options.runtimePlugins ?? []).map((id) => id.startsWith('.') ? path.resolve(root, id) : id),
     dts: options.dts === undefined ? true : options.dts,

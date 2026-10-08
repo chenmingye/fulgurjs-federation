@@ -125,7 +125,7 @@ describe('URL 同步回归', () => {
   it('Vue history base 不会二次剥离逻辑 pathname', async () => {
     const router = createRouter({ history: createMemoryHistory('/app/'), routes: [{ path: '/:pathMatch(.*)*', component: {} }] })
     await router.push('/app/detail')
-    expect(createVueBridgeNavigation(router, { routerBase: '/app' }).getLocation()).toEqual(loc('/app/detail'))
+    expect(createVueBridgeNavigation(router).getLocation()).toEqual(loc('/app/detail'))
   })
 
   it.each(['reset', 'proceed'])('React 真实 blocker %s：等待真实裁决，无 canNavigate 预判', async (decision) => {

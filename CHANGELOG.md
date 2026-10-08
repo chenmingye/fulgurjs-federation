@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.4.0
+
+公共面收紧：删除三个"接受但无行为"的残留项（全仓零消费者，文档不再描述不存在的开关）。
+
+### 公共面清理（破坏性）
+
+- **删除 `federation()` 选项 `runtime` 与 `runtimeChunk`**：二者归一化后从未被任何实现路径消费——内置运行时总是注入，运行时 chunk 由插件自动管理。类型面删除（TS 字面量传入立即报错）；普通 JS 传入被忽略。文档配置表已同步移除。
+- **删除 `createVueBridgeNavigation` 第二参数与 `VueBridgeNavigationOptions` 类型**：其唯一字段 `routerBase` 无任何行为（Vue Router `fullPath` 已剥离 history base，从不需要二次剥离），文档签名本就是单参形态。`/vue` 入口的 type 导出面同步移除该类型。
+
 ## 6.3.1
 
 两阶段发布的最终交付版本：插件运行时代码与 6.3.0 完全一致，唯一内容差异是包内五模板资产升钉 6.3.0（依赖声明、`minimumReleaseAgeExclude` 与锁文件，已逐模板冻结安装与构建验证）。`fulgurjs create` 生成的工程从此依赖 6.3.0，与 GitHub 模板逐字节同源。规则见 docs/maintainers/releasing.md「模板依赖与两阶段发布」。

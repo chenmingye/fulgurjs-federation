@@ -10,10 +10,6 @@ import { routingSyncError } from './bridge-errors'
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
 export type { BridgeHostRouting }
 
-export interface VueBridgeNavigationOptions {
-  /** 保留配置兼容；Vue Router fullPath 已剥离 history base，不再二次剥离。 */
-  routerBase?: string
-}
 /** NavigationFailureType.cancelled 的公开枚举值（vue-router 4.x/5.x 一致；见文件头说明） */
 const NAVIGATION_FAILURE_CANCELLED = 8
 /** NavigationFailureType.duplicated 的公开枚举值（同上口径；广播应用的目标与当前路由为同一路由） */
@@ -28,7 +24,7 @@ const locationFromPath = (path: string): BridgeLocation => {
   return { pathname: raw.pathname, search: raw.search, hash: raw.hash }
 }
 
-export function createVueBridgeNavigation(router: VueRouterLike, _options: VueBridgeNavigationOptions = {}): BridgeHostNavigation {
+export function createVueBridgeNavigation(router: VueRouterLike): BridgeHostNavigation {
   const toLogic = () => locationFromPath(router.currentRoute.value.fullPath)
   return {
     getLocation: toLogic,

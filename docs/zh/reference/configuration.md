@@ -13,8 +13,6 @@
 | `remotes` | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | 不消费任何远程 | 消费的远程，四种形态见下节。键是 import 前缀，不得含 `@`、`/`、空白（CFG-003） |
 | `shared` | `string[] \| Record<string, string \| SharedHint>` | 不共享任何依赖 | 共享依赖。字符串简写 = `requiredVersion`；数组 = 每项按 package.json 推断。字段全集见[共享依赖指南](../guide/sharing.md#sharedhint-全部字段) |
 | `shareScope` | `string` | `'default'` | 默认共享作用域名；各项可用 `shared[*].shareScope` 覆盖 |
-| `runtime` | `string \| false` | 内置运行时 | 自定义运行时模块路径；`false` 禁用内置运行时（自定义加载方案专用，普通项目不要设置） |
-| `runtimeChunk` | `boolean \| 'single'` | 不拆独立 chunk | 运行时是否拆独立 chunk |
 | `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` 关闭；其余值开启（对象形态不提供额外字段配置）。prod 构建生成 `fulgurjs-manifest.json`——`preloadRemote` 与 `check-pages`/`doctor` 依赖它；关闭后这两类能力不可用 |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（相对路径按应用根解析）。hook 错误契约：观测 hook 抛错只告警；`resolveShare`（决策 hook）显式抛错向调用方传播。见 [API 参考 · 运行时插件](api.md#运行时插件) |
 | `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | dev 下拉取远程 manifest 生成类型声明。`{ dir }` 自定义输出目录（默认 `src/fulgurjs/types/`，无 src 布局回退 `.fulgurjs/types`）；`mode: 'source'`（默认）跨工程源码直连，`mode: 'shim'` 宽松占位（IDE 干净、无源码补全）。`false` 完全关闭。dev-only；两种 mode 都要读 remote 本机源码，只对可信来源开启 |
