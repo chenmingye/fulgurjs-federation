@@ -6,12 +6,12 @@
 
 | Symptom | Check first | Go deeper |
 |---|---|---|
-| Dev first load reports a manifest fetch failure (`DEV-001`) | Is the remote dev server running; `remotes[*].dev` address and port | Dev-mode checkup: `npx fulgurjs doctor --base http://localhost:<remote port> --apps <subdir> --dev` |
+| Dev first load reports a manifest fetch failure (`DEV-001`) | Is the remote dev server running; `remotes[*].dev` address and port | Dev-mode checkup: `npx @fulgurjs/federation doctor --base http://localhost:<remote port> --apps <subdir> --dev` |
 | Dev says a port has no listener (`DEV-005`) | The remote changed ports but the host was not synced | [The fixed checklist for changing ports](../guide/examples.md#the-fixed-checklist-for-changing-ports) |
-| Prod load failure (`MFU-001`) | remoteEntry: 200? JS shape? CORS? no-cache? | `npx fulgurjs doctor --base <site> --apps <subdirs,...>`; [deployment guide](../guide/deployment.md) |
+| Prod load failure (`MFU-001`) | remoteEntry: 200? JS shape? CORS? no-cache? | `npx @fulgurjs/federation doctor --base <site> --apps <subdirs,...>`; [deployment guide](../guide/deployment.md) |
 | Self-reported name mismatch (`MFU-002`) | The remotes key vs the container's self-reported name | Explicit rename with the string `'selfName@url'` form |
 | Unknown remote (`MFU-008`) | The spec prefix vs the remotes key spelling | For dynamic remotes, `registerRemote` first |
-| Module not exposed (`MFU-006`) | Does `remoteName/exposes key` correspond | `npx fulgurjs check-pages` (per-page hosts) to batch-verify |
+| Module not exposed (`MFU-006`) | Does `remoteName/exposes key` correspond | `npx @fulgurjs/federation check-pages` (per-page hosts) to batch-verify |
 | Loads but has no exports (`MFU-009`) | The expose target file's exports | Add exports |
 | Retry/breaker behavior | The `timeout`/`retries`/`fallback`/`breaker` configuration | [Configuration reference · remotes](../reference/configuration.md#the-four-forms-of-remotes) |
 | A static dependency once failed and still fails after the service recovers | The browser cached the failure for that dependency URL | The default error placeholder's "Refresh page" (a full refresh keeping the current address); [known boundary](../reference/api.md#vue-version-fulgurjsfederationvue) |
@@ -28,7 +28,9 @@
 | Remote page opened standalone shows a white screen (`CC-002`) | The page was accessed bypassing the host | Load it through the host federation |
 | JS requests answered with HTML (doctor FAIL) | The nginx deep-link fallback is too broad | Add exact matching for static assets; [deployment guide · SPA fallback](../guide/deployment.md#spa-fallback-never-serve-html-for-a-js-request) |
 | A remote component renders, but string tags like `<a-divider>` stay as unstyled dead elements | The consumer app never registered that global component | The remote declares `globalComponents` in its setup module (auto-installed for `remoteComponent` consumers); [API reference · setup/onSession](../reference/api.md#setup-on-session) |
-| A kept-alive page remounts on every visit / loses state | The keepAlive include name mismatches the resolved component name (fixed in Vue 3.5) | Upgrade to 5.9.3+; verify keepAliveNames usage |
+| Build fails with `xxx.default.extend is not a function` after adding an ESM alias to a shared dependency | Double interop in the prod rollup build | **Remove the alias for build**; on the dev side, if that dependency was moved out of pre-bundling, its CJS subpath needs a dev-only alias as a fallback (injected only when `command==='serve'`) |
+| Worried about double instances when a remote page (an exposes target file) statically imports the runtime | — | Just import it statically — the plugin rewrites it into a lazy singleton proxy automatically; the remote and the host write identical code |
+| A kept-alive page remounts on every visit / loses state | The keepAlive include name mismatches the resolved component name | Verify that the keepAliveNames usage matches the resolved component name |
 
 ## Shared version conflicts
 
@@ -62,6 +64,8 @@
 | Occasional partial asset 404s | The release window wiped old chunks | Keep chunks still referenced by old pages; `rsync -a --delete` whole-directory consistent deploys |
 | Asset is 200 but its content is HTML | The fallback swallowed JS (the status code illusion) | doctor's chunk shape check catches it; fix the nginx fallback rules |
 | `Cannot find module '@fulgurjs/federation'` after a pnpm tarball install | Broken symlinks | Reinstall and verify the directory resolves |
+| Pages report 404/401 resource errors and the business API is not implemented on the backend | The backend endpoint is missing | Add an honest empty-response shim at the proxy/NGINX layer (never fake business data); the frontend renders an empty state |
+| e2e occasionally bounces back to the login page | The assertion ran before the async login chain finished | Wait for "the login form to disappear" instead of a fixed number of seconds; leave generous timeouts for slow chains |
 
 ## Type fetching failures / IDE issues
 
@@ -72,7 +76,6 @@
 | ts(2307) cannot find `@fulgurjs/federation/*` | The IDE TS service cached the old package | `Restart TS Server` (⌘⇧P) or reopen the window |
 | VSCode shows walls of red squiggles in `src/fulgurjs/types/*.d.ts` | Volar checks cross-project files with an inferred project | An editor-only display issue (command-line checks and builds report 0 errors); cure it with `dts: { mode: 'shim' }`; [IDE notes](../reference/api.md#ide-notes-red-squiggles-in-the-srcfulgurjs-directory) |
 | React precise types not working | The host tsconfig lacks paths | Configure `paths` per the `_paths.d.ts` instructions; [React dev types](../reference/api.md#react-dev-types-dual-track) |
-| Older versions: `loadRemote<typeof import('remote-a/X')>(...)` fails at runtime with `"remote-a/X".then is not a function`, or `type M = typeof import('remote-a/X')` fails the build with esbuild `Expected ";" but found "("` | The plugin mistook a **dynamic import in a TS type position** for a real import and rewrote it (a runtime call got inserted into the type grammar) | Fixed (the rewriter now skips `typeof import(...)`); upgrade the plugin version — documented form in [getting started](../guide/getting-started.md) |
 
 ## Bridge / session
 
@@ -84,14 +87,14 @@
 | `MFU-013` missing sessionKey | The remote declared onSession but the host gave no login generation | The host provides a non-sensitive sessionKey (never a token) |
 | Changing props does not update the sub app | appProps is a mount snapshot (by design) | Stable callbacks / a shared store / remount with a new key; [snapshot semantics](../guide/app-bridge.md#appprops-snapshot-semantics-important) |
 | The sub app lingers after logout | `sessionKey→null` not passed, or cached private pages not removed | null unmounts immediately; the host calls `clearAppContext()` and removes cached pages |
-| Timers/listeners duplicated after the sub app unmounts | Page global side effects not cleaned up | [Unmount cleanup checklist](../migration.md#6-page-unmount-cleanup-checklist) |
+| Timers/listeners duplicated after the sub app unmounts | Page global side effects not cleaned up | [Page unmount cleanup checklist](../guide/remote-pages.md#page-unmount-cleanup-checklist) |
 
 ## General troubleshooting tools
 
 ```bash
-npx fulgurjs explain          # Config stage: role/remotes/exposes/shared/load chain
-npx fulgurjs check-pages      # Per-page hosts: page table ↔ remote exposes
-npx fulgurjs doctor --base <URL> --apps <subdirs,...>   # Deployment-side checkup (exit code 1 usable in CI)
+npx @fulgurjs/federation explain          # Config stage: role/remotes/exposes/shared/load chain
+npx @fulgurjs/federation check-pages      # Per-page hosts: page table ↔ remote exposes
+npx @fulgurjs/federation doctor --base <URL> --apps <subdirs,...>   # Deployment-side checkup (exit code 1 usable in CI)
 ```
 
 Browser side: `window.__FULGURJS_INFO__` (per-remote status/duration/setup stage), `window.__FULGURJS_SCOPE__` (shared negotiation), `window.__FULGURJS_APP_CONFIG__` (the AppContext mirror), and the `fulgurjs:error` event.

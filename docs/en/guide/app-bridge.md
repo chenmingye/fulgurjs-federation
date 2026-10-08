@@ -2,7 +2,7 @@
 
 > Scenario: mount a **full sub app** (with its own Router/store/menus) into a host of the other framework — a Vue 3 host embedding a React 18/19 child app, or the reverse. What is embedded is the child app: it creates its own component tree and the host only provides a DOM container; **no component type conversion happens** (Vue's `remoteComponent` cannot render React components directly).
 >
-> 6.0.0 entries: the child app imports `defineBridgeApp` from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; the host factories `createVueBridgeApp`/`createReactBridgeApp` likewise come from `/vue` and `/react`. The old `/bridge*` entries have been removed.
+> Import entries: the child app imports `defineBridgeApp` from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; the host factories `createVueBridgeApp`/`createReactBridgeApp` likewise come from `/vue` and `/react`.
 
 ## Product scope
 
@@ -176,7 +176,7 @@ Session change table:
 - The wrapper component only creates and keeps a stable empty mount container; the pending/error placeholders are its siblings; host re-renders never patch inside the child app's root;
 - React host StrictMode double effects (mount→cleanup→mount) are safe;
 - Vue `<KeepAlive>` deactivate is not unmount — a child app in a cached page keeps its root and state; if you want destroy-on-leave, do not cache that page, and the logout flow should also remove cached private pages;
-- Window-level listeners/timers/back-registrations inside the child app must be cleaned up by the child app (see [migration guide · page unmount cleanup checklist](../migration.md#6-page-unmount-cleanup-checklist)).
+- Window-level listeners/timers/back-registrations inside the child app must be cleaned up by the child app (see [remote page integration · page unmount cleanup checklist](remote-pages.md#page-unmount-cleanup-checklist)).
 
 ## Nesting
 

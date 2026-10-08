@@ -5,7 +5,7 @@
     <p v-if="state === 'unreachable'" class="pc-error">
       远程 dev manifest 不可达（{{ manifestUrl }}）——远程 dev server 未启动时如实展示，不假装通过。
       CLI 侧对应「无法验证」（unverified）语义；manifest 来源可显式指定：
-      <code>npx fulgurjs check-pages --manifest pc-remote=&lt;路径或URL&gt;</code>。
+      <code>npx @fulgurjs/federation check-pages --manifest pc-remote=&lt;路径或URL&gt;</code>。
     </p>
 
     <template v-if="state === 'ready'">
@@ -33,8 +33,8 @@
       契约的两侧：宿主 fulgurjs.config.ts 具名导出 hostPages（本应用 src/fulgurjs/pages.data.ts——
       与运行时 createHostPages 同一份数据模块）；远程 fulgurjs.config.ts 也具名导出同构 hostPages
       （examples/demos/pages-cli/remote/src/fulgurjs/pages.data.ts，内容一致表达「同源」）。分别在两个工程根目录跑
-      <code>npx fulgurjs explain</code> 可以看到两侧的页面 spec 映射；
-      <code>npx fulgurjs check-pages --manifest pc-remote=http://localhost:5363/fulgurjs-manifest.json</code>
+      <code>npx @fulgurjs/federation explain</code> 可以看到两侧的页面 spec 映射；
+      <code>npx @fulgurjs/federation check-pages --manifest pc-remote=http://localhost:5363/fulgurjs-manifest.json</code>
       则在宿主侧自动完成本面板的对照（远程 dist 已构建时，脚本会改用本地 dist 的 prod manifest 真实核对）。
     </p>
   </section>

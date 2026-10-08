@@ -2,7 +2,7 @@
 
 > 场景：把一个**完整子应用**（自带 Router/store/菜单）挂进另一框架的宿主——Vue 3 宿主嵌 React 18/19 子应用，或反向。嵌入的是子应用：子应用创建自己的组件树，宿主只提供 DOM 容器；**不做组件类型转换**（Vue 的 `remoteComponent` 不能直接渲染 React 组件）。
 >
-> 6.0.0 入口：子应用 `defineBridgeApp` 从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 导入；宿主工厂 `createVueBridgeApp`/`createReactBridgeApp` 同样从 `/vue`、`/react` 导入。旧 `/bridge*` 入口已删除。
+> 导入入口：子应用 `defineBridgeApp` 从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 导入；宿主工厂 `createVueBridgeApp`/`createReactBridgeApp` 同样从 `/vue`、`/react` 导入。
 
 ## 产品范围
 
@@ -30,7 +30,7 @@ export default {
 } satisfies FederationOptions
 ```
 
-子应用只装并共享自己的框架（Vue 子应用：`vue`；React 子应用：`react` + `react-dom`）。共享子路径（`react/jsx-runtime`、`react/jsx-dev-runtime`、`react-dom/client`）由 shared 机制协商单实例；宿主侧为 `react`、`react-dom` 配置 shared 是子路径协商的前提。纯 Vue/纯 React 项目的零对方依赖承诺不受影响。缺 singleton 的真实症状（Invalid hook call、双实例状态不互通）见错误码 `MFU-010`——插件按协商机制如实运行，不拦截配置违例。同页有多个 React 大版本时，singleton 不能把不兼容版本变成兼容，需按[版本隔离](sharing.md#react-18-19-同页隔离)分 scope。
+子应用只装并共享自己的框架（Vue 子应用：`vue`；React 子应用：`react` + `react-dom`）。共享子路径（`react/jsx-runtime`、`react/jsx-dev-runtime`、`react-dom/client`）由 shared 机制协商单实例；宿主侧为 `react`、`react-dom` 配置 shared 是子路径协商的前提。纯 Vue/纯 React 项目的零对方依赖承诺不受影响。缺 singleton 的真实症状（Invalid hook call、双实例状态不互通）见错误码 `MFU-010`——插件按协商机制如实运行，不拦截配置违例。同页有多个 React 大版本时，singleton 不能把不兼容版本变成兼容，需按[版本隔离](sharing.md#sharescope分组隔离react-1819-同页隔离)分 scope。
 
 ## 子应用侧：`defineBridgeApp`
 
@@ -176,7 +176,7 @@ export default function BridgePage() {
 - 包装组件只创建并保持稳定的空挂载容器；pending/error 占位是它的兄弟节点，宿主重渲染不 patch 子应用 root 内部；
 - React 宿主 StrictMode 双 effect（mount→cleanup→mount）安全；
 - Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态；需要离页即销毁就别缓存该页，登出流程应同时移除缓存的私有页面；
-- 子应用内的 `window` 级监听/定时器/反向注册须自行清理（见[迁移指南 · 页面卸载清理清单](../migration.md#页面卸载清理清单)）。
+- 子应用内的 `window` 级监听/定时器/反向注册须自行清理（见[远程页面接入 · 页面卸载清理清单](remote-pages.md#页面卸载清理清单)）。
 
 ## 嵌套
 

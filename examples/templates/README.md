@@ -1,6 +1,6 @@
 # fulgurjs-federation 模板（examples/templates/）
 
-五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation@6.1.4`（精确版本 + pnpm 锁文件；6.0.0 起统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。
+五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation`（精确版本 + pnpm 锁文件，钉定版本见各模板 package.json；统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。
 
 ## 获取模板的两种方式
 
@@ -75,7 +75,7 @@ pnpm dev                # 统一启动器：远程(5213) + 宿主(5214) 按顺�
 
 ## 生产构建与部署
 
-`pnpm build` 后产物为标准 Vite dist，远程会多生成 `fulgurjs-remoteEntry.js` 与 `fulgurjs-manifest.json`，用 no-cache 规则部署，SPA fallback 配置见 [Vue 模板部署说明](vue-vue/README.md#生产构建与最小-nginx-部署)。部署后可用 `npx fulgurjs doctor --base <站点> --apps <部署子目录>` 体检（`--apps` 是部署子目录，不是容器名）。
+`pnpm build` 后产物为标准 Vite dist，远程会多生成 `fulgurjs-remoteEntry.js` 与 `fulgurjs-manifest.json`，用 no-cache 规则部署，SPA fallback 配置见 [Vue 模板部署说明](vue-vue/README.md#生产构建与最小-nginx-部署)。部署后可用 `npx @fulgurjs/federation doctor --base <站点> --apps <部署子目录>` 体检（`--apps` 是部署子目录，不是容器名）。
 
 ## 模板覆盖的能力 → 去哪看
 

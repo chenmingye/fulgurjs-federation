@@ -2,7 +2,7 @@
 
 > Bridge defaults to **memory routing**: sub app internal navigation does not change the browser address, and a refresh cannot restore the sub app's internal page. URL sync makes the **host URL express the sub app's internal location** — refresh lands directly, bookmarks/sharing, back/forward, and host menu navigation all behave consistently. It is an explicit opt-in, **off by default** (without sync, sub app internal navigation does not touch the host address — that is normal behavior).
 >
-> 6.0.0 entries: `createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` all import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`. The old `/bridge/router/vue` and `/bridge/router/react` have been removed. Router libraries are optional peers: `/vue` does not require vue-router, `/react` does not require react-router-dom — the corresponding library is only needed when the route-sync APIs are actually called (the React side errors clearly when the dependency is missing).
+> Import entries: `createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` all import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`. Router libraries are optional peers: `/vue` does not require vue-router, `/react` does not require react-router-dom — the corresponding library is only needed when the route-sync APIs are actually called (the React side errors clearly when the dependency is missing).
 
 ## Effect
 

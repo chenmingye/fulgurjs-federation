@@ -1,5 +1,27 @@
 # Changelog
 
+## 6.2.0
+
+面向对外提供的第一版公开文档整理与公共面收敛。应用代码与模板工程无需任何代码改动；仅当你引用过下列弃用面时需要调整。
+
+### 公共面清理（破坏性）
+
+- **删除弃用类型别名 `RemoteInput`**（`/runtime`、`/vue`、`/react` 三入口的 type 导出面）：改用 `RemoteConfig`（签名包含 RemoteInput 的全部公开字段）。该别名自标注 deprecated 起无任何内部消费。
+- **`fulgurjs init` 移除 `--template` 兼容写法**：此前按 `--out` 解释并打印更名提示；现在显式报错（退出码 2）并给出 `--out` 修法。
+- **删除 exports 中的 `./internal/bridge-router-core.js` 死映射**：正式包 dist 中该映射目标文件不存在（构建分块内联），且全仓无任何消费者——声明子路径只会让直接引用它在解析期失败。internal 子路径本就不承诺公开兼容。
+
+### 文档
+
+- 公开文档全面清理为当前产品形态：删除迁移指南（docs/zh/migration.md、docs/en/migration.md）与"入口一览/旧入口已删除/旧文档去向/Legacy 英文参考"等全部面向过去的段落；仍有价值的知识（qiankun 概念映射、页面卸载清理清单、首次接入避坑）迁入快速上手/远程页面/排错文档。
+- 中英文文档统一为同一套当前合同，移除"英文过时以中文为准"类声明；修复全部死链接与锚点拼写（含 CONTRIBUTING/SECURITY/DESIGN/maintainers 对照表）；`npx fulgurjs <cmd>` 统一改为 `npx @fulgurjs/federation <cmd>`（npm 上不存在 fulgurjs 包名，未安装依赖的工程里旧写法 404）。
+- 快速上手补首次接入的真实坑：pnpm ≥11 默认 24 小时发布冷却（minimumReleaseAge）、pnpm 12 allowBuilds 占位提示、桥接宿主须同时安装双框架的例外说明。
+- npm 包不再携带 DESIGN.md（历史设计存档保留在仓库）与迁移指南；错误码总表节标题去掉旧手册残留编号（check-manual-codes 门禁锚同步）。
+- examples：showcase 模板 README 修正旧版本号与旧入口引用；templates/README 版本口径改为与模板 package.json 一致；删除"原目录迁移"映射表。
+
+### 修复
+
+- **exports 发布完整性回归**：`tests/exports.test.ts` 新增"每个 exports 子路径的 import/types 目标必须在磁盘可解析"断言（本次 bridge-router-core 死映射的防复发）。
+
 ## 6.1.9
 
 ### 修复
@@ -18,7 +40,7 @@
 
 ### 修复
 
-- **dev 入口重试修复补全：业务模块树的 runtime import 不再被入口失败污染**。6.1.6 已让入口直接依赖可穿透失败缓存，但业务模块树（远程页面的 shared facade、runtime-proxy）import 的是经 Vite 重写的**无 query** `virtual:fulgurjs-runtime` URL——入口链失败同样污染该 URL，重试后整棵业务树被浏览器 module map 秒拒（实测：MESZC dev 桥接重试，`./bridge` 模块树因 `virtual:fulgurjs-shared:vue-router` facade 的 runtime 静态 import 失败而无法恢复）。现在入口改用专用变体 URL（`?fulgurjs_entry=1`）加载 runtime/provides，与业务树的无 query URL 隔离为不同模块记录；两个变体经 `globalThis.__FULGURJS_RUNTIME__` 单例幂等收敛为同一运行时实例，不分裂共享注册表。`@vite/client` 不隔离（HMR 客户端不可重复求值），维持失败驱动换 URL 穿透。回归：`e2e/tests/fault.spec.ts` 同用例升级为 `Button`（Vue 组件树经 shared facade 覆盖该链路）。
+- **dev 入口重试修复补全：业务模块树的 runtime import 不再被入口失败污染**。6.1.6 已让入口直接依赖可穿透失败缓存，但业务模块树（远程页面的 shared facade、runtime-proxy）import 的是经 Vite 重写的**无 query** `virtual:fulgurjs-runtime` URL——入口链失败同样污染该 URL，重试后整棵业务树被浏览器 module map 秒拒（实测：大型集成工程 dev 桥接重试时，`./bridge` 模块树因 `virtual:fulgurjs-shared:vue-router` facade 的 runtime 静态 import 失败而无法恢复）。现在入口改用专用变体 URL（`?fulgurjs_entry=1`）加载 runtime/provides，与业务树的无 query URL 隔离为不同模块记录；两个变体经 `globalThis.__FULGURJS_RUNTIME__` 单例幂等收敛为同一运行时实例，不分裂共享注册表。`@vite/client` 不隔离（HMR 客户端不可重复求值），维持失败驱动换 URL 穿透。回归：`e2e/tests/fault.spec.ts` 同用例升级为 `Button`（Vue 组件树经 shared facade 覆盖该链路）。
 
 ## 6.1.6
 
@@ -39,23 +61,19 @@
 - `createHostPages` 与 `remoteComponent` 统一自动传入消费方注册器；零参组件 loader 的失败正常传播给 Vue 错误处理器。无需新增配置或导入路径。
 - showcase Vue 宿主守卫：首次深链恢复不弹交互确认，后续导航仍执行权限确认。
 
-### 局部验证
-
-- Vue 适配、错误恢复、页面保活、跨 app 注册和会话切换定向回归。
-
 ## 6.1.3
 
 **npm 包内五模板升钉 6.1.2**（6.1.2 已发布并核验：integrity 与五模板 pnpm-lock registry 重生成一致，`minimumReleaseAgeExclude` 同步 `@6.1.2`）。`fulgurjs create` 生成工程从此携带 6.1.2 插件修复（transform 类型位置 import / bridge-router 重复前缀守卫）。
 
 ### 修复
 
-- **bridge-router（Vue 子应用）：宿主广播应用的 `duplicated` 导航失败不再误报 `MFU-033`（终验 E）**。宿主广播字符串与子应用 fullPath 存在合法编码差异（中文 query：宿主持 `%E6%BC%94%E7%A4%BA`、vue-router fullPath 保持 `演示`），文本不等触发一次冗余 replace，vue-router 按路由级判定「已在目标位置」返回 `duplicated(16)`——此前 `apply()` 只豁免 `cancelled(8)`，把 duplicated 误报成「守卫拒绝」（无守卫子应用中枪，真实案例 showcase vue-remote 连报两次 MFU-033 且前进不同步）。现在 `duplicated` 按已同步处理（零误报、零宿主写入）；真实守卫拒绝（aborted≠duplicated）仍报 MFU-033。回归：`tests/bridge-router-regressions.test.ts`「广播应用 duplicated 失败不误报」2 例（中文 query push/replace/go 全程 + 真实拒绝不被吞）。
+- **bridge-router（Vue 子应用）：宿主广播应用的 `duplicated` 导航失败不再误报 `MFU-033`**。宿主广播字符串与子应用 fullPath 存在合法编码差异（中文 query：宿主持 `%E6%BC%94%E7%A4%BA`、vue-router fullPath 保持 `演示`），文本不等触发一次冗余 replace，vue-router 按路由级判定「已在目标位置」返回 `duplicated(16)`——此前 `apply()` 只豁免 `cancelled(8)`，把 duplicated 误报成「守卫拒绝」（无守卫子应用中枪，真实案例 showcase vue-remote 连报两次 MFU-033 且前进不同步）。现在 `duplicated` 按已同步处理（零误报、零宿主写入）；真实守卫拒绝（aborted≠duplicated）仍报 MFU-033。回归：`tests/bridge-router-regressions.test.ts`「广播应用 duplicated 失败不误报」2 例（中文 query push/replace/go 全程 + 真实拒绝不被吞）。
 - **类型：包根导出 `PageRouteLike`（四入口合同补齐）**。pages 表属于构建配置（`fulgurjs.config.ts` / `hostPages` 选项），配置文件按合同从包根取类型——此前该类型仅 `/vue`、`/react` 导出，配置文件从包根 `import type { PageRouteLike }` 必 TS2614。属既有类型按合同补齐导出位，不构成新功能面。回归：`tests/client-types.test.ts`「包根类型面」（dist/index.d.ts 含 FederationOptions 与 PageRouteLike）；同文件修正 /react 导出面断言的误触发（JSDoc 散文提及不再算导出，绑定级判定）。
-- **示例/模板（终验缺陷修复）**：五模板 tsconfig 补 `allowImportingTsExtensions`（`fulgurjs.config.ts` 以 `.ts` 后缀 import 页面数据，模板内 `tsc --noEmit` 此前报错；react-react/vue-vue 各 host+remote 共 4 份）；showcase react-remote `bridge.tsx` 改用 `routerReady` 就绪合同做初始位置上报（冷加载慢路径下 `element.props.router` 是惰性包装、同步读会静默跳过上报）；vue-host-react-remote `App.vue` `r(null)`→`r()`；pages-cli demo `ContractPanel.vue` 兼容 manifest v1 的 exposes **数组**形态（此前按 Record 解析导致对照永远不命中）并按 `remotePrefixes` 剥离远程名前缀。
+- **示例/模板**：五模板 tsconfig 补 `allowImportingTsExtensions`（`fulgurjs.config.ts` 以 `.ts` 后缀 import 页面数据，模板内 `tsc --noEmit` 此前报错；react-react/vue-vue 各 host+remote 共 4 份）；showcase react-remote `bridge.tsx` 改用 `routerReady` 就绪合同做初始位置上报（冷加载慢路径下 `element.props.router` 是惰性包装、同步读会静默跳过上报）；vue-host-react-remote `App.vue` `r(null)`→`r()`；pages-cli demo `ContractPanel.vue` 兼容 manifest v1 的 exposes **数组**形态（此前按 Record 解析导致对照永远不命中）并按 `remotePrefixes` 剥离远程名前缀。
 
 ### 文档与测试
 
-- doctor 部署体检补单测（终验 F）：`tests/doctor.test.ts` 新增 9 场景（--no-entry/--no-manifest/--no-html/--entry/'.'/完整 URL/--dev/nginx 回退兜 HTML/坏 JSON/schemaVersion/缓存 WARN/shared 版本 skew）。
+- doctor 部署体检补单测：`tests/doctor.test.ts` 新增 9 场景（--no-entry/--no-manifest/--no-html/--entry/'.'/完整 URL/--dev/nginx 回退兜 HTML/坏 JSON/schemaVersion/缓存 WARN/shared 版本 skew）。
 - 文档 zh/en：globalComponents 消费方 app 捕获范围澄清（当前仅 Vue `remoteComponent` 自动捕获；页面/React/手动 loadRemote 不传，组件解析走宿主全局注册表）+「字符串标签成死元素」排查行；`devSharedSelf` 缺省口径注释与实现（按角色推断，`commands.ts`）对齐；`getLoadedShare` 注释改为「高级诊断用，公开导出」（导出面本就含它，仅注释失真）。
 
 ## 6.1.2
@@ -113,7 +131,7 @@
 
 ### 修复
 
-- **修复（插件）：dev 桥接门面误绑 `{ createVueBridgeApp }`**——internal/bridge-host-vue.js 实际只导出 `createVueBridgeAppWithLoader`（绑定发生在 dist 生成壳）。5.9.x 的旧 /bridge 桥接门面存在同一误写，因 expose 目标从不导入宿主工厂而从未触发；6.0.0 /vue 门面承载完整入口面后被 dev 预构建放大为 MFU-001（ MESZC 实测）。修复为取 WithLoader 名并就地绑定 loadRemote；新增 tests/api-facade-bindings.test.ts 以 dist 真实导出面逐名核对门面导入（防回归）。
+- **修复（插件）：dev 桥接门面误绑 `{ createVueBridgeApp }`**——internal/bridge-host-vue.js 实际只导出 `createVueBridgeAppWithLoader`（绑定发生在 dist 生成壳）。5.9.x 的旧 /bridge 桥接门面存在同一误写，因 expose 目标从不导入宿主工厂而从未触发；6.0.0 /vue 门面承载完整入口面后被 dev 预构建放大为 MFU-001（大型集成工程实测）。修复为取 WithLoader 名并就地绑定 loadRemote；新增 tests/api-facade-bindings.test.ts 以 dist 真实导出面逐名核对门面导入（防回归）。
 - **doctor 不再猜默认应用**：`--apps` 必填（缺省 main 的静默行为移除）；支持 `.`（站点根）、完整 URL 条目（多 origin）；新增 `--entry <文件名>`（自定义入口）、`--no-entry`（纯宿主）、`--no-manifest`（合法关闭）、`--no-html`；`--json` 输出实际检查目标 mode。
 - **create 环境校验前置**：按模板真实 `engines.node`（>=20.19.0）与 pnpm 存在性在**写入前**校验，不满足即失败并给升级方法（此前在复制/安装后才警告）；输出 `cd` 路径加引号（空格/中文路径）；宿主入口按 dev.config.json 的 host 标记列出**全部**宿主（showcase 双宿主不再只显示一个）。
 
@@ -334,7 +352,6 @@
 - **修复：生产重试 helper 并发失败代次竞态**——per-URL 状态机此前在并发失败时每个失败各自递增代次并改写当前 URL，并发中的其他调用可能落到不同 `fulgurjs_retry` 代次 URL 上（不同 URL = 不同 module map 条目 = 模块重复求值、单例身份分裂）。现在为 per-URL promise 状态机：并发调用共享同一 Promise（单请求、单失败、单代次推进）；成功缓存定型 Promise（重复访问零额外网络请求，身份严格保持，两个 expose 别名同 chunk 同样经此去重）。真实构建浏览器验证：别名身份/单次求值/成功后零多余请求与 retry 参数；入口失败、expose chunk 失败同页重试恢复；**静态依赖 chunk 失败为不可同页恢复的已知边界**（浏览器缓存该依赖 URL 失败，需整页刷新；已写入 README 边界说明，不做全站依赖图改写）。
 - **测试基建**：`fixtures/remote-react` 新增同源别名 expose、静态依赖链（两个消费者使 leaf 独立成 chunk）与模块求值计数探针；`fixtures/host-react` 新增别名身份面板与静态依赖组件；`prod-react` 新增 B1–B3c 生产形态浏览器回归（并发失败单代次推进的断言 = 恢复请求 URL 恰为 `fulgurjs_retry=1`）。
 - **文档**：中英文 README 的类型轨 paths 配置位置由「任一 tsconfig」订正为「应用 TS 上下文」语义；补生产重试恢复范围、并发语义与静态依赖边界说明。
-- 交接的 MES dev / 8662 双环境完整验收在正式包安装后单独执行；本条不含 MES 验收结论。
 
 ## 5.1.2（2026-09-29）
 
@@ -414,7 +431,7 @@
 - **`check-pages` 远程地址全形态推导**：新增 `manifestUrlForRemoteAddress` 共享解析（与运行时同语义）——绝对 prod 地址支持目录 URL / 完整 `fulgurjs-remoteEntry.js` URL / `name@url` 前缀 / `fulgurjs-manifest.json` 直链；`name@url` 形态此前被 `^https?://` 门禁误判为相对地址而报「无法验证」。相对 prod + `--site` 组合同样经统一推导。
 - **`check-pages` manifest 来源优先级**：显式 `--manifest` > 显式 `--site`（只用指定来源，失败=「无法验证」）> 本地 dist（仅在未指定任何线上来源时兜底）。修复旧聚合配置在 `--site` 指定死地址时仍回退本地旧 dist 并退出 0 的问题——指定线上站点验证时不再可能被本地产物冒充。来源报告带实际命中 URL（含 localhost 回退）。
 - **CLI 独立目录 TS 配置加载**（`app-config.ts`）：esbuild 定位改为「受控编译器」——候选（配置工程直连 → 经 vite 传递依赖 → CLI 自身依赖树）必须先通过 `satisfies` 语法能力探针（esbuild ≥0.14.49），不再按「找到就用」收编偶然悬挂的旧版（曾实测 esbuild 0.11.23 使合法配置报 `Expected ";" but found "satisfies"`）；`esbuild` 成为包直接依赖（^0.27.0），无本地 Vite 的独立目录 `init`/`explain` 开箱可用（Node 18/24 实测）。
-- **CLI localhost 回环回退**：Node 18 的 fetch 将 `localhost` 只解析到 `::1`（本机服务通常只监听 IPv4），CLI 抓取 manifest 失败时自动改试 `127.0.0.1` 并以实际命中的 URL 作为来源报告（Node 18 下 `--site http://localhost:8662` 不再误报「无法验证」）。
+- **CLI localhost 回环回退**：Node 18 的 fetch 将 `localhost` 只解析到 `::1`（本机服务通常只监听 IPv4），CLI 抓取 manifest 失败时自动改试 `127.0.0.1` 并以实际命中的 URL 作为来源报告（Node 18 下 `--site http://localhost:<端口>` 不再误报「无法验证」）。
 
 ### 文档订正
 
@@ -568,7 +585,7 @@
 - **修复根相对 remote 地址**：配置 `prod: '/lowcode'` 时也能生成 `/lowcode/fulgurjs-manifest.json`；保留绝对地址与协议相对地址的 origin/path 语义。
 - **运行时按 expose 加载样式**：`loadRemote('remote/Expose')` 在 manifest 可用时预载该 expose 的 JS chunk 与 CSS，并等待 stylesheet load/error 后再返回模块；仅传 remote 名时保留预载全部 exposes 的行为。CSS 失败报告 `MFU-007`，不阻断 JS 模块加载。
 - **补齐 build 后置转换**：build 阶段允许处理 pre 阶段标记过、但随后由 auto-import 等插件注入新 import 的模块；依赖 `transformModule` 幂等，serve 路径维持原有重复处理守卫。
-- **回归验证**：覆盖静态依赖 chunk 持有 CSS、根相对 manifest URL、请求 expose 的 CSS 预载与等待行为；8662 实际运行态认证弹窗验收 computed `z-index: 5000`。
+- **回归验证**：覆盖静态依赖 chunk 持有 CSS、根相对 manifest URL、请求 expose 的 CSS 预载与等待行为；实际运行态认证弹窗验收 computed `z-index: 5000`。
 
 ## 2.0.2（2026-09-22）
 
@@ -752,7 +769,7 @@
   `FulgurjsAppContext` 类型同步删除 `token` 字段。取值一律 `getToken()`。
 - **`formUrl` / `baseUrl` 移出默认 provide**：自 0.7.0 `remoteComponent` 直渲染（iframe 通道删除）后
   无消费点。项目如需可经扩展位 `[key: string]: unknown` 自行提供。
-- 取证依据：testbed 全量 grep 上述三键零消费（除 bridge 传参本身）；`user` / `getToken` / `store` /
+- 取证依据：仓库全量 grep 上述三键零消费（除 bridge 传参本身）；`user` / `getToken` / `store` /
   `hostApp` / `locale` / `events` 六键各有真实消费点（boot 双注入 / EP 注入 / 方法池 / 组件注册），保留。
 - 单测同步（扩展位语义用例）；README §9 示例与字段表、迁移指南三C 同步。
 
@@ -787,7 +804,7 @@
 
 ## 0.7.1（2026-09-20）
 
-### 修复（TS 子路径类型兼容，demo-app testbed 用户 IDE 实测暴露）
+### 修复（TS 子路径类型兼容，IDE 实测暴露）
 
 - **`typesVersions` 子路径类型映射**：`moduleResolution: "node"`（node10 语义，vben/jeecg 一代工程常见，如 TS 4.9 + `moduleResolution: "node"`）不读 package.json `exports`，`import ... from '@fulgurjs/federation/pages'` 报 ts(2307)。新增 `typesVersions` 把 `./pages` / `./config` / `./vue` 映射到对应 `dist/*.d.ts`——TS 3.1+ 任意解析模式可用；TS ≥4.7 的 bundler/node16 仍走 `exports`，两者互不冲突。运行时无任何变化（Vite 一直认 exports）。
 - 新增清单防漂移测试（exports 子路径 ↔ typesVersions ↔ 磁盘 d.ts 三方一致）。

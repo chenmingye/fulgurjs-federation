@@ -6,15 +6,15 @@
 
 | 症状 | 先检查 | 深入 |
 |---|---|---|
-| dev 下首次加载报 manifest 拉取失败（`DEV-001`） | 远程 dev server 是否启动；`remotes[*].dev` 地址与端口 | dev 模式体检：`npx fulgurjs doctor --base http://localhost:<远程端口> --apps <子目录> --dev` |
+| dev 下首次加载报 manifest 拉取失败（`DEV-001`） | 远程 dev server 是否启动；`remotes[*].dev` 地址与端口 | dev 模式体检：`npx @fulgurjs/federation doctor --base http://localhost:<远程端口> --apps <子目录> --dev` |
 | dev 提示端口无监听（`DEV-005`） | 远程是否改过端口而宿主未同步 | [改端口四处清单](../guide/examples.md#改端口的固定清单) |
-| prod 下加载失败（`MFU-001`） | remoteEntry 是否 200、是否 JS 形态、CORS、no-cache | `npx fulgurjs doctor --base <站点> --apps <子目录,...>`；[部署指南](../guide/deployment.md) |
+| prod 下加载失败（`MFU-001`） | remoteEntry 是否 200、是否 JS 形态、CORS、no-cache | `npx @fulgurjs/federation doctor --base <站点> --apps <子目录,...>`；[部署指南](../guide/deployment.md) |
 | 报自报名不一致（`MFU-002`） | remotes 键与容器自报名 | 字符串 `'自报名@url'` 写法显式重命名 |
 | 报未知远程（`MFU-008`） | spec 前缀与 remotes 键拼写 | 动态远程先 `registerRemote` |
-| 报模块未被 exposes（`MFU-006`） | `远程名/exposes 键` 是否对应 | `npx fulgurjs check-pages`（逐页接入宿主）批量核对 |
+| 报模块未被 exposes（`MFU-006`） | `远程名/exposes 键` 是否对应 | `npx @fulgurjs/federation check-pages`（逐页接入宿主）批量核对 |
 | 加载到了但没有任何导出（`MFU-009`） | expose 目标文件的导出 | 补导出 |
 | 重试/熔断行为 | `timeout`/`retries`/`fallback`/`breaker` 配置 | [配置参考 · remotes](../reference/configuration.md#remotes-的四种形态) |
-| 静态依赖曾失败，服务恢复后仍失败 | 浏览器缓存了依赖 URL 的失败记录 | 默认错误占位的「刷新页面重试」（保留当前地址整页刷新）；[已知边界](../reference/api.md#vue-版本fulgurjsfederationvue-1) |
+| 静态依赖曾失败，服务恢复后仍失败 | 浏览器缓存了依赖 URL 的失败记录 | 默认错误占位的「刷新页面重试」（保留当前地址整页刷新）；[已知边界](../reference/api.md#vue-版fulgurjsfederationvue) |
 
 ## 白屏 / 页面渲染异常
 
@@ -28,7 +28,9 @@
 | 远程页面独立直开白屏（`CC-002`） | 页面被绕过宿主直接访问 | 经宿主联邦加载 |
 | JS 请求被兜成 HTML（doctor FAIL） | nginx 深链回退过宽 | 为静态资源加精确匹配；[部署指南 · SPA 回退](../guide/deployment.md#spa-回退绝不把-js-请求兜成-html) |
 | 远程组件渲染成功但字符串标签（如 `<a-divider>`）成无样式死元素 | 消费方 app 未注册该全局组件 | 远程在 setup 模块声明 `globalComponents`（`remoteComponent` 消费时自动安装）；[API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期) |
-| 保活页每次进出都重挂 / 状态丢失 | keepAlive include 名与解析后组件名不一致（Vue 3.5 已修复） | 升级到 5.9.3+；核对 keepAliveNames 用法 |
+| 给 shared 依赖加 ESM 别名后构建报 `xxx.default.extend is not a function` | prod rollup 双重 interop | **build 必删**该别名；dev 侧若该依赖已移出预构建，其 CJS 子路径需 dev 专用别名兜住（`command==='serve'` 才注入） |
+| 远程页面（exposes 目标文件）静态导入运行时，担心双实例 | — | 直接静态导入即可——插件自动改写为惰性单例代理，远程与宿主写法完全一致 |
+| 保活页每次进出都重挂 / 状态丢失 | keepAlive include 名与解析后组件名不一致 | 核对 keepAliveNames 用法与解析后组件名一致 |
 
 ## 共享版本冲突
 
@@ -38,7 +40,7 @@
 | `MFU-010` 单例版本不满足告警 | 最终选中版本与某消费方要求 | 统一版本；确认告警可接受；不能接受就分 shareScope |
 | `MFU-004` 共享缺失且无 fallback | 提供方是否声明该 shared 键；加载顺序 | 自定义入口先 `await loadShare` 再导入消费者 |
 | 双版本组件库 CSS 互相覆盖 | `:root` 变量后加载覆盖先加载 | 主流版本变量一致则无感；升级时留意；[沙箱边界审计](../../maintainers/沙箱边界审计.md) |
-| React 18/19 同页需求 | singleton 不能让 18/19 兼容 | 分 shareScope 隔离整组依赖及消费者；[版本隔离示例](../guide/sharing.md#sharecope分组隔离react-1819-同页隔离) |
+| React 18/19 同页需求 | singleton 不能让 18/19 兼容 | 分 shareScope 隔离整组依赖及消费者；[版本隔离示例](../guide/sharing.md#sharescope分组隔离react-1819-同页隔离) |
 | doctor 报 shared 版本 skew WARN | 各应用 manifest.shared 同键版本对比 | 统一依赖版本；singleton 场景确认告警可接受 |
 
 ## URL 前缀 / 路由同步
@@ -62,6 +64,8 @@
 | 偶发部分资源 404 | 发布窗口清了旧 chunk | 保留仍被旧页面引用的 chunk；`rsync -a --delete` 整目录一致部署 |
 | 资源 200 但内容是 HTML | 回退吞 JS（状态码假象） | doctor 的 chunk 形态检查会拦；修 nginx 回退规则 |
 | pnpm 装 tarball 后 `Cannot find module '@fulgurjs/federation'` | 软链断链 | 重新安装并验证目录可达 |
+| 页面 404/401 资源报错，业务接口后端未实现 | 后端缺端点 | 代理/NGINX 层加诚实空响应垫片（不伪造业务数据），前端按空态渲染 |
+| e2e 偶发被弹回登录页 | 登录异步链未完成就断言 | 等「登录表单消失」而非固定秒数；慢链留足超时 |
 
 ## 类型获取失败 / IDE 问题
 
@@ -72,7 +76,6 @@
 | ts(2307) 找不到 `@fulgurjs/federation/*` | IDE TS 服务缓存旧包 | `Restart TS Server`（⌘⇧P）或重开窗口 |
 | VSCode 打开 `src/fulgurjs/types/*.d.ts` 大片红波浪线 | Volar 以推断项目检查工程外文件 | 仅编辑器显示问题（命令行检查与构建 0 错误）；根治用 `dts: { mode: 'shim' }`；[IDE 说明](../reference/api.md#ide-提示srcfulgurjs-目录的红波浪线) |
 | React 精确类型不生效 | 宿主 tsconfig 未配 paths | 按 `_paths.d.ts` 说明配置 `paths`；[React 的 dev 类型](../reference/api.md#react-的-dev-类型双轨) |
-| 旧版本：`loadRemote<typeof import('remote-a/X')>(...)` 运行时报 `"remote-a/X".then is not a function`，或 `type M = typeof import('remote-a/X')` 构建报 esbuild `Expected ";" but found "("` | 插件把 **TS 类型位置的动态 import** 误当真实导入改写（类型实参里被插入运行时调用） | 已修复（改写器跳过 `typeof import(...)`）；升级插件版本即可，官方形态见[快速开始](../guide/getting-started.md) |
 
 ## 桥接 / 会话
 
@@ -80,18 +83,18 @@
 |---|---|---|
 | `MFU-015` 契约非法 | `./bridge` 是否用 `defineBridgeApp` 默认导出 | [子应用桥接](../guide/app-bridge.md#子应用侧definebridgeapp) |
 | `MFU-016` 挂载/卸载失败 | `details.phase`；子应用原始错误 | mount 失败先清理再抛；unmount 抛错容器被持久封锁，整页刷新恢复 |
-| `MFU-017` 会话不一致 | sessionKey 三态用法；同页多实例代次 | [会话触发表](../guide/app-bridge.md#会话sessionkey-与-appcontext) |
+| `MFU-017` 会话不一致 | sessionKey 三态用法；同页多实例代次 | [会话触发表](../guide/app-bridge.md#会话sessionkey与-appcontext) |
 | `MFU-013` 缺 sessionKey | 远程声明了 onSession 但宿主没给登录代次 | 宿主 provide 非敏感 sessionKey（禁用 token） |
-| 换 props 子应用不更新 | appProps 是挂载快照（by design） | 稳定回调 / 共享 store / 换 key 重挂；[快照语义](../guide/app-bridge.md#approps-快照语义重要) |
+| 换 props 子应用不更新 | appProps 是挂载快照（by design） | 稳定回调 / 共享 store / 换 key 重挂；[快照语义](../guide/app-bridge.md#appprops-快照语义重要) |
 | 登出后子应用残留 | `sessionKey→null` 未传或缓存的私有页面未移除 | null 立即卸载；宿主 `clearAppContext()` 并移除缓存页 |
-| 子应用卸载后定时器/监听重复 | 页面全局副作用未清理 | [卸载清理清单](../migration.md#页面卸载清理清单) |
+| 子应用卸载后定时器/监听重复 | 页面全局副作用未清理 | [卸载清理清单](../guide/remote-pages.md#页面卸载清理清单) |
 
 ## 通用排查工具
 
 ```bash
-npx fulgurjs explain          # 配置期：角色/remotes/exposes/shared/加载链
-npx fulgurjs check-pages      # 逐页接入宿主：页面表 ↔ 远程 exposes
-npx fulgurjs doctor --base <URL> --apps <子目录,...>   # 部署面体检（CI 可用退出码 1）
+npx @fulgurjs/federation explain          # 配置期：角色/remotes/exposes/shared/加载链
+npx @fulgurjs/federation check-pages      # 逐页接入宿主：页面表 ↔ 远程 exposes
+npx @fulgurjs/federation doctor --base <URL> --apps <子目录,...>   # 部署面体检（CI 可用退出码 1）
 ```
 
 浏览器侧：`window.__FULGURJS_INFO__`（各 remote 状态/耗时/setup 阶段）、`window.__FULGURJS_SCOPE__`（shared 协商）、`window.__FULGURJS_APP_CONFIG__`（AppContext 镜像）、`fulgurjs:error` 事件。

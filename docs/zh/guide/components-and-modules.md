@@ -1,6 +1,6 @@
 # 组件与模块加载
 
-> 加载一个远程组件或函数模块，不需要桥接、页面表或登录初始化——这是联邦的最小用法。对应 6.0.0 入口：Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入，框架无关代码从 `@fulgurjs/federation/runtime` 导入。
+> 加载一个远程组件或函数模块，不需要桥接、页面表或登录初始化——这是联邦的最小用法。导入入口：Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入，框架无关代码从 `@fulgurjs/federation/runtime` 导入。
 
 ## 提供方：exposes 一个模块
 
@@ -159,7 +159,7 @@ import UserBadge from 'remote-a/shared/user-badge'
 - `mode: 'shim'`：宽松占位，IDE 干净但无源码级补全；
 - 两种 mode 都要读取 remote 本机源码枚举导出名；`dts` 不是不可信 manifest 的安全边界，只对可信来源开启；
 - 远程源码不可访问（`devFsRoot: false` 或跨机器）：降级生成 `any` 声明（默认/具名/副作用导入均可解析，无精确类型）；`dts: false` 完全关闭；
-- React expose（.tsx/.ts）与 Vue 共用同一套生成，另支持在宿主 tsconfig 配 `paths` 后获得源码级精确类型（见 [API 参考 · React 的 dev 类型](../reference/api.md#react-的-dev-类型)）。
+- React expose（.tsx/.ts）与 Vue 共用同一套生成，另支持在宿主 tsconfig 配 `paths` 后获得源码级精确类型（见 [API 参考 · React 的 dev 类型](../reference/api.md#react-的-dev-类型双轨)）。
 
 ## 远程页面里的运行时导入
 

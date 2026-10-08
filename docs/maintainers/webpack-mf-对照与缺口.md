@@ -20,7 +20,7 @@
 | 加载恢复与诊断 | 支持 | 超时、重试、熔断、显式 fallback、错误码；静态依赖失败的恢复边界见 §三 |
 | 工程辅助 | 支持 | dts、manifest 预载、setup/onSession、CLI 检查与 Demo |
 
-入门步骤见 [中文 README](../../README.md)、[英文 README](../../README.en.md)；公开签名及默认值见 [中文 API 手册](../API.md)、[English API reference](../API.en.md)。版本隔离与恢复例子见 [examples/demos/react-versions](../../examples/demos/react-versions/README.md)。
+入门步骤见 [中文 README](../../README.md)、[英文 README](../../README.en.md)；公开签名及默认值见 [中文 API 参考](../zh/reference/api.md)、[English API reference](../en/reference/api.md)。版本隔离与恢复例子见 [examples/demos/react-versions](../../examples/demos/react-versions/README.md)。
 
 ## 二、当前不提供的能力
 
@@ -61,4 +61,3 @@
 - Vite 工程按 [README](../../README.md) 配置 remotes/exposes/shared，不照搬已经删除的 webpack 配置字段。
 - 从 iframe/其他微前端方案迁移：先选择模块/页面加载或子应用桥接；需要地址恢复时显式开启 URL 同步。
 - React 18/19 同页运行：先运行 [版本隔离 Demo](../../examples/demos/react-versions/README.md)，再按实际应用依赖图配置作用域。
-- 5.x → 6.0.0 的入口迁移（`/bridge`、`/bridge/router/*` 删除，功能并入 `/vue`、`/react`）逐条对照见[迁移指南](../zh/migration.md)。

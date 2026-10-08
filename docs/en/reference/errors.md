@@ -27,7 +27,7 @@
 
 | Code | Symptom | Cause | Fix |
 |---|---|---|---|
-| `DEV-001` | Dev startup/first load reports a remote manifest fetch failure | The remote dev server is unreachable (not started / wrong port / network) | Confirm the remote dev server is running and `remotes[*].dev` is correct; check with `npx fulgurjs doctor --base http://localhost:<port> --apps <subdir> --dev` |
+| `DEV-001` | Dev startup/first load reports a remote manifest fetch failure | The remote dev server is unreachable (not started / wrong port / network) | Confirm the remote dev server is running and `remotes[*].dev` is correct; check with `npx @fulgurjs/federation doctor --base http://localhost:<port> --apps <subdir> --dev` |
 | `DEV-002` | Dev says the remote manifest is empty or of unrecognized format | The other side is not a fulgurjs plugin artifact, or the plugin version is so old the manifest shape is unrecognized | Install/upgrade @fulgurjs/federation on the other side and restart its dev server; verify you are hitting the `@fulgurjs-manifest.json` endpoint |
 | `DEV-004` | Dev pre-bundling warning: a known UMD-only dependency is not in optimizeDeps.include | A UMD/CJS dependency was moved out of pre-bundling, risking the pre-bundle inlining a local vue | Put that dependency back into `optimizeDeps.include` (the plugin externalizes shared keys automatically) |
 | `DEV-005` | Dev says the remotes dev URL port has no listener | No process is listening on the port of `remotes[*].dev` (the remote is not started, or its port changed without syncing) | Start the remote dev server; sync the host remotes dev addresses per the [port change checklist](../guide/examples.md#the-fixed-checklist-for-changing-ports) |
@@ -76,11 +76,11 @@
 
 | Code | Symptom | Cause | Fix |
 |---|---|---|---|
-| `CC-001` | Remote initialization throws a three-part error (got / expected / example) | A required field requested by `requireAppContext(...)` is missing from the AppContext | The host bridge calls `provideAppContext({...})` with the missing field before loading the remote (see [API reference · AppContext](api.md#2-appcontext--passing-values-and-method-references-across-apps)) |
+| `CC-001` | Remote initialization throws a three-part error (got / expected / example) | A required field requested by `requireAppContext(...)` is missing from the AppContext | The host bridge calls `provideAppContext({...})` with the missing field before loading the remote (see [API reference · AppContext](api.md#context)) |
 | `CC-002` | The remote page reports the runtime singleton unavailable | The remote page was opened standalone (not loaded through the host federation) — no page-level runtime or context | Load the remote page through the host federation; timing contract: bridge → remote setup → page module |
 
 ## Where to start troubleshooting
 
 - By symptom (ignore the codes): [troubleshooting index](../troubleshooting/README.md)
-- For config-stage errors run `npx fulgurjs explain` first; for deployment-side problems run `npx fulgurjs doctor` first
+- For config-stage errors run `npx @fulgurjs/federation explain` first; for deployment-side problems run `npx @fulgurjs/federation doctor` first
 - Runtime diagnostics: `window.__FULGURJS_INFO__` (per-remote status and setup stage), `window.__FULGURJS_SCOPE__` (shared negotiation results), the `fulgurjs:error` event

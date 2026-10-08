@@ -1,6 +1,6 @@
 # 快速上手：安装、新建工程与已有项目接入
 
-> 对应 6.0.0。所有示例的 import 均为 6.0.0 统一入口：Vite 配置用包根 `@fulgurjs/federation`；Vue 应用用 `@fulgurjs/federation/vue`；React 应用用 `@fulgurjs/federation/react`；框架无关模块用 `@fulgurjs/federation/runtime`。
+> 应用代码只从四个公开入口导入：Vite 配置用包根 `@fulgurjs/federation`；Vue 应用用 `@fulgurjs/federation/vue`；React 应用用 `@fulgurjs/federation/react`；框架无关模块用 `@fulgurjs/federation/runtime`。
 
 ## 安装
 
@@ -16,7 +16,12 @@ pnpm add -D @fulgurjs/federation
 - Node.js：插件本体要求 ≥ 18；但 Vite 7/8 要求 **20.19+**（或 22.12+），按所用 Vite 版本选 Node。
 - 浏览器基线 Chrome 108+（需要 ESM、动态导入、顶层 await）。
 - 构建目标 `es2022` 或更新（低于该目标报 `BLD-002`）。
-- 普通 Vue 项目装 Vue 即可；普通 React 项目装 react + react-dom 即可。Vue/React 项目**不需要**安装对方框架或任何路由库；路由库仅在实际使用 URL 同步时由相应端按需引用（类型层面导入，运行时缺依赖只在真正调用路由同步 API 时报错）。
+- 普通 Vue 项目装 Vue 即可；普通 React 项目装 react + react-dom 即可。Vue/React 项目**不需要**安装对方框架或任何路由库；例外是**桥接宿主**（把另一框架的完整子应用嵌入本应用时，必须同时安装两个框架，见[子应用桥接](app-bridge.md#双框架安装合同桥接宿主必须)）。路由库仅在实际使用 URL 同步时由相应端按需引用（类型层面导入，运行时缺依赖只在真正调用路由同步 API 时报错）。
+
+包管理器提示（pnpm 用户）：
+
+- pnpm ≥ 11 默认开启 `minimumReleaseAge: 1440`（24 小时供应链冷却）：刚发布的版本在 24 小时内不会被解析，`pnpm add` 会装到上一个满足冷却期的版本。刚发版就要用最新版时，在 `pnpm-workspace.yaml` 加 `minimumReleaseAgeExclude: ['@fulgurjs/federation@<版本>']`（五模板即此做法），或临时 `pnpm config set minimum-release-age 0`。
+- pnpm 12 遇到未批准的构建脚本（esbuild 等）会把 `allowBuilds: { esbuild: set this to true or false }` 占位提示写进 `pnpm-workspace.yaml` 并以非零码结束安装。把值改成 `true` 后重跑安装即可。
 
 ## 新建工程：`fulgurjs create`
 
@@ -62,7 +67,7 @@ pnpm dev        # 统一启动器：远程先启动并探活，再启动宿主�
 
 ## 已有项目接入
 
-已有项目不需要重搭工程，只做三件事：装插件 → 写 `fulgurjs.config.ts` → `vite.config.ts` 注册插件。可以先用 `fulgurjs init` 生成起步配置（推荐），也可以直接手写。
+已有项目不需要重搭工程，只做三件事：装插件 → 写 `fulgurjs.config.ts` → `vite.config.ts` 注册插件。可以先用 `fulgurjs init` 生成起步配置（推荐），也可以直接手写。CLI 统一用 `npx @fulgurjs/federation <命令>` 调用（工程尚未安装依赖时也有效；已安装后 `npx fulgurjs` 亦可）。
 
 ### 用 `fulgurjs init` 生成起步配置
 
@@ -70,28 +75,27 @@ pnpm dev        # 统一启动器：远程先启动并探活，再启动宿主�
 
 ```bash
 # 自动从 package.json 判断框架（vue/react 依赖可明确时），生成双角色最小配置
-npx fulgurjs init
+npx @fulgurjs/federation init
 
 # 判断不了（两框架并存或都没有）时显式指定
-npx fulgurjs init --framework react --role consumer
+npx @fulgurjs/federation init --framework react --role consumer
 
 # 角色可选：consumer（纯消费）/ provider（纯提供）/ dual（双角色，默认）
-npx fulgurjs init --framework vue --role provider
+npx @fulgurjs/federation init --framework vue --role provider
 
 # 输出到其他路径 / 覆盖已有模板
-npx fulgurjs init --out config/fulgurjs.config.ts
-npx fulgurjs init --force
+npx @fulgurjs/federation init --out config/fulgurjs.config.ts
+npx @fulgurjs/federation init --force
 ```
 
 - `init` 只生成**最小有效**配置起步模板：shared 只含框架本体（不硬塞 pinia/vue-router/业务页）；按角色决定是否含 `remotes`/`exposes` 示例；纯消费方附 `hostPages` 具名导出的注释示例（不用逐页接入就删掉）。
 - 已存在的同名文件拒绝覆盖（`--force` 放开）。
 - 生成后打印四步后续动作（编辑配置 → vite.config.ts 两行接入 → `explain` 核对 → 部署后 `doctor`）。
-- 旧写法 `--template <路径>` 仍接受但按 `--out` 解释并提示更名（`--template` 在 `create` 里是模板名，同名不同义，6.0.0 收敛为 `--out`）。
 
 校验已有配置并输出接入块：
 
 ```bash
-npx fulgurjs init --config ./fulgurjs.config.ts
+npx @fulgurjs/federation init --config ./fulgurjs.config.ts
 ```
 
 ### 手工接入（三个文件）
@@ -161,11 +165,27 @@ const { formatMoney } = await loadRemote<typeof import('remote-utils/money')>('r
 
 > `loadRemote` 的类型参数只是编译期辅助；运行时模块 namespace 以远程实际导出为准。dev 下开了 `dts`（默认开）的宿主可对 `remote-a/X` 形态的导入直接获得类型，见[组件与模块加载 · 开发类型](components-and-modules.md#开发类型直连)。
 
+## 从其他微前端方案迁入（概念映射）
+
+从 qiankun 类方案迁入时的 API 级概念对应（通用技术结论）：
+
+| 旧方案概念 | @fulgurjs/federation 对应 |
+|---|---|
+| 主应用 registerMicroApps | 宿主 `federation({ remotes })` |
+| 子应用 entry（HTML） | remote entry（dev: `@fulgurjs-entry.js` 中间件 / prod: `fulgurjs-remoteEntry.js`） |
+| 子应用生命周期 mount/unmount | 页面级 exposes（组件即入口，无生命周期样板）；启动期初始化 = 远程 `federation({ setup })`（setup/onSession）；整应用嵌入 = 桥接契约的 `mount`/`unmount`（`defineBridgeApp`，见[子应用桥接](app-bridge.md)） |
+| window 隔离/沙箱 | 无沙箱：同 realm 直渲染（结论与边界见[沙箱边界审计](../../maintainers/沙箱边界审计.md)） |
+| props 传递 | 组件 props（组件级）；`appProps`（桥接级，挂载快照语义）；AppContext（跨应用上下文） |
+| 公共依赖 externals | `shared`（singleton 协商，"已加载优先"） |
+| qiankun 运行时 + single-spa | `@fulgurjs/federation/runtime`（运行时内核 20KB 级，无 single-spa） |
+
+与乾坤不同：这里**没有** `unmount` 强制清理 window 级资源的机制——组件级卸载的全局副作用要自己清理，清单见[远程页面接入 · 页面卸载清理清单](remote-pages.md#页面卸载清理清单)。
+
 ## 核对与下一步
 
 ```bash
-npx fulgurjs explain          # 纯本地解释：角色/remotes/exposes/shared/加载链
-npx fulgurjs doctor --base http://localhost:5174 --apps remote-a --dev   # dev 容器体检
+npx @fulgurjs/federation explain          # 纯本地解释：角色/remotes/exposes/shared/加载链
+npx @fulgurjs/federation doctor --base http://localhost:5174 --apps remote-a --dev   # dev 容器体检
 ```
 
 - 加载普通组件/模块**不需要**页面表、桥接配置或登录初始化——按需再读[组件与模块加载](components-and-modules.md)。

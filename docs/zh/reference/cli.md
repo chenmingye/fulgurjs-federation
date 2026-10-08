@@ -58,8 +58,8 @@ fulgurjs create <模板> [--dir <路径>] [--no-install] [--force] [--json]
 
 ```bash
 # 成功：创建并安装
-$ npx fulgurjs create vue-vue --dir my-federation
-[fulgurjs:create] 已创建完整工程 /path/my-federation（模板 vue-vue，插件依赖 ^6.0.0）
+$ npx @fulgurjs/federation create vue-vue --dir my-federation
+[fulgurjs:create] 已创建完整工程 /path/my-federation（模板 vue-vue，插件依赖 6.1.8）
 后续步骤：
   cd "/path/my-federation"
   pnpm dev                # 按启动顺序拉起全部应用，失败会整组退出并说明原因
@@ -69,7 +69,7 @@ $ npx fulgurjs create vue-vue --dir my-federation
 ...
 
 # 失败：非空目录
-$ npx fulgurjs create vue-vue --dir existing
+$ npx @fulgurjs/federation create vue-vue --dir existing
 [fulgurjs:create] 目标目录非空，拒绝覆盖：/path/existing
   根因：静默合并可能掩盖与你已有文件的冲突。
   修法：换一个目录（--dir），或加 --force 复用目录（只补缺失文件；同名冲突逐项列出并保留你的版本，绝不改写）
@@ -93,7 +93,7 @@ fulgurjs init --config <path>
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--out <路径>` | `./fulgurjs.config.ts` | 输出路径。旧 `--template <路径>` 写法仍接受但按 `--out` 解释并提示更名（`--template` 在 create 里是模板名——同名不同义，6.0.0 收敛） |
+| `--out <路径>` | `./fulgurjs.config.ts` | 输出路径 |
 | `--framework vue\|react` | 从 package.json 依赖判断 | 两框架并存或都没有时不猜：TTY 交互询问；非 TTY 报错要求显式指定（退出码 2） |
 | `--role` | `dual` | `consumer` 纯消费方（生成 remotes 示例 + hostPages 注释）/ `provider` 纯提供方（生成 exposes 示例）/ `dual` 双角色（两者都生成） |
 | `--force` | 已存在拒绝覆盖 | 覆盖已存在的模板 |
@@ -112,7 +112,7 @@ fulgurjs init --config <path>
 
 ```bash
 # 成功：React 消费方起步配置
-$ npx fulgurjs init --framework react --role consumer
+$ npx @fulgurjs/federation init --framework react --role consumer
 [fulgurjs:init] 已生成 React 纯消费方起步模板 fulgurjs.config.ts
 后续步骤：
   1. 编辑 fulgurjs.config.ts：填入容器名/remotes/shared（默认导出直接是 federation() 选项）
@@ -120,12 +120,12 @@ $ npx fulgurjs init --framework react --role consumer
        import federation from '@fulgurjs/federation'
        import fulgurjsConfig from './fulgurjs.config'
        // plugins: [ ...原有插件, federation(fulgurjsConfig) ]
-  3. npx fulgurjs explain
-  4. 部署后：npx fulgurjs doctor --base <URL> --apps <部署子目录>
+  3. npx @fulgurjs/federation explain
+  4. 部署后：npx @fulgurjs/federation doctor --base <URL> --apps <部署子目录>
 ...
 
 # 失败：非 TTY 无法判断框架
-$ npx fulgurjs init
+$ npx @fulgurjs/federation init
 [fulgurjs:init] 无法从 package.json 判断框架（vue/react 依赖缺失或并存）。
   修法：显式指定 fulgurjs init --framework vue|react（--role consumer|provider|dual 可选，默认 dual）
 （退出码 2）
@@ -158,12 +158,12 @@ fulgurjs explain [--config <path>] [--json]
 
 ### 退出码
 
-`0` 成功；`2` 配置加载/校验失败。传已删除的 `--app`（5.0.0 聚合选择器）报中文迁移错误（退出码 2）。
+`0` 成功；`2` 配置加载/校验失败。传已废弃的 `--app` 报中文迁移错误（退出码 2）。
 
 ### 示例
 
 ```bash
-$ npx fulgurjs explain
+$ npx @fulgurjs/federation explain
 [fulgurjs:explain] demo-host（宿主+远程（双角色），单项目配置，目录 /path/demo-host）
   消费远程 remote-a → dev http://localhost:5174/remote-a / prod /remote-a
   exposes（1）：./api
@@ -207,7 +207,7 @@ manifest 来源优先级：**`--manifest`（可多次、文件路径或 URL）> 
 
 ```bash
 # 成功
-$ npx fulgurjs check-pages --site http://your-site
+$ npx @fulgurjs/federation check-pages --site http://your-site
 [fulgurjs:check-pages] remote-a：manifest 来源 https://your-site/remote-a/fulgurjs-manifest.json
   页面 /remote-a/home → pages/remote-a/home  ✓
 ...
@@ -268,7 +268,7 @@ fulgurjs doctor --base <URL> --apps <a,b,c> [--entry <文件名>] [--no-entry]
 
 ```bash
 # 成功（无 FAIL）
-$ npx fulgurjs doctor --base http://your-site --apps my-app,remote-a
+$ npx @fulgurjs/federation doctor --base http://your-site --apps my-app,remote-a
 [fulgurjs:doctor] PASS [remote-a] fulgurjs-remoteEntry.js — 200, Cache-Control: no-cache, JS 形态
 ...
 [fulgurjs:doctor] 汇总：18 PASS / 1 WARN / 0 FAIL
@@ -281,7 +281,7 @@ $ npx fulgurjs doctor --base http://your-site --apps my-app,remote-a
   修法：nginx 改为 Cache-Control "no-cache"（协商缓存）；带 hash 的 assets 才配长缓存
 
 # 用法错误（退出码 2）
-$ npx fulgurjs doctor --base http://your-site
+$ npx @fulgurjs/federation doctor --base http://your-site
 [fulgurjs:doctor] 缺少 --apps <子目录,...>——doctor 不猜默认应用名。
   修法：--apps 传站点根下的部署子目录（...部署在站点根写 "."；多 origin 直接写完整 URL）...
 ```
@@ -323,7 +323,7 @@ fulgurjs port <应用> <新端口> [--write]
 
 ```bash
 # 预览（默认）
-$ npx fulgurjs port vue-remote 6213
+$ npx @fulgurjs/federation port vue-remote 6213
 [fulgurjs:port] 计划：vue-remote（目录 remote）端口 5213 → 6213
   改写 remote/package.json（2 处）
   改写 scripts/dev.config.json（1 处）
@@ -333,7 +333,7 @@ $ npx fulgurjs port vue-remote 6213
 （退出码 0）
 
 # 写入
-$ npx fulgurjs port vue-remote 6213 --write
+$ npx @fulgurjs/federation port vue-remote 6213 --write
 [fulgurjs:port] 已写入 4 个文件（vue-remote 5213 → 6213）。回退：git checkout <file>
 ```
 

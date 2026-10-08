@@ -51,7 +51,7 @@ import { remoteComponent, useLoadRemote, RemoteErrorBoundary } from '@fulgurjs/f
 import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 ```
 
-## 入口一览（6.0.0）
+## 导入入口
 
 | 使用位置 | 入口 |
 |---|---|
@@ -60,7 +60,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 | React 应用代码（组件/页面/桥接/路由同步） | `@fulgurjs/federation/react` |
 | 框架无关浏览器模块 | `@fulgurjs/federation/runtime` |
 
-6.0.0 起旧入口 `/bridge`、`/bridge/vue`、`/bridge/react`、`/bridge/router/{vue,react}` 已移除，功能并入 `/vue` 与 `/react`；迁移对照见 [迁移指南](docs/zh/migration.md)。
+记忆口诀：应用跑什么框架，就从哪个框架入口导入；两者都要用的纯 TS 模块从 `/runtime`；Vite 配置从包根。
 
 ## 能力地图
 

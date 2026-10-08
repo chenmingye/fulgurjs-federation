@@ -4,7 +4,7 @@
 
 ## 五个可复制模板（`examples/templates/`）
 
-全部使用 npm registry 正式包 `@fulgurjs/federation@6.0.0`（精确版本 + pnpm 锁文件），不依赖本仓库源码。每个模板目录是完整 pnpm workspace，**必须整目录复制/创建**。
+全部使用 npm registry 正式包 `@fulgurjs/federation`（精确版本 + pnpm 锁文件，版本见各模板 package.json），不依赖本仓库源码。每个模板目录是完整 pnpm workspace，**必须整目录复制/创建**。
 
 | 模板 | 组合 | 演示能力 |
 |---|---|---|

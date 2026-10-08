@@ -1,12 +1,12 @@
 # English Documentation Index
 
-> Corresponds to @fulgurjs/federation **6.0.0**. Application code imports from exactly four public entries: the package root (Vite plugin), `@fulgurjs/federation/vue`, `@fulgurjs/federation/react`, and `@fulgurjs/federation/runtime`. The old `/bridge*` entries were removed in 6.0.0 (see the [migration guide](migration.md)).
+> Application code imports from exactly four public entries: the package root (Vite plugin), `@fulgurjs/federation/vue`, `@fulgurjs/federation/react`, and `@fulgurjs/federation/runtime`.
 
 ## Recommended reading paths
 
 **First contact (build a project from scratch)**:
 
-1. [Getting started](guide/getting-started.md) — install, scaffold with `fulgurjs create`, run it
+1. [Getting started](guide/getting-started.md) — install, scaffold with `fulgurjs create`, run it (includes pnpm 11+ install notes)
 2. [Loading components and modules](guide/components-and-modules.md) — the most-used `remoteComponent` / `loadRemote`
 3. When something breaks, check the [troubleshooting index](troubleshooting/README.md); for option details see the [configuration reference](reference/configuration.md) and the [API reference](reference/api.md)
 
@@ -20,7 +20,7 @@
 
 1. [Sub app bridge](guide/app-bridge.md) — defineBridgeApp / createVueBridgeApp / createReactBridgeApp, the appProps snapshot, session switching
 2. When refresh/sharing must restore the sub app's internal pages: [URL sync](guide/url-sync.md)
-3. Before deploying, read the [deployment guide](guide/deployment.md) and run `fulgurjs doctor`
+3. Before deploying, read the [deployment guide](guide/deployment.md) and run `npx @fulgurjs/federation doctor`
 
 ## Directory
 
@@ -28,7 +28,7 @@
 
 | Document | Content |
 |---|---|
-| [Getting started](guide/getting-started.md) | Install, scaffold a new project with `create`, integrate existing projects with `init`/manual wiring (Vue/React/pure TS; consumer/provider/dual) |
+| [Getting started](guide/getting-started.md) | Install, scaffold a new project with `create`, integrate existing projects with `init`/manual wiring (Vue/React/pure TS; consumer/provider/dual), concept mapping from qiankun-style frameworks |
 | [Loading components and modules](guide/components-and-modules.md) | remoteComponent (Vue/React), useLoadRemote, RemoteErrorBoundary, loadRemote, dev-time type passthrough |
 | [Remote page integration](guide/remote-pages.md) | definePages / createHostPages / createReactHostPages, the `hostPages` named export, check-pages, and the boundary that business menus stay app-owned |
 | [Sub app bridge](guide/app-bridge.md) | defineBridgeApp, createVueBridgeApp/createReactBridgeApp, the sessionKey lifecycle, the appProps snapshot, mount/unmount/nesting |
@@ -52,12 +52,6 @@
 |---|---|
 | [Find problems by symptom](troubleshooting/README.md) | Remote loading failures/white screens/shared version conflicts/URL prefixes/cache/type fetching failures… |
 | [Supported scope and real limitations](troubleshooting/compatibility.md) | Vite 5.1+/6/7/8, React 18/19, Vue 3.2+, router library versions, cross-framework boundaries |
-
-### Migration
-
-| Document | Content |
-|---|---|
-| [6.0.0 migration guide](migration.md) | Old entry → new entry mapping table + before/after code; every breaking change from 5.x to 6.0.0 |
 
 ### Maintainers (../maintainers/, Chinese)
 

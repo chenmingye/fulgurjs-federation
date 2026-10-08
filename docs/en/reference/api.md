@@ -1,6 +1,6 @@
 # API reference
 
-> Corresponds to 6.0.0. Config default values, public entries, and types are verified against the repository source and the published package declarations; for version changes see the [CHANGELOG](../../../CHANGELOG.md). Application code imports only the four public entries and never depends on `/internal/*`. Terminology: bridge = "mounting a child app into a DOM container provided by the host"; scope = "a group of shared dependencies".
+> Config default values, public entries, and types are verified against the repository source and the published package declarations; for version changes see the [CHANGELOG](../../../CHANGELOG.md). Application code imports only the four public entries and never depends on `/internal/*`. Terminology: bridge = "mounting a child app into a DOM container provided by the host"; scope = "a group of shared dependencies".
 
 ## Entry overview
 
@@ -11,11 +11,9 @@
 | `@fulgurjs/federation/react` | **The single entry for React apps** | the same full runtime + context + pages (`createReactHostPages`) + `remoteComponent`/`useLoadRemote`/`RemoteErrorBoundary` + `defineBridgeApp` + `createReactBridgeApp` + `createReactBridgeNavigation` + `createReactBridgeRouter` + `remoteSchema` |
 | `@fulgurjs/federation/runtime` | **Framework-agnostic** | full runtime (loadRemote/loadShare/initSharing/registerRemotes/registerShare/registerRemote/registerPlugins/preloadRemote/getContainer/getLoadedShare/pinLoadedShare/parseSpec/getRuntime/shareScopeMap/unwrapDefault/version/clearSessionState) + context + pages (`definePages`/`validatePages`) + `remoteSchema`; zero Vue/React/router dependency |
 
-6.0.0 breaking changes: `/runtime` no longer exports Vue's `remoteComponent`/`createHostPages`/`defineBridgeApp` (moved to `/vue`); the old entries `/bridge`, `/bridge/vue`, `/bridge/react`, `/bridge/router/vue`, `/bridge/router/react` have been removed. For the per-item migration mapping see the [migration guide](../migration.md).
-
 <a id="runtime-api"></a>
 
-## 1. Runtime API (shared by all three entries)
+## Runtime API (shared by all three entries)
 
 Host pages and expose target files (remote pages) — **any file** statically imports directly — the plugin guarantees there is exactly one runtime instance per page (imports inside remote pages are automatically rewritten into a lazy singleton delegation):
 
@@ -35,7 +33,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | `loadShare` | `(name: string, opts?) => Promise<namespace>` | Shared module negotiation (highest version wins / already-loaded first / singleton convergence). opts: `{ requiredVersion?, singleton?, strictVersion?, shareKey?, shareScope?, fallback? }` |
 | `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | `remote/Expose` preloads just that expose's chunk + CSS; passing only the remote name preloads all its exposes. `preload` waits for CSS load/error; `prefetch` is low-priority and returns immediately. **Only prefetches resources, never executes modules**, and does not trigger setup/onSession; failure does not block the app (`MFU-007`) |
 | `getContainer` | `(name: string) => Promise<container>` | Fetches the remote container (triggers load + init), container protocol `{ name, init, get }`; **does not run setup/onSession**. Calling `container.get()` directly likewise guarantees no initialization — any load that needs the lifecycle goes through `loadRemote` |
-| `registerRemote` / `registerRemotes` | `(config \| list) => void` | Registers remotes at runtime (promise remote / dynamic addresses). `RemoteConfig`: `{ name, entry, promise?, shareScope?, timeout?, retries?, fallback?, breaker? }` (the old type name RemoteInput remains as a deprecated alias). Validation: `timeout` a finite positive, `retries` an integer 0..10, `breaker.threshold/resetMs` finite positives — illegal values **throw at registration time**; on duplicate registration, entry/timeout/retries/breaker refresh to the latest config while breaker counters are preserved |
+| `registerRemote` / `registerRemotes` | `(config \| list) => void` | Registers remotes at runtime (promise remote / dynamic addresses). `RemoteConfig`: `{ name, entry, promise?, shareScope?, timeout?, retries?, fallback?, breaker? }`. Validation: `timeout` a finite positive, `retries` an integer 0..10, `breaker.threshold/resetMs` finite positives — illegal values **throw at registration time**; on duplicate registration, entry/timeout/retries/breaker refresh to the latest config while breaker counters are preserved |
 | `registerShare` | `(scope, name, version, get, opts?) => void` | Manually registers a shared module (normally done automatically by the init module) |
 | `initSharing` | `(scopeName?) => ShareScopeMap` | Initializes the shared scope (normally done automatically by the init module) |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | Registers runtime plugins (below); the boundary of changing policy after the app runs is described under "synchronous vs asynchronous arbitration" |
@@ -108,7 +106,7 @@ export default {
 
 <a id="context"></a>
 
-## 2. AppContext — passing values and method references across apps
+## AppContext — passing values and method references across apps
 
 The first-class channel for the host to pass values to child apps and for child apps to register methods back to the host (with types and an error contract) — no more ad-hoc bare `window.*` hooks.
 
@@ -179,7 +177,7 @@ Method module conventions: export pure functions/service objects (no framework c
 
 <a id="pages-api"></a>
 
-## 3. `definePages` / `validatePages` / `remoteSchema` — page route table
+## `definePages` / `validatePages` / `remoteSchema` — page route table
 
 The host hands it the "URL path → remote exposes key" mapping for validation, so silent conflicts of parameterized routes fail at startup instead of loading the wrong component at runtime:
 
@@ -208,9 +206,9 @@ export const PAGES = definePages(
 - **`remoteSchema`**: the remote exposes probe the plugin fills in automatically during dev; business code only forwards it to `schema`.
 - Same-subpath types: `PageRouteLike` (the route entry shape), `PagesOptions` (validation options, with `deriveSpec`/`remotes`/`schema`/`strict`), `PageViolation`, `RemoteSchemaEntry`.
 
-## 4. `createHostPages` (Vue) / `createReactHostPages` (React) — host page adapters
+## `createHostPages` (Vue) / `createReactHostPages` (React) — host page adapters
 
-**Import location**: `createHostPages` from `@fulgurjs/federation/vue` (no longer exported from `/runtime` as of 6.0.0); `createReactHostPages` from `@fulgurjs/federation/react`. For the full signature, options, returned members, and behavior contract see [remote page integration](../guide/remote-pages.md#page-adapters) (Vue and React data-item semantics are identical; React display items `fallback`/`error`/`retries`/`timeout` match the React `remoteComponent`, plus `beforeLoad`).
+**Import location**: `createHostPages` from `@fulgurjs/federation/vue`; `createReactHostPages` from `@fulgurjs/federation/react`. For the full signature, options, returned members, and behavior contract see [remote page integration](../guide/remote-pages.md#page-adapters) (Vue and React data-item semantics are identical; React display items `fallback`/`error`/`retries`/`timeout` match the React `remoteComponent`, plus `beforeLoad`).
 
 Call timing and lifecycle notes (identical on both ends):
 
@@ -221,7 +219,7 @@ Call timing and lifecycle notes (identical on both ends):
 - The React side provides no `keepAliveNames` (no keep-alive promise); routing is not a runtime dependency of the plugin — the example uses React Router 7 (`path` declared in the route table, `element` rendering the `component(spec)` output; parameterized routes pass params to remote page props via `useParams`/`useSearchParams`);
 - Cross-framework Context sharing: host and remote consumers get the same Context object through **the same expose instance** (the remote exposes `'./theme-context'` exporting a `createContext` instance; the host fetches it with `useLoadRemote` as the Provider, and the remote component reads the host's value via `useContext`); the plugin does not auto-bridge arbitrary React Contexts — the object must be shared explicitly.
 
-## 5. `remoteComponent` — direct rendering of remote components
+## `remoteComponent` — direct rendering of remote components
 
 ### Vue version (`@fulgurjs/federation/vue`)
 
@@ -294,7 +292,7 @@ A standalone page-level fallback boundary. Props: `children`, `fallback` (a node
 
 <a id="setup-on-session"></a>
 
-## 6. `federation({ setup })` — remote initialization lifecycle (setup/onSession)
+## `federation({ setup })` — remote initialization lifecycle (setup/onSession)
 
 ```ts
 // Remote vite.config.ts / fulgurjs.config.ts
@@ -356,9 +354,9 @@ Fixed contract:
 
 <a id="bridge-api"></a>
 
-## 7. Bridge API — `defineBridgeApp` / `createVueBridgeApp` / `createReactBridgeApp`
+## Bridge API — `defineBridgeApp` / `createVueBridgeApp` / `createReactBridgeApp`
 
-**Import locations (6.0.0)**: `defineBridgeApp` is dual-exported under the same name from `/vue` and `/react` (no longer from `/runtime`); `createVueBridgeApp` from `/vue`, `createReactBridgeApp` from `/react`.
+**Import locations**: `defineBridgeApp` is dual-exported under the same name from `/vue` and `/react`; `createVueBridgeApp` from `/vue`, `createReactBridgeApp` from `/react`.
 
 **Product scope**: bidirectional embedding with site-level mount/unmount — a Vue 3 host embedding a React 18/19 child app, a React host embedding a Vue 3 child app. For sub app internal routes synced with the host URL see [section 8](#url-sync-api) — explicit opt-in, off by default. Component-level interconversion, Angular, SSR/RSC, JS sandbox, and CSS isolation are outside the supported surface (see [supported scope](../troubleshooting/compatibility.md)).
 
@@ -419,9 +417,9 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 <a id="url-sync-api"></a>
 
-## 8. Bridge URL sync API
+## Bridge URL sync API
 
-**Import locations (6.0.0)**: `createVueBridgeNavigation`/`connectVueBridgeRouter` from `/vue`; `createReactBridgeNavigation`/`createReactBridgeRouter` from `/react`. The old `/bridge/router/*` have been removed. Router libraries are optional peers (vue-router / react-router-dom installed by the consumer; a missing React-side dependency errors clearly only when `createReactBridgeRouter` is actually called).
+**Import locations**: `createVueBridgeNavigation`/`connectVueBridgeRouter` from `/vue`; `createReactBridgeNavigation`/`createReactBridgeRouter` from `/react`. Router libraries are optional peers (vue-router / react-router-dom installed by the consumer; a missing React-side dependency errors clearly only when `createReactBridgeRouter` is actually called).
 
 The bridge defaults to memory routing; URL sync makes the **host URL express the sub app's internal location** (refresh lands directly, bookmarks/sharing, back/forward). Explicit opt-in, off by default. **Architecture conventions**: the host Router is the only writer of browser history; the sub app uses a controlled memory router; the two ends exchange location through an independent routing channel; within the same instance, path/search/hash changes **do not remount the root, do not rebuild the store, do not reload the remote**.
 
@@ -432,7 +430,7 @@ The bridge defaults to memory routing; URL sync makes the **host URL express the
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue host navigation port. Vue Router fullPath is already the logical path; no deployment base needed. Vue Router 4, history or hash mode |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React host navigation port. **Data router only** (`createBrowserRouter`/`createHashRouter` + `RouterProvider`); declarative mode (BrowserRouter) has no cancellation semantics and is not supported. React Router ≥ 6.11. `canNavigate` is optional and only an early rejection; the port observes the real blocker state — wait for `reset()` to resolve as cancelled and for the actual location to commit after `proceed()`; success is never judged solely by the settle of navigate's Promise |
 | `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue child app wiring for the controlled memory router; `await …ready` settles before `app.use(router)` (order must not be reversed) |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React child app: returns a `RouterProvider` element used directly as the contract product. `routerReady: Promise<Router>` is the wired memory-router readiness contract (since 6.0.0): the fast path (module-level warmup already settled, the common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Introspect via `await routerReady` instead of assuming `element.props.router` exists synchronously. `dispose()` tears down the wiring idempotently (auto-invoked by the signal); late tasks after dispose never write state |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React child app: returns a `RouterProvider` element used directly as the contract product. `routerReady: Promise<Router>` is the wired memory-router readiness contract: the fast path (module-level warmup already settled, the common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Introspect via `await routerReady` instead of assuming `element.props.router` exists synchronously. `dispose()` tears down the wiring idempotently (auto-invoked by the signal); late tasks after dispose never write state |
 
 The channel parameter the host passes to the bridge component: `routing: BridgeHostRouting = { basePath: '/approval', navigation }`; after the child app contract's second parameter declares `{ routing: true }`, it receives the channel from `ctx.routing`. The wiring's third argument on both ends, `{ signal?: AbortSignal }`, defaults to empty; passing `ctx.signal` is recommended for automatic dispose — without it, the child app explicitly calls `dispose()`. A custom `BridgeHostNavigation.navigate(target, action, { signal })` should re-check the optional signal before an async commit and forbid late writes once aborted.
 
@@ -451,7 +449,7 @@ The channel parameter the host passes to the bridge component: `routing: BridgeH
 
 <a id="dev-types"></a>
 
-## 9. Dev types and remote source
+## Dev types and remote source
 
 ### Type generation (shared by Vue and React exposes)
 
@@ -477,7 +475,7 @@ Type generation supports string or array `extends` (later entries override earli
 
 <a id="project-side"></a>
 
-## 10. Optional project-side composition patterns: keep-alive, loading hints, preloading, and the diagnostics page
+## Optional project-side composition patterns: keep-alive, loading hints, preloading, and the diagnostics page
 
 This section records project-side composition patterns. The constants, pages, and diagnostics panel are implemented by the integrating project — they are not public APIs generated automatically after installing the plugin. `fulgurjs init` only generates the config starter template, not these project files; the plugin runtime is not involved at all. Configuration surface overview:
 
@@ -501,7 +499,7 @@ A page-level boolean switch: when on, navigating away from the page **does not d
 - Cache cap `max: 8` (Vue's native LRU; the least recently used page instance is destroyed beyond the cap);
 - Cache key = the sanitized page spec name (`Fulgurjs_<remote>_<expose key>`); the same route with different params (different fullPath) each occupies a cache entry;
 - **Why everything is off by default**: caching heavy components (complex tables/form designers) costs a lot of memory; enable explicitly page by page;
-- If an enabled page's component registers window-level listeners/timers/context back-registrations, it must follow the [unmount cleanup checklist](../migration.md#6-page-unmount-cleanup-checklist) (a kept-alive page only unmounts when actually evicted by the LRU).
+- If an enabled page's component registers window-level listeners/timers/context back-registrations, it must follow the [page unmount cleanup checklist](../guide/remote-pages.md#page-unmount-cleanup-checklist) (a kept-alive page only unmounts when actually evicted by the LRU).
 
 ### 10.2 Page loading skeleton — built-in `loadingComponent` (no config item)
 

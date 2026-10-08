@@ -34,7 +34,7 @@
 | `examples/integrations/` | 大型公开集成，例如 Jeecg 自嵌套 |
 | `examples/portal/`、`examples/scripts/` | 展示门户与统一管理脚本 |
 | `examples/scenarios.json` | 场景目录、端口、启动顺序、包管理器和安装目录的统一登记表 |
-| `docs/README.md` | 文档中心总入口：zh/ guide+reference+troubleshooting、en/ 镜像、maintainers/（含 API 手册 zh/reference/api.md、错误码 zh/reference/errors.md、迁移 zh/migration.md） |
+| `docs/README.md` | 文档中心总入口：zh/ guide+reference+troubleshooting、en/ 镜像、maintainers/（含 API 手册 zh/reference/api.md 与错误码 zh/reference/errors.md） |
 | `.github/workflows/` | 实际 CI 与正式发布流程 |
 | `testbed/` | 本机私有验收目录（Git 忽略）：runs/ 为各轮验收现场，private-docs/ 为任务书/报告/私有规则 |
 
@@ -83,6 +83,7 @@ npm run test:examples
 - history 模式不应自行添加 `#/`，但业务合法的 hash、query、中文编码、深链刷新和前进后退必须保留。不能把“修掉意外 hash”写成“清除所有 hash”。
 - 新增/修改错误码同步源码、`diagnostics.ts` 中的 `CODE_REGISTRY`、中英文 API 错误码表。错误说明包含现象、原因和具体修法。
 - 确认不用的旧导出、无效配置与旧文档可清理；先查实现和引用，说明迁移影响，不凭名称删除当前能力或生成链。
+- **公开使用文档只描述当前推荐用法**：不维护历史 API 教程、旧入口迁移对照、"从旧版本升级"说明或历次任务流水账；版本变更事实记入 CHANGELOG，面向过去的说明随版本发布即清理。当前真实的兼容条件与限制必须保留并用普通语言解释。中英文文档描述同一套当前合同，不允许出现"英文过时，以中文为准"类声明。
 
 ## 6. 公开 Demo 与模板统一管理
 

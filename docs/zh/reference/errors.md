@@ -4,9 +4,8 @@
 >
 > 维护提示：新增/修改错误码必须三处同步——源码码表（`src/runtime/errors.ts` 的 MFU 段 / `src/context.ts` 的 CC 段）＋ 登记表 `CODE_REGISTRY`（`src/diagnostics.ts`）＋ 本表；`npm run build` 里的 `scripts/check-manual-codes.mjs` 做三方一致性校验（见[维护者 · 测试方法](../../maintainers/testing.md)）。
 
-### 6. 错误码总表
 
-#### CFG 配置期
+### CFG 配置期
 
 | 码 | 现象 | 原因 | 修法 |
 |---|---|---|---|
@@ -23,11 +22,11 @@
 | `CFG-011` | 配置期报「选项 xxx 已在 5.0.0 删除」并给迁移写法 | 传入了 webpack 兼容/无效选项：`remoteType`/`library`/`automaticAsyncBoundary`/`dataPrefetch`/`usedExports`/`ignoreUnusedSharedExports`（任何值含历史合法值都报） | 直接删除该字段：remoteEntry 恒为 ESM、TLA 异步边界恒开、tree-shaking 由打包器原生完成；预载用运行时 `preloadRemote()`（`/runtime` 导出） |
 | `CFG-012` | 配置期报「setup 必须是相对应用根目录的非空模块路径」或「exposes 键已由联邦 setup 入口保留」 | setup 为空/非字符串；或 exposes 占用内部保留键 `./__fulgurjs_setup__` | setup 写如 `'./src/fulgurjs/setup.ts'`；保留键改名为其他公开 expose，原文件路径配置到 `federation({ setup })` |
 
-#### DEV 开发期
+### DEV 开发期
 
 | 码 | 现象 | 原因 | 修法 |
 |---|---|---|---|
-| `DEV-001` | dev 启动/首次加载报远程 manifest 拉取失败 | remote dev server 不可达（未启动/端口错/网络） | 确认远程 dev server 已启动且 `remotes[*].dev` 地址正确；`npx fulgurjs doctor --base http://localhost:<端口> --apps <子目录> --dev` 体检 |
+| `DEV-001` | dev 启动/首次加载报远程 manifest 拉取失败 | remote dev server 不可达（未启动/端口错/网络） | 确认远程 dev server 已启动且 `remotes[*].dev` 地址正确；`npx @fulgurjs/federation doctor --base http://localhost:<端口> --apps <子目录> --dev` 体检 |
 | `DEV-002` | dev 提示 remote manifest 为空或格式不识别 | 对端不是 fulgurjs 插件产物，或插件版本过旧 manifest 形状不识别 | 对端安装/升级 @fulgurjs/federation 并重启其 dev server；核对访问的是 `@fulgurjs-manifest.json` 端点 |
 | `DEV-004` | dev 预构建警告：已知 UMD-only 依赖不在 optimizeDeps.include | UMD/CJS 依赖被移出预构建，存在预构建内联本地 vue 风险 | 把该依赖放回 `optimizeDeps.include`（插件自动外部化 shared 键） |
 | `DEV-005` | dev 提示 remotes dev URL 端口无监听 | `remotes[*].dev` 指向的端口没有进程监听（远程未启动或改了端口未同步） | 启动远程 dev server；按[改端口四处清单](../guide/examples.md#改端口的固定清单)同步宿主 remotes dev 地址 |
@@ -37,7 +36,7 @@
 | `DEV-011` | dev 启动提醒：非 loopback host + 通配 dev CORS | `devCorsOrigins` 缺省/`'*'` 且 host 暴露到局域网，联邦端点对任意来源放开 | 显式 `devCorsOrigins: '*'`（声明知情）或改来源 allowlist 数组 |
 | `DEV-012` | dev 启动提醒：非 loopback host + dev manifest 携带 fsRoot | dev manifest 含本机绝对路径（`fsRoot`），非 loopback 访问时本机路径外发 | `devFsRoot: false`（宿主 dts 降级 any 桩并提示）；`fsRoot` 永不进入 prod manifest |
 
-#### BLD 构建期
+### BLD 构建期
 
 | 码 | 现象 | 原因 | 修法 |
 |---|---|---|---|
@@ -46,7 +45,7 @@
 | `BLD-003` | 构建警告 expose 目标组件含必填 props | expose 的组件声明了无默认值的必填 props——宿主按 props 透传时可能渲染缺参 | 必填 props 给默认值，或在使用处保证始终传入 |
 | `BLD-006` | 构建报 output 数组形态下无法自动注入协商门面 chunk 隔离 | `build.rollupOptions.output` 是数组，插件无法自动加协商门面 chunk 隔离分支 | 手工在 output 各分支补齐插件提示的隔离规则 |
 
-#### MFU 运行时
+### MFU 运行时
 
 | 码 | 现象 | 原因 | 修法 |
 |---|---|---|---|
@@ -72,15 +71,15 @@
 | `MFU-032` | 桥接报非法导航 | 子应用导航目标越界自身前缀（`../`、跨前缀）、目标已含 basePath（重复前缀，宿主 URL 会叠加成 `/x/x/...`）、非法 `go` 参数、或失效通道的请求 | 子应用只导航自身 basePath 内的逻辑路径（不含 basePath，错误信息附去掉前缀后的目标）；go 参数用合法整数；通道作废后不再发起导航 |
 | `MFU-033` | 桥接报路由准备/同步失败（附目标链/cause，不静默回退 memory） | 守卫/加载器/端口执行异常拒绝、或连续内部 replace 超过 5 次（重定向环） | 修复子应用守卫/加载器异常；排查重定向环（子应用路由定义的循环重定向） |
 
-#### CC 跨应用上下文
+### CC 跨应用上下文
 
 | 码 | 现象 | 原因 | 修法 |
 |---|---|---|---|
-| `CC-001` | 远程初始化抛三段式错误（got / expected / example） | `requireAppContext(...)` 请求的必需字段在 AppContext 缺失 | 宿主桥在加载远程前 `provideAppContext({...})` 写入缺失字段（见[API 参考 · AppContext](api.md#2-appcontext--跨应用传值与方法引用)） |
+| `CC-001` | 远程初始化抛三段式错误（got / expected / example） | `requireAppContext(...)` 请求的必需字段在 AppContext 缺失 | 宿主桥在加载远程前 `provideAppContext({...})` 写入缺失字段（见[API 参考 · AppContext](api.md#context)） |
 | `CC-002` | 远程页报运行时单例不可用 | 远程页面被独立直开（未经宿主联邦加载）——没有页面级运行时与 context | 经宿主联邦加载远程页；时序契约 bridge → 远程 setup → 页面模块 |
 
 ## 排查入口
 
 - 按症状（不看码）：[排错目录](../troubleshooting/README.md)
-- 配置期错误先跑 `npx fulgurjs explain`；部署面问题先跑 `npx fulgurjs doctor`
+- 配置期错误先跑 `npx @fulgurjs/federation explain`；部署面问题先跑 `npx @fulgurjs/federation doctor`
 - 运行时诊断：`window.__FULGURJS_INFO__`（各 remote 状态与 setup 阶段）、`window.__FULGURJS_SCOPE__`（shared 协商结果）、`fulgurjs:error` 事件

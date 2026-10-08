@@ -51,7 +51,7 @@ import { remoteComponent, useLoadRemote, RemoteErrorBoundary } from '@fulgurjs/f
 import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 ```
 
-## Entries (6.0.0)
+## Import entries
 
 | Where | Entry |
 |---|---|
@@ -60,7 +60,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 | React app code (components/pages/bridge/router sync) | `@fulgurjs/federation/react` |
 | Framework-agnostic browser modules | `@fulgurjs/federation/runtime` |
 
-Since 6.0.0 the legacy entries `/bridge`, `/bridge/vue`, `/bridge/react` and `/bridge/router/{vue,react}` are removed; their features live in `/vue` and `/react`. See the [migration guide](docs/en/migration.md).
+Rule of thumb: import from the entry of the framework your app runs on; framework-agnostic TS modules from `/runtime`; Vite config from the package root.
 
 ## Capabilities
 

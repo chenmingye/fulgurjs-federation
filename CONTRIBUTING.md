@@ -27,12 +27,13 @@ pnpm test:prod  # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 
 这些不是建议，是 CI 与门禁会拦的红线：
 
-1. **新增/修改错误码必须三处同步**：源码码表（`src/runtime/errors.ts` 的 MFU 段 / `src/context.ts` 的 CC 段）＋ 登记表 `CODE_REGISTRY`（`src/diagnostics.ts`）＋ [API 手册「错误码总表」](docs/API.md#error-codes)。`npm run build` 里的 `scripts/check-manual-codes.mjs` 会做三方一致性校验，任一侧漏了直接构建失败。**不要绕过它**——它是防止文档与代码漂移的唯一防线。
+1. **新增/修改错误码必须三处同步**：源码码表（`src/runtime/errors.ts` 的 MFU 段 / `src/context.ts` 的 CC 段）＋ 登记表 `CODE_REGISTRY`（`src/diagnostics.ts`）＋ [错误码总表](docs/zh/reference/errors.md)。`npm run build` 里的 `scripts/check-manual-codes.mjs` 会做三方一致性校验，任一侧漏了直接构建失败。**不要绕过它**——它是防止文档与代码漂移的唯一防线。
 2. **错误文案必须是三段式**（现象 → 根因 → 修法），ERROR 级文案的 `cause` / `fix` 不允许为空（单测断言）。修法要具体到配置键 / 文件 / 命令。
 3. **runtime 体积红线**：`dist/runtime.js` gzip ≤ 10496B，`npm run build` 有 gzip 门禁。往浏览器运行时里加逻辑前，先说清体积影响。
-4. **文档同步**：README 是使用指南，`docs/API.md` 与 `docs/API.en.md` 是参数和执行规则手册。改了行为 / 配置项 / API / CLI 输出，必须同一轮同步受影响的使用指南、API 手册与相关 JSDoc；迁移指南涉及面向使用者的行为变化时同步。
-5. **测试**：行为改动必须补测试并跑通。单测 + `--project=dev` + `--project=fault` 都要过；prod e2e 需 NGINX，本地按 `e2e/scripts/prod-setup.sh` 起。
-6. **配置项新增**：按 API 手册的插件选项体例写（配置项名 / 类型 / 默认值 / 配置位置 + 开/关/自定义三态示例）。
+4. **文档同步**：README 是使用指南，[docs/zh/reference/](docs/zh/README.md)（配置/API/CLI/错误码）是参数和执行规则手册，docs/en/ 逐文件镜像。改了行为 / 配置项 / API / CLI 输出，必须同一轮同步受影响的使用指南、参考手册与相关 JSDoc。
+5. **公开使用文档只描述当前推荐用法**：不维护历史 API 教程、旧入口迁移对照或版本升级流水账；面向过去的说明随当前版本发布即清理（CHANGELOG 保留变更事实本身）。当前真实的兼容条件与限制必须保留并用普通语言解释。
+6. **测试**：行为改动必须补测试并跑通。单测 + `--project=dev` + `--project=fault` 都要过；prod e2e 需 NGINX，本地按 `e2e/scripts/prod-setup.sh` 起。
+7. **配置项新增**：按[配置参考](docs/zh/reference/configuration.md)的体例写（配置项名 / 类型 / 默认值 / 配置位置 + 开/关/自定义三态示例）。
 
 ## 提交与 PR
 
@@ -44,8 +45,8 @@ pnpm test:prod  # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 
 ## 调试建议
 
-- 配置类问题先跑 `npx fulgurjs doctor`（部署面体检）与 `npx fulgurjs explain`（查看有效配置），多数问题能直接定位。
-- 报错按错误码查 [API 手册「错误码总表」](docs/API.md#error-codes)，或看 [`docs/迁移指南.md`](docs/迁移指南.md) 的首次使用避坑清单。
+- 配置类问题先跑 `npx @fulgurjs/federation doctor`（部署面体检）与 `npx @fulgurjs/federation explain`（查看有效配置），多数问题能直接定位。
+- 报错按错误码查 [错误码总表](docs/zh/reference/errors.md)，按症状查[排错目录](docs/zh/troubleshooting/README.md)。
 - dev 下改了插件源码要重启 dev server（缓存自动清，但仍需重启进程）。
 
 ## 示例与模板目录

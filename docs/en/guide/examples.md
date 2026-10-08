@@ -4,7 +4,7 @@
 
 ## Five copyable templates (`examples/templates/`)
 
-All use the official npm registry package `@fulgurjs/federation@6.0.0` (exact version + pnpm lockfile) and do not depend on this repository's source code. Each template directory is a complete pnpm workspace and **must be copied/created as a whole directory**.
+All use the official npm registry package `@fulgurjs/federation` (exact version + pnpm lockfile; the version is pinned in each template's package.json) and do not depend on this repository's source code. Each template directory is a complete pnpm workspace and **must be copied/created as a whole directory**.
 
 | Template | Combination | Demonstrates |
 |---|---|---|

@@ -1,6 +1,6 @@
 # 双向桥接 URL 同步（examples/templates/showcase）
 
-`@fulgurjs/federation` 5.9.1「桥接 URL 同步」（`/bridge/router/*`，README §8.3）的双向旗舰演示：
+`@fulgurjs/federation` 桥接 URL 同步的双向旗舰演示（API 见[文档中心](../../../docs/README.md)）：
 两个方向的宿主 × 子应用各一套——
 
 - **vue-host（:5334）× react-remote（:5333）**：Vue Router 4 宿主 + `createReactBridgeRouter` React 子应用
@@ -87,9 +87,9 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 | `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | `react-host/src/pages/BridgeVuePage.tsx`（`<RemoteVueBridge routing={routing} appProps={appProps} />`） |
 | `createReactBridgeNavigation(router, { canNavigate?, basename? })`（仅 data router） | `@fulgurjs/federation/react` | `react-host/src/routing.ts`（`createBrowserRouter` 实例组装后初始化） |
 | `createReactBridgeRouter(routing, routes, { signal })` → `{ element }` 直接作为工厂返回值 | `@fulgurjs/federation/react` | `react-remote/src/bridge.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
-| `defineBridgeApp(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/runtime`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/bridge.ts`、`react-remote/src/bridge.tsx`（工厂内校验 `ctx?.routing`，`ctx.signal` 传入接线自动 dispose） |
-| `BridgeHostRouting`（`{ basePath, navigation }` 组件 prop，独立控制通道不进 appProps） | 类型面见 README §8.3 | `vue-host/src/routing.ts`、`react-host/src/routing.ts`（basePath 常量 `BRIDGE_BASE_PATH`） |
-| `BridgeChildRoute` / `BridgeLocation`（通道与位置契约） | `/bridge/router/*` | 由插件随 mount 第三参数注入子应用；两端仓库源码 `packages/plugin/src/bridge-router-core.ts` |
+| `defineBridgeApp(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/vue`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/bridge.ts`、`react-remote/src/bridge.tsx`（工厂内校验 `ctx?.routing`，`ctx.signal` 传入接线自动 dispose） |
+| `BridgeHostRouting`（`{ basePath, navigation }` 组件 prop，独立控制通道不进 appProps） | 类型面见 [API 参考](../../../docs/zh/reference/api.md) | `vue-host/src/routing.ts`、`react-host/src/routing.ts`（basePath 常量 `BRIDGE_BASE_PATH`） |
+| `BridgeChildRoute` / `BridgeLocation`（通道与位置契约） | `@fulgurjs/federation/vue`、`@fulgurjs/federation/react` | 由插件随 mount 第三参数注入子应用；两端仓库源码 `packages/plugin/src/bridge-router-core.ts` |
 
 ## 配置要点（复刻到其他工程时必读）
 

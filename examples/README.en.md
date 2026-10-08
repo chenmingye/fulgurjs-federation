@@ -41,9 +41,6 @@ node examples/scripts/stop-demo.mjs --scenario vue-basic
 
 Use repeated `--scenario` flags or `--all`. [scenarios.json](scenarios.json) defines project locations, ports, package managers and startup order. Templates use pnpm workspaces; feature demos use npm; Jeecg apps use their documented package manager. Install failures stop startup. Logs and process records are local under `examples/.run/`.
 
-## Directory migration
-
-Vue/React basic examples moved into `examples/templates/`. Bridge examples are the two cross-framework templates. The former `demo/bridge-router` shares its source with `templates/showcase`; other demos moved into `examples/demos/`, Jeecg into `examples/integrations/`, and the portal/scripts into `examples/portal/` and `examples/scripts/`. Plugin APIs and ports are unchanged.
 
 ## Examples in the npm package
 

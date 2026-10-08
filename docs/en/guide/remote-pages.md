@@ -1,6 +1,6 @@
 # Remote page integration (per-page pages)
 
-> Scenario: the host has a set of routes, and each route's content is a page component exposed by some remote app. Corresponds to the 6.0.0 entries: Vue imports `definePages`/`createHostPages`/`remoteSchema` from `@fulgurjs/federation/vue`; React imports `definePages`/`createReactHostPages`/`remoteSchema` from `@fulgurjs/federation/react`.
+> Scenario: the host has a set of routes, and each route's content is a page component exposed by some remote app. Import entries: Vue imports `definePages`/`createHostPages`/`remoteSchema` from `@fulgurjs/federation/vue`; React imports `definePages`/`createReactHostPages`/`remoteSchema` from `@fulgurjs/federation/react`.
 >
 > The boundary first: **per-page pages are an optional capability**. Loading ordinary components needs no page table; full sub app bridging also does not register internal pages — business menus and the business Router stay app-owned (see the end of this document).
 
@@ -145,10 +145,10 @@ export const hostPages = { pages, remotePrefixes }
 Then verify the page contract:
 
 ```bash
-npx fulgurjs check-pages --site https://your-site
+npx @fulgurjs/federation check-pages --site https://your-site
 # Or specify each remote's manifest source explicitly (repeatable):
-npx fulgurjs check-pages --manifest remote-a=./dist/remote-a/fulgurjs-manifest.json
-npx fulgurjs check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
+npx @fulgurjs/federation check-pages --manifest remote-a=./dist/remote-a/fulgurjs-manifest.json
+npx @fulgurjs/federation check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
 ```
 
 - What is checked: host page table ↔ remote manifest exposes; reports unknown remotes, mappings to unconsumed remotes, missing exposes, and route conflicts (R1–R5);
@@ -169,3 +169,28 @@ This boundary decides "do I need a page table":
 Decision rule: if the remote is a **collection of pages** (the host controls menus and routes one by one) → per-page pages; if the remote is a **complete app** (with its own navigation/router/store) → bridge it, and **do not register its internal pages** — under bridge mode `check-pages` is not a mandatory step.
 
 Complete runnable example: [examples/demos/pages-cli](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli) (Vue; covers definePages/createHostPages/remoteSchema/requireAppContext and all CLI commands).
+
+## Page unmount cleanup checklist
+
+Federation **component-level** unmounting does not automatically clean up window-level resources (unlike qiankun's forced `unmount` cleanup) — the resources below must be removed by the page component itself in `onUnmounted` (React: effect cleanup), otherwise leaving and returning re-registers / re-fires them:
+
+| Resource | How to clean it up |
+|---|---|
+| Reverse registrations via `getAppContext().events.<prefix>.xxx = fn` | Delete the property on unmount (compare the function reference, then delete) |
+| `window.addEventListener(...)` | Keep the function reference and `removeEventListener` on unmount |
+| `setInterval` / `setTimeout` | `clearInterval` / `clearTimeout` on unmount |
+| Other global keys you attached | Same: delete them explicitly |
+
+```ts
+import { onUnmounted } from 'vue'
+import { getAppContext } from '@fulgurjs/federation/vue'
+
+const onHostEvent = (e: unknown) => { /* ... */ }
+getAppContext().events!.bpm = { onHostEvent }
+onUnmounted(() => {
+  const events = getAppContext().events
+  if (events?.bpm?.onHostEvent === onHostEvent) delete events.bpm.onHostEvent
+})
+```
+
+> A lightweight reminder, not a plugin mechanism: the vast majority of pages only make data requests (which end naturally when the component is destroyed) and need no cleanup at all; pages with global side effects just walk through this checklist item by item. A full sub app mounted through the bridge relies on the contract's `unmount` for container-level cleanup; an error thrown from `unmount` permanently blocks that container (only a full page refresh recovers), so the child app's cleanup logic must be robust. Pages under `keepAlive` unmount only when actually evicted by the LRU.

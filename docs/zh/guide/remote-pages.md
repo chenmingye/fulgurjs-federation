@@ -1,6 +1,6 @@
 # 远程页面接入（逐页）
 
-> 场景：宿主有一批路由，每条路由的内容是某个远程应用 expose 的页面组件。对应 6.0.0 入口：Vue 从 `@fulgurjs/federation/vue` 导入 `definePages`/`createHostPages`/`remoteSchema`；React 从 `@fulgurjs/federation/react` 导入 `definePages`/`createReactHostPages`/`remoteSchema`。
+> 场景：宿主有一批路由，每条路由的内容是某个远程应用 expose 的页面组件。导入入口：Vue 从 `@fulgurjs/federation/vue` 导入 `definePages`/`createHostPages`/`remoteSchema`；React 从 `@fulgurjs/federation/react` 导入 `definePages`/`createReactHostPages`/`remoteSchema`。
 >
 > 边界先说清：**逐页接入是可选能力**。加载普通组件不需要页面表；完整子应用桥接也不逐页登记内部页面——业务菜单与业务 Router 归应用自己管理（见文末）。
 
@@ -141,10 +141,10 @@ export const hostPages = { pages, remotePrefixes }
 然后核对页面契约：
 
 ```bash
-npx fulgurjs check-pages --site https://your-site
+npx @fulgurjs/federation check-pages --site https://your-site
 # 或显式指定每个远程的 manifest 来源（可多次）：
-npx fulgurjs check-pages --manifest remote-a=./dist/remote-a/fulgurjs-manifest.json
-npx fulgurjs check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
+npx @fulgurjs/federation check-pages --manifest remote-a=./dist/remote-a/fulgurjs-manifest.json
+npx @fulgurjs/federation check-pages --manifest remote-a=https://cdn.example.com/remote-a/fulgurjs-manifest.json
 ```
 
 - 核对内容：宿主页面表 ↔ 远程 manifest exposes；报告未知 remote、映射到未消费远程、缺失 expose、路由冲突（R1–R5）；
@@ -165,3 +165,28 @@ npx fulgurjs check-pages --manifest remote-a=https://cdn.example.com/remote-a/fu
 判断口径：远程是一个**页面集合**（宿主要逐条控制菜单与路由）→ 逐页接入；远程是一个**完整应用**（自带导航/路由/store）→ 桥接，且**不逐页登记它的内部页面**——桥接模式下 `check-pages` 不是必经步骤。
 
 完整可运行示例：[examples/demos/pages-cli](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/demos/pages-cli)（Vue，覆盖 definePages/createHostPages/remoteSchema/requireAppContext 与全 CLI 命令）。
+
+## 页面卸载清理清单
+
+联邦**组件级**卸载不会自动清 window 级资源（这与乾坤 `unmount` 的强制清理不同）——以下资源必须在页面组件 `onUnmounted`（React 用 effect cleanup）里自行摘除，否则切走再切回会重复注册/重复触发：
+
+| 资源 | 清理方式 |
+|---|---|
+| `getAppContext().events.<前缀>.xxx = fn` 反向注册 | 卸载时删除该属性（比对函数引用后 delete） |
+| `window.addEventListener(...)` | 记住函数引用，卸载时 `removeEventListener` |
+| `setInterval` / `setTimeout` | 卸载时 `clearInterval` / `clearTimeout` |
+| 自挂的其他全局键 | 同理显式删除 |
+
+```ts
+import { onUnmounted } from 'vue'
+import { getAppContext } from '@fulgurjs/federation/vue'
+
+const onHostEvent = (e: unknown) => { /* ... */ }
+getAppContext().events!.bpm = { onHostEvent }
+onUnmounted(() => {
+  const events = getAppContext().events
+  if (events?.bpm?.onHostEvent === onHostEvent) delete events.bpm.onHostEvent
+})
+```
+
+> 轻量提醒而非插件机制：绝大多数页面只有数据请求（随组件销毁自然结束），无需任何清理；有全局副作用的页面按清单逐项过一遍即可。桥接挂载的完整子应用由契约 `unmount` 负责容器级清理；unmount 抛错会导致该容器被持久封锁（只能整页刷新），子应用清理逻辑务必健壮。开启 `keepAlive` 的页面只在真正被 LRU 淘汰时才 unmount。

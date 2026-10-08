@@ -1,6 +1,6 @@
 # API 参考
 
-> 对应 6.0.0。配置默认值、公开入口与类型以仓库源码及发布包声明核对；版本变更见 [CHANGELOG](../../../CHANGELOG.md)。应用代码只导入四个公开入口，不依赖 `/internal/*`。术语：桥接 =「把子应用挂到宿主提供的 DOM 容器」；作用域 =「共享依赖的分组」。
+> 配置默认值、公开入口与类型以仓库源码及发布包声明核对；版本变更见 [CHANGELOG](../../../CHANGELOG.md)。应用代码只导入四个公开入口，不依赖 `/internal/*`。术语：桥接 =「把子应用挂到宿主提供的 DOM 容器」；作用域 =「共享依赖的分组」。
 
 ## 入口总览
 
@@ -11,11 +11,9 @@
 | `@fulgurjs/federation/react` | **React 应用唯一入口** | 同一运行时全量 + context + pages（`createReactHostPages`）+ `remoteComponent`/`useLoadRemote`/`RemoteErrorBoundary` + `defineBridgeApp` + `createReactBridgeApp` + `createReactBridgeNavigation` + `createReactBridgeRouter` + `remoteSchema` |
 | `@fulgurjs/federation/runtime` | **框架无关** | 运行时全量（loadRemote/loadShare/initSharing/registerRemotes/registerShare/registerRemote/registerPlugins/preloadRemote/getContainer/getLoadedShare/pinLoadedShare/parseSpec/getRuntime/shareScopeMap/unwrapDefault/version/clearSessionState）+ context + pages（`definePages`/`validatePages`）+ `remoteSchema`；零 Vue/React/router 依赖 |
 
-6.0.0 破坏性变化：`/runtime` 不再导出 Vue 的 `remoteComponent`/`createHostPages`/`defineBridgeApp`（迁移到 `/vue`）；旧入口 `/bridge`、`/bridge/vue`、`/bridge/react`、`/bridge/router/vue`、`/bridge/router/react` 已删除。逐条迁移对照见[迁移指南](../migration.md)。
-
 <a id="runtime-api"></a>
 
-## 1. 运行时 API（三个入口通用）
+## 运行时 API（三个入口通用）
 
 宿主页面、exposes 目标文件（远程页面）**任何文件都直接静态导入**——插件自动保证同一页面只有一个运行时实例（远程页面里的导入会被自动改写为惰性单例委托）：
 
@@ -35,7 +33,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | `loadShare` | `(name: string, opts?) => Promise<命名空间>` | 共享模块协商（最高版本胜出/已加载优先/singleton 收敛）。opts：`{ requiredVersion?, singleton?, strictVersion?, shareKey?, shareScope?, fallback? }` |
 | `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | `remote/Expose` 只预载该 expose 的 chunk + CSS；仅传 remote 名则预载全部 exposes。`preload` 等待 CSS load/error；`prefetch` 低优先级并立即返回。**只预取资源不执行模块**，不触发 setup/onSession；失败不阻断业务（`MFU-007`） |
 | `getContainer` | `(name: string) => Promise<容器>` | 取远程容器（触发加载 + init），容器协议 `{ name, init, get }`；**不执行 setup/onSession**。直调 `container.get()` 同样不保证初始化——需要生命周期的加载一律走 `loadRemote` |
-| `registerRemote` / `registerRemotes` | `(config \| list) => void` | 运行时注册远程（promise remote / 动态地址）。`RemoteConfig`：`{ name, entry, promise?, shareScope?, timeout?, retries?, fallback?, breaker? }`（旧类型名 RemoteInput 保留为弃用别名）。校验：`timeout` 有限正数、`retries` 0..10 整数、`breaker.threshold/resetMs` 有限正数——非法值**注册当场抛错**；重复注册时 entry/timeout/retries/breaker 按最新配置刷新，熔断计数保留 |
+| `registerRemote` / `registerRemotes` | `(config \| list) => void` | 运行时注册远程（promise remote / 动态地址）。`RemoteConfig`：`{ name, entry, promise?, shareScope?, timeout?, retries?, fallback?, breaker? }`。校验：`timeout` 有限正数、`retries` 0..10 整数、`breaker.threshold/resetMs` 有限正数——非法值**注册当场抛错**；重复注册时 entry/timeout/retries/breaker 按最新配置刷新，熔断计数保留 |
 | `registerShare` | `(scope, name, version, get, opts?) => void` | 手工注册共享模块（一般由 init 模块自动完成） |
 | `initSharing` | `(scopeName?) => ShareScopeMap` | 初始化共享作用域（一般由 init 模块自动完成） |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | 注册运行时插件（见下）；应用运行后才调用更改策略的边界见「同步与异步裁决」 |
@@ -79,7 +77,7 @@ Vue 从 `/vue`（或 `/runtime`）、React 从 `/react` 导入。除 `validatePa
 >
 > **resolveShare 与消费路径（5.7.1 起）**：配置了 `runtimePlugins` 的 HTML 入口在执行应用前完成共享裁决与加载；远程容器也会在执行 expose 前完成异步裁决。同步门面复用同一消费条件的决策与实例，异步 hook 可以选择低版本或原表之外的条目，不会被本地副本覆盖。应用与 provider 之间保留动态导入边界，Vite 8 的消费方门面仍无 TLA。
 >
-> **入口边界**：没有 HTML 入口的 library/自定义入口，或应用运行后才调用 `registerPlugins` 更改策略，需要先 `await loadShare(name, opts)`，再动态导入新的消费者；已经求值的静态绑定无法追溯改写。未准备的同步消费者遇到异步 hook 给出 `MFU-004`（`details.syncUnsupported: true`）并接管其迟到拒绝。`strictVersion` 冲突给出 MFU-003；本地接管的实例按真实版本登记，不借用另一版本槽位绕过检查。需要同时使用 React 18/19 时，为整组 React、renderer 及其消费方设置独立 `shareScope`（见[共享依赖](../guide/sharing.md#sharecope分组隔离react-1819-同页隔离)）。可运行示例：[React 版本隔离与恢复](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/react-versions/README.md)。
+> **入口边界**：没有 HTML 入口的 library/自定义入口，或应用运行后才调用 `registerPlugins` 更改策略，需要先 `await loadShare(name, opts)`，再动态导入新的消费者；已经求值的静态绑定无法追溯改写。未准备的同步消费者遇到异步 hook 给出 `MFU-004`（`details.syncUnsupported: true`）并接管其迟到拒绝。`strictVersion` 冲突给出 MFU-003；本地接管的实例按真实版本登记，不借用另一版本槽位绕过检查。需要同时使用 React 18/19 时，为整组 React、renderer 及其消费方设置独立 `shareScope`（见[共享依赖](../guide/sharing.md#sharescope分组隔离react-1819-同页隔离)）。可运行示例：[React 版本隔离与恢复](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/demos/react-versions/README.md)。
 
 ```ts
 import type { RuntimePlugin } from '@fulgurjs/federation/runtime'
@@ -108,7 +106,7 @@ export default {
 
 <a id="context"></a>
 
-## 2. AppContext — 跨应用传值与方法引用
+## AppContext — 跨应用传值与方法引用
 
 宿主向子应用传值、子应用向宿主反向注册方法的一等公民通道（带类型与错误契约）——不再各自挂 `window.*` 裸口子。
 
@@ -179,7 +177,7 @@ getAppContext().events!.bpm = { formEvent, formSubmitEvent }
 
 <a id="pages-api"></a>
 
-## 3. `definePages` / `validatePages` / `remoteSchema` — 页面路由表
+## `definePages` / `validatePages` / `remoteSchema` — 页面路由表
 
 宿主把「URL 路径 → 远程 exposes 键」的映射表交给它校验，带参路由的静默冲突在启动期报错而不是运行时加载错组件：
 
@@ -202,25 +200,25 @@ export const PAGES = definePages(
 )
 ```
 
-- **`definePages(pages, options?)`**：调用时机 = 宿主启动期（模块求值时）。返回经校验的页面表。校验规则 R1–R5 见[远程页面接入](../guide/remote-pages.md#定义页面表definepages)；R3 依赖 `schema`（dev 探针结果），build 恒为空表（诚实降级）。
+- **`definePages(pages, options?)`**：调用时机 = 宿主启动期（模块求值时）。返回经校验的页面表。校验规则 R1–R5 见[远程页面接入](../guide/remote-pages.md#-定义页面表definepages)；R3 依赖 `schema`（dev 探针结果），build 恒为空表（诚实降级）。
 - **`validatePages(pages, options?)`**：返回违例清单（`PageViolation[]`，含 `level` 与说明）不抛错，便于自测。
 - **`remoteSchema`**：插件 dev 期自动填充的远程 exposes 探针；业务代码只把它透传给 `schema`。
 - 同子路径类型：`PageRouteLike`（路由条目形状）、`PagesOptions`（校验选项，含 `deriveSpec`/`remotes`/`schema`/`strict`）、`PageViolation`、`RemoteSchemaEntry`。
 
-## 4. `createHostPages`（Vue）/ `createReactHostPages`（React）— 宿主页面适配器
+## `createHostPages`（Vue）/ `createReactHostPages`（React）— 宿主页面适配器
 
-**导入位置**：`createHostPages` 从 `@fulgurjs/federation/vue`（6.0.0 起不再从 `/runtime` 导出）；`createReactHostPages` 从 `@fulgurjs/federation/react`。完整签名、选项、返回成员与行为契约见[远程页面接入](../guide/remote-pages.md#生成页面适配器)（Vue 与 React 的数据项语义完全一致；React 展示项 `fallback`/`error`/`retries`/`timeout` 与 React 版 `remoteComponent` 一致，另支持 `beforeLoad`）。
+**导入位置**：`createHostPages` 从 `@fulgurjs/federation/vue`；`createReactHostPages` 从 `@fulgurjs/federation/react`。完整签名、选项、返回成员与行为契约见[远程页面接入](../guide/remote-pages.md#-生成页面适配器)（Vue 与 React 的数据项语义完全一致；React 展示项 `fallback`/`error`/`retries`/`timeout` 与 React 版 `remoteComponent` 一致，另支持 `beforeLoad`）。
 
 调用时机与生命周期要点（两端一致）：
 
 - 页面表创建时零加载副作用；组件在**渲染时**才 `loadRemote(spec)`；
 - 加载顺序：`beforeLoad` → 远程可选 `setup`/`onSession` → 页面模块；失败进错误态不静默回退；
 - 组件缓存按 spec 与登录代次复用：**仅新的非空 `sessionKey` 到来时重建**（登出变 `undefined` 不重建）——换账号后重新加载触发新代次 `onSession`，模块本体经运行时缓存复用不重复下载；
-- Vue 独有 `keepAliveNames` 返回值与 `keepAlive: true` 页面级保活（缓存上限 max=8 LRU、缓存键=页面 spec 清洗名、默认全关的原因）见[远程页面接入](../guide/remote-pages.md#生成页面适配器)；
+- Vue 独有 `keepAliveNames` 返回值与 `keepAlive: true` 页面级保活（缓存上限 max=8 LRU、缓存键=页面 spec 清洗名、默认全关的原因）见[远程页面接入](../guide/remote-pages.md#-生成页面适配器)；
 - React 侧不提供 `keepAliveNames`（不承诺保活）；路由不是插件运行时依赖——示例用 React Router 7（`path` 在路由表声明、`element` 渲染 `component(spec)` 产物；带参路由经 `useParams`/`useSearchParams` 传给远程页面 props）；
 - 跨框架共享 Context：宿主与远程消费方经**同一 expose 实例**拿到同一 Context 对象（远程 `expose './theme-context'` 导出 `createContext` 实例，宿主 `useLoadRemote` 取得后作 Provider，远程组件 `useContext` 读到宿主值）；插件不自动桥接任意 React Context——必须显式共享该对象。
 
-## 5. `remoteComponent` — 远程组件直渲染
+## `remoteComponent` — 远程组件直渲染
 
 ### Vue 版（`@fulgurjs/federation/vue`）
 
@@ -245,7 +243,7 @@ const FederatedForm = remoteComponent('remote-a/Form', {
 语义与边界：
 
 - 内部 = `defineAsyncComponent({ loader: () => loadRemote(spec, opts).then(m => m.default ?? m) })`，返回标准 Vue 异步组件，`props` 在使用处直接透传；
-- **全局注册组件自动安装（6.1.0）**：远程组件渲染在**消费方 app** 上下文里，其模板字符串标签（如 `<a-divider>`）按消费方全局注册表解析——提供方 app 的 `app.use(X)` 全局注册不随组件走。远程在 setup 模块声明 `globalComponents` 后，本工厂加载时自动捕获当前渲染 app 并完成幂等注册（含桥接子应用内消费的场景）；详见第 6 节 `federation({ setup })` 的 globalComponents 契约；
+- **全局注册组件自动安装（6.1.0）**：远程组件渲染在**消费方 app** 上下文里，其模板字符串标签（如 `<a-divider>`）按消费方全局注册表解析——提供方 app 的 `app.use(X)` 全局注册不随组件走。远程在 setup 模块声明 `globalComponents` 后，本工厂加载时自动捕获当前渲染 app 并完成幂等注册（含桥接子应用内消费的场景）；详见 [`federation({ setup })`](#setuponsession-远程初始化生命周期) 的 globalComponents 契约；
 - **无任何兜底/降级**（零兜底）：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法 + **重试加载 / 刷新页面重试**），`fulgurjs:error` 事件由 runtime 层照常发出；
 - 模块去重沿用 `loadRemote` 内部 Promise 缓存——同 spec 多组件实例只加载一次容器模块；
 - 调用时机 = 组件工厂声明时零副作用，渲染时才加载；
@@ -293,7 +291,7 @@ const { data, error, loading, reload } = useLoadRemote<Utils>('remote-react/util
 
 <a id="setuponsession-远程初始化生命周期"></a>
 
-## 6. `federation({ setup })` — 远程初始化生命周期（setup/onSession）
+## `federation({ setup })` — 远程初始化生命周期（setup/onSession）
 
 ```ts
 // 远程 vite.config.ts / fulgurjs.config.ts
@@ -352,11 +350,11 @@ export const globalComponents: RemoteSetupModule['globalComponents'] = {
 
 <a id="bridge-api"></a>
 
-## 7. 桥接 API — `defineBridgeApp` / `createVueBridgeApp` / `createReactBridgeApp`
+## 桥接 API — `defineBridgeApp` / `createVueBridgeApp` / `createReactBridgeApp`
 
-**导入位置（6.0.0）**：`defineBridgeApp` 从 `/vue` 与 `/react` 同名双导出（`/runtime` 不再导出）；`createVueBridgeApp` 从 `/vue`、`createReactBridgeApp` 从 `/react`。
+**导入位置**：`defineBridgeApp` 从 `/vue` 与 `/react` 同名双导出；`createVueBridgeApp` 从 `/vue`、`createReactBridgeApp` 从 `/react`。
 
-**产品范围**：整站挂载/卸载的双向嵌入——Vue 3 宿主嵌 React 18/19 子应用、React 宿主嵌 Vue 3 子应用。子应用内部路由与宿主 URL 同步见[第 8 节](#url-sync-api)，显式开启、默认关闭。组件级互转、Angular、SSR/RSC、JS 沙箱、CSS 隔离不在支持面（见[支持范围](../troubleshooting/compatibility.md)）。
+**产品范围**：整站挂载/卸载的双向嵌入——Vue 3 宿主嵌 React 18/19 子应用、React 宿主嵌 Vue 3 子应用。子应用内部路由与宿主 URL 同步见[桥接 URL 同步 API](#url-sync-api)，显式开启、默认关闭。组件级互转、Angular、SSR/RSC、JS 沙箱、CSS 隔离不在支持面（见[支持范围](../troubleshooting/compatibility.md)）。
 
 **双框架安装合同（必须）**：桥接宿主同时安装 `vue` + `react` + `react-dom`，shared 三键全部 `singleton: true`：
 
@@ -408,16 +406,16 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 - **`appProps` 快照语义**：挂载时浅拷贝顶层字段传入，嵌套对象/响应式 store/函数保留原引用；之后的顶层替换**不追踪、不重渲染子应用**，需要重置用 `:key`/key 重建。宿主新闭包不会自动传给子应用——实时读取宿主状态请传稳定回调或主动重挂。跨 root 不继承宿主 provide/inject、Pinia、React Context 或路由。
 - **`getContext`**：无副作用的**同步** getter，在首次、重试及换会话的实际加载前调用；返回快照对象（拒绝 Promise/thenable 与非对象——`MFU-016`，`phase: 'getContext'`）。桥接层先校验快照 `sessionKey` 与受控值一致（不一致 `MFU-017`，且不写全局），**校验通过后由桥接层调用 `provideAppContext`**——getter 本身不写全局。未提供 getter 时校验现有 `AppContext.sessionKey` 必须与受控值一致。换代时桥接层先 `clearAppContext()` 清旧账号独有字段再写新快照。
-- **`sessionKey` 受控语义**：只接受 `undefined`（不启用受控会话）/`null`（登出态：立即卸载、保持空容器、不再 loadRemote）/非空字符串（登录代次）。空字符串、数字等非法值按 `MFU-017` 拒绝挂载。完整触发表见[子应用桥接 · 会话](../guide/app-bridge.md#会话sessionkey-与-appcontext)。
+- **`sessionKey` 受控语义**：只接受 `undefined`（不启用受控会话）/`null`（登出态：立即卸载、保持空容器、不再 loadRemote）/非空字符串（登录代次）。空字符串、数字等非法值按 `MFU-017` 拒绝挂载。完整触发表见[子应用桥接 · 会话](../guide/app-bridge.md#会话sessionkey与-appcontext)。
 - **多实例与页面级单会话**：同页多个同 spec 实例并存合法（按 el 分键）；`AppContext` 是页面级单例——同页所有受控桥接实例必须同一会话，代次不一致按 `MFU-017` 拒绝。不承诺同页同时承载两个账号。
 - **DOM 所有权**：包装组件只创建并保持稳定的空挂载容器；宿主重渲染不 patch 子应用 root 内部。React 宿主 StrictMode 双 effect 安全。Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态。
 - **旧请求不冒充取消**：已进入 `loadRemote` 的工作不因桥接层作废而被取消——迟到的旧结果按代次丢弃；远程 `onSession` 必须遵守 `signal.aborted` 契约。
 
 <a id="url-sync-api"></a>
 
-## 8. 桥接 URL 同步 API
+## 桥接 URL 同步 API
 
-**导入位置（6.0.0）**：`createVueBridgeNavigation`/`connectVueBridgeRouter` 从 `/vue`；`createReactBridgeNavigation`/`createReactBridgeRouter` 从 `/react`。旧 `/bridge/router/*` 已删除。路由库为可选 peer（vue-router / react-router-dom 消费者自装；React 端缺依赖仅在实际调用 `createReactBridgeRouter` 时报清晰错误）。
+**导入位置**：`createVueBridgeNavigation`/`connectVueBridgeRouter` 从 `/vue`；`createReactBridgeNavigation`/`createReactBridgeRouter` 从 `/react`。路由库为可选 peer（vue-router / react-router-dom 消费者自装；React 端缺依赖仅在实际调用 `createReactBridgeRouter` 时报清晰错误）。
 
 桥接默认 memory 路由；URL 同步让**宿主 URL 表达子应用内部位置**（刷新直达、收藏分享、前进后退）。显式开启、默认关闭。**架构约定**：宿主 Router 是浏览器历史唯一写入方；子应用使用受控 memory 路由；两端经独立路由通道传递位置；同实例内 path/search/hash 变化**不重挂 root、不重建 store、不重新加载远程**。
 
@@ -428,7 +426,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue 宿主导航端口。Vue Router fullPath 已是逻辑路径，无需传部署 base。Vue Router 4，history/hash 模式皆可 |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React 宿主导航端口。**仅支持 data router**（`createBrowserRouter`/`createHashRouter` + `RouterProvider`）；declarative 模式（BrowserRouter）无取消语义，不支持。React Router ≥ 6.11。`canNavigate` 可选仅作提前拒绝；端口观察真实 blocker 状态，等待 `reset()` 返回 cancelled、`proceed()` 后实际位置提交返回 committed，不能只凭 navigate 的 Promise 落定判成功 |
 | `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue 子应用接线受控 memory 路由；`await …ready` 落定后再 `app.use(router)`（顺序不能反） |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同（6.0.0 起）：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dom 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dom 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
 
 宿主传给桥接组件的通道参数：`routing: BridgeHostRouting = { basePath: '/approval', navigation }`；子应用契约第二参数声明 `{ routing: true }` 后从 `ctx.routing` 接收通道。两端接线第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用 `dispose()`。自定义 `BridgeHostNavigation.navigate(target, action, { signal })` 应在异步提交前复核可选 signal，已 aborted 时禁止迟到写入。
 
@@ -447,7 +445,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 <a id="dev-types"></a>
 
-## 9. 开发类型与远程源码
+## 开发类型与远程源码
 
 ### 类型生成（Vue 与 React expose 共用）
 
@@ -473,7 +471,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 <a id="project-side"></a>
 
-## 10. 可选的项目侧组合用法：保活、加载提示、预载和诊断页
+## 可选的项目侧组合用法：保活、加载提示、预载和诊断页
 
 本节记录项目侧的组合用法。常量、页面及诊断面板需要接入方自己实现，不是安装插件后自动生成的公开 API。`fulgurjs init` 只生成配置起步模板，不生成这些项目文件；插件 runtime 零参与。配置面总览：
 
@@ -497,7 +495,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 - 缓存上限 `max: 8`（Vue 原生 LRU，超出后最久未访问的页面实例被销毁）；
 - 缓存键 = 页面 spec 清洗名（`Fulgurjs_<remote>_<expose键>`），同一路由不同参数（fullPath 不同）各占一个缓存条目；
 - **默认全关的原因**：重型组件（复杂表格/表单设计器）的缓存内存成本高，按页面逐个显式开启；
-- 开启页面的组件若注册了 `window` 级监听/定时器/context 反向注册，须遵循[卸载清理清单](../migration.md#页面卸载清理清单)（保活页只在真正被 LRU 淘汰时才 unmount）。
+- 开启页面的组件若注册了 `window` 级监听/定时器/context 反向注册，须遵循[卸载清理清单](../guide/remote-pages.md#页面卸载清理清单)（保活页只在真正被 LRU 淘汰时才 unmount）。
 
 ### 10.2 页面加载骨架屏 — 内置 `loadingComponent`（无配置项）
 

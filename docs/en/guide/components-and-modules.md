@@ -1,6 +1,6 @@
 # Loading components and modules
 
-> Loading a remote component or function module needs no bridge, no page table, and no login initialization — this is the minimal use of the federation. Corresponds to the 6.0.0 entries: Vue imports from `@fulgurjs/federation/vue`, React from `@fulgurjs/federation/react`, framework-agnostic code from `@fulgurjs/federation/runtime`.
+> Loading a remote component or function module needs no bridge, no page table, and no login initialization — this is the minimal use of the federation. Import entries: Vue imports from `@fulgurjs/federation/vue`, React from `@fulgurjs/federation/react`, framework-agnostic code from `@fulgurjs/federation/runtime`.
 
 ## Provider: expose a module
 

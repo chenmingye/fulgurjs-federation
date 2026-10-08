@@ -2,7 +2,7 @@
 
 > 桥接默认 **memory 路由**：子应用内部跳转不改浏览器地址、刷新不能恢复子应用内部页面。URL 同步让**宿主 URL 表达子应用内部位置**——刷新直达、收藏分享、前进后退、宿主菜单跳转全部一致。显式开启，**默认关闭**（不开同步时子应用内部跳转不影响宿主地址，这是正常行为）。
 >
-> 6.0.0 入口：`createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` 全部从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 导入。旧 `/bridge/router/vue`、`/bridge/router/react` 已删除。路由库是可选 peer：`/vue` 不要求安装 vue-router，`/react` 不要求安装 react-router-dom——只在真正调用路由同步 API 时才需要对应库（React 端缺依赖时报清晰错误）。
+> 导入入口：`createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` 全部从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 导入。路由库是可选 peer：`/vue` 不要求安装 vue-router，`/react` 不要求安装 react-router-dom——只在真正调用路由同步 API 时才需要对应库（React 端缺依赖时报清晰错误）。
 
 ## 效果
 

@@ -1,6 +1,6 @@
 # Getting started: install, create a project, and integrate an existing project
 
-> Corresponds to 6.0.0. All examples import from the unified 6.0.0 entries: Vite config uses the package root `@fulgurjs/federation`; Vue apps use `@fulgurjs/federation/vue`; React apps use `@fulgurjs/federation/react`; framework-agnostic modules use `@fulgurjs/federation/runtime`.
+> Application code imports only from four public entries: Vite config uses the package root `@fulgurjs/federation`; Vue apps use `@fulgurjs/federation/vue`; React apps use `@fulgurjs/federation/react`; framework-agnostic modules use `@fulgurjs/federation/runtime`.
 
 ## Installation
 
@@ -16,7 +16,12 @@ Environment requirements:
 - Node.js: the plugin itself requires ≥ 18, but Vite 7/8 requires **20.19+** (or 22.12+). Pick Node according to the Vite version you use.
 - Browser baseline: Chrome 108+ (ESM, dynamic import, and top-level await are required).
 - Build target `es2022` or newer (lower targets fail with `BLD-002`).
-- A plain Vue project only needs Vue; a plain React project only needs react + react-dom. Vue/React projects do **not** need to install the other framework or any router library; a router library is only referenced on demand by the side that actually uses URL sync (type-level imports; a missing runtime dependency only errors when a route-sync API is actually called).
+- A plain Vue project only needs Vue; a plain React project only needs react + react-dom. Vue/React projects do **not** need to install the other framework or any router library; the exception is a **bridge host** (when embedding another framework's full sub app into your application, both frameworks must be installed — see [the dual-framework installation contract](app-bridge.md#dual-framework-installation-contract-required-for-bridge-hosts)). A router library is only referenced on demand by the side that actually uses URL sync (type-level imports; a missing runtime dependency only errors when a route-sync API is actually called).
+
+Package manager notes (pnpm users):
+
+- pnpm ≥ 11 enables `minimumReleaseAge: 1440` by default (a 24-hour supply-chain cooldown): a freshly published version is not resolvable within 24 hours, so `pnpm add` installs the newest version that satisfies the cooldown instead. If you need the newest version right after a release, add `minimumReleaseAgeExclude: ['@fulgurjs/federation@<version>']` to `pnpm-workspace.yaml` (this is what the five templates do), or temporarily run `pnpm config set minimum-release-age 0`.
+- When pnpm 12 hits unapproved build scripts (esbuild and friends), it writes the `allowBuilds: { esbuild: set this to true or false }` placeholder prompt into `pnpm-workspace.yaml` and finishes the install with a non-zero exit code. Change the value to `true` and rerun the install.
 
 ## New project: `fulgurjs create`
 
@@ -62,7 +67,7 @@ pnpm dev        # Unified launcher: starts the remote first and probes it, then 
 
 ## Integrating an existing project
 
-An existing project does not need to be rebuilt. Only three things to do: install the plugin → write `fulgurjs.config.ts` → register the plugin in `vite.config.ts`. You can generate a starter config with `fulgurjs init` (recommended) or write it by hand.
+An existing project does not need to be rebuilt. Only three things to do: install the plugin → write `fulgurjs.config.ts` → register the plugin in `vite.config.ts`. You can generate a starter config with `fulgurjs init` (recommended) or write it by hand. The CLI is invoked uniformly as `npx @fulgurjs/federation <command>` (this also works before the project has installed its dependencies; once installed, `npx fulgurjs` works too).
 
 ### Starter config with `fulgurjs init`
 
@@ -70,28 +75,27 @@ Run in the **application root directory**:
 
 ```bash
 # Detects the framework from package.json (when vue/react deps are unambiguous); generates a minimal dual-role config
-npx fulgurjs init
+npx @fulgurjs/federation init
 
 # When detection is impossible (both frameworks present, or neither), specify explicitly
-npx fulgurjs init --framework react --role consumer
+npx @fulgurjs/federation init --framework react --role consumer
 
 # Roles: consumer (consume only) / provider (provide only) / dual (both, default)
-npx fulgurjs init --framework vue --role provider
+npx @fulgurjs/federation init --framework vue --role provider
 
 # Output elsewhere / overwrite an existing template
-npx fulgurjs init --out config/fulgurjs.config.ts
-npx fulgurjs init --force
+npx @fulgurjs/federation init --out config/fulgurjs.config.ts
+npx @fulgurjs/federation init --force
 ```
 
 - `init` generates only a **minimal valid** starter template: shared contains just the framework itself (pinia/vue-router/business pages are not forced in); the role decides whether `remotes`/`exposes` examples are included; pure consumers get a commented example of the `hostPages` named export (delete it if you don't use per-page pages).
 - An existing file with the same name is refused (`--force` lifts this).
 - After generation it prints four follow-up steps (edit the config → two lines in vite.config.ts → verify with `explain` → `doctor` after deployment).
-- The legacy `--template <path>` flag is still accepted but interpreted as `--out`, with a rename hint (`--template` is a template name in `create` — same name, different meaning; consolidated to `--out` in 6.0.0).
 
 Validate an existing config and print the integration snippet:
 
 ```bash
-npx fulgurjs init --config ./fulgurjs.config.ts
+npx @fulgurjs/federation init --config ./fulgurjs.config.ts
 ```
 
 ### Manual integration (three files)
@@ -161,11 +165,27 @@ const { formatMoney } = await loadRemote<typeof import('remote-utils/money')>('r
 
 > The type parameter of `loadRemote` is a compile-time aid only; at runtime the module namespace is whatever the remote actually exports. In dev, hosts with `dts` enabled (default) get types for `remote-a/X` imports directly; see [loading components and modules · dev types](components-and-modules.md#dev-types).
 
+## Migrating from other micro-frontend frameworks (concept mapping)
+
+API-level concept mapping when migrating from qiankun-style solutions (general technical conclusions):
+
+| Legacy concept | @fulgurjs/federation counterpart |
+|---|---|
+| Main app `registerMicroApps` | host `federation({ remotes })` |
+| Sub app entry (HTML) | remote entry (dev: the `@fulgurjs-entry.js` middleware / prod: `fulgurjs-remoteEntry.js`) |
+| Sub app lifecycle mount/unmount | page-level exposes (the component is the entry, no lifecycle boilerplate); startup-time initialization = the remote's `federation({ setup })` (setup/onSession); embedding a whole app = the bridge contract's `mount`/`unmount` (`defineBridgeApp`, see [sub app bridge](app-bridge.md)) |
+| window isolation/sandbox | no sandbox: same-realm direct rendering (conclusions and boundaries in the [sandbox boundary audit (Chinese)](../../maintainers/沙箱边界审计.md)) |
+| props passing | component props (component level); `appProps` (bridge level, mount-snapshot semantics); AppContext (cross-app context) |
+| Shared dependencies via externals | `shared` (singleton negotiation, "already-loaded wins") |
+| qiankun runtime + single-spa | `@fulgurjs/federation/runtime` (a ~20KB runtime kernel, no single-spa) |
+
+Unlike qiankun: there is **no** `unmount` mechanism that force-cleans window-level resources — global side effects of component-level unmounts must be cleaned up by yourself; the checklist lives in [remote page integration · page unmount cleanup checklist](remote-pages.md#page-unmount-cleanup-checklist).
+
 ## Verify and next steps
 
 ```bash
-npx fulgurjs explain          # Pure local explanation: role/remotes/exposes/shared/load chain
-npx fulgurjs doctor --base http://localhost:5174 --apps remote-a --dev   # Dev container checkup
+npx @fulgurjs/federation explain          # Pure local explanation: role/remotes/exposes/shared/load chain
+npx @fulgurjs/federation doctor --base http://localhost:5174 --apps remote-a --dev   # Dev container checkup
 ```
 
 - Loading ordinary components/modules does **not** need a page table, bridge configuration, or login initialization — read [loading components and modules](components-and-modules.md) when needed.

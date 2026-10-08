@@ -68,7 +68,7 @@ location /remote-a/ {
 
 跨源联邦（异域部署、dev 双端口）要求远程端点带 `Access-Control-Allow-Origin`：
 
-- dev 由插件配置 `devCorsOrigins` 控制（默认 `'*'`；allowlist 数组形态见[配置参考](../reference/configuration.md#devcorsorigins--devfsroot三态示例)）；用户显式配置的 `server.cors` 永远优先；
+- dev 由插件配置 `devCorsOrigins` 控制（默认 `'*'`；allowlist 数组形态见[配置参考](../reference/configuration.md#devcorsorigins--devfsroot-三态示例)）；用户显式配置的 `server.cors` 永远优先；
 - **prod 的 CORS 由部署层（NGINX 等）负责**，dev 配置不会自动修改生产服务器：
 
 ```nginx
@@ -92,16 +92,16 @@ location /remote-a/fulgurjs-remoteEntry.js {
 
 ```bash
 # 基本用法：--base 是站点根；--apps 是站点根下的部署子目录（远程部署在 /remote-a/ 就写 remote-a）
-npx fulgurjs doctor --base https://your-site --apps my-app,remote-a
+npx @fulgurjs/federation doctor --base https://your-site --apps my-app,remote-a
 
 # 纯宿主（无远程入口）：跳过 remoteEntry 检查
-npx fulgurjs doctor --base https://your-site --apps my-app --no-entry
+npx @fulgurjs/federation doctor --base https://your-site --apps my-app --no-entry
 
 # 自定义入口文件名 / 合法关闭 manifest / 无页面子目录
-npx fulgurjs doctor --base https://your-site --apps remote-a --entry my-entry.js --no-manifest --no-html
+npx @fulgurjs/federation doctor --base https://your-site --apps remote-a --entry my-entry.js --no-manifest --no-html
 
 # dev 容器体检 / CI JSON / 抽样数
-npx fulgurjs doctor --base http://localhost:5174 --apps remote-a --dev --json --chunk-sample 32
+npx @fulgurjs/federation doctor --base http://localhost:5174 --apps remote-a --dev --json --chunk-sample 32
 ```
 
 检查项（每项三段式 PASS/FAIL/WARN + 现象/根因/修法）：
@@ -123,4 +123,4 @@ npx fulgurjs doctor --base http://localhost:5174 --apps remote-a --dev --json --
 - [ ] SPA 回退不吞 JS（资源 404 保持 404）
 - [ ] 跨源部署时远程端点带 CORS 头
 - [ ] 发布窗口保留旧 chunk
-- [ ] `npx fulgurjs doctor --base <URL> --apps <子目录,...>` 零 FAIL
+- [ ] `npx @fulgurjs/federation doctor --base <URL> --apps <子目录,...>` 零 FAIL

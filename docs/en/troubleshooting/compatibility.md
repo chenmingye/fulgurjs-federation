@@ -50,11 +50,6 @@
 | A bridge host's error boundary cannot catch child app internal errors | Render errors across roots belong to the child app's own error boundary | The child app builds its own error handling |
 | Multi-level bridge routing does not auto-proxy | With A→B→C, C's URL sync is configured by B acting as a host itself | Each level is configured independently; no multi-level route proxying |
 
-## Status of known historical issues
-
-- "React not supported", "URL sync unimplemented", and "Vite 8 production hangs unresolved" are all **old-version records**; the current version supports/fixes all of them (the Vite 8 large-app startup hang was fixed in 5.8.0, and business `manualChunks` can be kept — the shared bodies are automatically isolated into `fulgurjs-provider-*` groups).
-- 5.9.3 fixed the problem of keepAlive pages never being cached under Vue 3.5 (`__asyncResolved.name` mismatching the wrapper name); in earlier versions keepAlive pages remounted on every visit.
-
 ## How to verify
 
 For any "is X supported" question, the fastest verification path:

@@ -92,16 +92,16 @@ During a release window, old pages still hold the old remoteEntry and keep refer
 
 ```bash
 # Basic usage: --base is the site root; --apps are deployment subdirectories under the site root (a remote at /remote-a/ is written as remote-a)
-npx fulgurjs doctor --base https://your-site --apps my-app,remote-a
+npx @fulgurjs/federation doctor --base https://your-site --apps my-app,remote-a
 
 # Pure host (no remote entry): skip remoteEntry checks
-npx fulgurjs doctor --base https://your-site --apps my-app --no-entry
+npx @fulgurjs/federation doctor --base https://your-site --apps my-app --no-entry
 
 # Custom entry filename / legitimately disabled manifest / no page subdirectory
-npx fulgurjs doctor --base https://your-site --apps remote-a --entry my-entry.js --no-manifest --no-html
+npx @fulgurjs/federation doctor --base https://your-site --apps remote-a --entry my-entry.js --no-manifest --no-html
 
 # Dev container checkup / CI JSON / sample count
-npx fulgurjs doctor --base http://localhost:5174 --apps remote-a --dev --json --chunk-sample 32
+npx @fulgurjs/federation doctor --base http://localhost:5174 --apps remote-a --dev --json --chunk-sample 32
 ```
 
 Check items (each with three-part PASS/FAIL/WARN + symptom/root cause/fix):
@@ -123,4 +123,4 @@ Exit codes: **any FAIL means 1**, usable directly as a CI gate. `--apps` is requ
 - [ ] SPA fallback does not swallow JS (missing assets stay 404)
 - [ ] Cross-origin deployments carry CORS headers on remote endpoints
 - [ ] Release windows keep old chunks
-- [ ] `npx fulgurjs doctor --base <URL> --apps <subdirs,...>` finishes with zero FAILs
+- [ ] `npx @fulgurjs/federation doctor --base <URL> --apps <subdirs,...>` finishes with zero FAILs

@@ -58,8 +58,8 @@ fulgurjs create <template> [--dir <path>] [--no-install] [--force] [--json]
 
 ```bash
 # Success: created and installed
-$ npx fulgurjs create vue-vue --dir my-federation
-[fulgurjs:create] Created the full project /path/my-federation (template vue-vue, plugin dependency ^6.0.0)
+$ npx @fulgurjs/federation create vue-vue --dir my-federation
+[fulgurjs:create] Created the full project /path/my-federation (template vue-vue, plugin dependency 6.1.8)
 Next steps:
   cd "/path/my-federation"
   pnpm dev                # starts every app in launch order; any failure exits the whole group with the reason
@@ -69,7 +69,7 @@ Access entries (remote ready before host):
 ...
 
 # Failure: non-empty directory
-$ npx fulgurjs create vue-vue --dir existing
+$ npx @fulgurjs/federation create vue-vue --dir existing
 [fulgurjs:create] Target directory is not empty, refusing to overwrite: /path/existing
   Cause: a silent merge could hide conflicts with your existing files.
   Fix: pick another directory (--dir), or add --force to reuse it (only adds missing files; name conflicts are listed item by item and your versions are kept — nothing is ever rewritten)
@@ -93,7 +93,7 @@ fulgurjs init --config <path>
 
 | Flag | Default | Notes |
 |---|---|---|
-| `--out <path>` | `./fulgurjs.config.ts` | Output path. The legacy `--template <path>` is still accepted but interpreted as `--out` with a rename hint (`--template` is a template name in create — same name, different meaning; consolidated in 6.0.0) |
+| `--out <path>` | `./fulgurjs.config.ts` | Output path |
 | `--framework vue\|react` | Detected from package.json dependencies | When both frameworks are present or neither is, it does not guess: asks interactively on TTY; on non-TTY it errors demanding an explicit value (exit code 2) |
 | `--role` | `dual` | `consumer` pure consumer (remotes example + hostPages comment) / `provider` pure provider (exposes example) / `dual` both roles (generates both) |
 | `--force` | Existing files are refused | Overwrite an existing template |
@@ -112,7 +112,7 @@ fulgurjs init --config <path>
 
 ```bash
 # Success: React consumer starter config
-$ npx fulgurjs init --framework react --role consumer
+$ npx @fulgurjs/federation init --framework react --role consumer
 [fulgurjs:init] Generated the React pure-consumer starter template fulgurjs.config.ts
 Next steps:
   1. Edit fulgurjs.config.ts: fill in the container name/remotes/shared (the default export is directly federation() options)
@@ -120,12 +120,12 @@ Next steps:
        import federation from '@fulgurjs/federation'
        import fulgurjsConfig from './fulgurjs.config'
        // plugins: [ ...existing plugins, federation(fulgurjsConfig) ]
-  3. npx fulgurjs explain
-  4. After deployment: npx fulgurjs doctor --base <URL> --apps <deployment subdir>
+  3. npx @fulgurjs/federation explain
+  4. After deployment: npx @fulgurjs/federation doctor --base <URL> --apps <deployment subdir>
 ...
 
 # Failure: non-TTY framework detection impossible
-$ npx fulgurjs init
+$ npx @fulgurjs/federation init
 [fulgurjs:init] Cannot detect the framework from package.json (vue/react dependencies missing or both present).
   Fix: specify explicitly, fulgurjs init --framework vue|react (--role consumer|provider|dual optional, default dual)
 (exit code 2)
@@ -158,12 +158,12 @@ fulgurjs explain [--config <path>] [--json]
 
 ### Exit codes
 
-`0` success; `2` config load/validation failure. Passing the removed `--app` (the 5.0.0 aggregate selector) reports a migration error (exit code 2).
+`0` success; `2` config load/validation failure. Passing the removed `--app` reports a migration error (exit code 2).
 
 ### Examples
 
 ```bash
-$ npx fulgurjs explain
+$ npx @fulgurjs/federation explain
 [fulgurjs:explain] demo-host (host + remote (dual role), single-project config, directory /path/demo-host)
   Consumes remote remote-a → dev http://localhost:5174/remote-a / prod /remote-a
   exposes (1): ./api
@@ -207,7 +207,7 @@ Zero writes. Reports: unknown remotes, mappings to unconsumed remotes, missing e
 
 ```bash
 # Success
-$ npx fulgurjs check-pages --site http://your-site
+$ npx @fulgurjs/federation check-pages --site http://your-site
 [fulgurjs:check-pages] remote-a: manifest source https://your-site/remote-a/fulgurjs-manifest.json
   Page /remote-a/home → pages/remote-a/home  ✓
 ...
@@ -268,7 +268,7 @@ Zero writes, HTTP requests only (8s timeout per request).
 
 ```bash
 # Success (no FAILs)
-$ npx fulgurjs doctor --base http://your-site --apps my-app,remote-a
+$ npx @fulgurjs/federation doctor --base http://your-site --apps my-app,remote-a
 [fulgurjs:doctor] PASS [remote-a] fulgurjs-remoteEntry.js — 200, Cache-Control: no-cache, JS shape
 ...
 [fulgurjs:doctor] Summary: 18 PASS / 1 WARN / 0 FAIL
@@ -281,7 +281,7 @@ $ npx fulgurjs doctor --base http://your-site --apps my-app,remote-a
   Fix: switch nginx to Cache-Control "no-cache" (revalidation cache); only hashed assets get long caching
 
 # Usage error (exit code 2)
-$ npx fulgurjs doctor --base http://your-site
+$ npx @fulgurjs/federation doctor --base http://your-site
 [fulgurjs:doctor] Missing --apps <subdirs,...> — doctor never guesses default app names.
   Fix: pass deployment subdirectories under the site root to --apps (... deployed at the site root is written as "."; multi-origin uses full URLs directly)...
 ```
@@ -323,7 +323,7 @@ Replacements use **word-boundary matching** (`5333` never hits `15333`) and touc
 
 ```bash
 # Preview (default)
-$ npx fulgurjs port vue-remote 6213
+$ npx @fulgurjs/federation port vue-remote 6213
 [fulgurjs:port] Plan: vue-remote (directory remote) port 5213 → 6213
   rewrite remote/package.json (2 hits)
   rewrite scripts/dev.config.json (1 hit)
@@ -333,7 +333,7 @@ Preview mode; nothing written. Add --write to execute. Revert with git checkout 
 (exit code 0)
 
 # Write
-$ npx fulgurjs port vue-remote 6213 --write
+$ npx @fulgurjs/federation port vue-remote 6213 --write
 [fulgurjs:port] Wrote 4 files (vue-remote 5213 → 6213). Revert: git checkout <file>
 ```
 

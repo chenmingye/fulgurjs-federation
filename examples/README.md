@@ -64,20 +64,6 @@ examples/
 
 各能力在哪个示例验证见[文档中心的示例指南](../docs/zh/guide/examples.md)。`fixtures/` 是插件内部测试夹具，不属于用户下载模板。
 
-## 原目录迁移
-
-| 原位置 | 当前位置 |
-|---|---|
-| `examples/vue`、`templates/vue-vue` | `examples/templates/vue-vue` |
-| `examples/react`、`templates/react-react` | `examples/templates/react-react` |
-| `examples/bridge` | 两个 `examples/templates/*-host-*-remote` 模板 |
-| `demo/bridge-router`、`templates/showcase` | `examples/templates/showcase` |
-| `demo/jeecg` | `examples/integrations/jeecg` |
-| 其他 `demo/<场景>` | `examples/demos/<场景>` |
-| `demo/portal`、`demo/scripts` | `examples/portal`、`examples/scripts` |
-
-使用旧命令或收藏的源码路径时，按上表更新。插件 API 和端口没有因目录整理而变化。
-
 ## npm 包中的示例
 
 npm 包仅附带 `examples/templates/` 的五个可复制模板。功能 Demo、Jeecg 集成和门户从 GitHub 仓库下载；安装插件不会附带大型业务演示源码。
