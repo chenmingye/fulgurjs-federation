@@ -35,7 +35,7 @@ export default function BridgeVuePage(): ReactElement {
     if (/^https?:\/\//i.test(raw)) {
       try {
         const parsed = new URL(raw)
-        path = parsed.pathname + parsed.search
+        path = parsed.pathname + parsed.search + parsed.hash
       } catch {
         setDeepLinkError('URL 无法解析')
         return
@@ -55,7 +55,7 @@ export default function BridgeVuePage(): ReactElement {
       <h2>桥接演示：React 宿主 × Vue 子应用（URL 同步）</h2>
       <p style={{ color: '#666', fontSize: 13, margin: '4px 0' }}>
         子应用挂载在宿主 <code>{BRIDGE_BASE_PATH}</code> 前缀下；当前宿主路径：
-        <code>{location.pathname + location.search}</code>
+        <code>{location.pathname + location.search + location.hash}</code>
       </p>
       <ObsPanel />
       <section style={{ border: '1px dashed #bbb', padding: '8px 12px', margin: '12px 0', borderRadius: 4 }}>

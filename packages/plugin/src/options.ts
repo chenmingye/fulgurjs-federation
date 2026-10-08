@@ -417,7 +417,7 @@ function configError(what: string, got: unknown, expect: string, example: string
 const REMOVED_OPTIONS: Record<string, string> = {
   remoteType: `// 删除 remoteType（fulgurjs 只产出 ESM module remote，无 script/var 互操作）`,
   library: `// 删除 library（remoteEntry 恒为 ESM，无 UMD/var 输出形态）`,
-  automaticAsyncBoundary: `// 删除 automaticAsyncBoundary（TLA 自动异步边界始终开启，无手工 bootstrap 模式）`,
+  automaticAsyncBoundary: `// 删除 automaticAsyncBoundary（异步边界由插件按构建引擎管理，无需手工 bootstrap）`,
   dataPrefetch: `// 删除 dataPrefetch（preloadRemote() 能力始终可用，无需开关）`,
   usedExports: `// 删除 usedExports（Rollup/Rolldown 原生 tree-shaking 已覆盖）`,
   ignoreUnusedSharedExports: `// 删除 ignoreUnusedSharedExports（Rollup/Rolldown 原生 tree-shaking 已覆盖）`,
@@ -426,7 +426,7 @@ const REMOVED_OPTIONS: Record<string, string> = {
 const REMOVED_OPTION_CAUSES: Record<string, string> = {
   remoteType: '该字段只接受唯一值 "module"，从未产生其他行为',
   library: '该字段从未参与输出——remoteEntry 恒为 ESM',
-  automaticAsyncBoundary: '该字段接受任意值且恒为 true（TLA 天然异步边界）',
+  automaticAsyncBoundary: '异步边界由插件按构建引擎管理，该字段不能控制它',
   dataPrefetch: '该字段接受任意值且恒为 true（预载能力不由此开关控制）',
   usedExports: '该字段是 no-op（打包器原生 tree-shaking 已覆盖）',
   ignoreUnusedSharedExports: '该字段是 no-op（打包器原生 tree-shaking 已覆盖）',
@@ -461,7 +461,7 @@ function validateOptions(options: FederationOptions): void {
     const value = (options as unknown as Record<string, unknown>)[field]
     if (value !== undefined) {
       configError(
-        `CFG-011：选项 "${field}" 已在 5.0.0 删除`,
+        `CFG-011：不支持的选项 "${field}"`,
         value,
         REMOVED_OPTION_CAUSES[field],
         fix,

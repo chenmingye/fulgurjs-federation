@@ -99,7 +99,6 @@ export default {
 
 - The CLI loader esbuild-bundles the **original config file as the parse baseline**: supports pure TS/JS data modules with project-relative imports, Node ≥ 18, both CJS and ESM; a missing file, no `name`, a wrong field shape, or an expose/setup pointing outside the project or at a missing file all fail with a three-part error;
 - The runtime (Vite) and the CLI resolve the same config values; dev/prod URL selection follows the same rules as `federation({ remotes })`;
-- The legacy aggregate config (the `@fulgurjs/federation/config` subpath, the `root + apps[]` shape, and the CLI `--app` selector) no longer exists: importing it yields an exports resolution error, and when the CLI reads the old shape it prints a migration hint — one `fulgurjs.config.ts` per app is the only form.
 
 ## Config-time validation (fail fast)
 

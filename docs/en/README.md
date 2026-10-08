@@ -63,4 +63,4 @@
 | [Releasing](../maintainers/releasing.md) | Release triggers publish.yml, npm verification, doc sync |
 | [webpack MF comparison](../maintainers/webpack-mf-对照与缺口.md) | Capability comparison and boundaries versus webpack ModuleFederationPlugin |
 | [Sandbox boundary audit](../maintainers/沙箱边界审计.md) | Same-realm conclusions for CSS / global variables / public dependencies |
-| [Vite 7/8 compatibility matrix](../maintainers/P5-vite7-8兼容矩阵.md) | Full-version e2e fixture matrix |
+| [Vite 7/8 compatibility matrix](../maintainers/compatibility-testing.md) | Full-version e2e fixture matrix |

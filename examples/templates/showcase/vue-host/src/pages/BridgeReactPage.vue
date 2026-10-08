@@ -25,7 +25,7 @@ const handleDeepLink = (): void => {
   if (/^https?:\/\//i.test(raw)) {
     try {
       const parsed = new URL(raw)
-      path = parsed.pathname + parsed.search
+      path = parsed.pathname + parsed.search + parsed.hash
     } catch {
       deepLinkError.value = 'URL 无法解析'
       return

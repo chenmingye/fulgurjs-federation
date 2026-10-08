@@ -46,7 +46,7 @@ describe('options: setup 校验（CFG-012）', () => {
 describe('options: CFG-011 已删除的 webpack 兼容/无效选项（5.0.0——传入任何值都硬报错并给出迁移写法）', () => {
   it('remoteType（含历史唯一合法值 "module"）→ CFG-011 迁移报错', () => {
     expect(() => normalizeOptions({ name: 'r', remoteType: 'script' } as unknown as FederationOptions, ROOT, 'build')).toThrow('CFG-011')
-    expect(() => normalizeOptions({ name: 'r', remoteType: 'module' } as unknown as FederationOptions, ROOT, 'build')).toThrow(/remoteType.*已在 5\.0\.0 删除/)
+    expect(() => normalizeOptions({ name: 'r', remoteType: 'module' } as unknown as FederationOptions, ROOT, 'build')).toThrow(/CFG-011.*不支持的选项 "remoteType"/s)
   })
 
   it('library（含历史合法 type）→ CFG-011 迁移报错', () => {
@@ -55,7 +55,7 @@ describe('options: CFG-011 已删除的 webpack 兼容/无效选项（5.0.0—�
     ).toThrow('CFG-011')
     expect(() =>
       normalizeOptions({ name: 'r', library: { type: 'esm' } } as unknown as FederationOptions, ROOT, 'build'),
-    ).toThrow(/library.*已在 5\.0\.0 删除/)
+    ).toThrow(/CFG-011.*不支持的选项 "library"/s)
   })
 
   it('automaticAsyncBoundary / dataPrefetch / usedExports / ignoreUnusedSharedExports → CFG-011 迁移报错', () => {

@@ -1,6 +1,6 @@
 # webpack Module Federation：当前能力与使用边界对照
 
-> 核对版本：`@fulgurjs/federation@5.7.1`（2026-10-03 完成）；6.0.0 统一入口（/vue、/react、/runtime）后本文入口路径已同步更新，能力语义不变。本页描述当前能力；早期历史过程文档不作为当前支持范围。
+> 当前能力以公开 API、实现和 CI 为依据。本页按使用场景说明能力与边界，不宣称与 webpack 的全部行为相同。
 > 对照对象是 webpack 5 内置 `ModuleFederationPlugin`；Module Federation enhanced runtime、Bridge、DevTools 等独立生态工具不是 webpack 内置插件的同一功能面。本插件不承诺完整配置或产物互操作兼容。
 
 ## 一、已经实现
@@ -27,7 +27,7 @@
 | 能力 | 当前范围 | 与 webpack 的关系 |
 |---|---|---|
 | SSR / Node 服务端联邦、RSC、Next.js 全栈 | 不支持 | webpack 联邦概念支持 web/Node 等环境；不意味着自动获得完整 SSR/RSC 集成。本插件当前仅支持浏览器客户端 |
-| webpack `script` / `var` 容器互操作 | 不支持 | 本插件产出 ESM remote；不要因为都有 init/get 就直接混用两种产物。remoteType/library 已删除，传入报迁移错误 |
+| webpack `script` / `var` 容器互操作 | 不支持 | 本插件产出 ESM remote；不要因为都有 init/get 就直接混用两种产物。无需 remoteType/library 配置；配置这两个字段会报不支持的选项 |
 | Vue/React 组件级直接混渲染 | 不提供转换层 | webpack 核心负责模块加载，不转换框架组件；本插件的子应用桥接允许两个框架各自管理组件树 |
 | JS 沙箱 / 自动 CSS 隔离 | 不提供 | 普通同页面联邦不会自动隔离全局变量、全局 CSS、Portal/Teleport 的容器外 DOM；需要额外隔离方案（见[沙箱边界审计](沙箱边界审计.md)） |
 | 独立浏览器 DevTools 扩展 | 无 | 本插件提供 `window.__FULGURJS_SCOPE__ / __FULGURJS_INFO__`。其他联邦生态工具的扩展不能计为 webpack 内置能力 |

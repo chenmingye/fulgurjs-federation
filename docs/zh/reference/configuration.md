@@ -99,7 +99,6 @@ export default {
 
 - CLI 加载器以**原配置文件为解析基准** esbuild-bundle 读取：支持项目内相对导入的纯 TS/JS 数据模块、Node ≥ 18、CJS/ESM 双形态；缺失文件、无 `name`、字段形状不对、expose/setup 指向项目外或不存在文件均三段式报错；
 - 运行时（Vite）与 CLI 解析同一份配置值；dev/prod 的 URL 选择规则与 `federation({ remotes })` 一致；
-- 旧版聚合配置（`@fulgurjs/federation/config` 子路径、`root + apps[]` 形状、CLI `--app` 选择器）均已不存在：导入得到 exports 解析错误，CLI 读到旧形状输出中文迁移指引——每应用一份 `fulgurjs.config.ts` 是唯一形态。
 
 ## 配置期校验（fail fast）
 

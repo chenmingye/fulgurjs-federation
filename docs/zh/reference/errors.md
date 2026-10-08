@@ -19,7 +19,7 @@
 | `CFG-008` | 配置期报「不能同时配置 eager 和 import:false」或「共享键重复声明」 | `eager` 需要本地副本打进初始 chunk，与 `import: false`（纯消费）互斥；或同 shareKey+shareScope 声明了两次 | 二选一：`{ eager: true }` 或 `{ import: false }`；合并重复声明或改用不同 shareKey |
 | `CFG-009` | 配置期报 timeout/retries/breaker 数值非法 | `timeout`/`breaker.threshold`/`breaker.resetMs` 非有限正数；`retries` 非 0–10 整数 | `timeout: 15000`、`retries: 2`（上限 10 防退避风暴）、`breaker: { threshold: 5, resetMs: 30000 }` |
 | `CFG-010` | 配置期报 devCorsOrigins 形态非法 | 值既不是 `"*"` 也不是 http(s) 来源数组 | `'*'`（全放开）或 `['http://localhost:5100', …]` allowlist |
-| `CFG-011` | 配置期报「选项 xxx 已在 5.0.0 删除」并给迁移写法 | 传入了 webpack 兼容/无效选项：`remoteType`/`library`/`automaticAsyncBoundary`/`dataPrefetch`/`usedExports`/`ignoreUnusedSharedExports`（任何值含历史合法值都报） | 直接删除该字段：remoteEntry 恒为 ESM、TLA 异步边界恒开、tree-shaking 由打包器原生完成；预载用运行时 `preloadRemote()`（`/runtime` 导出） |
+| `CFG-011` | 配置包含不支持的选项 | 传入 `remoteType`、`library`、`automaticAsyncBoundary`、`dataPrefetch`、`usedExports` 或 `ignoreUnusedSharedExports` | 删除该字段。remoteEntry 使用 ESM，异步边界与共享 chunk 由插件管理，tree-shaking 由打包器执行；主动预载使用 `/runtime` 的 `preloadRemote()` |
 | `CFG-012` | 配置期报「setup 必须是相对应用根目录的非空模块路径」或「exposes 键已由联邦 setup 入口保留」 | setup 为空/非字符串；或 exposes 占用内部保留键 `./__fulgurjs_setup__` | setup 写如 `'./src/fulgurjs/setup.ts'`；保留键改名为其他公开 expose，原文件路径配置到 `federation({ setup })` |
 
 ### DEV 开发期

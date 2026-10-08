@@ -36,7 +36,7 @@ pnpm test:prod   # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 `fixtures/{host-vue,remote-a,remote-b,remote-auto,host-auto,remote-react,host-react}` 是最小联邦夹具（端口 5100–5102 一族；prod 经 NGINX 8999）。用途：
 
 - dev/prod e2e 的宿主与远程；
-- 版本矩阵升级实测（Vite 7/8 轮次，见 [P5 兼容矩阵](P5-vite7-8兼容矩阵.md)）：fixture 内 `pnpm add -D vite@^7` 升级 → e2e 全量 → `git checkout -- fixtures/ && pnpm install` 恢复基线（不留升级残留）。
+- 版本矩阵升级实测（Vite 7/8 轮次，见 [P5 兼容矩阵](compatibility-testing.md)）：fixture 内 `pnpm add -D vite@^7` 升级 → e2e 全量 → `git checkout -- fixtures/ && pnpm install` 恢复基线（不留升级残留）。
 
 注意：fixtures 默认只覆盖 vue 生态；react fixture 补齐时需同步扩矩阵。
 
@@ -62,7 +62,7 @@ pnpm test:prod   # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 
 - Vite 6 / 7 / 8 的 e2e 作业随 CI 常驻（Vite 8.3.2：dev 73/73 + prod 33/33）；
 - React 代表性验证：React 18 + React Router 6（dev 34/34 + prod 20/20）；React 19 + RR7 随基线矩阵；
-- 历史矩阵全表见 [P5-vite7-8兼容矩阵](P5-vite7-8兼容矩阵.md)。
+- 兼容性验证方法见 [兼容性验证](compatibility-testing.md)。
 
 ## 调试建议
 

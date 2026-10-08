@@ -11,7 +11,7 @@
 | [发布流程](releasing.md) | GitHub Release → publish.yml 自动发布；npm dist-tag/integrity/provenance 核验；文档与锁文件同步 |
 | [webpack-mf-对照与缺口](webpack-mf-对照与缺口.md) | 与 webpack `ModuleFederationPlugin` 的能力对照、不提供面、使用限制区别 |
 | [沙箱边界审计](沙箱边界审计.md) | CSS / 全局变量 / 公共依赖的同 realm 结论与心智模型 |
-| [P5-vite7-8兼容矩阵](P5-vite7-8兼容矩阵.md) | fixtures Vite 5.1→8.3 全版本 dev/prod e2e 矩阵与测试方法 |
+| [兼容性验证](compatibility-testing.md) | fixtures Vite 5.1→8.3 全版本 dev/prod e2e 矩阵与测试方法 |
 
 ## 硬约束速查（CI 与门禁会拦的红线）
 

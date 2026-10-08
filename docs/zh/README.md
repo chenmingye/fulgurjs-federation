@@ -63,4 +63,4 @@
 | [发布流程](../maintainers/releasing.md) | Release 触发 publish.yml、npm 核验、文档同步 |
 | [webpack MF 对照](../maintainers/webpack-mf-对照与缺口.md) | 与 webpack ModuleFederationPlugin 的能力对照与边界 |
 | [沙箱边界审计](../maintainers/沙箱边界审计.md) | CSS / 全局变量 / 公共依赖的同 realm 结论 |
-| [Vite 7/8 兼容矩阵](../maintainers/P5-vite7-8兼容矩阵.md) | fixtures 全版本 e2e 矩阵 |
+| [Vite 7/8 兼容矩阵](../maintainers/compatibility-testing.md) | fixtures 全版本 e2e 矩阵 |

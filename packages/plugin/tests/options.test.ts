@@ -253,3 +253,12 @@ describe('runtimePlugins 的项目根目录解析', () => {
     expect(result.runtimePlugins).toEqual([`${ROOT}/src/plugin.ts`, 'shared-policy', '/tmp/policy.ts'])
   })
 })
+
+
+describe('current configuration diagnostics', () => {
+  it('unsupported async boundary option explains current engine-managed behavior', () => {
+    expect(() => norm({ name: 'h', automaticAsyncBoundary: false } as never)).toThrow(/CFG-011.*不支持的选项/s)
+    expect(() => norm({ name: 'h', automaticAsyncBoundary: false } as never)).toThrow(/按构建引擎管理/)
+    expect(() => norm({ name: 'h', automaticAsyncBoundary: false } as never)).not.toThrow(/5\.0\.0|恒为 true|始终开启/)
+  })
+})
