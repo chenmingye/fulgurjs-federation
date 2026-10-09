@@ -58,13 +58,22 @@ type TsModule = typeof import('typescript')
 /** 从提供方工程解析指定包（typescript / vue-tsc）；npm 生态三种包管理器布局兼容 */
 function resolveFromRoot(root: string, pkg: string): string | null {
   const req = createRequire(path.join(root, 'package.json'))
-  for (const spec of [pkg, `${pkg}/package.json`]) {
+  let resolved: string | null = null
+  for (const spec of [`${pkg}/package.json`, pkg]) {
     try {
-      const resolved = req.resolve(spec)
-      return spec.endsWith('/package.json') ? resolved : path.dirname(resolved)
+      resolved = req.resolve(spec)
+      break
     } catch { /* 尝试下一个形态 */ }
   }
-  return null
+  if (!resolved) return null
+  // 裸名解析可能落在包内文件（如旧版 vue-tsc 的 main=out/index.js）——向上爬升找包根
+  let dir = path.dirname(resolved)
+  for (let i = 0; i < 5 && !fs.existsSync(path.join(dir, 'package.json')); i++) {
+    const parent = path.dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+  return fs.existsSync(path.join(dir, 'package.json')) ? dir : null
 }
 
 function installHint(root: string, pkg: string): string {
@@ -76,6 +85,120 @@ function installHint(root: string, pkg: string): string {
   const devFlag = pkgManager === 'pnpm' ? '-D' : '--save-dev'
   const run = pkgManager === 'npm' ? `npm install ${devFlag} ${pkg}` : `${pkgManager} add ${devFlag} ${pkg}`
   return `请在提供方工程安装 ${pkg}（${run}）；它是声明生成工具，不进入浏览器运行时。`
+}
+
+/**
+ * rawOptions（子配置原文）缺失的继承键从 parsed options 补齐——tsconfig 的 extends
+ * 链解析结果只在 parsed.options 里，直接序列化 rawOptions 会丢掉父级 paths/baseUrl/
+ * typeRoots 等关键解析配置。只合并**非枚举**键（parsed 里枚举键是数值，序列化会给
+ * vue-tsc 报 TS5023/5024）；rawOptions 显式声明的键永远优先。
+ */
+const INHERITABLE_KEYS = [
+  'paths', 'baseUrl', 'typeRoots', 'types', 'lib', 'rootDirs',
+  'allowImportingTsExtensions', 'useDefineForClassFields', 'esModuleInterop',
+  'allowSyntheticDefaultImports', 'allowJs', 'checkJs', 'skipLibCheck', 'strict',
+  'experimentalDecorators', 'emitDecoratorMetadata', 'verbatimModuleSyntax',
+  'isolatedModules', 'resolveJsonModule', 'jsxImportSource', 'allowUmdGlobalAccess',
+] as const
+
+function rawOptionsWithInherited(ctx: TsConfigContext): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...ctx.rawOptions }
+  for (const key of INHERITABLE_KEYS) {
+    if (merged[key] === undefined && ctx.compilerOptions[key] !== undefined) {
+      merged[key] = ctx.compilerOptions[key]
+    }
+  }
+  return merged
+}
+
+/**
+ * 入口静态导入闭包（BFS）：沿 import/export 语句与 import() 之外的静态说明符解析。
+ * 动态 import() 不入闭包（只是类型边）；.vue 说明符经 resolver 解析不到时按相对路径
+ * 兜底（ts.resolveModuleName 不认 SFC）。入口本身恒在闭包内。
+ */
+function computeStaticClosure(
+  ts: TsModule,
+  entryFiles: string[],
+  resolver: (spec: string, from: string) => { resolved: string; fromNodeModules: boolean } | null,
+  root: string,
+): Set<string> {
+  const closure = new Set<string>()
+  const queue = [...entryFiles]
+  while (queue.length > 0) {
+    const file = queue.pop()!
+    if (closure.has(file)) continue
+    closure.add(file)
+    let text: string
+    try {
+      text = fs.readFileSync(file, 'utf8')
+    } catch {
+      continue
+    }
+    const sfile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    for (const stmt of sfile.statements) {
+      const specNode: import('typescript').StringLiteral | null =
+        ((ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt)) && stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier))
+          ? stmt.moduleSpecifier
+          : null
+      if (!specNode) continue
+      const spec = specNode.text
+      if (!spec.startsWith('.') && !spec.startsWith('@/')) continue
+      const r = resolver(spec, file)
+      let resolved = r && !r.fromNodeModules ? r.resolved : null
+      if (!resolved) {
+        // .vue / 非常规扩展：相对路径兜底（SFC 不在 TS 解析面内）
+        const base = path.resolve(path.dirname(file), spec)
+        for (const c of [base, `${base}.vue`, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
+          if (fs.existsSync(c)) { resolved = c; break }
+        }
+      }
+      if (resolved && !resolved.includes(`${path.sep}node_modules${path.sep}`)) {
+        queue.push(path.resolve(resolved))
+      }
+    }
+  }
+  void root
+  return closure
+}
+
+/** 从编译器 stdout 解析出错文件集合（file(line,col): error TSxxxx；相对路径按 root 归一） */
+function parseErrorFiles(stdout: string, root: string): Set<string> {
+  const out = new Set<string>()
+  for (const line of stdout.split('\n')) {
+    const m = line.match(/^([^)(]+)\((\d+),(\d+)\): error TS/)
+    if (m) out.add(path.resolve(root, m[1]!.trim()))
+  }
+  return out
+}
+
+/**
+ * 解析 compilerOptions.types 条目为具体 .d.ts 文件（相对路径/包子路径），并从
+ * baseCo 中移除 types。条目形态两类：路径形态（相对 root 的 .d.ts / 目录）与包形态
+ * （"vite/client" → node_modules/vite/client.d.ts）。解析失败的条目移除并记录诊断。
+ */
+function resolveTypesEntries(root: string, baseCo: Record<string, unknown>, diagnostics: string[]): string[] {
+  const raw = baseCo.types
+  if (raw === undefined) return []
+  delete baseCo.types
+  if (!Array.isArray(raw)) return []
+  const req = createRequire(path.join(root, 'package.json'))
+  const out: string[] = []
+  for (const entry of raw) {
+    if (typeof entry !== 'string' || entry.length === 0) continue
+    const direct = [path.resolve(root, `${entry}.d.ts`), path.resolve(root, entry, 'index.d.ts')]
+    let hit = direct.find((c) => fs.existsSync(c))
+    if (!hit && !entry.startsWith('.') && !path.isAbsolute(entry)) {
+      try {
+        const r = req.resolve(entry)
+        for (const c of [r.replace(/\.js$/, '.d.ts'), `${r}.d.ts`, r]) {
+          if (fs.existsSync(c)) { hit = c; break }
+        }
+      } catch { /* 包形态解析失败 → 丢弃并记录 */ }
+    }
+    if (hit) out.push(hit)
+    else diagnostics.push(`compilerOptions.types 条目 "${entry}" 无法解析为类型文件，已从声明生成程序中排除（不影响应用构建）。`)
+  }
+  return out
 }
 
 /** 源码树里是否存在 .vue（有界扫描：src/ 优先，最多 2000 文件；找不到 src 扫根下一层） */
@@ -127,6 +250,10 @@ interface TsConfigContext {
   rawOptions: Record<string, unknown>
   /** 工程全部输入文件（绝对路径，非 .d.ts）——rootDir 与 vue 需求判定用 */
   projectFiles: string[]
+  /** 工程自身的 ambient 声明输入（.d.ts，绝对路径）——Jeecg 系工程的全局类型
+   * （Recordable/auto-imports 等）都在这里；声明闭包程序必须含它们，
+   * 否则声明 emit 报 TS40xx private name（MESZC bpm 实测） */
+  ambientInputs: string[]
   tsconfigFile: string | null
 }
 
@@ -147,6 +274,7 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
     return {
       ts,
       rawOptions: defaults,
+      ambientInputs: [],
       compilerOptions: {
         target: ts.ScriptTarget.ES2022,
         module: ts.ModuleKind.ESNext,
@@ -186,6 +314,7 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
     compilerOptions: co,
     rawOptions: (raw.config.compilerOptions ?? {}) as Record<string, unknown>,
     projectFiles: parsed.fileNames.filter((f) => !f.endsWith('.d.ts')),
+    ambientInputs: parsed.fileNames.filter((f) => f.endsWith('.d.ts') && !f.includes(`${path.sep}node_modules${path.sep}`)),
     tsconfigFile,
   }
 }
@@ -256,6 +385,11 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   const emitted = new Map<string, string>() // 绝对源文件 → 声明文本
   let tool: 'typescript' | 'vue-tsc' = 'typescript'
 
+  // 入口**静态**导入闭包：诊断门禁与产物范围都限定在它——动态导入（如桥接契约的
+  // 装配模块）只是类型边，其文件的存量业务错误与公开声明面无关，不进闭包也不阻断
+  // 生成（设计合同：「与 exposed 声明依赖无关的业务错误不要被偷换成类型生成失败」）。
+  const closure = computeStaticClosure(ts, entryFiles, resolver, root)
+
   if (needsVueTsc) {
     const vueTscDir = resolveFromRoot(root, 'vue-tsc')
     if (!vueTscDir) {
@@ -280,7 +414,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     // 临时 tsconfig 写在提供方根（include 相对路径语义正确；用完即删）
     const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${process.pid}.json`)
     const outDir = fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
-    const baseCo: Record<string, unknown> = { ...ctx.rawOptions }
+    const baseCo: Record<string, unknown> = { ...rawOptionsWithInherited(ctx) }
     delete baseCo.noEmit
     delete baseCo.incremental
     delete baseCo.composite
@@ -288,11 +422,18 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     delete baseCo.emitDeclarationOnly
     delete baseCo.declarationDir
     delete baseCo.extends
+    // types 条目改为显式文件 include：显式 typeRoots 下 TS 的 types 条目只查 typeRoots
+    // （"vite/client" 落不进 ./types → TS2688，MESZC bpm 实测）；自行按包解析出具体
+    // .d.ts 并纳入 include，绕开该解析歧义；解析失败的条目丢弃（如实记录诊断）
+    const resolvedTypeFiles = resolveTypesEntries(root, baseCo, diagnostics)
 
     fs.writeFileSync(tmpCfg, JSON.stringify({
       compilerOptions: {
         ...baseCo,
         noEmit: false,
+        // 程序级文件（含动态导入的类型边）可能有存量业务错误——声明照常产出，
+        // 由「入口静态闭包内的错误」做门禁（见 computeStaticClosure 注释）
+        noEmitOnError: false,
         declaration: true,
         emitDeclarationOnly: true,
         declarationMap: false,
@@ -300,8 +441,13 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         outDir,
         rootDir,
       },
-      include: entryFiles.map((f) => path.relative(root, f)),
+      include: [
+        ...entryFiles.map((f) => path.relative(root, f)),
+        ...ctx.ambientInputs.map((f) => path.relative(root, f)),
+        ...resolvedTypeFiles.map((f) => path.relative(root, f)),
+      ],
     }))
+    if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
     try {
       await new Promise<void>((resolve, reject) => {
         const child = execFile(
@@ -315,10 +461,22 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
                 reject(err)
                 return
               }
-              // vue-tsc 的编译诊断走 stdout；两路都收（取尾部防刷屏）
-              const tail = `${String(stdout ?? '')}\n${String(stderr ?? '')}\n${err.message}`.trim().split('\n').slice(-40).join('\n')
-              diagnostics.push(`vue-tsc 声明生成失败（暴露闭包存在编译错误）——类型资源未产出：\n${tail}`)
-              reject(err)
+              // 门禁 = 入口静态闭包内的错误（file(line,col): error TSxxxx 形态解析）；
+              // 闭包外（动态导入类型边/无关业务文件）的错误如实丢弃，不偷换成生成失败
+              const errFiles = parseErrorFiles(String(stdout ?? ''), root)
+              const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
+              if (closureErrs.size > 0) {
+                const tail = `${String(stdout ?? '')}\n${String(stderr ?? '')}\n${err.message}`
+                  .split('\n').filter((line) => {
+                    const m = line.match(/^([^)(]+)\(\d+,\d+\): error TS/)
+                    return !m || closureErrs.has(path.resolve(root, m[1]!.trim()))
+                  }).slice(-40).join('\n')
+                diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
+                reject(err)
+              } else {
+                // 仅闭包外错误：声明 emit 已产出（noEmitOnError:false），继续
+                resolve()
+              }
             } else {
               resolve()
             }
@@ -333,11 +491,11 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     } finally {
       fs.rmSync(tmpCfg, { force: true })
     }
-    collectEmitted(ts, outDir, rootDir, emitted)
+    collectEmitted(ts, outDir, rootDir, emitted, closure)
     fs.rmSync(outDir, { recursive: true, force: true })
   } else {
     const outDir = fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
-    const program = ts.createProgram(entryFiles, {
+    const program = ts.createProgram([...entryFiles, ...ctx.ambientInputs, ...resolveTypesEntries(root, ctx.rawOptions, [])], {
       ...(ctx.compilerOptions as Record<string, never>),
       noEmit: false,
       declaration: true,
@@ -355,10 +513,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       ...program.getSemanticDiagnostics(),
       ...program.getDeclarationDiagnostics(),
     ].filter((d) => d.category === ts.DiagnosticCategory.Error)
+      // 门禁 = 入口静态闭包内的错误；闭包外业务文件不偷换成生成失败
+      .filter((d) => !d.file || closure.has(path.resolve(d.file.fileName)))
     if (errs.length > 0) {
       fs.rmSync(outDir, { recursive: true, force: true })
       diagnostics.push(
-        `声明生成失败：暴露闭包存在 ${errs.length} 个编译错误——类型资源未产出（修复后重新构建/重启 dev）。前若干条：`,
+        `声明生成失败：暴露闭包内存在 ${errs.length} 个编译错误——类型资源未产出（修复后重新构建/重启 dev）。前若干条：`,
         ...errs.slice(0, 20).map((d) => {
           const f = d.file ? path.relative(root, d.file.fileName) : '?'
           const pos = d.file ? d.file.getLineAndCharacterOfPosition(d.start ?? 0) : { line: 0 }
@@ -372,7 +532,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       fs.rmSync(outDir, { recursive: true, force: true })
       return { ok: false, diagnostics: ['TypeScript 声明 emit 失败（emitSkipped）。请检查 tsconfig 编译选项。'] }
     }
-    collectEmitted(ts, outDir, rootDir, emitted)
+    collectEmitted(ts, outDir, rootDir, emitted, closure)
     fs.rmSync(outDir, { recursive: true, force: true })
   }
 
@@ -436,8 +596,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   return { ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0 }
 }
 
-/** 收集 emit 产物 → { 绝对源文件 → 声明文本 }（.vue → .vue.d.ts；.ts/.tsx → .d.ts） */
-function collectEmitted(ts: TsModule, outDir: string, rootDir: string, out: Map<string, string>): void {
+/** 收集 emit 产物 → { 绝对源文件 → 声明文本 }（.vue → .vue.d.ts；.ts/.tsx → .d.ts）。
+ * 只收入口静态闭包内的文件——程序级其他文件（动态导入类型边）的声明不进 bundle。 */
+function collectEmitted(ts: TsModule, outDir: string, rootDir: string, out: Map<string, string>, closure: Set<string>): void {
   const walk = (dir: string): string[] =>
     fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
       const p = path.join(dir, d.name)
@@ -456,6 +617,7 @@ function collectEmitted(ts: TsModule, outDir: string, rootDir: string, out: Map<
         if (fs.existsSync(candidate)) { srcAbs = candidate; break }
       }
     }
+    if (!closure.has(srcAbs)) continue
     out.set(srcAbs, fs.readFileSync(file, 'utf8'))
   }
   void ts

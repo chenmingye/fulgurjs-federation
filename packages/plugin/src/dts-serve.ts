@@ -51,12 +51,17 @@ export function createDevTypesServer(
 
   const run = async (): Promise<void> => {
     if (disposed) return
-    const result: DtsGenerateResult = await generateTypesBundle({
-      root: options.root,
-      exposes: publicExposes,
-      pluginVersion: options.pluginVersion,
-      signal: controller.signal,
-    })
+    let result: DtsGenerateResult
+    try {
+      result = await generateTypesBundle({
+        root: options.root,
+        exposes: publicExposes,
+        pluginVersion: options.pluginVersion,
+        signal: controller.signal,
+      })
+    } catch (e) {
+      result = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截）：${(e as Error).stack ?? (e as Error).message}`] }
+    }
     if (disposed) return
     if (result.ok) {
       files = result.files

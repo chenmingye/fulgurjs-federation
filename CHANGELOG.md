@@ -1,5 +1,16 @@
 # 当前发布说明
 
+## 6.5.3
+
+远程类型声明生成的真实工程加固（MESZC/demes 迁移现场驱动；公共 API 与运行时不变）：
+
+- **包解析加固**：`typescript`/`vue-tsc` 从提供方工程解析时向上爬升到包根（旧版 vue-tsc 的裸名解析落在 `out/` 子目录会直接 ENOENT 崩构建）。
+- **异常防线**：build/dev 期声明生成的未预期异常统一拦截为 TYP-001 诊断——构建继续、dev 服务继续，绝不让类型链故障中断应用。
+- **types 条目解析**：`compilerOptions.types` 条目自行解析为具体 `.d.ts` 并纳入程序——显式 `typeRoots` 下 TS 只在 typeRoots 内查条目（`vite/client` 报 TS2688，Jeecg 系工程实测）。
+- **ambient 输入**：工程自身的 `.d.ts`（global/auto-imports 等）纳入声明程序——依赖全局类型（`Recordable` 等）的工程不再报 TS40xx private name。
+- **extends 继承合并**：临时 tsconfig 序列化时补齐 extends 链解析出的非枚举关键键（paths/baseUrl/typeRoots 等）——直接序列化子配置原文会丢父级解析配置。
+- **入口静态闭包门禁**：诊断门禁与产物范围都限定在 exposes 入口的**静态**导入闭包——动态导入只是类型边，其文件的存量业务类型错误不再阻断类型资源（设计合同：「与 exposed 声明依赖无关的业务错误不要被偷换成类型生成失败」）。MESZC/demes 六应用实测：桥接契约与宿主表单页全部成功产出精确声明。
+
 ## 6.5.2
 
 最终交付包（与 6.5.1 插件运行时零差异，仅模板资产与文档）：

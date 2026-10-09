@@ -1364,11 +1364,16 @@ export function federation(options: FederationOptions): Plugin[] {
         // 严格门禁走 `npx @fulgurjs/federation types`（失败非零退出）
         let typesRevision: string | undefined
         if (n.dts && n.exposes.some((e) => !e.internal)) {
-          const typesResult = await generateTypesBundle({
-            root: n.root,
-            exposes: n.exposes.filter((e) => !e.internal).map((e) => ({ name: e.name, import: e.import })),
-            pluginVersion: n.pluginVersion,
-          })
+          let typesResult: Awaited<ReturnType<typeof generateTypesBundle>>
+          try {
+            typesResult = await generateTypesBundle({
+              root: n.root,
+              exposes: n.exposes.filter((e) => !e.internal).map((e) => ({ name: e.name, import: e.import })),
+              pluginVersion: n.pluginVersion,
+            })
+          } catch (e) {
+            typesResult = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截，构建继续）：${(e as Error).message}`] }
+          }
           if (typesResult.ok) {
             for (const [rel, content] of typesResult.files) {
               this.emitFile({ type: 'asset', fileName: `fulgurjs-types/${rel}`, source: content })
