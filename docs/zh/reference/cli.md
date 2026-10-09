@@ -141,8 +141,10 @@ $ npx @fulgurjs/federation init
 ### 语法
 
 ```bash
-fulgurjs types [--config <path>] [--mode dev|prod] [--check]
+fulgurjs types [--config <path>] [--mode dev|prod] [--base <URL>] [--check]
 ```
+
+`--mode prod` 读取 remotes 的 **prod** 地址；相对地址（如 `/remote-a`）需 `--base <站点 origin>`（如 `https://your-site`）拼出完整 URL。
 
 ### 行为
 

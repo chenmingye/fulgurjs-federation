@@ -36,10 +36,12 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs init --config <path>                    校验配置；输出 federation(fulgurjsConfig) 接入块
                                                  与按角色的接入核对清单
   fulgurjs explain [--config <path>] [--json]      解释本应用有效联邦形态与加载链（纯本地，无网络）
-  fulgurjs types [--config <path>] [--mode dev|prod] [--check]
+  fulgurjs types [--config <path>] [--mode dev|prod] [--base <URL>] [--check]
                                                  远程类型：提供方验证声明 bundle 生成；宿主同步远程
                                                  声明到本地类型目录（CI 在 typecheck 前运行；失败非零
                                                  退出）。双角色工程先生成（纯本地，不等远程）再同步。
+                                                 --mode prod 读 remotes 的 prod 地址；相对地址（如
+                                                 /remote-a）需 --base <站点 origin> 拼出完整 URL。
                                                  --check 只核对本地缓存与已记录 revision（不联网，
                                                  不代表远程线上最新已核实）
   fulgurjs check-pages [--config <path>] [--site <URL>]
@@ -272,6 +274,7 @@ async function main(): Promise<number> {
       const r = await runTypesCommand({
         configPath: resolve(argOf('--config') ?? 'fulgurjs.config.ts'),
         ...(mode ? { mode: mode as 'dev' | 'prod' } : {}),
+        ...(argOf('--base') ? { base: argOf('--base') } : {}),
         check: has('--check'),
         cwd: process.cwd(),
       })

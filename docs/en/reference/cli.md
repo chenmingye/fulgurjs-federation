@@ -141,8 +141,10 @@ The single entry for remote types. Roles are auto-detected from `fulgurjs.config
 ### Syntax
 
 ```bash
-fulgurjs types [--config <path>] [--mode dev|prod] [--check]
+fulgurjs types [--config <path>] [--mode dev|prod] [--base <URL>] [--check]
 ```
+
+`--mode prod` reads remotes' **prod** URLs; relative ones (e.g. `/remote-a`) need `--base <site origin>` (e.g. `https://your-site`) to form full URLs.
 
 ### Behavior
 

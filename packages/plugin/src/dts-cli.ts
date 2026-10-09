@@ -26,6 +26,8 @@ import { checkTypesDiscovery } from './dts-discovery'
 export interface TypesCommandOptions {
   configPath?: string
   mode?: 'dev' | 'prod'
+  /** 相对 prod 地址的站点 origin（--mode prod 时 remotes.prod 形如 '/remote-a' 需要） */
+  base?: string
   /** 只校验本地缓存与已记录 revision（不联网；不核实远程最新） */
   check?: boolean
   cwd?: string
@@ -103,10 +105,11 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
     const externalsMissing = new Map<string, string[]>()
     for (const remote of syncable) {
       const entry = mode === 'dev' ? remote.devEntry : remote.prodEntry
-      const manifestUrl = manifestUrlFromEntry(entry)
+      const entryUrl = entry.startsWith('/') ? (opts.base ? new URL(entry, opts.base).toString() : entry) : entry
+      const manifestUrl = manifestUrlFromEntry(entryUrl)
       if (!manifestUrl) {
         failed = true
-        lines.push(`[consumer] 远程 ${remote.key}：地址（${entry}）无法推导 manifest URL，已跳过。`)
+        lines.push(`[consumer] 远程 ${remote.key}：地址（${entry}${entry !== entryUrl ? ` → ${entryUrl}` : ''}）无法推导 manifest URL，已跳过。${entry.startsWith('/') && !opts.base ? '--mode prod 的相对地址需要 --base <站点 origin>（如 https://your-site）。' : ''}`)
         continue
       }
       const result = await syncRemoteTypes({
