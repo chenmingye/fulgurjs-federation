@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --port 5203 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --port 5203 --strictPort"
+    "preview": "vite preview --port 5203 --strictPort",
+    "types": "fulgurjs types",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fulgurjs/federation": "6.4.1",

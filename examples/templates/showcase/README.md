@@ -97,13 +97,14 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 - **双框架安装合同**：桥接宿主 shared 必须 vue / react / react-dom 三键全 `singleton`（见两个宿主的 `fulgurjs.config.ts`）。
 - **vue-remote 的 vue-router 双实例防护**：`resolve.dedupe: ['vue', 'vue-router']` + `optimizeDeps.exclude: ['vue-router']`（vue-router 纯 ESM，exclude 后其 vue 导入被插件 dev 改写到 shared 门面；同 `fixtures/remote-a`）。
 - **react-remote 的 react-router-dom 必须正常进预构建**（同 e2e 实测的 `fixtures/remote-react`：不 exclude、不 alias）：其传递依赖 cookie 是 CJS-only 包，exclude 后浏览器报 `does not provide an export named 'parse'`；预构建内的 react 导入不会双实例——插件 dev 会向预构建注入 shared 键外部化 resolver（`fulgurjs:optimize-shared-external`）。
-- **dev 类型生成**：宿主 dev 启动时插件生成 `src/fulgurjs/types/<remote>.d.ts`（零配置轨，ambient `any`）与 `src/fulgurjs/types/<remote>.d/`（精确轨，需在 tsconfig 配 `paths` 才启用）。跨框架精确轨（React 宿主 tsc 消费 Vue 远程源码）需排除精确轨目录，见 `react-host/tsconfig.json` 的 `exclude: ["src/fulgurjs/types/vue-remote.d"]`。
+- **远程类型自动同步**：宿主 dev 启动时插件自动同步远程声明闭包到 `src/fulgurjs/types/<远程名>/`（ambient 声明 + 类型注册表），普通 import 与字符串 API 共用同一套类型；跨框架（React 宿主消费 Vue 远程）同样工作，无需 tsconfig paths 或 exclude。CI 在 typecheck 前运行 `pnpm run types`（= `fulgurjs types`）。
 - **守卫与 go 的交互**：守卫按目标路径拦截（不区分会话内触发方式），子应用 `go(-1)` 回到受守卫页面同样会弹确认；Vue 宿主守卫在任何新导航开始时自动作废旧待确认（`vue-host/src/guard.ts` 的 `invalidatePending`），避免确认横幅悬挂。两宿主守卫都**不拦截本会话的首跳**：整页刷新的深链恢复直接渲染（操作 15），Vue 宿主以 `router.isReady()` 解除首跳武装，与 React 宿主 `useBlocker` 随组件挂载生效的语义对齐。
 
 ## 构建 / 类型检查
 
 ```bash
 # 4 个工程均独立通过（在各自目录执行）
+pnpm run types       # 远程类型同步/验证（宿主同步远程声明；提供方验证生成）
 pnpm run typecheck   # React 工程 tsc --noEmit；Vue 工程 vue-tsc --noEmit
 pnpm run build
 ```

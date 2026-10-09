@@ -17,12 +17,8 @@
 import { onMounted, ref } from 'vue'
 import { loadRemote } from '@fulgurjs/federation/runtime'
 
-// 普通 TS 模块同样走 loadRemote：拿到命名空间后像本地模块一样调用
-interface RemoteUtils {
-  DEMO_ANSWER: number
-  sumNumbers: (...numbers: number[]) => number
-  formatPrice: (yuan: number) => string
-}
+// 普通 TS 模块同样走 loadRemote：类型来自插件同步的远程声明（src/fulgurjs/types），
+// 入口字符串拼错会在编译期报错——不再需要手写接口或手动泛型
 
 const result = ref<{ sum: number; answer: number; price: string } | null>(null)
 const error = ref('')
@@ -30,7 +26,7 @@ const error = ref('')
 async function load(): Promise<void> {
   error.value = ''
   try {
-    const utils = await loadRemote<RemoteUtils>('vue-remote/utils')
+    const utils = await loadRemote('vue-remote/utils')
     result.value = {
       sum: utils.sumNumbers(2, 3, 7),
       answer: utils.DEMO_ANSWER,

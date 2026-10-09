@@ -146,20 +146,21 @@ import { RemoteErrorBoundary } from '@fulgurjs/federation/react'
 
 Vue 侧无独立边界组件：`remoteComponent` 的内置错误占位 + `errorComponent` 选项承担同一职责。
 
-## 开发类型直连
+## 远程类型（自动同步）
 
-`dts` 默认开启：dev 下插件拉取远程 manifest，为每个公开 expose 生成类型声明到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`），src 布局项目 tsconfig 零配置生效：
+`dts` 默认开启：提供方随 dev/build 产出**可分发声明资源**（不依赖远程源码在宿主机器上），宿主 dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`），src 布局项目 tsconfig 零配置生效：
 
 ```ts
-// 宿主里直接以 '远程名/X' 形态导入获得类型
+// 宿主里直接以 '远程名/X' 形态导入获得类型（普通 import 与 import() 同源）
 import UserBadge from 'remote-a/shared/user-badge'
+// 字符串 API 同样检查：拼错入口在调用点报错；动态变量放行（unknown 边界）
+const mod = await loadRemote('remote-a/shared/user-badge')
 ```
 
-- `mode: 'source'`（默认）：跨工程源码直连，补全/跳转直达远程源码；VSCode 打开生成物可能显示工程外文件诊断（仅编辑器显示问题，命令行检查与构建不受影响）；
-- `mode: 'shim'`：宽松占位，IDE 干净但无源码级补全；
-- 两种 mode 都要读取 remote 本机源码枚举导出名；`dts` 不是不可信 manifest 的安全边界，只对可信来源开启；
-- 远程源码不可访问（`devFsRoot: false` 或跨机器）：降级生成 `any` 声明（默认/具名/副作用导入均可解析，无精确类型）；`dts: false` 完全关闭；
-- React expose（.tsx/.ts）与 Vue 共用同一套生成，另支持在宿主 tsconfig 配 `paths` 后获得源码级精确类型（见 [API 参考 · React 的 dev 类型](../reference/api.md#react-的-dev-类型双轨)）。
+- 普通模块、Vue/React 组件 props、桥接 `appProps` 都来自远程真实声明（vue-tsc/TypeScript 官方工具链产出，非宽松占位）；
+- 宿主不需要手工 tsconfig `paths`，也不需要远程源码或软链接；跨机器联调同样工作；
+- 远程未提供类型（旧版本/`dts: false`）：页面正常运行，入口按动态边界放行（`unknown`）；严格类型检查在 CI 运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](../reference/cli.md#fulgurjs-types)）；
+- `dts: false` 完全关闭（不生成、不下载）；细节与已知限制见 [API 参考 · 远程类型](../reference/api.md#远程类型自动生成与同步)。
 
 ## 远程页面里的运行时导入
 

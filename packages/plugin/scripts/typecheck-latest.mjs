@@ -38,7 +38,7 @@ if (!fs.existsSync(path.join(DIR, 'node_modules', 'typescript'))) {
 const pkgNameDir = path.join(DIR, 'node_modules', '@fulgurjs', 'federation')
 fs.rmSync(pkgNameDir, { recursive: true, force: true })
 fs.mkdirSync(pkgNameDir, { recursive: true })
-for (const entry of ['dist', 'package.json']) {
+for (const entry of ['dist', 'types', 'package.json']) {
   fs.cpSync(path.join(PKG, entry), path.join(pkgNameDir, entry), { recursive: true })
 }
 

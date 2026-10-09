@@ -110,7 +110,8 @@ export interface NormalizedOptions {
   shareScope: string
   manifest: boolean
   runtimePlugins: string[]
-  dts: boolean | { dir?: string; mode?: 'source' | 'shim' }
+  /** 远程类型输出（6.5.0 单一机制：宿主自动同步声明 + ambient 声明 + 注册表；dir 覆盖默认目录） */
+  dts: boolean | { dir?: string }
   root: string
   /** 本插件版本（D.5 DEV-006：宿主/远程版本一致性校验） */
   pluginVersion: string
@@ -121,8 +122,6 @@ export interface NormalizedOptions {
   devSharedSelf: boolean
   /** dev 跨源访问策略（devCorsOrigins 选项的规范化结果：undefined='*' / '*' / 来源数组） */
   devCorsOrigins: DevCorsOrigins
-  /** dev manifest 是否携带 fsRoot（devFsRoot 选项，默认 true） */
-  devFsRoot: boolean
 }
 
 export interface FederationOptions {
@@ -156,12 +155,6 @@ export interface FederationOptions {
    * 用户显式配置的 server.cors 永远优先）。
    */
   devCorsOrigins?: string[] | '*'
-  /**
-   * dev manifest 是否携带 fsRoot（remote 根目录本机绝对路径，宿主 dts 类型直连用）。
-   * 默认 true（现状兼容）；false 时不写入 manifest，宿主 dts 降级为 any 桩并给出提示。
-   * fsRoot 是 dev-only 字段，永不进入 prod manifest。
-   */
-  devFsRoot?: boolean
 }
 
 export const DEFAULT_FILENAME = 'fulgurjs-remoteEntry.js'
@@ -607,12 +600,23 @@ function validateOptions(options: FederationOptions): void {
       `devCorsOrigins: ['http://localhost:5100', 'http://127.0.0.1:5100']`,
     )
   }
-  if (options.devFsRoot !== undefined && typeof options.devFsRoot !== 'boolean') {
+  // 6.5.0：旧类型直连链（fsRoot/devFsRoot）随可分发声明机制移除——显式报错而非静默忽略
+  // （公共类型面已删该字段：TS 用户在编写期报错；JS/动态配置在运行期由这里拦截）
+  const legacyDevFsRoot = (options as { devFsRoot?: unknown }).devFsRoot
+  if (legacyDevFsRoot !== undefined) {
     configError(
-      'devFsRoot 必须是布尔值',
-      options.devFsRoot,
-      'true（dev manifest 携带 fsRoot，现状默认）或 false（不暴露本机路径）',
-      `devFsRoot: false`,
+      'CFG-013：devFsRoot 已随 6.5.0 远程类型机制移除（类型不再依赖远程本机源码路径）',
+      legacyDevFsRoot,
+      '删除 devFsRoot 配置项',
+      `// 类型资源由提供方随 dev/build 自动产出，宿主自动同步；无需本机路径直连`,
+    )
+  }
+  if (typeof options.dts === 'object' && options.dts !== null && 'mode' in options.dts) {
+    configError(
+      'CFG-013：dts.mode（source/shim 双轨）已随 6.5.0 远程类型机制移除',
+      (options.dts as { mode?: unknown }).mode,
+      '删除 mode 字段（保留 dts: true 或 { dir } 形态）',
+      `dts: true  // 或 dts: { dir: 'src/fulgurjs/types' }`,
     )
   }
 }
@@ -690,7 +694,6 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     // §12.4 后默认推断：仅纯宿主为 false）；显式配置永远优先
     devSharedSelf: options.devSharedSelf ?? (remotes.length === 0 || exposes.length > 0),
     devCorsOrigins: options.devCorsOrigins,
-    devFsRoot: options.devFsRoot ?? true,
   }
 }
 

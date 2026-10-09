@@ -163,7 +163,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 const { formatMoney } = await loadRemote<typeof import('remote-utils/money')>('remote-utils/money')
 ```
 
-> `loadRemote` 的类型参数只是编译期辅助；运行时模块 namespace 以远程实际导出为准。dev 下开了 `dts`（默认开）的宿主可对 `remote-a/X` 形态的导入直接获得类型，见[组件与模块加载 · 开发类型](components-and-modules.md#开发类型直连)。
+> `loadRemote` 的入口类型来自插件同步的远程声明（默认开启）：已同步字面量获得模块真实类型，拼错入口在调用点报错，动态变量走 `unknown` 边界；运行时模块 namespace 以远程实际导出为准。见[组件与模块加载 · 远程类型](components-and-modules.md#远程类型自动同步)。
 
 ## 从其他微前端方案迁入（概念映射）
 

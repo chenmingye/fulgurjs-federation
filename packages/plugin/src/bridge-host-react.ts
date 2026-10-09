@@ -36,6 +36,8 @@ import {
 } from './bridge-core'
 import { bridgeHostError } from './bridge-errors'
 import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
+import type { FgBridgeEntry, FgBridgeAppProps } from './remote-types'
+import type { FgTypeAuto } from '@fulgurjs/federation/internal/registry.js'
 
 type LoadRemoteFn = (spec: string, opts?: { retries?: number }) => Promise<any>
 
@@ -115,15 +117,19 @@ function renderBridgeErrorNode(
 /**
  * 构建 React 宿主桥接工厂（dist 壳与 dev 门面绑定各自运行时的 loadRemote 后导出）。
  */
+/** 桥接 appProps 解析：显式 P（老用法/接管）优先；默认按注册表推导（FgTypeAuto 标记） */
+type FgResolvedBridgeProps<P, S extends string> = P extends FgTypeAuto ? FgBridgeAppProps<S> : P
+
 export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
-  return function createReactBridgeApp<P = Record<string, unknown>>(
-    spec: string,
+  return function createReactBridgeApp<P = FgTypeAuto, S extends string = string>(
+    spec: S & FgBridgeEntry<S>,
     options: ReactBridgeAppOptions = {},
-  ): ComponentType<{ appProps?: P; sessionKey?: string | null; routing?: BridgeHostRouting }> {
+  ): ComponentType<{ appProps?: FgResolvedBridgeProps<P, S>; sessionKey?: string | null; routing?: BridgeHostRouting }> {
+    type ResolvedProps = FgResolvedBridgeProps<P, S>
     assertBridgeOptions(`createReactBridgeApp("${spec}")`, options)
     const displayName = 'FulgurjsBridge_' + spec.replace(/[^A-Za-z0-9_-]/g, '_')
 
-    function BridgeHost(props: { appProps?: P; sessionKey?: string | null; routing?: BridgeHostRouting }): ReactNode {
+    function BridgeHost(props: { appProps?: ResolvedProps; sessionKey?: string | null; routing?: BridgeHostRouting }): ReactNode {
       const [status, setStatus] = useState<BridgeStatus>('idle')
       const [error, setError] = useState<unknown>(undefined)
       const [attempt, setAttempt] = useState(0)
@@ -262,6 +268,6 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
       return createElement(Fragment, null, children)
     }
     ;(BridgeHost as { displayName?: string }).displayName = displayName
-    return BridgeHost
+    return BridgeHost as ComponentType<{ appProps?: ResolvedProps; sessionKey?: string | null; routing?: BridgeHostRouting }>
   }
 }

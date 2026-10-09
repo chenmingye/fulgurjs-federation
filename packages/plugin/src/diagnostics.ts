@@ -12,7 +12,7 @@
 
 import path from 'node:path'
 
-export type FulgurjsStage = 'CFG' | 'DEV' | 'BLD' | 'MFU' | 'CC'
+export type FulgurjsStage = 'CFG' | 'DEV' | 'BLD' | 'MFU' | 'CC' | 'TYP'
 
 export interface FulgurjsCodeMeta {
   code: string
@@ -44,7 +44,14 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'DEV-009', stage: 'DEV', title: '门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启）' },
   { code: 'DEV-010', stage: 'DEV', title: 'dev 冷启动预构建窗口（首轮 30~60s 瞬态 504/\'ce\' 假错误）' },
   { code: 'DEV-011', stage: 'DEV', title: '非 loopback host + 通配 dev CORS（暴露面扩大提醒）' },
-  { code: 'DEV-012', stage: 'DEV', title: '非 loopback host + dev manifest 携带 fsRoot（本机路径外发提醒）' },
+  // ── TYP 远程类型链（6.5.0 类型自动生成）──
+  { code: 'TYP-001', stage: 'TYP', title: '提供方声明 bundle 生成失败（暴露闭包编译错误/工具缺失/路径泄漏）' },
+  { code: 'TYP-002', stage: 'TYP', title: '宿主类型同步失败（manifest/清单/文件获取失败；本地声明保持原状）' },
+  { code: 'TYP-003', stage: 'TYP', title: '类型资源校验拒绝（摘要不符/路径越界/超限/协议不匹配）' },
+  { code: 'TYP-004', stage: 'TYP', title: '远程未提供类型资源（旧版本插件或 dts:false；页面可运行）' },
+  { code: 'TYP-005', stage: 'TYP', title: '宿主缺少远程声明的外部类型依赖（externals 解析失败）' },
+  { code: 'TYP-006', stage: 'TYP', title: '生成类型目录未被应用 tsconfig 覆盖（发现失败，附最小修法）' },
+  { code: 'TYP-007', stage: 'TYP', title: '声明生成工具缺失（typescript/vue-tsc 未安装，附包管理器安装命令）' },
   // ── BLD 构建期 ──
   { code: 'BLD-001', stage: 'BLD', title: 'expose 源文件解析失败' },
   { code: 'BLD-002', stage: 'BLD', title: '构建目标低于 es2022（TLA 需要）' },

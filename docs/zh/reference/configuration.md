@@ -15,12 +15,10 @@
 | `shareScope` | `string` | `'default'` | 默认共享作用域名；各项可用 `shared[*].shareScope` 覆盖 |
 | `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` 关闭；其余值开启（对象形态不提供额外字段配置）。prod 构建生成 `fulgurjs-manifest.json`——`preloadRemote` 与 `check-pages`/`doctor` 依赖它；关闭后这两类能力不可用 |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（相对路径按应用根解析）。hook 错误契约：观测 hook 抛错只告警；`resolveShare`（决策 hook）显式抛错向调用方传播。见 [API 参考 · 运行时插件](api.md#运行时插件) |
-| `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | dev 下拉取远程 manifest 生成类型声明。`{ dir }` 自定义输出目录（默认 `src/fulgurjs/types/`，无 src 布局回退 `.fulgurjs/types`）；`mode: 'source'`（默认）跨工程源码直连，`mode: 'shim'` 宽松占位（IDE 干净、无源码补全）。`false` 完全关闭。dev-only；两种 mode 都要读 remote 本机源码，只对可信来源开启 |
+| `dts` | `boolean \| { dir?: string }` | `true` | 远程类型自动生成与同步。提供方：dev 后台生成、随 prod 构建输出**可分发声明资源**（声明闭包 + 类型清单，不依赖远程本机源码）；宿主：dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`）并生成 ambient 声明与类型注册表——普通 import、动态 import 与字符串 API（`loadRemote`/`remoteComponent`/桥接工厂）共用同一套类型。`{ dir }` 自定义输出目录；`false` 完全关闭。含 `.vue` 暴露的提供方需 `vue-tsc`（模板已带）。见 [CLI · types](cli.md#types) |
 | `devSharedSelf` | `boolean` | 按角色推断：提供 `exposes`/`setup` 的应用 `true`；纯宿主 `false`；**显式配置永远优先** | dev 下自身源码（含依赖）是否参与 shared 协商改写。双向联邦缺省即 `true` 无需显式。build 下协商门面自动隔离进插件专属 chunk，业务 manualChunks 可保留 |
 | `devCorsOrigins` | `string[] \| '*'` | `'*'`（缺省与显式 `'*'` 行为相同，差别只在是否提醒 DEV-011） | dev 跨源访问策略：插件端点（`/@fulgurjs-entry.js`、`/@fulgurjs-manifest.json`）与 `server.cors` 共用同一来源。数组按 Origin 反射 allowlist（未命中省略头）。**只作用于 dev**；用户显式配置的 `server.cors` 永远优先。形态非法报 CFG-010 |
-| `devFsRoot` | `boolean` | `true`（非 loopback host 下默认值会提醒 DEV-012） | dev manifest 是否携带 `fsRoot`（remote 根目录本机绝对路径，宿主 dts 类型直连用）。`false` 不写入（本机路径不外发），宿主 dts 降级 any 桩并提示。**该字段永不进入 prod manifest** |
-
-省略语义小结：`manifest`/`dts`/`devFsRoot` 省略 = 开启/默认；`setup` 省略 = 无初始化行为；`shared`/`exposes`/`remotes` 省略 = 对应能力关闭（都不配 = 孤岛配置，得到 CFG-006 类提醒：既不提供也不消费）。
+省略语义小结：`manifest`/`dts` 省略 = 开启/默认；`setup` 省略 = 无初始化行为；`shared`/`exposes`/`remotes` 省略 = 对应能力关闭（都不配 = 孤岛配置，得到 CFG-006 类提醒：既不提供也不消费）。
 
 ## remotes 的四种形态
 
@@ -51,7 +49,7 @@ remotes: {
 
 `timeout` 语义：超时只代表「调用方不再等待」，浏览器不会取消已发出的动态 import——后续调用复用同一 in-flight 记录，不会重复初始化同一容器。
 
-## devCorsOrigins / devFsRoot 三态示例
+## devCorsOrigins 三态示例
 
 ```ts
 // ① 开（默认/省略）：全放开——跨 dev-server 协作开箱即用；非 loopback host 时提醒 DEV-011/012
@@ -64,17 +62,15 @@ federation({
   devCorsOrigins: '*',
 })
 
-// ③ 自定义 allowlist：仅列出的宿主来源可跨源访问联邦端点与源码模块；
-//    同时不把本机绝对路径写进 dev manifest（宿主 dts 降级 any 桩并提示）
+// ③ 自定义 allowlist：仅列出的宿主来源可跨源访问联邦端点与源码模块
 federation({
   name: 'remote-a',
   exposes: { './Button': './src/Button.vue' },
   devCorsOrigins: ['http://localhost:5100', 'https://team.example.com'],
-  devFsRoot: false,
 })
 ```
 
-行为边界：`devCorsOrigins` 只作用于 dev（build 产物不受影响）；端点对未命中来源只是省略 `Access-Control-Allow-Origin` 响应头（同源请求不受任何影响）；`devFsRoot: false` 只影响 dev manifest 的 `fsRoot` 字段。
+行为边界：`devCorsOrigins` 只作用于 dev（build 产物不受影响）；端点对未命中来源只是省略 `Access-Control-Allow-Origin` 响应头（同源请求不受任何影响）。
 
 ## `fulgurjs.config.ts` 的完整形状
 

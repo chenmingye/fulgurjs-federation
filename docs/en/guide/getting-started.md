@@ -163,7 +163,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 const { formatMoney } = await loadRemote<typeof import('remote-utils/money')>('remote-utils/money')
 ```
 
-> The type parameter of `loadRemote` is a compile-time aid only; at runtime the module namespace is whatever the remote actually exports. In dev, hosts with `dts` enabled (default) get types for `remote-a/X` imports directly; see [loading components and modules · dev types](components-and-modules.md#dev-types).
+> `loadRemote` entry types come from the plugin-synced remote declarations (on by default): synced literals get real module types, misspelled entries error at the call site, and dynamic variables follow the `unknown` boundary; at runtime the module namespace is whatever the remote actually exports. See [loading components and modules · remote types](components-and-modules.md#remote-types-automatic-sync).
 
 ## Migrating from other micro-frontend frameworks (concept mapping)
 

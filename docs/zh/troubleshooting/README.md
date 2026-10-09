@@ -73,9 +73,9 @@
 | 症状 | 先检查 | 深入 |
 |---|---|---|
 | `remote-a/X` 导入无类型提示 | `dts` 是否被关闭；生成目录是否在 tsconfig include 内 | `dts` 默认开；生成物在 `src/fulgurjs/types/`（无 src 布局 `.fulgurjs/types`） |
-| 远程源码不在本机，类型是 any | `devFsRoot: false` 或跨机器 | 这是诚实降级：可解析但无源码补全；恢复可达后重启宿主 dev 重新生成 |
+| 远程类型提示未提供（TYP-004） | 远程是旧版本插件或配置了 `dts: false` | 页面正常运行；要精确类型请升级远程并保持 `dts: true`，宿主动态字符串走 unknown 边界 |
 | ts(2307) 找不到 `@fulgurjs/federation/*` | IDE TS 服务缓存旧包 | `Restart TS Server`（⌘⇧P）或重开窗口 |
-| VSCode 打开 `src/fulgurjs/types/*.d.ts` 大片红波浪线 | Volar 以推断项目检查工程外文件 | 仅编辑器显示问题（命令行检查与构建 0 错误）；根治用 `dts: { mode: 'shim' }`；[IDE 说明](../reference/api.md#ide-提示srcfulgurjs-目录的红波浪线) |
+| 类型缺失或不生效（TYP-006） | 生成目录未被应用 tsconfig include 覆盖（exclude 或严格 `files` 白名单） | 按 TYP-006 给出的最小修法补 include；默认目录在 `src` 下无需配置 |
 | React 精确类型不生效 | 宿主 tsconfig 未配 paths | 按 `_paths.d.ts` 说明配置 `paths`；[React 的 dev 类型](../reference/api.md#react-的-dev-类型双轨) |
 
 ## 桥接 / 会话

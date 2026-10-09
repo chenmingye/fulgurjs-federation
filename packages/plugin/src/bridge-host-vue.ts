@@ -12,7 +12,7 @@
  * appProps 是挂载时浅拷贝快照（顶层替换不追踪、不重渲染子应用，重挂由 :key 重建）；
  * sessionKey 是桥接控制参数，不混入业务 props。
  */
-import { defineComponent, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, toRaw, watch, type Component, type PropType } from 'vue'
+import { defineComponent, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, toRaw, watch, type Component, type DefineComponent, type PropType } from 'vue'
 import type { AppContext } from './context'
 import { provideAppContext } from './context'
 import {
@@ -27,6 +27,8 @@ import {
 } from './bridge-core'
 import { bridgeHostError } from './bridge-errors'
 import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
+import type { FgBridgeEntry, FgBridgeAppProps } from './remote-types'
+import type { FgTypeAuto } from '@fulgurjs/federation/internal/registry.js'
 
 type LoadRemoteFn = (spec: string, opts?: { retries?: number }) => Promise<any>
 
@@ -109,11 +111,23 @@ const BridgeErrorPlaceholder = defineComponent({
 /**
  * 构建 Vue 宿主桥接工厂（dist 壳与 dev 门面绑定各自运行时的 loadRemote 后导出）。
  */
+/** 包装组件返回形态：appProps 类型显式 P 优先，默认从注册表推导（第三类型参数 unknown） */
+export type FgVueBridgeWrapperResolved<P0, S extends string> = DefineComponent<
+  { appProps?: (P0 extends FgTypeAuto ? FgBridgeAppProps<S> : P0); sessionKey?: string | null; routing?: BridgeHostRouting },
+  {},
+  unknown
+>
+export type FgVueBridgeWrapper<S extends string> = FgVueBridgeWrapperResolved<FgTypeAuto, S>
+
 export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
-  return function createVueBridgeApp<P = Record<string, unknown>>(
-    spec: string,
+  return function createVueBridgeApp<P0 = FgTypeAuto, S extends string = string>(
+    spec: S & FgBridgeEntry<S>,
     options: VueBridgeAppOptions = {},
-  ): Component {
+  ): FgVueBridgeWrapperResolved<P0, S> {
+    // appProps 类型：显式 P0（老用法/接管）优先；默认按注册表推导（提供方 defineBridgeApp
+    // 声明 → 声明闭包 → phantom 提取）。见 types/registry.d.ts 的 FgTypeAuto 说明
+    type P = P0 extends FgTypeAuto ? FgBridgeAppProps<S> : P0
+    type Wrapper = FgVueBridgeWrapperResolved<P0, S>
     assertBridgeOptions(`createVueBridgeApp("${spec}")`, options)
     const componentName = 'FulgurjsBridge_' + spec.replace(/[^A-Za-z0-9_-]/g, '_')
 
@@ -295,6 +309,9 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
           return children
         }
       },
-    })
+    }) as unknown as FgVueBridgeWrapperResolved<P0, S>
+    // 说明：包装器真实形态是 defineComponent 的多根组件（容器节点+占位兄弟）；
+    // 类型面声明为 appProps/sessionKey/routing 的 DefineComponent（第三类型参数
+    // unknown——any 会让 vue-tsc 模板检查全宽松）。cast 是声明层近似，运行时语义不变。
   }
 }

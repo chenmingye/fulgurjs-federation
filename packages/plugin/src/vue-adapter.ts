@@ -210,8 +210,21 @@ function sessionComponent(
   })
 }
 
+import type { DefineComponent } from 'vue'
+import type { FgComponentEntry, FgModuleDefault, FgComponentLike } from './remote-types'
+import type { FgRemoteTypes } from './runtime-entry'
+
+/**
+ * remoteComponent 返回类型：已同步的组件暴露 → 远程组件真实类型（props/events/泛型
+ * 经声明闭包保留，vue-tsc 模板与 h() 均可检查）；未同步/动态入口 → 无约束组件
+ * （DefineComponent 第三类型参数必须 unknown——any 会让 vue-tsc 模板检查全宽松）。
+ */
+export type FgRemoteVueComponent<S extends string> = S extends keyof FgRemoteTypes
+  ? (FgModuleDefault<FgRemoteTypes[S]> extends FgComponentLike ? FgModuleDefault<FgRemoteTypes[S]> : never)
+  : DefineComponent<{}, {}, unknown>
+
 export function createRemoteComponent(loadRemote: (spec: string, opts?: { retries?: number; consumerApp?: unknown }) => Promise<any>) {
-  return function remoteComponent(spec: string, opts: RemoteComponentOptions = {}): Component {
+  return function remoteComponent<S extends string>(spec: S & FgComponentEntry<S>, opts: RemoteComponentOptions = {}): FgRemoteVueComponent<S> {
     // consumerApp：当前渲染远程组件的 app 实例（异步包装组件 setup 内同步可得）。
     // 远程 setup 声明的 globalComponents 借它注册进消费方全局注册表——桥接子应用
     // 每次挂载新建 app 也能拿到；无组件上下文（重试等）时为 undefined，仅跳过注册。
@@ -235,7 +248,10 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
       errorComponent: createRecoverableErrorPlaceholder(loader, spec, opts.errorComponent),
       delay: opts.delay,
       timeout: opts.timeout,
-    })
+    }) as unknown as FgRemoteVueComponent<S>
+    // 说明：运行时包装器（异步加载/错误占位/重试）的真实类型是 DefineComponent；
+    // 类型面按注册表返回远程组件真实类型——加载中/失败态是运行时行为，不在类型上
+    // 建模（attrs/事件透传语义由包装器保证）。此 cast 是声明层的诚实近似，非 any 逃逸。
   }
 }
 

@@ -13,6 +13,11 @@
 import { satisfies, compareVersions } from '../semver'
 import { FgError, ErrorCodes } from './errors'
 import { RUNTIME_VERSION } from '../version'
+// 类型-only 包自引用（编译期擦除，无运行时导入）：远程类型注册表声明在公共 /runtime
+// 入口。必须用包名而非相对路径——各入口的 dts 打包会把相对引用内联成私有副本，
+// 注册表增强（declare module '@fulgurjs/federation/runtime'）就到不了这些副本；
+// 包自引用 + tsup --external 让 dist 里各入口共享同一个可增强接口声明。
+import type { FgStaticEntry, FgRemoteModule, FgTypeAuto } from '@fulgurjs/federation/internal/registry.js'
 
 export interface ShareEntry {
   version: string
@@ -1053,10 +1058,13 @@ function createRuntime() {
     return m.startsWith('.') ? m : `./${m}`
   }
 
-  async function loadRemote<T = Record<string, any>>(
-    spec: string,
+  async function loadRemote<T = FgTypeAuto, S extends string = string>(
+    // 泛型顺序兼容老用法：显式 loadRemote<MyModule>(spec) 的类型绑定第一个参数（用户接管，
+    // 此时入口检查退化为 string）；未给泛型时 T=FgTypeAuto → 按注册表推导（已同步入口获得
+    // 模块类型，未登记字面量在调用点报错，动态 string 放行 unknown）。见 types/registry.d.ts
+    spec: S & FgStaticEntry<S>,
     opts?: LoadRemoteOptions,
-  ): Promise<T> {
+  ): Promise<T extends FgTypeAuto ? FgRemoteModule<S> : T> {
     const { remote: name, module } = parseSpec(spec)
     // MFU-014：setup/onSession 同步执行段内递归 loadRemote 同一远程（自等待死锁的显式报错）
     if (module && lifecycleSyncRemote === name) {

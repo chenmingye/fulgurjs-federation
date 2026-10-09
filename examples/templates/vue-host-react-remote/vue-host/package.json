@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --port 5314 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --port 5314 --strictPort"
+    "preview": "vite preview --port 5314 --strictPort",
+    "types": "fulgurjs types",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@fulgurjs/federation": "6.4.1",
@@ -19,6 +21,7 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.8.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vue-tsc": "^2.2.0"
   }
 }

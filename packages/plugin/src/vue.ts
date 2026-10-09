@@ -28,6 +28,10 @@ export { provideAppContext, getAppContext, requireAppContext, clearAppContext } 
 export type { AppContext } from './context'
 export { definePages, validatePages } from './pages'
 export type { PageRouteLike, PagesOptions, PageViolation, RemoteSchemaEntry } from './pages'
+// 远程类型注册表（与 /runtime、/react 共享同一声明；见 runtime-entry 的注册表说明）。
+// 包自引用保证 dist 各入口引用同一个可增强接口（相对路径会被 dts 打包内联成私有副本）
+export type { FgRemoteTypes, FgStaticEntry, FgRemoteModule } from '@fulgurjs/federation/internal/registry.js'
+export type { FgComponentEntry, FgBridgeEntry, FgBridgeAppProps, FgBridgePropsOf } from './remote-types'
 
 import { loadRemote } from './runtime/index'
 import { createRemoteComponent, createHostPages as createHostPagesWithLoader } from './vue-adapter'
@@ -36,9 +40,9 @@ import { createVueBridgeAppWithLoader } from './bridge-host-vue'
 import { createVueBridgeNavigation, connectVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
 import type { BridgeHostRouting } from './bridge-router-core'
 
-export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage } from './vue-adapter'
+export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage, FgRemoteVueComponent } from './vue-adapter'
 export type { BridgeApp, VueBridgeAppFactory } from './bridge-app-vue'
-export type { VueBridgeAppOptions } from './bridge-host-vue'
+export type { VueBridgeAppOptions, FgVueBridgeWrapper } from './bridge-host-vue'
 export type { VueBridgeRouterConnection, BridgeHostRouting }
 
 export const remoteComponent = createRemoteComponent(loadRemote)

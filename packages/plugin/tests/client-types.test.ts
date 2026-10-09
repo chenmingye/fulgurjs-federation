@@ -30,13 +30,16 @@ describe('runtime 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'FgRuntime', 'LoadRemoteOptions', 'LoadShareOptions',
+      'AppContext', 'FgRuntime',
+      'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
       'RemoteConfig', 'RemoteDebugInfo',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'RuntimeHooks', 'RuntimePlugin',
       'ShareEntry', 'ShareScope', 'ShareScopeMap',
     ].sort())
+    // 注册表三类型经包内共享子路径再导出（独立 export-from 语句；见 types/registry.d.ts）
+    expect(text).toContain("export { FgRemoteModule, FgRemoteTypes, FgStaticEntry } from '@fulgurjs/federation/internal/registry.js'")
   })
 })
 
@@ -55,7 +58,9 @@ describe('/react 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostRouting', 'FgRuntime',
+      'AppContext', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostRouting',
+      'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
+      'FgReactRemoteProps', 'FgRuntime',
       'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
       'ReactBridgeAppFactory', 'ReactBridgeAppOptions', 'ReactBridgeCancelPolicy', 'ReactBridgeRouterConnection',
@@ -66,6 +71,7 @@ describe('/react 物理入口类型', () => {
       'ShareEntry', 'ShareScope', 'ShareScopeMap',
       'UseLoadRemoteOptions', 'UseLoadRemoteResult',
     ].sort())
+    expect(text).toContain("export { FgRemoteModule, FgRemoteTypes, FgStaticEntry } from '@fulgurjs/federation/internal/registry.js'")
     expect(text).toContain('defineBridgeApp')
     expect(text).toContain('createReactBridgeApp')
     expect(text).toContain('createReactBridgeNavigation')
@@ -113,7 +119,10 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'BridgeApp', 'BridgeHostRouting', 'FgRuntime', 'HostPages', 'HostPagesOptions',
+      'AppContext', 'BridgeApp', 'BridgeHostRouting',
+      'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
+      'FgRemoteVueComponent', 'FgRuntime', 'FgVueBridgeWrapper',
+      'HostPages', 'HostPagesOptions',
       'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
       'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo',
@@ -122,6 +131,8 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppOptions',
       'VueBridgeRouterConnection',
     ].sort())
+    // 注册表三类型经包内共享子路径再导出（与 /runtime、/react 同一声明）
+    expect(text).toContain("export { FgRemoteModule, FgRemoteTypes, FgStaticEntry } from '@fulgurjs/federation/internal/registry.js'")
   })
 
   it('package.json 导出 /vue 与桥接 internals；/vue 浏览器 ESM 不承诺 require', () => {
@@ -135,47 +146,6 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
   })
 })
 
-describe('dts 生成路径规则（skipLibCheck 静默失败回归）', () => {
-  it('非 .vue 源码 re-export 去掉 .ts 扩展名（默认禁 allowImportingTsExtensions）', async () => {
-    const { sourceImportPath, stripTsExtension } = await import('../src/dts')
-    expect(stripTsExtension(sourceImportPath('../remote/src/SharedState.ts'))).toBe('../remote/src/SharedState')
-    expect(stripTsExtension(sourceImportPath('src/x.ts'))).toBe('./src/x')
-    expect(sourceImportPath('../remote/src/Button.vue')).toBe('../remote/src/Button.vue')
-  })
-})
-
-describe('extractTsExportNames（环境模块显式重导出）', () => {
-  it('枚举 const/function/interface/type 与 export {} 形式，忽略 default', async () => {
-    const { extractTsExportNames } = await import('../src/dts')
-    const text = [
-      `import { ref } from 'vue'`,
-      `export const sharedCount = ref(0)`,
-      `export function helper() {}`,
-      `export interface Props { a: number }`,
-      `export type Maybe<T> = T | null`,
-      `const hidden = 1`,
-      `export { hidden as shown, default } from './other'`,
-    ].join('\n')
-    const names = extractTsExportNames(text)
-    for (const name of ['sharedCount', 'helper', 'Props', 'Maybe', 'shown']) {
-      expect(names).toContain(name)
-    }
-    expect(names).not.toContain('default')
-    expect(names).not.toContain('hidden')
-  })
-})
-
-describe('dts 默认目录收敛到根目录点文件夹（src 零污染）', () => {
-  it('默认 .fulgurjs/types；dts.dir 可覆盖；dts:false 不生成', async () => {
-    const { resolveDtsDir } = await import('../src/dts')
-    expect(resolveDtsDir(undefined, true)).toBe('src/fulgurjs/types')
-    expect(resolveDtsDir(true, true)).toBe('src/fulgurjs/types')
-    expect(resolveDtsDir(undefined, false)).toBe('.fulgurjs/types')
-    expect(resolveDtsDir(true, false)).toBe('.fulgurjs/types')
-    expect(resolveDtsDir({ dir: 'types/federation' })).toBe('types/federation')
-    expect(resolveDtsDir(false)).toBe('')
-  })
-})
 
 describe('包根类型面（模板 fulgurjs.config.ts 依赖）', () => {
   it('包根导出 FederationOptions 与 PageRouteLike（配置文件按四入口合同从包根取类型；缺 TS2614）', () => {

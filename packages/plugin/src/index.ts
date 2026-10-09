@@ -53,7 +53,9 @@ import {
   REACT_REFRESH_SHIM_URL,
   type ManifestExposeEntry,
 } from './virtual'
-import { generateDevTypes } from './dts'
+import { createDevTypesServer, type DevTypesServer } from './dts-serve'
+import { startRemoteTypesSyncLoop, removeGeneratedTypes } from './dts-sync'
+import { generateTypesBundle } from './dts-generate'
 import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, genRemoteSchemaModule } from './remote-schema'
 import { formatFulgurjsDiagnostic, debugLog, redactModulePath } from './diagnostics'
 import { corsHeadersFor, isNonLoopbackHost } from './dev-cors'
@@ -475,16 +477,6 @@ export function federation(options: FederationOptions): Plugin[] {
                 symptom: `server.host=${String(host)} 非 loopback 且 dev 跨源策略为通配（*）：任何能访问该机的来源都可拉取本应用联邦端点与源码模块`,
                 cause: 'devCorsOrigins 未配置时保持现状兼容（*）；跨机开发暴露面随之扩大',
                 fix: `按宿主来源显式收紧：devCorsOrigins: ['http://<host>:<port>', ...]（或确认该机处于可信网络）`,
-              }),
-            )
-          }
-          if (normalized.devFsRoot) {
-            console.warn(
-              formatFulgurjsDiagnostic({
-                code: 'DEV-012',
-                symptom: `server.host=${String(host)} 非 loopback 且 dev manifest 携带 fsRoot（remote 根目录本机绝对路径）`,
-                cause: 'fsRoot 供同机联调的宿主 dts 类型直连；2.x 默认 true 保持现状，下个主版本拟改为显式开启',
-                fix: `同机联调无需动作；跨机/不可信网络可 devFsRoot: false（宿主 dts 将降级为 any 桩并有明确提示）`,
               }),
             )
           }
@@ -1272,7 +1264,7 @@ export function federation(options: FederationOptions): Plugin[] {
 
     generateBundle: {
       order: 'post',
-      handler(_opts, bundle) {
+      async handler(_opts, bundle) {
         const n = state.normalized
         if (state.command !== 'build' || !n || n.exposes.length === 0 || !n.manifest) return
 
@@ -1367,7 +1359,34 @@ export function federation(options: FederationOptions): Plugin[] {
           entryChunk.code = `${helper}\n${entryChunk.code}`
           debugLog('manifest', { stage: 'generateBundle', retryBust: 'remoteEntry loaders wrapped' })
         }
-        const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename)
+        // ---- 类型资源随构建输出（6.5.0）：声明 bundle → fulgurjs-types/ 资产 + manifest 定位 ----
+        // 生成失败（闭包编译错误等）不中断构建——manifest 不带 types、构建 WARN 明示；
+        // 严格门禁走 `npx @fulgurjs/federation types`（失败非零退出）
+        let typesRevision: string | undefined
+        if (n.dts && n.exposes.some((e) => !e.internal)) {
+          const typesResult = await generateTypesBundle({
+            root: n.root,
+            exposes: n.exposes.filter((e) => !e.internal).map((e) => ({ name: e.name, import: e.import })),
+            pluginVersion: n.pluginVersion,
+          })
+          if (typesResult.ok) {
+            for (const [rel, content] of typesResult.files) {
+              this.emitFile({ type: 'asset', fileName: `fulgurjs-types/${rel}`, source: content })
+            }
+            typesRevision = typesResult.index.revision
+            debugLog('types', { stage: 'generateBundle', tool: typesResult.tool, files: typesResult.fileCount, revision: typesRevision })
+          } else {
+            console.warn(
+              formatFulgurjsDiagnostic({
+                code: 'TYP-001',
+                symptom: `构建产物不包含远程类型资源（宿主类型同步将提示未提供）：${n.name}`,
+                cause: typesResult.diagnostics.join('\n'),
+                fix: '修复暴露闭包内的编译错误后重新构建；严格门禁可在 CI 运行 npx @fulgurjs/federation types（失败非零退出）；确需跳过可 dts: false',
+              }),
+            )
+          }
+        }
+        const manifest = genProdManifest(n, state.exposeFiles, entryChunkName ?? n.filename, typesRevision)
         debugLog('manifest', {
           stage: 'generateBundle',
           exposes: Object.keys(state.exposeFiles).length,
@@ -1398,13 +1417,33 @@ export function federation(options: FederationOptions): Plugin[] {
         )
       }
 
-      // ---- remote 端中间件：容器入口 / manifest（跨 dev-server 协作的服务面）----
+      // ---- remote 端中间件：容器入口 / manifest / 类型资源（跨 dev-server 协作的服务面）----
+      let typesServer: DevTypesServer | null = null
+      if (n.exposes.length > 0 && n.dts) {
+        typesServer = createDevTypesServer(n)
+        // 源码变化 → 防抖重生成声明 bundle（revision 变化经 manifest 轮询传导到宿主）
+        let regenTimer: ReturnType<typeof setTimeout> | null = null
+        const scheduleRegen = (id: string): void => {
+          if (!id.startsWith(n.root + path.sep)) return
+          if (id.includes(`${path.sep}node_modules${path.sep}`) || id.includes(`${path.sep}.vite${path.sep}`)) return
+          if (regenTimer) clearTimeout(regenTimer)
+          regenTimer = setTimeout(() => {
+            regenTimer = null
+            typesServer?.invalidate()
+          }, 800)
+        }
+        server.watcher?.on('change', scheduleRegen)
+        server.watcher?.on('unlink', scheduleRegen)
+        server.watcher?.on('add', scheduleRegen)
+        server.httpServer?.once('close', () => typesServer?.dispose())
+      }
       if (n.exposes.length > 0) {
         const baseNorm = state.base
         server.middlewares.use((req, res, next) => {
           const raw = (req.url ?? '').split('?')[0]
           const stripped = raw.startsWith(baseNorm) ? `/${raw.slice(baseNorm.length)}` : raw
-          if (stripped === '/@fulgurjs-entry.js' || stripped === '/@fulgurjs-manifest.json') {
+          const isTypesReq = stripped.startsWith('/@fulgurjs-types/') || stripped === '/@fulgurjs-types'
+          if (stripped === '/@fulgurjs-entry.js' || stripped === '/@fulgurjs-manifest.json' || isTypesReq) {
             // WP5：端点 CORS 与 server.cors 同一来源策略（devCorsOrigins；缺省 '*' 保持现状）
             const origin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin
             for (const [k, v] of Object.entries(corsHeadersFor(origin, n.devCorsOrigins))) {
@@ -1417,6 +1456,20 @@ export function federation(options: FederationOptions): Plugin[] {
               res.end()
               return
             }
+            if (isTypesReq) {
+              // 类型资源：bundle 就绪前 503（宿主有界重试+轮询），就绪后只服务清单登记键
+              const served = typesServer?.servePath(stripped) ?? null
+              if (served) {
+                res.setHeader('Content-Type', served.contentType)
+                res.setHeader('Cache-Control', 'no-cache')
+                res.end(served.body)
+              } else {
+                res.statusCode = 503
+                res.setHeader('Content-Type', 'application/json; charset=utf-8')
+                res.end(JSON.stringify({ error: 'fulgurjs types bundle not ready (generating or failed); retry via manifest polling' }))
+              }
+              return
+            }
             if (stripped === '/@fulgurjs-entry.js') {
               res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
               res.setHeader('Cache-Control', 'no-cache')
@@ -1424,17 +1477,39 @@ export function federation(options: FederationOptions): Plugin[] {
               return
             }
             res.setHeader('Content-Type', 'application/json; charset=utf-8')
-            res.end(JSON.stringify(genDevManifest(n, baseNorm)))
+            res.end(JSON.stringify(genDevManifest(n, baseNorm, typesServer?.revision() ?? undefined)))
             return
           }
           next()
         })
       }
 
-      // ---- host 端：dev 类型直连 ----
-      if (n.remotes.length > 0 && n.dts) {
+      // ---- host 端：dev 远程类型同步（后台，不阻塞页面服务）----
+      if (n.remotes.length > 0 && n.dts && state.command === 'serve') {
         server.httpServer?.once('listening', () => {
-          void generateDevTypes(n, server)
+          const dtsOpt = n.dts === true ? true : n.dts
+          const typesRoot = path.join(
+            n.root,
+            dtsOpt === false ? '' : (typeof dtsOpt === 'object' ? dtsOpt.dir : undefined)
+              ?? (fs.existsSync(path.join(n.root, 'src')) ? 'src/fulgurjs/types' : '.fulgurjs/types'),
+          )
+          // 清理已从配置移除的远程的旧生成物（只清插件自有账本登记的文件）
+          try {
+            if (fs.existsSync(typesRoot)) {
+              const activeKeys = new Set(n.remotes.map((r) => r.key))
+              for (const name of fs.readdirSync(typesRoot)) {
+                if (!activeKeys.has(name)) removeGeneratedTypes(typesRoot, name)
+              }
+            }
+          } catch { /* 清理失败不阻塞启动 */ }
+          const syncable = n.remotes.filter((r) => r.devEntry && !r.promise)
+          if (syncable.length === 0) return
+          const stop = startRemoteTypesSyncLoop({
+            root: n.root,
+            typesRoot,
+            remotes: syncable.map((r) => ({ key: r.key, devEntry: r.devEntry })),
+          })
+          server.httpServer?.once('close', stop)
         })
       }
 

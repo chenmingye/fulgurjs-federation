@@ -62,13 +62,13 @@ describe('WP5: isNonLoopbackHost', () => {
 })
 
 describe('WP5: 配置归一与 CFG 校验', () => {
-  it('devCorsOrigins / devFsRoot 归一（默认 true）', () => {
+  it('devCorsOrigins 归一 + 旧类型链配置（devFsRoot/dts.mode）显式 CFG-013 拒绝', () => {
     const n = normalizeOptions({ name: 'x', remotes: { r: 'http://localhost:1' } }, process.cwd(), 'serve')
     expect(n.devCorsOrigins).toBeUndefined()
-    expect(n.devFsRoot).toBe(true)
-    const n2 = normalizeOptions({ name: 'x', devCorsOrigins: ['http://localhost:5100'], devFsRoot: false }, process.cwd(), 'serve')
+    const n2 = normalizeOptions({ name: 'x', devCorsOrigins: ['http://localhost:5100'] }, process.cwd(), 'serve')
     expect(n2.devCorsOrigins).toEqual(['http://localhost:5100'])
-    expect(n2.devFsRoot).toBe(false)
+    expect(() => normalizeOptions({ name: 'x', devFsRoot: false } as never, process.cwd(), 'serve')).toThrow(/CFG-013/)
+    expect(() => normalizeOptions({ name: 'x', dts: { mode: 'source' } } as never, process.cwd(), 'serve')).toThrow(/CFG-013/)
   })
   it('CFG-010：坏 devCorsOrigins 配置期报错', () => {
     expect(() => normalizeOptions({ name: 'x', devCorsOrigins: [] as never }, process.cwd(), 'serve')).toThrow(/CFG-010/)

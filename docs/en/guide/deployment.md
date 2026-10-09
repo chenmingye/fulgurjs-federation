@@ -9,7 +9,7 @@ After `pnpm build` / `npm run build`, a remote app's dist contains two extra fix
 | Environment | Path | Notes |
 |---|---|---|
 | dev | `/<base>/@fulgurjs-entry.js` | Remote container entry (served directly by plugin middleware, self-contained) |
-| dev | `/<base>/@fulgurjs-manifest.json` | Dev manifest (consumed by host dts / preloadRemote) |
+| dev | `/<base>/@fulgurjs-manifest.json` | Dev manifest (consumed by host type sync / preloadRemote; carries the types descriptor when dts is on) |
 | prod | `/<base>/fulgurjs-remoteEntry.js` | Fixed-filename container entry (content changes every build — **must be no-cache**) |
 | prod | `/<base>/fulgurjs-manifest.json` | Expose chunk/CSS inventory (consumed by preloadRemote, **no-cache**) |
 

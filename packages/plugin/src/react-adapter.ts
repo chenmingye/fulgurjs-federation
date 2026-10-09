@@ -375,13 +375,33 @@ function buildRemoteComponent<P>(
   return Wrapped as ComponentType<P & { ref?: Ref<unknown> }>
 }
 
+import type { FgComponentEntry, FgModuleDefault, FgComponentLike } from './remote-types'
+import type { FgTypeAuto } from '@fulgurjs/federation/internal/registry.js'
+import type { FgRemoteTypes } from './runtime-entry'
+/**
+ * remoteComponent 的 props 推导：已同步的组件暴露 → 远程组件真实 props（FC 的
+ * props / ForwardRefExoticComponent 的 ref+props）；未同步/动态入口 → 宽松对象面。
+ */
+export type FgReactRemoteProps<S extends string> = S extends keyof FgRemoteTypes
+  ? (FgModuleDefault<FgRemoteTypes[S]> extends FgComponentLike ? FgReactComponentPropsOf<FgModuleDefault<FgRemoteTypes[S]>> : Record<string, unknown>)
+  : Record<string, unknown>
+
+/** React 组件形态 → props 类型（FC 直取 P；forwardRef/类组件经 ComponentProps 提取） */
+type FgReactComponentPropsOf<C> = C extends (props: infer P) => any
+  ? P
+  : C extends abstract new (...args: any[]) => { props: infer P }
+    ? P
+    : C extends { defaultProps: infer D }
+      ? D
+      : Record<string, unknown>
+
 export function createRemoteComponent(loadRemote: LoadRemoteFn) {
-  return function remoteComponent<P = Record<string, unknown>>(
-    spec: string,
+  return function remoteComponent<P = FgTypeAuto, S extends string = string>(
+    spec: S & FgComponentEntry<S>,
     opts: ReactRemoteComponentOptions = {},
-  ): ComponentType<P & { ref?: Ref<unknown> }> {
+  ): ComponentType<(P extends FgTypeAuto ? FgReactRemoteProps<S> : P) & { ref?: Ref<unknown> }> {
     assertAdapterOptions(`remoteComponent("${spec}")`, opts)
-    return buildRemoteComponent<P>(spec, opts, loadRemote)
+    return buildRemoteComponent<P extends FgTypeAuto ? FgReactRemoteProps<S> : P>(spec, opts, loadRemote)
   }
 }
 

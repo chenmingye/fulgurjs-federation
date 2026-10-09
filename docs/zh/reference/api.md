@@ -29,7 +29,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 
 | 函数 | 签名 | 用途 / 边界 |
 |---|---|---|
-| `loadRemote` | `(spec: string, opts?) => Promise<模块命名空间>` | 加载远程模块。`spec = '远程名/./Expose键'`（`./` 可省）。远程配置了 `setup` 时，它是初始化生命周期的**统一触发入口**（容器 init 后、返回模块前执行 setup/onSession）；`loadRemote('remote')` 只取容器不执行初始化。opts 见下 |
+| `loadRemote` | `<S extends string, T = FgRemoteModule<S>>(spec: S \| 动态 string, opts?) => Promise<T>` | 加载远程模块，类型来自[远程类型注册表](#字符串-api-的入口检查类型注册表)：已同步字面量获得模块真实类型，拼错报错，动态变量 → `unknown`（显式泛型 `T` 可覆盖）。`spec = '远程名/./Expose键'`（`./` 可省）。远程配置了 `setup` 时，它是初始化生命周期的**统一触发入口**（容器 init 后、返回模块前执行 setup/onSession）；`loadRemote('remote')` 只取容器不执行初始化。opts 见下 |
 | `loadShare` | `(name: string, opts?) => Promise<命名空间>` | 共享模块协商（最高版本胜出/已加载优先/singleton 收敛）。opts：`{ requiredVersion?, singleton?, strictVersion?, shareKey?, shareScope?, fallback? }` |
 | `preloadRemote` | `(spec: string, opts?: { mode?: 'preload' \| 'prefetch' }) => Promise<void>` | `remote/Expose` 只预载该 expose 的 chunk + CSS；仅传 remote 名则预载全部 exposes。`preload` 等待 CSS load/error；`prefetch` 低优先级并立即返回。**只预取资源不执行模块**，不触发 setup/onSession；失败不阻断业务（`MFU-007`） |
 | `getContainer` | `(name: string) => Promise<容器>` | 取远程容器（触发加载 + init），容器协议 `{ name, init, get }`；**不执行 setup/onSession**。直调 `container.get()` 同样不保证初始化——需要生命周期的加载一律走 `loadRemote` |
@@ -171,7 +171,7 @@ getAppContext().events!.bpm = { formEvent, formSubmitEvent }
 | 通道 | 语义 | 适用 |
 |---|---|---|
 | **context 携带函数引用** | 同步直调（bridge 先于一切页面加载） | 高频热路径（`getToken`/字典/文件 URL）、子应用反向注册 |
-| **exposes 方法模块** | `exposes: { './api': './src/fulgurjs/exposes/api.ts' }` → `const { xxx } = await loadRemote('remote/api')` | 低频/重逻辑跨应用调用；任意 expose 任意消费；dts 类型直连自动覆盖 |
+| **exposes 方法模块** | `exposes: { './api': './src/fulgurjs/exposes/api.ts' }` → `const { xxx } = await loadRemote('remote/api')` | 低频/重逻辑跨应用调用；任意 expose 任意消费；远程类型自动覆盖 |
 
 方法模块规范：导出纯函数/服务对象（不挂框架组件）；依赖宿主单例的函数（走 shared 的 http 客户端等）直接写，联邦协商保证同模块图。端到端示例见[组件与模块加载](../guide/components-and-modules.md#方式二loadremote--命令式加载任意框架纯-ts)。
 
@@ -343,7 +343,7 @@ export const globalComponents: RemoteSetupModule['globalComponents'] = {
 | 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）。违反 → MFU-011（报实际类型/预期签名/修法） |
 | 失败与重试 | setup/onSession 抛错 → 该次 `loadRemote` 拒绝（MFU-012）；**只清失败阶段的缓存**（setup 失败重试从 setup 开始；onSession 失败只重跑会话段），已成功的阶段不重复。`fallbackModule` 不掩盖初始化失败 |
 | 自递归 | setup/onSession 同步段内 `loadRemote(同 remote/…)` → MFU-014（该调用会等待自身形成死锁）。异步段内的同远程递归无法精确归因，表现为挂起——不要在初始化内加载同远程模块 |
-| dev/prod 一致 | dev 容器（中间件直出）与 prod 容器（构建产物）携带同一 setup 元数据（容器上的 `__fulgurjsSetup` 字段 + manifest 的 `setup` 字段）；内部 expose 键 `./__fulgurjs_setup__` 不出现在 dts 类型与公开文档 exposes 清单中 |
+| dev/prod 一致 | dev 容器（中间件直出）与 prod 容器（构建产物）携带同一 setup 元数据（容器上的 `__fulgurjsSetup` 字段 + manifest 的 `setup` 字段）；内部 expose 键 `./__fulgurjs_setup__` 不出现在类型产物与公开文档 exposes 清单中 |
 | 错误码 | MFU-011 导出非法 / MFU-012 执行失败 / MFU-013 缺 sessionKey / MFU-014 自递归；全部带 remote 名、模块路径/阶段、实际结果、预期与修法，不记录 token |
 
 「`exposes` 一个普通 TS 启动模块 + 宿主手动 `loadRemote` 并调用」只是普通 expose + `loadRemote` 的通用用法，不是插件 API，也无 `setup`/`onSession` 的应用级一次、会话级去重、失败重试语义——初始化一律改用 `federation({ setup })`。
@@ -445,29 +445,39 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 <a id="dev-types"></a>
 
-## 开发类型与远程源码
+## 远程类型（自动生成与同步）
 
-### 类型生成（Vue 与 React expose 共用）
+远程类型默认开启（`dts: true`），链路是**提供方生成可分发声明 → 宿主自动同步 → TypeScript 自动发现**，不要求远程源码在宿主机器上、不要求手工 tsconfig paths：
 
-`dts` 默认开启：dev 下插件拉取远程 manifest，为每个公开 exposes 模块生成类型声明——宿主写 `import X from 'remote-a/X'` 获得类型。产物写入 `src/fulgurjs/types/`（联邦产物集中一个文件夹；无 src 布局回退 `.fulgurjs/types`），src 布局项目 tsconfig 零配置即生效；`{ dir }` 自定义位置。`mode: 'source'`（默认）跨工程源码直连（补全/跳转直达远程源码，VSCode 打开生成物可能显示工程外文件诊断——仅编辑器显示问题，命令行检查与构建不受影响）；`mode: 'shim'` 宽松占位（IDE 全程干净，无源码级补全）。两种 mode 都要读取 remote 本机源码来枚举导出名（shim 亦然）；manifest 的 `fsRoot`/`src` 经过路径边界校验（相对路径、无 `..`、realpath 不得越出 fsRoot），但 **`dts` 不是不可信 manifest 的安全边界——只对可信来源开启**。
+- **提供方**：dev 后台（vue-tsc / TypeScript，按工程实际 tsconfig）从公开 exposes 出发生成**声明闭包**——默认/具名/类型导出、泛型、函数重载、重导出、Vue SFC 真实 props/events 都按官方工具链产出；源码 alias 重写为声明内相对引用，跨工程源码路径与本机绝对路径绝不外发；闭包内编译错误时**不产出**类型资源（manifest 不携带 `types`，构建给出 TYP-001 诊断）。prod 构建把声明资源（`fulgurjs-types/`）随产物输出，manifest 附带定位与内容摘要。
+- **宿主**：dev 启动后台同步（不阻塞页面服务；远程晚启动有界重试，恢复后自动更新；源码变化按摘要代次自动刷新）。同步做完整性校验（逐文件摘要、路径边界、大小/数量上限），完整下载后**原子替换**——中断/失败保留上一代完整声明并明确陈旧状态。产物写入 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`，`dts.dir` 可覆盖）：`<远程名>/modules.d.ts`（环境模块声明）+ `<远程名>/registry.d.ts`（类型注册表）+ `metadata.json`（生成器账本——清理只动账本内自有文件，绝不碰用户文件）。
+- **TypeScript 发现**：生成目录默认落在 `src` 下，常规 `include: ["src/**/*"]` 零配置生效；生成代码不含相对导入，宿主 `moduleResolution`（bundler/NodeNext/…）不影响发现。目录被 exclude 或严格 `files` 白名单排除时，dev 与 `fulgurjs types` 给出 TYP-006（含具体配置文件与最小修法）。插件**绝不**在 dev 启动时改写你的 tsconfig。
 
-### 远程源码不可访问时的开发类型
+### 字符串 API 的入口检查（类型注册表）
 
-远程设置 `devFsRoot: false`，或远程源码目录在宿主机器上不可访问时，插件根据开发 manifest 为每个公开暴露模块生成 `any` 声明。默认导入、具名导入和副作用导入均可解析，但没有源码补全、类型约束或源码跳转；内部 setup 生命周期入口不生成声明。生成目录遵循 `dts.dir`；默认有 `src` 时为 `src/fulgurjs/types`，否则为 `.fulgurjs/types`。确保项目 tsconfig 包含该目录。恢复源码直连后重启宿主开发服务即可重新生成精确映射；`dts: false` 会完全关闭生成。
+`loadRemote`、`remoteComponent`、`createVueBridgeApp`、`createReactBridgeApp` 与普通 import 共用同一份注册表类型（`FgRemoteTypes`，由同步产物登记）：
 
-开发类型生成与运行时使用同一份 `remotes.dev` 地址：绝对 URL、`//host:port/path` 和同源相对路径均支持。相对地址以宿主 Vite 开发服务的 origin 解析；显式 `server.origin` 优先，其次实际本地服务地址。
+- **已同步的入口字面量**：获得真实模块/组件/桥接类型——参数、返回值、props、`appProps` 全部精确检查；`remoteComponent` 只接受默认导出为组件的暴露项，桥接工厂只接受 `defineBridgeApp` 的默认导出（普通模块冒充会编译报错）；
+- **拼错的入口字面量**：注册表非空时在**调用点编译报错**（不再被宽泛 string 重载兜底通过）；
+- **动态字符串变量**（业务拼接的入口名）：永远放行，结果类型为 `unknown`——这是诚实边界：运行时仍可加载，但类型系统不知道远程真实形状；需要时可显式泛型 `loadRemote<T>(spec as never)` 或先用类型化变量收窄；
+- **未同步任何类型**（远程旧版本/`dts: false`）：所有字面量放行、结果 `unknown`，页面正常运行；严格类型检查需要升级远程并保持 `dts: true`。
 
-### React 的 dev 类型（双轨）
+桥接 `appProps`：提供方 `defineBridgeApp<{ userId: string }>(工厂)` 声明的 props 经声明闭包保留到宿主包装组件（Vue 模板/JSX 均可检查）；未声明具体类型的远程得到诚实的 `Record<string, unknown>`——工具不会凭空推导业务字段。
 
-`@fulgurjs/federation/react` 的 `.tsx`/`.ts` expose 与 Vue 共用同一套 dev 类型生成（目录、`dts:false`、`dts.dir`、setup 过滤、`devFsRoot:false` 降级全部一致），并新增**双轨**形态：零配置时生成可解析的宽松声明（导出为 `any`）；在宿主**应用 TS 上下文**（`tsconfig.json` 本身、其 `extends` 链，或其 `references` 指向且 include 覆盖应用源码/类型输出目录的子项目配置；独立的 `tsconfig.test.json`、只含 vite.config 的 `tsconfig.node.json` 等无关上下文不参与判定）配置一段 `"paths": { "<remote>/*": ["<types目录>/<remote>.d/*"] }` 后，同形态导入即解析到转发模块获得**源码级类型**（props/函数签名精确，错误 props/参数编译失败）——应用上下文配置了 paths 的远程会自动跳过同名宽松声明避免遮蔽，启用说明见生成目录内 `_paths.d.ts`。
+### CI 与离线检查（`fulgurjs types`）
 
-类型生成支持字符串或数组 `extends`（后项覆盖前项）、指向目录的 `references`，并按声明文件目录解析继承路径。`baseUrl` 与 `paths` 独立继承。多个实际应用上下文的远程 `paths` 接管不一致时，会保留默认宽松声明并给出中文提示；需要精确类型时请统一这些应用配置。生命周期错误 `MFU-012` 的 `cause` 保留 setup/onSession 抛出的原始异常。
+在 typecheck 前运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](cli.md)）：提供方验证声明生成（闭包编译错误 → **非零退出**），宿主按 `--mode dev|prod` 同步声明并校验外部类型依赖可解析（缺失列出包名与安装命令，TYP-005）。全新 clone 的 CI 不需要先启动浏览器或 dev server。`--check` 只核对本地缓存与已记录代次——不联网，不代表远程线上最新已核实。
 
-### IDE 提示（`src/fulgurjs/` 目录的红波浪线）
+### 工具要求
 
-- `types/` 下的 `*.d.ts` 是**插件每次 dev 自动生成**的类型直连声明（勿手改）：内部指向兄弟工程的源码。命令行 `vue-tsc --noEmit`（走本应用 tsconfig，skipLibCheck 生效）为 0 错误；但 VSCode/Volar 打开这些 d.ts 时可能把工程外文件用推断项目展开检查，显示大片"找不到模块"——仅编辑器显示问题，不影响命令行检查与构建，不打开 `types/` 生成物即无感；
-- 升级插件版本后若 `import ... from '@fulgurjs/federation/*'` 报 ts(2307)：是 IDE 的 TS 服务缓存了旧包——`Restart TS Server`（⌘⇧P）或重开窗口即可；
-- **根治红波浪线**：`federation({ dts: { mode: 'shim' } })`——生成物不再引用跨工程源文件，IDE 全程干净；取舍是失去"跳转直达远程源码"的补全能力（默认 `source` 不变，按项目偏好选择）。
+声明生成工具只进 Node 侧，不进浏览器运行时与共享依赖图：纯 TS/React 工程需要 `typescript`；含 `.vue` 暴露的提供方需要 `vue-tsc`（模板已内置；缺失时给出当前包管理器的安装命令，TYP-007，不会静默联网安装）。React-only 工程不要求安装任何 Vue 工具。
+
+### 边界与已知限制（如实）
+
+- 声明本身会暴露远程模块的接口结构——介意时可 `dts: false` 关闭发布；
+- 外部类型依赖（远程声明引用的第三方包，如组件库）须宿主可解析，缺失时相关类型退化并给出 TYP-005 安装指引；
+- Vue 模板对**条件派生**的桥接 `appProps` 内联对象字面量检查受 vue-tsc 能力限制——显式类型化变量绑定（`const props: FgBridgeAppProps<'x/bridge'> = …`）与 `h()`/JSX 路径完全严格；
+- 动态注册（`registerRemote`）/promise remote 的入口无法在编译期枚举——按动态边界处理。
 
 <a id="project-side"></a>
 

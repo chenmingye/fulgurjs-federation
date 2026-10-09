@@ -11,12 +11,13 @@
 | `fulgurjs create` | 新项目：从完整模板创建可运行联邦工程 | 创建+安装成功 |
 | `fulgurjs init` | 已有项目：生成配置起步模板 / 校验配置 | 模板写出或校验通过 |
 | `fulgurjs explain` | 解释本应用有效联邦形态与加载链 | 解释成功 |
+| `fulgurjs types` | 远程类型：提供方验证声明生成 / 宿主同步声明（CI 在 typecheck 前运行） | 生成+同步+发现检查全部通过 |
 | `fulgurjs check-pages` | 宿主页面表 ↔ 远程 manifest 契约核对 | 无确定性错误且已验证 |
 | `fulgurjs doctor` | 部署/配置层体检 | 无 FAIL |
 | `fulgurjs port` | 模板工程端口统一变更 | 计划生成或写入成功 |
 | `fulgurjs --help` | 帮助 | — |
 
-退出码约定：`0` 成功；`1` 命令语义内的确定性失败（check-pages 核对失败、doctor 有 FAIL——可作 CI 断言）；`2` 用法错误/异常（缺参、配置非法、目标不可写等）。
+退出码约定：`0` 成功；`1` 命令语义内的确定性失败（check-pages 核对失败、doctor 有 FAIL、types 的生成/同步/发现失败——可作 CI 断言）；`2` 用法错误/异常（缺参、配置非法、目标不可写等）。
 
 ---
 
@@ -129,6 +130,41 @@ $ npx @fulgurjs/federation init
 [fulgurjs:init] 无法从 package.json 判断框架（vue/react 依赖缺失或并存）。
   修法：显式指定 fulgurjs init --framework vue|react（--role consumer|provider|dual 可选，默认 dual）
 （退出码 2）
+```
+
+---
+
+## `fulgurjs types`
+
+远程类型的一个入口命令：按当前 `fulgurjs.config.ts` 自动识别角色（可同时是提供方与宿主——先生成（纯本地，不等待任何远程在线）再同步，无互等死锁）。
+
+### 语法
+
+```bash
+fulgurjs types [--config <path>] [--mode dev|prod] [--check]
+```
+
+### 行为
+
+| 角色 | 行为 | 失败时 |
+|---|---|---|
+| 提供方（有公开 exposes） | 本地验证声明 bundle 生成（真实工具链：TS/TSX 用 TypeScript，含 `.vue` 用 vue-tsc） | TYP-001 诊断 + **非零退出**（构建不中断页面产物，这里是严格门禁） |
+| 宿主（有 remotes） | 按 `--mode`（默认 `dev`，读 remotes 的 dev 地址；`prod` 读 prod 地址）拉取远程 manifest → 校验 → 下载声明 → 生成 ambient 声明与类型注册表 → 原子写入 `dts.dir`（默认 `src/fulgurjs/types/`） | 网络/校验/写入失败按状态明确报告并**非零退出**；远程未提供类型（TYP-004）同样非零——严格类型验收要求更新提供方 |
+| 收尾（有类型工作） | 校验生成目录被应用 tsconfig 覆盖（TYP-006 最小修法）+ 外部类型依赖在宿主可解析（TYP-005 安装指引） | 未覆盖/缺失 → **非零退出** |
+
+`--check`：只核对本地缓存与账本记录的代次（不联网，**不代表远程线上最新已核实**）。
+
+### 示例
+
+```bash
+# CI（typecheck 前）：
+npx @fulgurjs/federation types && npx vue-tsc --noEmit   # 或 tsc --noEmit
+
+# 本地核对已同步状态（不联网）：
+npx @fulgurjs/federation types --check
+
+# 对部署后的远程同步（读 remotes 的 prod 地址）：
+npx @fulgurjs/federation types --mode prod
 ```
 
 ---

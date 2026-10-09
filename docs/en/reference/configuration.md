@@ -15,12 +15,11 @@
 | `shareScope` | `string` | `'default'` | Default shared scope name; each item can override via `shared[*].shareScope` |
 | `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` disables; any other value enables (the object form provides no extra field configuration). A prod build generates `fulgurjs-manifest.json` — `preloadRemote` and `check-pages`/`doctor` depend on it; disabling makes those two capabilities unavailable |
 | `runtimePlugins` | `string[]` | `[]` | Runtime plugin module paths (relative paths resolve against the app root). Hook error contract: observational hooks only warn on throw; `resolveShare` (a decision hook) propagates explicit throws to the caller. See [API reference · runtime plugins](api.md#runtime-plugins) |
-| `dts` | `boolean \| { dir?: string; mode?: 'source' \| 'shim' }` | `true` | In dev, fetches the remote manifest and generates type declarations. `{ dir }` customizes the output directory (default `src/fulgurjs/types/`, falling back to `.fulgurjs/types` without a src layout); `mode: 'source'` (default) is cross-project source-level passthrough, `mode: 'shim'` is a loose placeholder (clean IDE, no source completion). `false` disables entirely. Dev-only; both modes read the remote's local source — enable only for trusted sources |
+| `dts` | `boolean \| { dir?: string }` | `true` | Remote type generation and sync. Provider: background generation in dev and a **distributable declaration resource** shipped with the prod build (declaration closure + type manifest — never depends on the remote's local source). Host: automatic dev sync into `src/fulgurjs/types/` (`.fulgurjs/types` without a src layout) producing ambient declarations plus a type registry — plain imports, dynamic imports and the string APIs (`loadRemote`/`remoteComponent`/bridge factories) share one set of types. `{ dir }` overrides the directory; `false` disables. Providers with `.vue` exposes need `vue-tsc` (templates include it). See [CLI · types](cli.md#types) |
 | `devSharedSelf` | `boolean` | Inferred from role: apps providing `exposes`/`setup` are `true`; pure hosts `false`; **explicit configuration always wins** | Whether, in dev, the app's own source (including dependencies) participates in the shared negotiation rewrite. Bidirectional federation defaults to `true` with no explicit config needed. In build, the negotiation facade is isolated into plugin-owned chunks automatically; business manualChunks can stay |
 | `devCorsOrigins` | `string[] \| '*'` | `'*'` (omitted and explicit `'*'` behave identically; the only difference is whether DEV-011 reminds you) | Dev cross-origin access policy: the plugin endpoints (`/@fulgurjs-entry.js`, `/@fulgurjs-manifest.json`) share the same origin source as `server.cors`. An array reflects the Origin against an allowlist (header omitted on miss). **Dev only**; a user-configured `server.cors` always wins. An illegal form reports CFG-010 |
-| `devFsRoot` | `boolean` | `true` (on non-loopback hosts the default emits a DEV-012 reminder) | Whether the dev manifest carries `fsRoot` (the remote root's local absolute path, used by host dts type passthrough). `false` omits it (the local path never leaves the machine) and host dts degrades to any stubs with a hint. **This field never enters the prod manifest** |
 
-Omitted-semantics summary: `manifest`/`dts`/`devFsRoot` omitted = enabled/default; `setup` omitted = no initialization behavior; `shared`/`exposes`/`remotes` omitted = the corresponding capability is off (none configured = an isolated-island config, producing a CFG-006-style reminder: neither provides nor consumes).
+Omitted-semantics summary: `manifest`/`dts` omitted = enabled/default; `setup` omitted = no initialization behavior; `shared`/`exposes`/`remotes` omitted = the corresponding capability is off (none configured = an isolated-island config, producing a CFG-006-style reminder: neither provides nor consumes).
 
 ## The four forms of `remotes`
 
@@ -51,7 +50,7 @@ remotes: {
 
 `timeout` semantics: a timeout only means "the caller stops waiting" — the browser does not cancel an already-issued dynamic import; later calls reuse the same in-flight record and never re-initialize the same container.
 
-## `devCorsOrigins` / `devFsRoot` three-state examples
+## `devCorsOrigins` three-state examples
 
 ```ts
 // ① On (default/omitted): fully open — cross-dev-server collaboration works out of the box; on non-loopback hosts DEV-011/012 remind
@@ -65,16 +64,15 @@ federation({
 })
 
 // ③ Custom allowlist: only the listed host origins may access federation endpoints and source modules cross-origin;
-//    also keeps the local absolute path out of the dev manifest (host dts degrades to any stubs with a hint)
+
 federation({
   name: 'remote-a',
   exposes: { './Button': './src/Button.vue' },
   devCorsOrigins: ['http://localhost:5100', 'https://team.example.com'],
-  devFsRoot: false,
 })
 ```
 
-Behavior boundaries: `devCorsOrigins` applies only to dev (build output is unaffected); for non-matching origins the endpoints merely omit the `Access-Control-Allow-Origin` response header (same-origin requests are untouched); `devFsRoot: false` only affects the dev manifest's `fsRoot` field.
+Behavior boundaries: `devCorsOrigins` applies only to dev (build output is unaffected); for non-matching origins the endpoints merely omit the `Access-Control-Allow-Origin` response header (same-origin requests are untouched).
 
 ## Full shape of `fulgurjs.config.ts`
 

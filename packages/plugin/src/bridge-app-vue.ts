@@ -35,10 +35,18 @@ export interface VueBridgeAppContext {
  * 见 /bridge/router/vue 的 connectVueBridgeRouter 与任务书 §1 原型结论 1）。
  * Promise 被作废（signal aborted / 容器已换代）时结果丢弃，不落挂。
  */
-export type VueBridgeAppFactory = (
-  props: Record<string, unknown>,
+export type VueBridgeAppFactory<P = Record<string, unknown>> = (
+  props: P,
   ctx?: VueBridgeAppContext,
 ) => VueApp | Promise<VueApp>
+
+/**
+ * 桥接 props 的类型标记（phantom）：defineBridgeApp<P> 把工厂声明的 props 类型
+ * 附加到返回契约的类型面上（运行时对象不带该字段）。宿主侧 createVueBridgeApp
+ * 经注册表提取为包装组件的 appProps 类型；未声明具体 P 的远程保持
+ * Record<string, unknown>（诚实通用面，绝不凭空推导业务字段）。
+ */
+export type FgBridgePropsMarker<P extends Record<string, unknown>> = { __fgBridgeProps?: P }
 
 export interface DefineVueBridgeAppOptions {
   /**
@@ -68,7 +76,10 @@ function entriesAborted(el: HTMLElement): boolean {
  * export default defineBridgeApp((props) => { const app = createApp(App, props); app.use(router); return app })
  * ```
  */
-export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVueBridgeAppOptions = {}): BridgeApp {
+export function defineBridgeApp<P extends Record<string, unknown> = Record<string, unknown>>(
+  factory: VueBridgeAppFactory<P>,
+  options: DefineVueBridgeAppOptions = {},
+): BridgeApp & FgBridgePropsMarker<P> {
   const attach = (el: HTMLElement, app: VueApp, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): void => {
     if (!app || typeof app.mount !== 'function' || typeof app.unmount !== 'function') {
       throw new Error(
@@ -103,7 +114,7 @@ export function defineBridgeApp(factory: VueBridgeAppFactory, options: DefineVue
       const ctx: VueBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }
       let app: VueApp | undefined
       try {
-        const produced = factory(snapshot, ctx)
+        const produced = (factory as (props: Record<string, unknown>, ctx?: VueBridgeAppContext) => VueApp | Promise<VueApp>)(snapshot, ctx)
         const thenable = (produced as { then?: unknown }).then
         if (typeof thenable === 'function') {
           // 异步工厂：注册占位防并发重复 mount；作废后结果丢弃

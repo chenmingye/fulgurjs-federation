@@ -21,10 +21,9 @@ Import from: `@fulgurjs/federation`.
 | `shareScope` | yes | `string` | See the owning API for lifecycle and runtime defaults. |
 | `manifest` | yes | `boolean \| Record<string, unknown>` | See the owning API for lifecycle and runtime defaults. |
 | `runtimePlugins` | yes | `string[]` | See the owning API for lifecycle and runtime defaults. |
-| `dts` | yes | `boolean \| { dir?: string; mode?: "source" \| "shim"; }` | See the owning API for lifecycle and runtime defaults. |
+| `dts` | yes | `boolean \| { dir?: string }` | Remote type generation and sync (see the [configuration reference](configuration.md) and [API · remote types](api.md#remote-types-generation-and-sync)). |
 | `devSharedSelf` | yes | `boolean` | See the owning API for lifecycle and runtime defaults. |
 | `devCorsOrigins` | yes | `string[] \| "*"` | See the owning API for lifecycle and runtime defaults. |
-| `devFsRoot` | yes | `boolean` | See the owning API for lifecycle and runtime defaults. |
 
 ## PageRouteLike
 
@@ -188,7 +187,7 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 | `prepareShares` | no | `(requests: { name: string; opts: LoadShareOptions; }[]) => Promise<void>` | See the owning API for lifecycle and runtime defaults. |
 | `getLoadedShare` | no | `(name: string, opts?: LoadShareOptions) => any` | See the owning API for lifecycle and runtime defaults. |
 | `pinLoadedShare` | no | `(name: string, opts: LoadShareOptions, localVersion: string, instance: unknown) => void` | See the owning API for lifecycle and runtime defaults. |
-| `loadRemote` | no | `<T = Record<string, any>>(spec: string, opts?: LoadRemoteOptions) => Promise<T>` | See the owning API for lifecycle and runtime defaults. |
+| `loadRemote` | no | `<S extends string, T = FgRemoteModule<S>>(spec: S & FgStaticEntry<S>, opts?: LoadRemoteOptions) => Promise<T>` | See the API contract (registry semantics under `FgRemoteTypes`). |
 | `getContainer` | no | `(name: string) => Promise<any>` | See the owning API for lifecycle and runtime defaults. |
 | `preloadRemote` | no | `(spec: string, opts?: PreloadRemoteOptions) => Promise<void>` | See the owning API for lifecycle and runtime defaults. |
 | `parseSpec` | no | `(spec: string) => { remote: string; module: string; }` | See the owning API for lifecycle and runtime defaults. |
@@ -259,7 +258,20 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 | `level` | no | `"error" \| "warn"` | See the owning API for lifecycle and runtime defaults. |
 | `message` | no | `string` | See the owning API for lifecycle and runtime defaults. |
 
-## RemoteSchemaEntry
+## FgRemoteTypes — remote type registry
+
+The **augmentable interface** shared by all three entries (`/runtime`, `/vue`, `/react`). Its single declaration lives in a static shared file inside the package (the `./internal/registry.js` subpath pointing at `types/registry.d.ts`) — the host-generated `src/fulgurjs/types/<remote>/registry.d.ts` augments it with `'<remote>/<expose>': typeof import('<remote>/<expose>')`. Never implement or extend this interface by hand: its members come entirely from the plugin's synced output.
+
+| Type | Meaning |
+|---|---|
+| `FgRemoteTypes` | Entry string → module namespace type registry. Empty while no types are synced (all literals pass with `unknown` results) |
+| `FgStaticEntry<S>` | Static check on string-API parameters (empty-registry/dynamic pass; registered literals narrow to themselves; unregistered literals get an error type carrying the fix text, failing at the call site) |
+| `FgRemoteModule<S>` | The module type for an entry: registered → module namespace; unsynced/dynamic → `unknown` |
+
+Framework-entry check types (re-exported by `/vue` and `/react`): `FgComponentEntry<S>` (remoteComponent accepts only exposes whose default export is a component), `FgBridgeEntry<S>` (bridge factories accept only a `defineBridgeApp` default export), `FgBridgeAppProps<S>` (bridge props extracted from the provider's declaration), `FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>` (real remote component/props types), `FgVueBridgeWrapper<S>` (the Vue bridge wrapper component). Semantics and limits: [API reference · string-API entry checks](api.md#entry-checks-for-the-string-apis-type-registry).
+
+## RemoteSchema
+Entry
 
 One remote expose declaration.
 
@@ -270,7 +282,20 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 | `exposes` | no | `string[]` | See the owning API for lifecycle and runtime defaults. |
 | `exists` | yes | `boolean` | See the owning API for lifecycle and runtime defaults. |
 
+## FgRemoteTypes — remote type registry
+
+The **augmentable interface** shared by all three entries (`/runtime`, `/vue`, `/react`). Its single declaration lives in a static shared file inside the package (the `./internal/registry.js` subpath pointing at `types/registry.d.ts`) — the host-generated `src/fulgurjs/types/<remote>/registry.d.ts` augments it with `'<remote>/<expose>': typeof import('<remote>/<expose>')`. Never implement or extend this interface by hand: its members come entirely from the plugin's synced output.
+
+| Type | Meaning |
+|---|---|
+| `FgRemoteTypes` | Entry string → module namespace type registry. Empty while no types are synced (all literals pass with `unknown` results) |
+| `FgStaticEntry<S>` | Static check on string-API parameters (empty-registry/dynamic pass; registered literals narrow to themselves; unregistered literals get an error type carrying the fix text, failing at the call site) |
+| `FgRemoteModule<S>` | The module type for an entry: registered → module namespace; unsynced/dynamic → `unknown` |
+
+Framework-entry check types (re-exported by `/vue` and `/react`): `FgComponentEntry<S>` (remoteComponent accepts only exposes whose default export is a component), `FgBridgeEntry<S>` (bridge factories accept only a `defineBridgeApp` default export), `FgBridgeAppProps<S>` (bridge props extracted from the provider's declaration), `FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>` (real remote component/props types), `FgVueBridgeWrapper<S>` (the Vue bridge wrapper component). Semantics and limits: [API reference · string-API entry checks](api.md#entry-checks-for-the-string-apis-type-registry).
+
 ## RemoteSchema
+
 
 Expose declarations indexed by key.
 

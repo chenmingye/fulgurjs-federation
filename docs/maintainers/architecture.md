@@ -17,7 +17,7 @@
 | `virtual.ts` | 虚拟模块：runtime/init/provides/remote-entry/shared 门面（`virtual:fulgurjs-*`） |
 | `runtime/`（生成源 `runtime-code.gen.ts`） | 浏览器运行时内核（gzip 红线 ≤ 10496B）：loadRemote/loadShare/协商/超时重试熔断/setup 生命周期 |
 | `transform.ts` | 远程页面运行时导入改写为惰性单例代理；dev shared 协商改写（devSharedSelf） |
-| `manifest.ts` / `dts.ts` | prod manifest 生成与契约校验；dev 类型直连生成（source/shim 双模式、React 双轨 paths） |
+| `manifest.ts` / `dts-*.ts` | prod manifest 生成与契约校验；远程类型链：dts-generate（提供方声明闭包，TS API/vue-tsc）、dts-ambient（宿主 ambient+注册表生成）、dts-sync（下载/校验/原子同步/轮询）、dts-serve（dev 端点）、dts-shared（类型协议）、dts-discovery（tsconfig 发现检查）、dts-cli（fulgurjs types）；注册表唯一声明在包内静态 types/registry.d.ts（跨入口共享，经 ./internal/registry.js 引用） |
 | `dev-cors.ts` | devCorsOrigins 归一化（端点与 server.cors 共用来源） |
 | `context.ts` / `pages.ts` / `host-pages-core.ts` | AppContext、definePages R1–R5、createHostPages 共用内核（Vue/React 共享纯解析层） |
 | `bridge-*.ts` / `vue-adapter.ts` / `react-adapter.ts` | 桥接契约核心、Vue/React 子应用与宿主适配器、路由同步（core/vue/react 三层） |

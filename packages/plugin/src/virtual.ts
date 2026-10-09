@@ -801,7 +801,7 @@ export function genApiFacade(framework: 'runtime' | 'vue' | 'react'): string {
 }
 
 /** dev manifest（remote 端中间件动态返回；契约见 manifest.ts，消费端经 parseManifest 校验） */
-export function genDevManifest(options: NormalizedOptions, base: string): DevFederationManifest {
+export function genDevManifest(options: NormalizedOptions, base: string, typesRevision?: string): DevFederationManifest {
   const b = base.endsWith('/') ? base : `${base}/`
   return {
     schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -813,10 +813,11 @@ export function genDevManifest(options: NormalizedOptions, base: string): DevFed
     base: b,
     entry: `${b}@fulgurjs-entry.js`,
     /**
-     * 本地联调时供宿主端 dts 类型直连（见 dts.ts）；远程不在本机时宿主回退 any 桩。
-     * WP5：devFsRoot: false 时不写入（本机路径不外发）；该字段永不进入 prod manifest。
+     * 类型资源定位（6.5.0 远程类型自动生成）：dts 启用且声明 bundle 就绪时写入；
+     * 宿主据此下载声明闭包（不再依赖本机源码路径——fsRoot/devFsRoot 已随旧类型
+     * 直连链移除）。bundle 未就绪（首次编译中/失败）时省略，宿主重试轮询。
      */
-    ...(options.devFsRoot === false ? {} : { fsRoot: options.root }),
+    ...(typesRevision ? { types: { schemaVersion: 1, index: './@fulgurjs-types/index.json', revision: typesRevision } } : {}),
     exposes: options.exposes.map((e) => ({
       name: e.name,
       src: e.import,
@@ -850,12 +851,16 @@ export function genProdManifest(
   options: NormalizedOptions,
   exposeFiles: Record<string, ManifestExposeEntry>,
   entryFile: string,
+  typesRevision?: string,
 ): ProdFederationManifest {
   return {
     schemaVersion: MANIFEST_SCHEMA_VERSION,
     id: options.name,
     name: options.name,
     entry: entryFile,
+    // 类型资源定位（6.5.0）：dts 启用且声明 bundle 随构建产出时写入（fulgurjs-types/ 随
+    // 产物部署；宿主/doctor 按此下载声明闭包）
+    ...(typesRevision ? { types: { schemaVersion: 1, index: './fulgurjs-types/index.json', revision: typesRevision } } : {}),
     exposes: exposeFiles,
     ...(options.setup && exposeFiles[options.setup.name] ? { setup: options.setup.name } : {}),
     shared: options.shared.map((s) => ({

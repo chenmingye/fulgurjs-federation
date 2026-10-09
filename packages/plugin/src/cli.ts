@@ -36,6 +36,12 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs init --config <path>                    校验配置；输出 federation(fulgurjsConfig) 接入块
                                                  与按角色的接入核对清单
   fulgurjs explain [--config <path>] [--json]      解释本应用有效联邦形态与加载链（纯本地，无网络）
+  fulgurjs types [--config <path>] [--mode dev|prod] [--check]
+                                                 远程类型：提供方验证声明 bundle 生成；宿主同步远程
+                                                 声明到本地类型目录（CI 在 typecheck 前运行；失败非零
+                                                 退出）。双角色工程先生成（纯本地，不等远程）再同步。
+                                                 --check 只核对本地缓存与已记录 revision（不联网，
+                                                 不代表远程线上最新已核实）
   fulgurjs check-pages [--config <path>] [--site <URL>]
                         [--manifest <remote>=<路径|URL>]... [--require-verified] [--json]
                                                  核对宿主页面表与远程 exposes（逐页接入的宿主运行；
@@ -249,6 +255,28 @@ async function main(): Promise<number> {
       const r = await checkPages(resolve(argOf('--config') ?? 'fulgurjs.config.ts'), opts)
       console.log(has('--json') ? JSON.stringify(r, null, 2) : formatCheckPages(r))
       return r.failed || r.unverifiedFailed ? 1 : 0
+    } catch (e) {
+      console.error(String((e as Error).message ?? e))
+      return 2
+    }
+  }
+
+  if (cmd === 'types') {
+    const mode = argOf('--mode')
+    if (mode !== undefined && mode !== 'dev' && mode !== 'prod') {
+      console.error('[fulgurjs:types] --mode 只支持 dev（默认，读 remotes 的 dev 地址）或 prod（读 prod 地址）')
+      return 2
+    }
+    try {
+      const { runTypesCommand } = await import('./dts-cli')
+      const r = await runTypesCommand({
+        configPath: resolve(argOf('--config') ?? 'fulgurjs.config.ts'),
+        ...(mode ? { mode: mode as 'dev' | 'prod' } : {}),
+        check: has('--check'),
+        cwd: process.cwd(),
+      })
+      for (const line of r.lines) console.log(line)
+      return r.exitCode
     } catch (e) {
       console.error(String((e as Error).message ?? e))
       return 2

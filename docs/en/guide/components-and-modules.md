@@ -146,20 +146,21 @@ import { RemoteErrorBoundary } from '@fulgurjs/federation/react'
 
 Vue has no separate boundary component: `remoteComponent`'s built-in error placeholder plus the `errorComponent` option carry the same responsibility.
 
-## Dev types
+## Remote types (automatic sync)
 
-`dts` is enabled by default: in dev the plugin fetches the remote manifest and generates type declarations for every public expose into `src/fulgurjs/types/` (falling back to `.fulgurjs/types` without a src layout); in src-layout projects tsconfig works with zero configuration:
+`dts` is on by default: providers ship a **distributable declaration resource** with dev/build output (never depending on the remote's source being on the host machine), and hosts sync it automatically in dev into `src/fulgurjs/types/` (`.fulgurjs/types` without a src layout); src-layout projects work with zero tsconfig configuration:
 
 ```ts
-// In the host, import directly as 'remote-name/X' to get types
+// In the host, import directly as 'remote-name/X' for typed access (plain import and import() share the source)
 import UserBadge from 'remote-a/shared/user-badge'
+// String APIs check too: a misspelled entry errors at the call site; dynamic variables pass (unknown boundary)
+const mod = await loadRemote('remote-a/shared/user-badge')
 ```
 
-- `mode: 'source'` (default): cross-project source-level passthrough — completions and go-to-definition land in the remote source; VSCode may show cross-project diagnostics when opening the generated files (an editor-only display issue; command-line checks and builds are unaffected);
-- `mode: 'shim'`: loose placeholder types — the IDE stays clean but there is no source-level completion;
-- Both modes read the remote's local source to enumerate export names; `dts` is not a security boundary against untrusted manifests and should only be enabled for trusted sources;
-- When the remote source is not accessible (`devFsRoot: false` or cross-machine): a degraded `any` declaration is generated (default/named/side-effect imports all resolve, without precise types); `dts: false` disables it entirely;
-- React exposes (.tsx/.ts) share the same generation as Vue, plus support for source-level precise types by configuring `paths` in the host tsconfig (see [API reference · React dev types](../reference/api.md#react-dev-types-dual-track)).
+- Plain modules, Vue/React component props and bridge `appProps` all come from the remote's real declarations (produced by the official vue-tsc/TypeScript toolchain, not loose placeholders);
+- Hosts need no hand-written tsconfig `paths`, no remote source and no symlinks; cross-machine development works the same;
+- A remote without type resources (older version / `dts: false`): pages run normally and entries follow the dynamic boundary (`unknown`); run `npx @fulgurjs/federation types` in CI for strict checks (see the [CLI reference](../reference/cli.md#fulgurjs-types));
+- `dts: false` disables everything (no generation, no download); details and known limits in the [API reference · remote types](../reference/api.md#remote-types-generation-and-sync).
 
 ## Runtime imports inside remote pages
 

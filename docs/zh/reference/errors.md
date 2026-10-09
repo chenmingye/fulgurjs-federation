@@ -34,7 +34,13 @@
 | `DEV-009` | dev 页面报门面/虚拟模块 404 | `.vite` 缓存漂移（插件升级后旧缓存与新门面签名不匹配） | `rm -rf node_modules/.vite` + 重启 dev server（必要时换浏览器 profile） |
 | `DEV-010` | dev 冷启动首轮 30~60s 出现瞬时 504/"ce" 或页面重载 | Vite 依赖预构建窗口（新依赖发现触发重新优化 + full reload），是瞬态不是故障 | 先真实打开页面预热再做断言/测试；稳定态不受影响 |
 | `DEV-011` | dev 启动提醒：非 loopback host + 通配 dev CORS | `devCorsOrigins` 缺省/`'*'` 且 host 暴露到局域网，联邦端点对任意来源放开 | 显式 `devCorsOrigins: '*'`（声明知情）或改来源 allowlist 数组 |
-| `DEV-012` | dev 启动提醒：非 loopback host + dev manifest 携带 fsRoot | dev manifest 含本机绝对路径（`fsRoot`），非 loopback 访问时本机路径外发 | `devFsRoot: false`（宿主 dts 降级 any 桩并提示）；`fsRoot` 永不进入 prod manifest |
+| `TYP-001` | 提供方声明 bundle 生成失败 | 暴露闭包存在编译错误、声明工具（typescript/vue-tsc）缺失或声明含本机绝对路径——失败时不产出/不发布类型资源，manifest 不携带 `types` | 按诊断修复闭包内编译错误；安装缺失工具（提示含当前包管理器命令）；严格门禁用 `npx @fulgurjs/federation types`（失败非零退出） |
+| `TYP-002` | 宿主类型同步失败 | 远程 manifest/类型清单/声明文件获取失败（远程未启动、网络故障）；本地保留上一代完整声明（明确陈旧） | 恢复远程或网络后 dev 自动重试/轮询更新；CI 重跑 `npx @fulgurjs/federation types`；本地声明在此之前按陈旧对待 |
+| `TYP-003` | 类型资源校验拒绝 | 声明文件摘要不符、路径越界（`..`/绝对路径）、文件数或体积超限、类型协议版本不匹配 | 核对远程与宿主的插件版本；网络代理改写响应时排查传输损坏；确认远程由本插件产出类型资源 |
+| `TYP-004` | 远程未提供类型资源 | 远程使用旧版本插件或配置了 `dts: false`；页面运行不受影响，但精确类型检查不可用 | 升级远程到当前版本并保持 `dts: true`；确不需类型时在宿主以动态字符串（unknown 边界）或 `dts: false` 显式放弃 |
+| `TYP-005` | 宿主缺少远程声明的外部类型依赖 | 远程声明闭包引用的包（如 `element-plus`）在宿主不可解析，相关类型退化 | 按提示安装缺失包（`npm i -D <包>`，或对应包管理器等价命令）后重跑类型检查 |
+| `TYP-006` | 生成类型目录未被应用 tsconfig 覆盖 | tsconfig 的 include/files 未包含类型目录（如严格 `files` 白名单或显式 exclude），IDE 与 tsc 发现不了生成的声明 | 按诊断给出的配置文件与最小修法补 include（默认目录在 `src` 内时通常无需配置） |
+| `TYP-007` | 声明生成工具缺失 | 提供方工程未安装 `typescript`（或含 `.vue` 暴露时未安装 `vue-tsc`）；工具只进 Node 侧，不进浏览器运行时 | 按提示用当前包管理器安装：`npm i -D typescript` / 纯 React、TS 工程无需 vue-tsc；Vue 工程需 `npm i -D vue-tsc` |
 
 ### BLD 构建期
 

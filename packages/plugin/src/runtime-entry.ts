@@ -30,3 +30,13 @@ import type { RemoteSchemaEntry } from './pages'
 export type RemoteSchema = Record<string, RemoteSchemaEntry>
 /** 无插件转换的场景（构建、Node 导入）如实返回空清单。 */
 export const remoteSchema: RemoteSchema = {}
+
+/**
+ * 远程类型注册表的公共再导出（6.5.0 远程类型自动生成）。
+ * 接口与检查类型是包内静态共享声明（types/registry.d.ts）——三入口与运行时内核
+ * 都经 './internal/registry.js' 子路径引用同一份，保证它是**同一个可增强声明**
+ * （相对引用会被各入口的 dts 打包内联成私有副本）。分支语义与冻结说明见该文件。
+ */
+// 共享声明全部来自静态 registry 子路径（接口 + 两个纯函数检查类型）；本入口再导出为公共类型面
+export type { FgRemoteTypes, FgStaticEntry, FgRemoteModule } from '@fulgurjs/federation/internal/registry.js'
+

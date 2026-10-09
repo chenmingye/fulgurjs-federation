@@ -8,8 +8,13 @@
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ]
   },
-  "include": ["src", "fulgurjs.config.ts", "vite.config.ts"],
-  "exclude": ["src/fulgurjs/types/vue-remote.d"]
+  "include": [
+    "src",
+    "fulgurjs.config.ts",
+    "vite.config.ts"
+  ]
 }

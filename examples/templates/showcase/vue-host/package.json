@@ -7,7 +7,8 @@
     "dev": "vite --port 5334 --strictPort",
     "build": "vite build",
     "preview": "vite preview --port 5334 --strictPort",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "types": "fulgurjs types"
   },
   "dependencies": {
     "@fulgurjs/federation": "6.4.1",

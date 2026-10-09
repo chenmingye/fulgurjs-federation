@@ -28,6 +28,10 @@ export { provideAppContext, getAppContext, requireAppContext, clearAppContext } 
 export type { AppContext } from './context'
 export { definePages, validatePages } from './pages'
 export type { PageRouteLike, PagesOptions, PageViolation, RemoteSchemaEntry } from './pages'
+// 远程类型注册表（与 /runtime、/vue 共享同一声明；见 runtime-entry 的注册表说明）。
+// 包自引用保证 dist 各入口引用同一个可增强接口（相对路径会被 dts 打包内联成私有副本）
+export type { FgRemoteTypes, FgStaticEntry, FgRemoteModule } from '@fulgurjs/federation/internal/registry.js'
+export type { FgComponentEntry, FgBridgeEntry, FgBridgeAppProps, FgBridgePropsOf } from './remote-types'
 import { loadRemote } from './runtime/index'
 import {
   RemoteErrorBoundary,
@@ -65,7 +69,7 @@ export type {
   ReactRemoteComponentOptions, RemoteErrorFallback,
   UseLoadRemoteOptions, UseLoadRemoteResult,
   RemoteErrorBoundaryProps,
-  ReactHostPagesOptions, ReactHostPages, ResolvedHostPage,
+  ReactHostPagesOptions, ReactHostPages, ResolvedHostPage, FgReactRemoteProps,
 } from './react-adapter'
 export type { BridgeApp, ReactBridgeAppFactory } from './bridge-app-react'
 import type { RemoteSchemaEntry } from './pages'

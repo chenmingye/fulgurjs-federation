@@ -21,10 +21,9 @@ Vite 联邦插件配置.
 | `shareScope` | yes | `string` | 见对应 API 合同。 |
 | `manifest` | yes | `boolean \| Record<string, unknown>` | 见对应 API 合同。 |
 | `runtimePlugins` | yes | `string[]` | 见对应 API 合同。 |
-| `dts` | yes | `boolean \| { dir?: string; mode?: "source" \| "shim"; }` | 见对应 API 合同。 |
+| `dts` | yes | `boolean \| { dir?: string }` | 远程类型自动生成与同步（见[配置参考](configuration.md)与[API · 远程类型](api.md#远程类型自动生成与同步)）。 |
 | `devSharedSelf` | yes | `boolean` | dev 下自身源码（含依赖，需配合 optimizeDeps.exclude）是否参与 shared 协商改写。 缺省按角色推断：提供 exposes/setup 的应用（纯 remote 与双向联邦）为 true——被宿主 消费的组件需协商到宿主实例；纯宿主（只配 remotes、无 exposes）为 false——自身 import 即自身 provide，避免巨型工程 TLA/循环依赖风险。显式配置永远优先。 |
 | `devCorsOrigins` | yes | `string[] \| "*"` | dev 跨源访问策略（插件端点 /@fulgurjs-entry.js、/@fulgurjs-manifest.json 与 server.cors 共用同一来源）。缺省 = '*'（现状兼容：端点与 server.cors 全放开）；'*' = 显式全放开（不告警）； 数组 = 来源 allowlist（端点按 Origin 反射匹配，不匹配省略头；server.cors 传 { origin: [...] }， 用户显式配置的 server.cors 永远优先）。 |
-| `devFsRoot` | yes | `boolean` | dev manifest 是否携带 fsRoot（remote 根目录本机绝对路径，宿主 dts 类型直连用）。 默认 true（现状兼容）；false 时不写入 manifest，宿主 dts 降级为 any 桩并给出提示。 fsRoot 是 dev-only 字段，永不进入 prod manifest。 |
 
 ## PageRouteLike
 
@@ -188,7 +187,7 @@ export type ShareScopeMap = Record<string, ShareScope>
 | `prepareShares` | no | `(requests: { name: string; opts: LoadShareOptions; }[]) => Promise<void>` | 见对应 API 合同。 |
 | `getLoadedShare` | no | `(name: string, opts?: LoadShareOptions) => any` | 见对应 API 合同。 |
 | `pinLoadedShare` | no | `(name: string, opts: LoadShareOptions, localVersion: string, instance: unknown) => void` | 见对应 API 合同。 |
-| `loadRemote` | no | `<T = Record<string, any>>(spec: string, opts?: LoadRemoteOptions) => Promise<T>` | 见对应 API 合同。 |
+| `loadRemote` | no | `<S extends string, T = FgRemoteModule<S>>(spec: S & FgStaticEntry<S>, opts?: LoadRemoteOptions) => Promise<T>` | 见对应 API 合同（类型注册表语义见 `FgRemoteTypes`）。 |
 | `getContainer` | no | `(name: string) => Promise<any>` | 见对应 API 合同。 |
 | `preloadRemote` | no | `(spec: string, opts?: PreloadRemoteOptions) => Promise<void>` | 见对应 API 合同。 |
 | `parseSpec` | no | `(spec: string) => { remote: string; module: string; }` | 见对应 API 合同。 |
@@ -269,6 +268,18 @@ setup/onSession 收到的上下文.
 |---|---|---|---|
 | `exposes` | no | `string[]` | 该 remote 的 exposes 键清单（与 spec 同口径，剥 ./ 前缀比较） |
 | `exists` | yes | `boolean` | manifest 是否成功拉取（false 时跳过该 remote 的 R3，诚实降级） |
+
+## FgRemoteTypes — 远程类型注册表
+
+三入口（`/runtime`、`/vue`、`/react`）共享的**可增强接口**，声明本体是包内静态共享文件（`./internal/registry.js` 子路径指向 `types/registry.d.ts`）——宿主生成的 `src/fulgurjs/types/<远程名>/registry.d.ts` 通过模块增强向它登记 `'<远程名>/<expose>': typeof import('<远程名>/<expose>')`。不要手工实现或扩展该接口：成员完全由插件的类型同步产物生成。
+
+| 类型 | 语义 |
+|---|---|
+| `FgRemoteTypes` | 入口字符串 → 模块命名空间类型的注册表。未同步任何类型时为空（所有字面量放行、结果 `unknown`） |
+| `FgStaticEntry<S>` | 字符串 API 参数面的静态检查（空注册表/动态放行；已登记收敛为字面量；未登记得到带修法文案的错误类型，调用点报错） |
+| `FgRemoteModule<S>` | 入口对应的模块类型：已登记 → 模块命名空间；未同步/动态 → `unknown` |
+
+框架入口的扩展检查类型（`/vue`、`/react` 再导出）：`FgComponentEntry<S>`（remoteComponent 只接受默认导出为组件的暴露项）、`FgBridgeEntry<S>`（桥接工厂只接受 `defineBridgeApp` 默认导出）、`FgBridgeAppProps<S>`（从提供方声明提取的桥接 props）、`FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>`（远程组件真实类型/props）、`FgVueBridgeWrapper<S>`（Vue 桥接包装组件）。语义与限制见 [API 参考 · 字符串 API 的入口检查](api.md#字符串-api-的入口检查类型注册表)。
 
 ## RemoteSchema
 

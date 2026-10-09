@@ -73,9 +73,9 @@
 | Symptom | Check first | Go deeper |
 |---|---|---|
 | `remote-a/X` imports have no type hints | Is `dts` disabled; is the generated directory inside tsconfig include | `dts` is on by default; artifacts live in `src/fulgurjs/types/` (`.fulgurjs/types` without a src layout) |
-| The remote source is not on this machine and types are any | `devFsRoot: false` or cross-machine | This is honest degradation: resolvable but without source completion; once reachable again, restart the host dev to regenerate |
+| Remote types report not provided (TYP-004) | The remote runs an older plugin or sets `dts: false` | Pages run normally; for precise types upgrade the remote keeping `dts: true`; dynamic strings on the host follow the unknown boundary |
 | ts(2307) cannot find `@fulgurjs/federation/*` | The IDE TS service cached the old package | `Restart TS Server` (⌘⇧P) or reopen the window |
-| VSCode shows walls of red squiggles in `src/fulgurjs/types/*.d.ts` | Volar checks cross-project files with an inferred project | An editor-only display issue (command-line checks and builds report 0 errors); cure it with `dts: { mode: 'shim' }`; [IDE notes](../reference/api.md#ide-notes-red-squiggles-in-the-srcfulgurjs-directory) |
+| Types missing or not taking effect (TYP-006) | The generated directory is outside the app tsconfig include (exclude or strict `files` allowlist) | Follow the TYP-006 minimal fix to extend include; the default directory under `src` needs no config |
 | React precise types not working | The host tsconfig lacks paths | Configure `paths` per the `_paths.d.ts` instructions; [React dev types](../reference/api.md#react-dev-types-dual-track) |
 
 ## Bridge / session

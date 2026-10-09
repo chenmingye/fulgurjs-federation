@@ -2,8 +2,8 @@
  * WP4：联邦 manifest 契约（类型 + 纯函数校验器 + 规范化）。
  *
  * 两种形态共用 schemaVersion 语义：
- * - dev（remote dev server 中间件动态返回）：exposes 为数组（name/src/file），含 dev-only
- *   的 fsRoot（本机源码根，供宿主 dts 类型直连）；
+ * - dev（remote dev server 中间件动态返回）：exposes 为数组（name/src/file），可含
+ *   types（远程类型资源定位，6.5.0 起；宿主据此同步声明闭包）；
  * - prod（构建产物 fulgurjs-manifest.json）：exposes 为按 expose 名索引的对象（file/css）。
  *
  * 消费端：
@@ -46,12 +46,22 @@ export interface DevFederationManifest {
   /** 以 / 开头且 / 结尾 */
   base: string
   entry: string
-  /** dev-only：remote 根目录的本机绝对路径（仅同机联调时存在） */
-  fsRoot?: string
+  /** 类型资源定位（dts 启用且声明 bundle 就绪时存在；旧版本远程无此字段） */
+  types?: ManifestTypesRef
   exposes: DevManifestExpose[]
   shared: ManifestSharedEntry[]
   /** setup 生命周期入口的内部 expose 键（配置 federation({ setup }) 时存在；v1 向后兼容字段） */
   setup?: string
+}
+
+/** 类型资源定位（6.5.0 远程类型自动生成；dev/prod 共用形态，字段相对 manifest 地址解析） */
+export interface ManifestTypesRef {
+  /** 类型协议版本（与运行时 manifest 的 schemaVersion 相互独立） */
+  schemaVersion: number
+  /** 类型清单（index.json）地址（相对 manifest URL） */
+  index: string
+  /** 内容摘要（宿主据此识别代次与缓存） */
+  revision: string
 }
 
 /** prod manifest 的 expose 条目（对象形态，URL 相对基准 = entry 所在目录） */
@@ -65,6 +75,8 @@ export interface ProdFederationManifest {
   id: string
   name: string
   entry: string
+  /** 类型资源定位（dts 启用且声明 bundle 生成成功时随构建输出） */
+  types?: ManifestTypesRef
   exposes: Record<string, ProdManifestExposeEntry>
   shared: ManifestSharedEntry[]
   /** setup 生命周期入口的内部 expose 键（配置 federation({ setup }) 时存在；v1 向后兼容字段） */
@@ -149,6 +161,7 @@ export function parseManifest(input: unknown): ManifestParseResult {
     if (typeof m.base !== 'string' || !/^\/(?:.*\/)?$/.test(m.base)) {
       issues.push({ field: 'base', message: '必须是以 / 开头且 / 结尾的路径', got: m.base })
     }
+    pushTypesIssues(m.types, issues, 'dev')
     if (!validAssetRef(m.entry)) {
       issues.push({ field: 'entry', message: '必须是合法资源地址', got: m.entry })
     }
@@ -172,6 +185,7 @@ export function parseManifest(input: unknown): ManifestParseResult {
     if (!validAssetRef(m.entry)) {
       issues.push({ field: 'entry', message: '必须是合法资源地址（相对基准 = 所在目录）', got: m.entry })
     }
+    pushTypesIssues(m.types, issues, 'prod')
     for (const [key, v] of Object.entries(exposes)) {
       if (!validExposeName(key)) {
         issues.push({ field: `exposes["${key}"]`, message: '键必须是 "./xxx" 形态的 expose 名' })
@@ -201,6 +215,24 @@ export function parseManifest(input: unknown): ManifestParseResult {
 
   if (issues.length > 0) return { issues }
   return { manifest: input as unknown as FederationManifest, issues }
+}
+
+/** types 描述校验（可选字段；存在时形状必须合法——宿主按它定位类型资源） */
+function pushTypesIssues(t: unknown, issues: ManifestIssue[], form: 'dev' | 'prod'): void {
+  if (t === undefined) return
+  if (!isPlainObject(t)) {
+    issues.push({ field: 'types', message: `${form} manifest 的 types 必须是对象`, got: typeof t })
+    return
+  }
+  if (t.schemaVersion !== 1) {
+    issues.push({ field: 'types.schemaVersion', message: '必须是 1（类型协议版本）', got: t.schemaVersion })
+  }
+  if (!validAssetRef(t.index)) {
+    issues.push({ field: 'types.index', message: '必须是类型清单地址（相对 manifest）', got: t.index })
+  }
+  if (typeof t.revision !== 'string' || t.revision.length === 0) {
+    issues.push({ field: 'types.revision', message: '必须是非空内容摘要字符串', got: t.revision })
+  }
 }
 
 function validateShared(shared: unknown): ManifestIssue[] {

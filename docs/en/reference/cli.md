@@ -11,6 +11,7 @@
 | `fulgurjs create` | New project: scaffold a runnable federation project from a full template | Creation + installation succeeded |
 | `fulgurjs init` | Existing project: generate a starter config / validate a config | Template written or validation passed |
 | `fulgurjs explain` | Explain this app's effective federation shape and load chain | Explanation succeeded |
+| `fulgurjs types` | Remote types: providers validate declaration generation / hosts sync declarations (run before typecheck in CI) | Generation + sync + discovery checks all pass |
 | `fulgurjs check-pages` | Host page table ↔ remote manifest contract verification | No deterministic errors and verified |
 | `fulgurjs doctor` | Deployment/config layer checkup | No FAILs |
 | `fulgurjs port` | Unified port change across a template project | Plan generated or write succeeded |
@@ -132,6 +133,39 @@ $ npx @fulgurjs/federation init
 ```
 
 ---
+
+## `fulgurjs types`
+
+The single entry for remote types. Roles are auto-detected from `fulgurjs.config.ts` (a project may be both provider and host — generation runs first (purely local, never waiting on any remote) then sync, so there is no mutual-wait deadlock).
+
+### Syntax
+
+```bash
+fulgurjs types [--config <path>] [--mode dev|prod] [--check]
+```
+
+### Behavior
+
+| Role | Behavior | On failure |
+|---|---|---|
+| Provider (public exposes) | Validates declaration bundle generation locally (real toolchain: TypeScript for TS/TSX, vue-tsc when `.vue` exposes exist) | TYP-001 diagnostic + **non-zero exit** (builds keep producing page artifacts; this is the strict gate) |
+| Host (remotes) | Per `--mode` (default `dev` reads remotes dev URLs; `prod` reads prod URLs): fetch the remote manifest → validate → download declarations → generate ambient declarations and the type registry → atomically write into `dts.dir` (default `src/fulgurjs/types/`) | Network/validation/write failures report by state and exit **non-zero**; a remote without type resources (TYP-004) is also non-zero — strict acceptance requires upgrading the provider |
+| Finale (when there is type work) | Verifies the generated directory is covered by the app tsconfig (TYP-006 minimal fix) and that external type dependencies resolve in the host (TYP-005 install hints) | Not covered / missing → **non-zero exit** |
+
+`--check`: only verifies the local cache against its recorded generation (offline; **does not** attest the remote's latest).
+
+### Examples
+
+```bash
+# CI (before typecheck):
+npx @fulgurjs/federation types && npx vue-tsc --noEmit   # or tsc --noEmit
+
+# Inspect synced state locally (offline):
+npx @fulgurjs/federation types --check
+
+# Sync from deployed remotes (reads remotes prod URLs):
+npx @fulgurjs/federation types --mode prod
+```
 
 ## `fulgurjs explain`
 

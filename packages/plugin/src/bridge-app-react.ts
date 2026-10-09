@@ -31,7 +31,10 @@ export interface ReactBridgeAppContext {
 }
 
 /** React 子应用工厂：接收挂载时 props 快照与生命周期上下文，返回 ReactElement */
-export type ReactBridgeAppFactory = (props: Record<string, unknown>, ctx?: ReactBridgeAppContext) => ReactElement
+export type ReactBridgeAppFactory<P = Record<string, unknown>> = (props: P, ctx?: ReactBridgeAppContext) => ReactElement
+
+/** 桥接 props 的类型标记（phantom，与 Vue 侧同构；见 bridge-app-vue 的说明） */
+export type FgBridgePropsMarker<P extends Record<string, unknown>> = { __fgBridgeProps?: P }
 
 export interface DefineReactBridgeAppOptions {
   /** 声明路由协议（URL 同步）：契约写入 routing: { protocol: 1 }（缺失时宿主启用同步即 MFU-031） */
@@ -97,7 +100,10 @@ function CommitProbe({ children, onCommit }: { children?: ReactNode; onCommit: (
  * export default defineBridgeApp((props) => <MemoryRouter><App {...props} /></MemoryRouter>)
  * ```
  */
-export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineReactBridgeAppOptions = {}): BridgeApp {
+export function defineBridgeApp<P extends Record<string, unknown> = Record<string, unknown>>(
+  factory: ReactBridgeAppFactory<P>,
+  options: DefineReactBridgeAppOptions = {},
+): BridgeApp & FgBridgePropsMarker<P> {
   return {
     ...(options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
     mount(el: HTMLElement, props?: Record<string, unknown>, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): Promise<void> {
@@ -109,7 +115,7 @@ export function defineBridgeApp(factory: ReactBridgeAppFactory, options: DefineR
       const ctx: ReactBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }
       let element: ReactElement
       try {
-        element = factory(snapshot, ctx)
+        element = (factory as (props: Record<string, unknown>, ctx?: ReactBridgeAppContext) => ReactElement)(snapshot, ctx)
       } catch (e) {
         throw e instanceof Error ? e : new Error(String(e))
       }

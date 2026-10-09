@@ -69,7 +69,8 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 - **完整子应用桥接**：`defineBridgeApp`（子应用）+ `createVueBridgeApp` / `createReactBridgeApp`（宿主）；挂载/卸载、会话代次、卸载失败封锁。
 - **URL 同步**：`createVueBridgeNavigation` / `createReactBridgeNavigation`（宿主）+ `connectVueBridgeRouter` / `createReactBridgeRouter`（子应用）；深链刷新、守卫取消、query/hash 保留。
 - **共享依赖**：singleton / requiredVersion / strictVersion / shareScope / eager，同步与异步裁决，React 18/19 多版本隔离。
-- **CLI**：`create` / `init` / `explain` / `check-pages` / `doctor` / `port`。
+- **远程类型**：提供方随构建产出可分发声明（SFC 真实 props/泛型/重载），宿主 dev 自动同步——普通 import 与 `loadRemote`/`remoteComponent`/桥接工厂共用一套类型，拼错入口编译期报错；CLI `types` 供 CI 在 typecheck 前同步校验。
+- **CLI**：`create` / `init` / `explain` / `types` / `check-pages` / `doctor` / `port`。
 
 ## 文档
 

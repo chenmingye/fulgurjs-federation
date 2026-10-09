@@ -9,7 +9,7 @@
 | 环境 | 路径 | 说明 |
 |---|---|---|
 | dev | `/<base>/@fulgurjs-entry.js` | 远程容器入口（插件中间件直出，自包含） |
-| dev | `/<base>/@fulgurjs-manifest.json` | dev manifest（宿主 dts / preloadRemote 消费） |
+| dev | `/<base>/@fulgurjs-manifest.json` | dev manifest（宿主类型同步 / preloadRemote 消费；dts 启用时附 types 定位） |
 | prod | `/<base>/fulgurjs-remoteEntry.js` | 固定文件名容器入口（内容每次构建变——**必须 no-cache**） |
 | prod | `/<base>/fulgurjs-manifest.json` | expose chunk/CSS 清单（preloadRemote 消费，**no-cache**） |
 
