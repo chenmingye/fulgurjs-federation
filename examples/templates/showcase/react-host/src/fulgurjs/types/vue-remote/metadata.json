@@ -1,0 +1,15 @@
+{
+  "generator": "@fulgurjs/federation",
+  "alias": "vue-remote",
+  "source": "http://localhost:5335/@fulgurjs-entry.js",
+  "revision": "64f2dbdedcce8df3",
+  "files": [
+    "modules.d.ts",
+    "registry.d.ts"
+  ],
+  "externals": [
+    "@fulgurjs/federation",
+    "vue"
+  ],
+  "syncedAt": 1791549630574
+}

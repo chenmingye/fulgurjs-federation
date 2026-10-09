@@ -483,6 +483,8 @@ Declaration tooling stays Node-side and never enters the browser runtime or the 
 - Checking inline object literals for **conditionally derived** bridge `appProps` inside Vue templates is limited by vue-tsc — explicitly typed bindings (`const props: FgBridgeAppProps<'x/bridge'> = …`) plus `h()`/JSX paths are fully strict;
 - Dynamically registered remotes (`registerRemote`) / promise remotes cannot be enumerated at compile time — they follow the dynamic boundary.
 
+Whether to commit the generated directory: ignored by default (CI syncs with `fulgurjs types` before typecheck); projects valuing offline reproducibility (like this repo's templates) may explicitly commit the declaration snapshot — a fresh clone can typecheck out of the box while dev/CLI keep it updated as remotes evolve.
+
 <a id="project-side"></a>
 
 ## Optional project-side composition patterns: keep-alive, loading hints, preloading, and the diagnostics page

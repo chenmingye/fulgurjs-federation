@@ -11,7 +11,7 @@
     "types": "fulgurjs types"
   },
   "dependencies": {
-    "@fulgurjs/federation": "6.4.1",
+    "@fulgurjs/federation": "6.5.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.1.0",

@@ -479,6 +479,8 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 - Vue 模板对**条件派生**的桥接 `appProps` 内联对象字面量检查受 vue-tsc 能力限制——显式类型化变量绑定（`const props: FgBridgeAppProps<'x/bridge'> = …`）与 `h()`/JSX 路径完全严格；
 - 动态注册（`registerRemote`）/promise remote 的入口无法在编译期枚举——按动态边界处理。
 
+生成目录是否提交 Git：默认忽略（CI 在 typecheck 前用 `fulgurjs types` 同步）；对离线可复现要求高的工程（如本仓库模板）可显式提交声明快照——fresh clone 开箱即可 typecheck，dev/CLI 会随远程演进自动更新它。
+
 <a id="project-side"></a>
 
 ## 可选的项目侧组合用法：保活、加载提示、预载和诊断页

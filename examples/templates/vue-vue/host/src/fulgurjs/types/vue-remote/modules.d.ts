@@ -1,0 +1,28 @@
+// 自动生成：fulgurjs-federation 远程类型（remote: vue-remote，来源: http://localhost:5213/@fulgurjs-entry.js，revision: da7f5b888debf1d7）。
+// 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。
+// 外部类型依赖（宿主需可解析）：vue。
+declare module "vue-remote/ClickButton" {
+  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  export default _default;
+}
+
+declare module "vue-remote/pages/DetailPage" {
+  type __VLS_Props = {
+      id?: string;
+      tab?: string;
+  };
+  declare const _default: import("vue").DefineComponent<__VLS_Props, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<__VLS_Props> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, false, {}, any>;
+  export default _default;
+}
+
+declare module "vue-remote/pages/HomePage" {
+  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  export default _default;
+}
+
+declare module "vue-remote/utils" {
+  /** 普通 TS 工具模块：演示跨应用函数/常量消费（不含任何组件） */
+  export declare const DEMO_ANSWER = 42;
+  export declare function sumNumbers(...numbers: number[]): number;
+  export declare function formatPrice(yuan: number): string;
+}

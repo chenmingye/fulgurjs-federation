@@ -1,5 +1,13 @@
 # 当前发布说明
 
+## 6.5.2
+
+最终交付包（与 6.5.1 插件运行时零差异，仅模板资产与文档）：
+
+- 五个模板的插件依赖升钉 **6.5.1**（锁文件按 registry 实际解析重新生成，integrity 与 registry 一致）；十二个应用 typecheck + build 全过。
+- 模板改为**提交声明快照**（`src/fulgurjs/types/` 不再忽略）：fresh clone 开箱即可 typecheck；dev/`fulgurjs types` 随远程演进自动更新。生成目录提交与否的两种策略已在 API 参考说明。
+- 含 `.vue` 暴露的模板新增 `vue-tsc` devDependency 与 `types`/`typecheck` 脚本；移除旧双轨时代的 tsconfig exclude 与提交的转发产物。
+
 ## 6.5.1
 
 修复 6.5.0 远程类型链的两个提供方生成缺陷（公共 API 与运行时不变）：

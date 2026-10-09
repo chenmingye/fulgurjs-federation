@@ -1,0 +1,14 @@
+{
+  "generator": "@fulgurjs/federation",
+  "alias": "react-remote",
+  "source": "http://localhost:5203/@fulgurjs-entry.js",
+  "revision": "d8d57c2717004b1b",
+  "files": [
+    "modules.d.ts",
+    "registry.d.ts"
+  ],
+  "externals": [
+    "react"
+  ],
+  "syncedAt": 1791549600580
+}

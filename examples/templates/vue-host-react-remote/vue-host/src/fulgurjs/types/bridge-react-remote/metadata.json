@@ -1,0 +1,15 @@
+{
+  "generator": "@fulgurjs/federation",
+  "alias": "bridge-react-remote",
+  "source": "http://localhost:5303/@fulgurjs-entry.js",
+  "revision": "fcc14f3feaa8914e",
+  "files": [
+    "modules.d.ts",
+    "registry.d.ts"
+  ],
+  "externals": [
+    "@fulgurjs/federation",
+    "react"
+  ],
+  "syncedAt": 1791549608659
+}
