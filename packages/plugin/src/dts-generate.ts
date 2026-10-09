@@ -78,6 +78,29 @@ function installHint(root: string, pkg: string): string {
   return `请在提供方工程安装 ${pkg}（${run}）；它是声明生成工具，不进入浏览器运行时。`
 }
 
+/** 源码树里是否存在 .vue（有界扫描：src/ 优先，最多 2000 文件；找不到 src 扫根下一层） */
+function hasVueFilesUnderSources(root: string): boolean {
+  const scan = (dir: string, budget: { left: number }): boolean => {
+    if (budget.left <= 0) return false
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return false
+    }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name === '.git' || e.name === 'dist') continue
+      const p = path.join(dir, e.name)
+      budget.left -= 1
+      if (e.isFile() && e.name.endsWith('.vue')) return true
+      if (e.isDirectory() && scan(p, budget)) return true
+    }
+    return false
+  }
+  const srcDir = path.join(root, 'src')
+  return scan(fs.existsSync(srcDir) ? srcDir : root, { left: 2000 })
+}
+
 /** 工程文件公共目录（bundle 布局的 rootDir；避免只用 entries 时目录塌缩） */
 function commonDirOf(files: string[]): string {
   if (files.length === 0) return ''
@@ -219,10 +242,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   if (entryMap.size === 0) return { ok: false, diagnostics }
   const entryFiles = [...entryMap.values()]
 
-  // .vue 需求判定：入口是 .vue，或工程输入含 .vue（入口可能传递依赖 SFC）
+  // .vue 需求判定：入口是 .vue，或工程内存在 .vue（入口可能传递依赖 SFC——TS 的
+  // 目录枚举只收 TS 扩展名，parsed.fileNames 看不到 .vue，必须实际扫文件系统）
   const needsVueTsc =
     entryFiles.some((f) => f.endsWith('.vue')) ||
-    ctx.projectFiles.some((f) => f.endsWith('.vue'))
+    ctx.projectFiles.some((f) => f.endsWith('.vue')) ||
+    hasVueFilesUnderSources(root)
 
   // rootDir：全工程文件公共目录（空时退到入口公共目录）
   const rootDir = ctx.projectFiles.length > 0 ? commonDirOf(ctx.projectFiles) : commonDirOf(entryFiles)
@@ -263,6 +288,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     delete baseCo.emitDeclarationOnly
     delete baseCo.declarationDir
     delete baseCo.extends
+
     fs.writeFileSync(tmpCfg, JSON.stringify({
       compilerOptions: {
         ...baseCo,
@@ -514,7 +540,9 @@ function rewriteSpecifiers(
       } else if (spec.startsWith('.')) {
         return fail(spec)
       } else {
-        externals.add(spec.split('/')[0] === '@' ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0]!)
+        // scoped 包名取前两段（@scope/name）；判断必须用 startsWith——split[0] 对
+        // scoped 包是 '@scope' 而非 '@'（实测曾把 @fulgurjs/federation 拆成 @fulgurjs）
+        externals.add(spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0]!)
         if (pos < stmt.getEnd()) { out += text.slice(pos, stmt.getEnd()); pos = stmt.getEnd() }
       }
       continue
@@ -533,7 +561,7 @@ function rewriteSpecifiers(
     const isAlias = viaResolver !== null && !viaResolver.fromNodeModules
     if (!spec.startsWith('.') && !isAlias) {
       const seg = spec.split('/')
-      externals.add(seg[0] === '@' ? seg.slice(0, 2).join('/') : seg[0]!)
+      externals.add(spec.startsWith('@') ? seg.slice(0, 2).join('/') : seg[0]!)
       return full
     }
     const targetRel = resolveTarget(spec)

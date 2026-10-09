@@ -1,5 +1,12 @@
 # 当前发布说明
 
+## 6.5.1
+
+修复 6.5.0 远程类型链的两个提供方生成缺陷（公共 API 与运行时不变）：
+
+- **vue-tsc 误判**：入口是 `.ts` 但闭包传递依赖 `.vue` 的工程（如 showcase 的 `./bridge` 暴露）此前被判定为纯 TS 工程，走 TypeScript API 生成导致 `TS2307 Cannot find module '*.vue'`——现按源码树实际扫描判定（TS 的目录枚举不含 `.vue` 扩展名）。
+- **externals 拆包名**：声明闭包引用 scoped 包（`@fulgurjs/federation` 等）时外部依赖登记被拆成错误的名字（如 `@fulgurjs`）；现按 scoped 包名规则取前两段，宿主的外部类型依赖核对不再误报。
+
 ## 6.5.0
 
 远程类型自动生成与易用性重构：用户正常使用简短远程入口（`@fulgurjs/federation/vue` / `/react` / `/runtime`）即可获得准确、自动生效的类型提示与检查，不再需要理解双轨模式、手写跨项目 tsconfig paths，或依赖远程源码在宿主机器上。
