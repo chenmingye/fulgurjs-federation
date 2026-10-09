@@ -4,7 +4,7 @@
 
 例如：主系统加载独立部署的审批页面，Vue 页面中嵌入 React 子应用，多个应用共享同一套依赖版本。提供方与使用方可以分仓库开发、独立构建部署。支持 Vue 3 与 React 18/19，Vite 5.1–8。
 
-[English](README.en.md) ｜ **[完整文档中心](docs/README.md)**（中文 [docs/zh](docs/zh/README.md) · English [docs/en](docs/en/README.md)）
+[English](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.en.md) ｜ **[完整文档中心](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)**（中文 [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md)）
 
 ## 快速开始
 
@@ -75,26 +75,26 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 
 | 需求 | 入口 |
 |---|---|
-| 新建工程 / 已有项目接入 | [快速开始](docs/zh/guide/getting-started.md) |
-| Vue/React 组件与普通模块 | [组件与模块](docs/zh/guide/components-and-modules.md) |
-| 完整子应用 / 跨框架嵌套 | [子应用桥接](docs/zh/guide/app-bridge.md) |
-| 路由同步 / 刷新深链 | [URL 同步](docs/zh/guide/url-sync.md) |
-| 全部配置项与默认值 | [配置参考](docs/zh/reference/configuration.md) |
-| 全部 API 签名与语义 | [API 参考](docs/zh/reference/api.md) |
-| CLI 命令与退出码 | [CLI 参考](docs/zh/reference/cli.md) |
-| 错误码（现象/原因/修法） | [错误码总表](docs/zh/reference/errors.md) |
-| 按症状排错 / 兼容范围 | [排错](docs/zh/troubleshooting/README.md) |
-| 模板与示例运行 | [示例总览](examples/README.md) |
+| 新建工程 / 已有项目接入 | [快速开始](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/getting-started.md) |
+| Vue/React 组件与普通模块 | [组件与模块](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/components-and-modules.md) |
+| 完整子应用 / 跨框架嵌套 | [子应用桥接](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/app-bridge.md) |
+| 路由同步 / 刷新深链 | [URL 同步](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/url-sync.md) |
+| 全部配置项与默认值 | [配置参考](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/configuration.md) |
+| 全部 API 签名与语义 | [API 参考](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/api.md) |
+| CLI 命令与退出码 | [CLI 参考](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/cli.md) |
+| 错误码（现象/原因/修法） | [错误码总表](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/errors.md) |
+| 按症状排错 / 兼容范围 | [排错](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/troubleshooting/README.md) |
+| 模板与示例运行 | [示例总览](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/README.md) |
 
 ## 示例
 
-五个完整模板（`vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`）与功能 Demo 统一维护在 [examples/](examples/README.md)，均可整目录复制后独立安装运行。
+五个完整模板（`vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`）与功能 Demo 统一维护在 [examples/](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/README.md)，均可整目录复制后独立安装运行。
 
 ## 贡献与安全
 
-- 贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；架构与发布见 [docs/maintainers/](docs/maintainers/README.md)。
-- 安全问题请按 [SECURITY.md](SECURITY.md) 的渠道私下报告。
+- 贡献流程见 [CONTRIBUTING.md](https://github.com/chenmingye/fulgurjs-federation/blob/master/CONTRIBUTING.md)；架构与发布见 [docs/maintainers/](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/maintainers/README.md)。
+- 安全问题请按 [SECURITY.md](https://github.com/chenmingye/fulgurjs-federation/blob/master/SECURITY.md) 的渠道私下报告。
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/chenmingye/fulgurjs-federation/blob/master/LICENSE)

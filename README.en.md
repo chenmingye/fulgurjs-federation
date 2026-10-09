@@ -4,7 +4,7 @@
 
 For example: a main system loads an independently deployed approval page, a Vue page embeds a React sub app, or several apps share one copy of a dependency. Providers and consumers can live in separate repos and build/deploy independently. Supports Vue 3 and React 18/19 on Vite 5.1–8.
 
-[简体中文](README.md) ｜ **[Documentation center](docs/README.md)** (Chinese [docs/zh](docs/zh/README.md) · English [docs/en](docs/en/README.md))
+[简体中文](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.md) ｜ **[Documentation center](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)** (Chinese [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md))
 
 ## Quick start
 
@@ -75,26 +75,26 @@ Rule of thumb: import from the entry of the framework your app runs on; framewor
 
 | Need | Entry |
 |---|---|
-| New project / existing project | [Getting started](docs/en/guide/getting-started.md) |
-| Vue/React components & plain modules | [Components & modules](docs/en/guide/components-and-modules.md) |
-| Full sub apps / cross-framework nesting | [App bridge](docs/en/guide/app-bridge.md) |
-| Router sync / deep links | [URL sync](docs/en/guide/url-sync.md) |
-| All options & defaults | [Configuration](docs/en/reference/configuration.md) |
-| Full API signatures & semantics | [API reference](docs/en/reference/api.md) |
-| CLI commands & exit codes | [CLI reference](docs/en/reference/cli.md) |
-| Error codes (symptom/cause/fix) | [Error code table](docs/en/reference/errors.md) |
-| Troubleshooting / compatibility | [Troubleshooting](docs/en/troubleshooting/README.md) |
-| Templates & demos | [Examples overview](examples/README.md) |
+| New project / existing project | [Getting started](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/getting-started.md) |
+| Vue/React components & plain modules | [Components & modules](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/components-and-modules.md) |
+| Full sub apps / cross-framework nesting | [App bridge](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/app-bridge.md) |
+| Router sync / deep links | [URL sync](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/url-sync.md) |
+| All options & defaults | [Configuration](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/reference/configuration.md) |
+| Full API signatures & semantics | [API reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/reference/api.md) |
+| CLI commands & exit codes | [CLI reference](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/reference/cli.md) |
+| Error codes (symptom/cause/fix) | [Error code table](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/reference/errors.md) |
+| Troubleshooting / compatibility | [Troubleshooting](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/troubleshooting/README.md) |
+| Templates & demos | [Examples overview](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/README.md) |
 
 ## Examples
 
-Five complete templates (`vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`) plus feature demos live in [examples/](examples/README.md). Each can be copied out and installed standalone.
+Five complete templates (`vue-vue` / `react-react` / `vue-host-react-remote` / `react-host-vue-remote` / `showcase`) plus feature demos live in [examples/](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/README.md). Each can be copied out and installed standalone.
 
 ## Contributing & security
 
-- See [CONTRIBUTING.md](CONTRIBUTING.md); architecture and release process live in [docs/maintainers/](docs/maintainers/README.md).
-- Please report security issues privately via [SECURITY.md](SECURITY.md).
+- See [CONTRIBUTING.md](https://github.com/chenmingye/fulgurjs-federation/blob/master/CONTRIBUTING.md); architecture and release process live in [docs/maintainers/](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/maintainers/README.md).
+- Please report security issues privately via [SECURITY.md](https://github.com/chenmingye/fulgurjs-federation/blob/master/SECURITY.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/chenmingye/fulgurjs-federation/blob/master/LICENSE)
