@@ -148,6 +148,8 @@ Vue 侧无独立边界组件：`remoteComponent` 的内置错误占位 + `errorC
 
 ## 远程类型（自动同步）
 
+想直接体验补全和错误检查？打开 [Vue 模板的类型演示](../../../examples/templates/vue-vue/README.md#体验远程类型提示与错误检查)：浏览器显示真实函数结果和远程组件，`host/src/type-demo.ts` 提供五条不执行的错误示例，`typecheck` 验证这些错误确实被拒绝。
+
 `dts` 默认开启：提供方随 dev/build 产出**可分发声明资源**（不依赖远程源码在宿主机器上），宿主 dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`），src 布局项目 tsconfig 零配置生效：
 
 ```ts

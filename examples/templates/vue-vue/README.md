@@ -37,6 +37,26 @@ pnpm dev                       # 同时启动远程和宿主
 | 宿主导航 + 懒加载（不批量预取） | `host/src/App.vue` + `host/src/main.ts`（路由级按需加载） |
 | 默认加载/错误/恢复占位 | 插件内置（`remoteComponent` / `createHostPages`），示例不自建错误组件 |
 
+## 体验远程类型提示与错误检查
+
+启动后打开 <http://localhost:5214/utils-demo>（菜单「TS 模块调用」）。页面会显示真实计算结果：`sumNumbers(2, 3, 7) = 12`、`DEMO_ANSWER = 42`、`formatPrice(12.5)`，以及远程详情组件的 `id=7`、`tab=type-demo`。
+
+1. 用编辑器打开整个模板目录，启用 Vue 官方扩展 **Vue - Official**。
+2. 打开 [`host/src/type-demo.ts`](host/src/type-demo.ts)，在 `utils.` 后触发补全，或悬停 `sumNumbers`：应显示数字参数和数字返回值。类型直接来自远程，没有手写接口或显式泛型。
+3. 打开 [`host/src/pages/UtilsDemo.vue`](host/src/pages/UtilsDemo.vue)，在 `<RemoteDetail>` 上查看属性提示。把 `id="7"` 临时改成 `:id="7"`，应提示数字不能赋给字符串；检查后还原。
+4. 在模板根执行：
+
+   ```bash
+   pnpm --dir host typecheck
+   ```
+
+   正确代码应通过；`type-demo.ts` 中五条 `@ts-expect-error` 同时验证：错误参数、错误返回值、不存在的方法、拼错入口、错误组件属性确实会被拒绝。如果这些错误变成被放行，检查会因指令失效而失败。
+5. 想看具体诊断，可临时删除其中一条 `@ts-expect-error`，再运行检查，应非零退出并指出对应错误；体验后还原。示例函数不被调用，错误示例不会在浏览器执行。
+
+模板已带类型快照，干净安装后即可检查。远程启动后，宿主 dev 会自动同步新类型；需要主动同步时，在远程在线期间执行 `pnpm --dir host types`，再执行 `typecheck`。不要编辑 `src/fulgurjs/types/` 下的自动生成文件。
+
+这是编辑器与编译检查能力，不会在浏览器里自动弹出参数错误；真实调用结果由页面展示。
+
 ## 生产构建与最小 Nginx 部署
 
 ```bash
