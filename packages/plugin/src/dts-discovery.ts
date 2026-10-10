@@ -107,6 +107,9 @@ function resolveConfigFile(value: string, declaringFile: string): string | null 
 /** 单个 include/exclude 模式是否在目录级覆盖 target（目录覆盖 = 递归含其下全部） */
 function patternCoversDir(pattern: string, target: string, cfgDir: string): boolean {
   const norm = pattern.replace(/^\.\//, '')
+  // A file-extension glob such as **/*.js does not exclude generated declarations.
+  const extension = /\*([^/*]+)$/.exec(norm)?.[1]
+  if (extension && !'__fulgurjs_probe__.d.ts'.endsWith(extension)) return false
   let base: string
   if (norm.includes('**')) base = norm.slice(0, norm.indexOf('**')).replace(/\/+$/, '')
   else if (norm.endsWith('/*')) base = norm.slice(0, -2)

@@ -138,6 +138,10 @@ describe('checkTypesDiscovery（tsconfig 发现检查）', () => {
     write('src/main.ts', 'export {}\n')
     expect(checkTypesDiscovery(tmp, path.join(tmp, 'src/fulgurjs/types')).covered).toBe(true)
   })
+  it('JS-only exclusion does not hide generated declarations', () => {
+    write('tsconfig.json', JSON.stringify({ include: ['src/**/*.ts'], exclude: ['**/*.js'] }))
+    expect(checkTypesDiscovery(tmp, path.join(tmp, 'src/fulgurjs/types')).covered).toBe(true)
+  })
   it('显式 exclude 生成目录 → 未覆盖 + 最小修法含 TYP-006', () => {
     write('tsconfig.json', JSON.stringify({ compilerOptions: {}, include: ['src/**/*'], exclude: ['src/fulgurjs'] }))
     const r = checkTypesDiscovery(tmp, path.join(tmp, 'src/fulgurjs/types'))

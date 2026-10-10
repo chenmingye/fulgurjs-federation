@@ -193,19 +193,19 @@ function parseErrorFiles(stdout: string, root: string): Set<string> {
 function resolveTypesEntries(root: string, baseCo: Record<string, unknown>, diagnostics: string[]): string[] {
   const raw = baseCo.types
   if (raw === undefined) return []
-  delete baseCo.types
+  baseCo.types = []
   if (!Array.isArray(raw)) return []
   const req = createRequire(path.join(root, 'package.json'))
   const out: string[] = []
   for (const entry of raw) {
     if (typeof entry !== 'string' || entry.length === 0) continue
-    const direct = [path.resolve(root, `${entry}.d.ts`), path.resolve(root, entry, 'index.d.ts')]
+    const direct = [path.resolve(root, `${entry}.d.ts`), path.resolve(root, entry, 'index.d.ts'), path.resolve(root, 'node_modules', `${entry}.d.ts`), path.resolve(root, 'node_modules', entry, 'index.d.ts'), path.resolve(root, 'node_modules/@types', entry, 'index.d.ts')]
     let hit = direct.find((c) => fs.existsSync(c))
     if (!hit && !entry.startsWith('.') && !path.isAbsolute(entry)) {
       try {
         const r = req.resolve(entry)
         for (const c of [r.replace(/\.js$/, '.d.ts'), `${r}.d.ts`, r]) {
-          if (fs.existsSync(c)) { hit = c; break }
+          if (c.endsWith('.d.ts') && fs.existsSync(c)) { hit = c; break }
         }
       } catch { /* 包形态解析失败 → 丢弃并记录 */ }
     }

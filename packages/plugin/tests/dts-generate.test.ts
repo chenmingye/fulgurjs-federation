@@ -165,10 +165,12 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
 
   it('Vue SFC 自定义 alias 和公共类型依赖通过真实 vue-tsc 生成', async () => {
     const root = makeProject('vue-alias', {
-      'src/entry.vue': `<script setup lang="ts">import Child from '#ui/Child.vue'; import type { User } from '#models/user'; defineProps<{ user: User }>();</script><template><Child :name="user.id" /></template>`,
+      'src/entry.vue': `<script setup lang="ts">import Child from '#ui/Child.vue'; import type { User } from '#models/user'; defineProps<{ user: User }>(); const clientValue: string = ClientRuntimeValue;</script><template><Child :name="user.id + clientValue" /></template>`,
       'src/ui/Child.vue': '<script setup lang="ts">defineProps<{ name: string }>();</script><template>{{ name }}</template>',
       'src/models/user.ts': 'export interface User { id: string }',
-    }, { paths: { '#ui/*': ['src/ui/*'], '#models/*': ['src/models/*'] } })
+      'node_modules/local/client.d.ts': 'declare const ClientRuntimeValue: string;',
+      'node_modules/untyped/package.json': '{"name":"untyped"}',
+    }, { types: ['local/client'], typeRoots: ['./node_modules'], paths: { '#ui/*': ['src/ui/*'], '#models/*': ['src/models/*'] } })
     for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
     const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test' })
     expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
