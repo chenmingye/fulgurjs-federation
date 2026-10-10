@@ -92,6 +92,16 @@ describe('buildAmbientDeclarations（bundle → ambient 变换）', () => {
     // default 重导出（api → math）
     expect(modules).toContain('from "lowcode/math"')
   })
+  it('嵌入模块体不保留重复 declare 修饰符，字符串与注释保持原样', () => {
+    const text = out.files.get('modules.d.ts') ?? ''
+    expect(text).toContain('export function page(')
+    expect(text).toContain('const _default:')
+    expect(text).not.toContain('export declare function')
+    const sample = 'declare const x: "declare const literal"; // declare const comment\n'
+    const checked = buildAmbientDeclarations({ alias: 'r', index: index as never, readFile: () => sample, source: 's' }).files.get('modules.d.ts') ?? ''
+    expect(checked).toContain('const x: "declare const literal"')
+    expect(checked).toContain('// declare const comment')
+  })
   it('registry 是 module 形态（含 import），目标为共享注册表子路径，登记全部公开入口', () => {
     const registry = out.files.get('registry.d.ts') ?? ''
     expect(registry).toContain("import '@fulgurjs/federation/internal/registry.js'")

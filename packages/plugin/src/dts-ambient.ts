@@ -87,6 +87,7 @@ export function buildAmbientDeclarations(input: AmbientBundleInput): AmbientBund
     }
     // 相对说明符（import/export 语句与 import() 节点）→ 目标 ambient 名
     text = rewriteRelativeSpecifiers(text, rel, (target) => ambientOf.get(target) ?? null, warnings)
+    text = stripAmbientModifiers(text)
     const indented = text
       .split('\n')
       .map((line) => (line.length ? `  ${line}` : line))
@@ -185,4 +186,12 @@ function pathNormalize(p: string): string {
     else stack.push(part)
   }
   return `${abs ? '/' : ''}${stack.join('/')}`
+}
+
+/** 外部 .d.ts 已隐式 ambient；包进模块体时移除重复修饰符，保留字符串和注释。 */
+function stripAmbientModifiers(text: string): string {
+  return text.replace(
+    /\/\*[\s\S]*?\*\/|\/\/[^\r\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\bdeclare\s+(?=(?:const|let|var|function|class|enum|namespace|module)\b)/g,
+    (token) => token.startsWith('declare') ? '' : token,
+  )
 }
