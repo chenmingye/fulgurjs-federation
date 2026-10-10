@@ -108,6 +108,18 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     for (const text of result.files.values()) expect(text).not.toContain(tmp)
   })
 
+  it('声明移除样式副作用导入，但缺失代码依赖仍失败', async () => {
+    const project = makeProject('style-import', {
+      'src/entry.ts': "import './theme.less'; export const title: string = 'demo'",
+      'src/styles.d.ts': "declare module '*.less'",
+    })
+    const result = await generateTypesBundle({ root: project, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (result.ok) expect([...result.files.values()].join('\n')).not.toContain('theme.less')
+    fs.writeFileSync(path.join(project, 'src/entry.ts'), "export { missing } from './missing'")
+    expect((await generateTypesBundle({ root: project, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })).ok).toBe(false)
+  })
+
   it('相同输入 revision 稳定；内容变化 revision 变化', async () => {
     const again = await generateTypesBundle({
       root, exposes: [{ name: './math', import: './src/exposes/math.ts' }, { name: './api', import: './src/exposes/api.ts' }], pluginVersion: 'test',

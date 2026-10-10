@@ -711,6 +711,11 @@ function rewriteSpecifiers(
           : null
     if (specNode) {
       const spec = specNode.text
+      // Style side effects have no declaration contract or runtime role in a type bundle.
+      if (ts.isImportDeclaration(stmt) && !stmt.importClause && /\.(?:css|less|scss|sass|styl|stylus)(?:[?#].*)?$/.test(spec)) {
+        emitRange(stmt, '')
+        continue
+      }
       const targetRel = resolveTarget(spec)
       if (targetRel) {
         emitRange(specNode, JSON.stringify(rewriteTo(targetRel)))
