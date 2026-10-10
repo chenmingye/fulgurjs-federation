@@ -336,8 +336,10 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
 /** 解析入口/依赖说明符到绝对源文件（paths alias / 相对 / node_modules 都走 TS 语义） */
 function makeResolver(ts: TsModule, co: Record<string, unknown>) {
   return (spec: string, fromFile: string): { resolved: string; fromNodeModules: boolean } | null => {
-    const r = ts.resolveModuleName(spec, fromFile, co as never, ts.sys)
-    const resolved = r.resolvedModule?.resolvedFileName
+    const host = { ...ts.sys, fileExists: (file: string) => ts.sys.fileExists(file) || (file.endsWith('.vue.ts') && ts.sys.fileExists(file.slice(0, -3))) }
+    const r = ts.resolveModuleName(spec, fromFile, co as never, host)
+    let resolved = r.resolvedModule?.resolvedFileName
+    if (resolved?.endsWith('.vue.ts') && ts.sys.fileExists(resolved.slice(0, -3))) resolved = resolved.slice(0, -3)
     if (!resolved) return null
     return { resolved, fromNodeModules: resolved.includes(`${path.sep}node_modules${path.sep}`) }
   }
@@ -393,7 +395,8 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     hasVueFilesUnderSources(root)
 
   // rootDir：全工程文件公共目录（空时退到入口公共目录）
-  const rootDir = ctx.projectFiles.length > 0 ? commonDirOf(ctx.projectFiles) : commonDirOf(entryFiles)
+  const closure = computeStaticClosure(ts, entryFiles, resolver, root)
+  const rootDir = commonDirOf([...ctx.projectFiles, ...closure])
   if (!rootDir) return { ok: false, diagnostics: ['无法确定声明输出根目录（rootDir）。请检查工程 tsconfig 的 include。'] }
 
   const emitted = new Map<string, string>() // 绝对源文件 → 声明文本
@@ -402,7 +405,6 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   // 入口**静态**导入闭包：诊断门禁与产物范围都限定在它——动态导入（如桥接契约的
   // 装配模块）只是类型边，其文件的存量业务错误与公开声明面无关，不进闭包也不阻断
   // 生成（设计合同：「与 exposed 声明依赖无关的业务错误不要被偷换成类型生成失败」）。
-  const closure = computeStaticClosure(ts, entryFiles, resolver, root)
 
   if (needsVueTsc) {
     const vueTscDir = resolveFromRoot(root, 'vue-tsc')
