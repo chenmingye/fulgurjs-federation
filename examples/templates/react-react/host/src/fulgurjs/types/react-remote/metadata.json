@@ -1,8 +1,8 @@
 {
   "generator": "@fulgurjs/federation",
   "alias": "react-remote",
-  "source": "http://localhost:5203/@fulgurjs-entry.js",
-  "revision": "d8d57c2717004b1b",
+  "source": "/react-remote/fulgurjs-remoteEntry.js",
+  "revision": "38ad9fa42144e844",
   "files": [
     "modules.d.ts",
     "registry.d.ts"
@@ -10,5 +10,5 @@
   "externals": [
     "react"
   ],
-  "syncedAt": 1791549600580
+  "syncedAt": 1791596389642
 }

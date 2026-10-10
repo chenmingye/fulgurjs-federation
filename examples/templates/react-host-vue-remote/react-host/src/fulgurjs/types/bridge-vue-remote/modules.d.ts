@@ -1,4 +1,4 @@
-// 自动生成：fulgurjs-federation 远程类型（remote: bridge-vue-remote，来源: http://localhost:5313/@fulgurjs-entry.js，revision: af18708d51dd0642）。
+// 自动生成：fulgurjs-federation 远程类型（remote: bridge-vue-remote，来源: /bridge-vue-remote/fulgurjs-remoteEntry.js，revision: 05c2086d5a0a1c0a）。
 // 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。
 // 外部类型依赖（宿主需可解析）：@fulgurjs/federation。
 declare module "bridge-vue-remote/bridge" {

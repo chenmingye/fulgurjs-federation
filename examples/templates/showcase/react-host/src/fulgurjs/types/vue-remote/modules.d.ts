@@ -1,4 +1,4 @@
-// 自动生成：fulgurjs-federation 远程类型（remote: vue-remote，来源: http://localhost:5335/@fulgurjs-entry.js，revision: 64f2dbdedcce8df3）。
+// 自动生成：fulgurjs-federation 远程类型（remote: vue-remote，来源: /vue-remote/fulgurjs-remoteEntry.js，revision: a0d86b51277569ca）。
 // 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。
 // 外部类型依赖（宿主需可解析）：@fulgurjs/federation, vue。
 declare module "vue-remote/__internal/src/ChildLayout" {

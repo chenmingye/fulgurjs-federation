@@ -1,4 +1,4 @@
-// 自动生成：fulgurjs-federation 远程类型（remote: react-remote，来源: http://localhost:5333/@fulgurjs-entry.js，revision: 523c8878ed5fc586）。
+// 自动生成：fulgurjs-federation 远程类型（remote: react-remote，来源: /react-remote/fulgurjs-remoteEntry.js，revision: 2493684b743f5a63）。
 // 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。
 // 外部类型依赖（宿主需可解析）：@fulgurjs/federation, react。
 declare module "react-remote/__internal/src/ChildLayout" {

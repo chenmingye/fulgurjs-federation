@@ -450,6 +450,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 远程类型默认开启（`dts: true`），链路是**提供方生成可分发声明 → 宿主自动同步 → TypeScript 自动发现**，不要求远程源码在宿主机器上、不要求手工 tsconfig paths：
 
 - **提供方**：dev 后台（vue-tsc / TypeScript，按工程实际 tsconfig）从公开 exposes 出发生成**声明闭包**——默认/具名/类型导出、泛型、函数重载、重导出、Vue SFC 真实 props/events 都按官方工具链产出；源码 alias 重写为声明内相对引用，跨工程源码路径与本机绝对路径绝不外发；闭包内编译错误时**不产出**类型资源（manifest 不携带 `types`，构建给出 TYP-001 诊断）。prod 构建把声明资源（`fulgurjs-types/`）随产物输出，manifest 附带定位与内容摘要。
+- **哪些依赖会生成类型**：入口的静态导入、路径别名、`import type` / `import("…")` 类型引用和 Vue 脚本依赖都会检查；手写本地 `.d.ts` 也会保留。纯样式副作用导入不会写入声明。运行时 `import()` 动态装配不属于公开声明闭包；公开 props 等合同应放在入口与实现共用的类型文件中。
 - **宿主**：dev 启动后台同步（不阻塞页面服务；远程晚启动有界重试，恢复后自动更新；源码变化按摘要代次自动刷新）。同步做完整性校验（逐文件摘要、路径边界、大小/数量上限），完整下载后**原子替换**——中断/失败保留上一代完整声明并明确陈旧状态。产物写入 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`，`dts.dir` 可覆盖）：`<远程名>/modules.d.ts`（环境模块声明）+ `<远程名>/registry.d.ts`（类型注册表）+ `metadata.json`（生成器账本——清理只动账本内自有文件，绝不碰用户文件）。
 - **TypeScript 发现**：生成目录默认落在 `src` 下，常规 `include: ["src/**/*"]` 零配置生效；生成代码不含相对导入，宿主 `moduleResolution`（bundler/NodeNext/…）不影响发现。目录被 exclude 或严格 `files` 白名单排除时，dev 与 `fulgurjs types` 给出 TYP-006（含具体配置文件与最小修法）。插件**绝不**在 dev 启动时改写你的 tsconfig。
 

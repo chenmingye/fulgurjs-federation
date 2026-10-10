@@ -1,8 +1,8 @@
 {
   "generator": "@fulgurjs/federation",
   "alias": "bridge-vue-remote",
-  "source": "http://localhost:5313/@fulgurjs-entry.js",
-  "revision": "af18708d51dd0642",
+  "source": "/bridge-vue-remote/fulgurjs-remoteEntry.js",
+  "revision": "05c2086d5a0a1c0a",
   "files": [
     "modules.d.ts",
     "registry.d.ts"
@@ -10,5 +10,5 @@
   "externals": [
     "@fulgurjs/federation"
   ],
-  "syncedAt": 1791549624269
+  "syncedAt": 1791596390027
 }
