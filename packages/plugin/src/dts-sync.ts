@@ -81,6 +81,8 @@ async function fetchText(url: string, timeoutMs: number): Promise<string> {
 /** 本地生成目录的自有文件账本（metadata.json）——清理与代次比对的唯一依据 */
 export interface DtsMetadata {
   generator: '@fulgurjs/federation'
+  /** 宿主声明转换格式；格式变化时同远程 revision 也需重新生成。 */
+  ambientFormat?: number
   alias: string
   source: string
   revision: string
@@ -91,6 +93,7 @@ export interface DtsMetadata {
 }
 
 const METADATA_FILE = 'metadata.json'
+const AMBIENT_FORMAT = 2
 
 export function readMetadata(dir: string): DtsMetadata | null {
   try {
@@ -182,7 +185,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
 
   const indexUrl = new URL(types.index, manifestUrl).toString()
   const existing = fs.existsSync(dir) ? readMetadata(dir) : null
-  if (existing && existing.revision === types.revision) {
+  if (existing && existing.revision === types.revision && existing.ambientFormat === AMBIENT_FORMAT) {
     return { status: 'unchanged', alias, revision: types.revision, message: `远程 ${alias} 类型已是最新（revision ${types.revision}）。` }
   }
 
@@ -258,6 +261,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     }
     const meta: DtsMetadata = {
       generator: '@fulgurjs/federation',
+      ambientFormat: AMBIENT_FORMAT,
       alias,
       source,
       revision: index.revision,

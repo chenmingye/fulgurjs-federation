@@ -2,12 +2,12 @@
 // 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。
 // 外部类型依赖（宿主需可解析）：@fulgurjs/federation, vue。
 declare module "vue-remote/__internal/src/ChildLayout" {
-  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
   export default _default;
 }
 
 declare module "vue-remote/bridge" {
-  declare const _default: import("@fulgurjs/federation/vue").BridgeApp & {
+  const _default: import("@fulgurjs/federation/vue").BridgeApp & {
       __fgBridgeProps?: Record<string, unknown> | undefined;
   };
   export default _default;
@@ -31,29 +31,29 @@ declare module "vue-remote/__internal/src/child-bus" {
   };
   export type DemoChildReporter = (event: DemoChildEvent) => void;
   /** 桥接工厂内调用：从 props 快照中取出宿主回调，并上报本次挂载计数 */
-  export declare function bindReporter(props: Record<string, unknown> | undefined): void;
+  export function bindReporter(props: Record<string, unknown> | undefined): void;
   /** 导航来源上报（子应用 Link / 子应用 push·replace / 子应用 go / 子应用初始化） */
-  export declare function reportNav(source: string, action: DemoChildNavAction, detail: string): void;
-  export declare function getMountCount(): number;
+  export function reportNav(source: string, action: DemoChildNavAction, detail: string): void;
+  export function getMountCount(): number;
 }
 
 declare module "vue-remote/__internal/src/pages/Locked" {
-  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
   export default _default;
 }
 
 declare module "vue-remote/__internal/src/pages/OrderDetail" {
-  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
   export default _default;
 }
 
 declare module "vue-remote/__internal/src/pages/OrderList" {
-  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
   export default _default;
 }
 
 declare module "vue-remote/__internal/src/pages/Settings" {
-  declare const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+  const _default: import("vue").DefineComponent<{}, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
   export default _default;
 }
 
@@ -63,7 +63,7 @@ declare module "vue-remote/__internal/src/settings-store" {
       notifyEnabled: boolean;
       theme: 'light' | 'dark';
   }
-  export declare const settingsState: {
+  export const settingsState: {
       nickname: string;
       notifyEnabled: boolean;
       theme: "light" | "dark";

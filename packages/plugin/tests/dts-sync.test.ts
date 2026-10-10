@@ -102,6 +102,20 @@ describe('syncRemoteTypes', () => {
     expect(fs.statSync(marker).mtimeMs).toBe(before)
   })
 
+  it('宿主声明格式变更时，同远程 revision 仍重新生成', async () => {
+    const bundle = makeBundle({ math: 'declare const value: number; export default value;\n' })
+    const f = fetchRouter(bundle)
+    const input = { alias: 'format', manifestUrl, typesRoot: typesRoot(), source: 's', fetchJsonImpl: f.json, fetchTextImpl: f.text }
+    await syncRemoteTypes(input)
+    const dir = path.join(typesRoot(), 'format')
+    const metadata = readMetadata(dir)!
+    delete metadata.ambientFormat
+    fs.writeFileSync(path.join(dir, 'metadata.json'), JSON.stringify(metadata))
+    fs.writeFileSync(path.join(dir, 'modules.d.ts'), 'stale declaration')
+    expect((await syncRemoteTypes(input)).status).toBe('synced')
+    expect(fs.readFileSync(path.join(dir, 'modules.d.ts'), 'utf8')).toContain('const value: number')
+    expect((await syncRemoteTypes(input)).status).toBe('unchanged')
+  })
   it('manifest 无 types → absent（本地已有则清理账本内文件，用户文件保留）', async () => {
     const bundle = makeBundle({ math: 'export const x = 1\n' })
     const f = fetchRouter(bundle)

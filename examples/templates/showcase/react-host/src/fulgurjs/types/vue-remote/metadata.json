@@ -1,5 +1,6 @@
 {
   "generator": "@fulgurjs/federation",
+  "ambientFormat": 2,
   "alias": "vue-remote",
   "source": "/vue-remote/fulgurjs-remoteEntry.js",
   "revision": "a0d86b51277569ca",
@@ -11,5 +12,5 @@
     "@fulgurjs/federation",
     "vue"
   ],
-  "syncedAt": 1791596421555
+  "syncedAt": 1791597340854
 }

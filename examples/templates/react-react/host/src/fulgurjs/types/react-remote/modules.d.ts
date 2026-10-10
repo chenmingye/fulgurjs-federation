@@ -21,7 +21,7 @@ declare module "react-remote/pages/HomePage" {
 
 declare module "react-remote/utils" {
   /** 普通 TS 工具模块：演示跨应用函数/常量消费（不含任何组件） */
-  export declare const DEMO_ANSWER = 42;
-  export declare function sumNumbers(...numbers: number[]): number;
-  export declare function formatPrice(yuan: number): string;
+  export const DEMO_ANSWER = 42;
+  export function sumNumbers(...numbers: number[]): number;
+  export function formatPrice(yuan: number): string;
 }

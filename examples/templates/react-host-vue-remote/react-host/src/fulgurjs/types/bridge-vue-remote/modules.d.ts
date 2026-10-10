@@ -7,7 +7,7 @@ declare module "bridge-vue-remote/bridge" {
       label?: string;
       onReady?: () => void;
   }
-  declare const _default: import("@fulgurjs/federation/vue").BridgeApp & {
+  const _default: import("@fulgurjs/federation/vue").BridgeApp & {
       __fgBridgeProps?: Record<string, unknown> | undefined;
   };
   export default _default;

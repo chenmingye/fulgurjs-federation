@@ -7,7 +7,7 @@ declare module "react-remote/__internal/src/ChildLayout" {
 }
 
 declare module "react-remote/bridge" {
-  declare const _default: import("@fulgurjs/federation/react").BridgeApp & {
+  const _default: import("@fulgurjs/federation/react").BridgeApp & {
       __fgBridgeProps?: Record<string, unknown> | undefined;
   };
   export default _default;
@@ -31,10 +31,10 @@ declare module "react-remote/__internal/src/child-bus" {
   };
   export type DemoChildReporter = (event: DemoChildEvent) => void;
   /** 桥接工厂内调用：从 props 快照中取出宿主回调，并上报本次挂载计数 */
-  export declare function bindReporter(props: Record<string, unknown> | undefined): void;
+  export function bindReporter(props: Record<string, unknown> | undefined): void;
   /** 导航来源上报（子应用 Link / 子应用 push·replace / 子应用 go / 子应用初始化） */
-  export declare function reportNav(source: string, action: DemoChildNavAction, detail: string): void;
-  export declare function getMountCount(): number;
+  export function reportNav(source: string, action: DemoChildNavAction, detail: string): void;
+  export function getMountCount(): number;
 }
 
 declare module "react-remote/__internal/src/pages/Locked" {
@@ -75,5 +75,5 @@ declare module "react-remote/__internal/src/settings-store" {
       notifyEnabled: boolean;
       theme: 'light' | 'dark';
   }
-  export declare const settingsState: SettingsState;
+  export const settingsState: SettingsState;
 }

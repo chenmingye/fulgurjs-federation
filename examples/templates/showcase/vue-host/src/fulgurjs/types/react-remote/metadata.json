@@ -1,5 +1,6 @@
 {
   "generator": "@fulgurjs/federation",
+  "ambientFormat": 2,
   "alias": "react-remote",
   "source": "/react-remote/fulgurjs-remoteEntry.js",
   "revision": "2493684b743f5a63",
@@ -11,5 +12,5 @@
     "@fulgurjs/federation",
     "react"
   ],
-  "syncedAt": 1791596422181
+  "syncedAt": 1791597341006
 }
