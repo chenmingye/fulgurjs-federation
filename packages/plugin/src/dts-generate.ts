@@ -553,6 +553,11 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     fs.rmSync(outDir, { recursive: true, force: true })
   }
 
+  // TypeScript does not emit existing declaration inputs; keep imported local contracts.
+  for (const file of closure) {
+    if (file.endsWith('.d.ts')) emitted.set(file, fs.readFileSync(file, 'utf8'))
+  }
+
   if (signal?.aborted) return { ok: false, diagnostics: ['声明生成被中止。'] }
   if (emitted.size === 0) {
     return { ok: false, diagnostics: ['声明 emit 未产出任何文件。请检查暴露入口与 tsconfig include 是否覆盖。'] }
@@ -563,7 +568,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   const srcToRel = new Map<string, string>() // 绝对源文件 → bundle 相对路径（files/...）
   for (const srcAbs of emitted.keys()) {
     const rel = path.relative(rootDir, srcAbs).split(path.sep).join('/')
-    const declRel = rel.endsWith('.vue')
+    const declRel = rel.endsWith('.d.ts')
+      ? `files/${rel}`
+      : rel.endsWith('.vue')
       ? `files/${rel}.d.ts`
       : `files/${rel.replace(/\.(mts|cts|ts|tsx|jsx|js)$/, '')}.d.ts`
     srcToRel.set(srcAbs, declRel)

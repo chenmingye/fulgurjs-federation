@@ -108,6 +108,16 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     for (const text of result.files.values()) expect(text).not.toContain(tmp)
   })
 
+  it('手写本地声明依赖保留在可独立分发的 bundle 中', async () => {
+    const project = makeProject('local-declaration', {
+      'src/entry.ts': "export type { User } from './model'",
+      'src/model.d.ts': 'export interface User { id: string }',
+    })
+    const result = await generateTypesBundle({ root: project, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (result.ok) expect(result.files.get('files/model.d.ts')).toContain('interface User')
+  })
+
   it('声明移除样式副作用导入，但缺失代码依赖仍失败', async () => {
     const project = makeProject('style-import', {
       'src/entry.ts': "import './theme.less'; export const title: string = 'demo'",
