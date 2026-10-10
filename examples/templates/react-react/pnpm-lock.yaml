@@ -11,8 +11,8 @@ importers:
   host:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 6.5.6
-        version: 6.5.6(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.4)
+        specifier: 6.5.7
+        version: 6.5.7(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.4)
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -42,8 +42,8 @@ importers:
   remote:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 6.5.6
-        version: 6.5.6(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.4)
+        specifier: 6.5.7
+        version: 6.5.7(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.4)
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -464,8 +464,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fulgurjs/federation@6.5.6':
-    resolution: {integrity: sha512-cvSQ9MKXxyD/dZ0b736FnL4qAYyXV6xUb7i9ihNSsjFg7BhgRj56u6z/6WMOjZjDm9AcnNvm0sXhNUF6b5U4qA==}
+  '@fulgurjs/federation@6.5.7':
+    resolution: {integrity: sha512-wbbPqlkKIBV9j+kEuwcKnXZ5ooCVx3qvNm1EJtoUjFoN907vXqWWRelepc3Jxzmxi2sXzowXOkXpoOn5o0oQKg==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -1169,7 +1169,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@fulgurjs/federation@6.5.6(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.4)':
+  '@fulgurjs/federation@6.5.7(react-dom@19.3.0(react@19.3.0))(react-router-dom@7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(vite@6.4.4)':
     dependencies:
       es-module-lexer: 1.7.0
       esbuild: 0.27.7

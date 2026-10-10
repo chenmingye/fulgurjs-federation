@@ -1,4 +1,4 @@
-// 自动生成：fulgurjs-federation 远程类型（remote: react-remote，来源: /react-remote/fulgurjs-remoteEntry.js，revision: 38ad9fa42144e844）。
+// 自动生成：fulgurjs-federation 远程类型（remote: react-remote，来源: /react-remote/fulgurjs-remoteEntry.js，revision: 1de0ea3432903a8c）。
 // 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。
 // 外部类型依赖（宿主需可解析）：react。
 declare module "react-remote/ClickButton" {

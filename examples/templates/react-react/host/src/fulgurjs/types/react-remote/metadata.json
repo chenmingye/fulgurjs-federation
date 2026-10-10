@@ -3,7 +3,7 @@
   "ambientFormat": 2,
   "alias": "react-remote",
   "source": "/react-remote/fulgurjs-remoteEntry.js",
-  "revision": "38ad9fa42144e844",
+  "revision": "1de0ea3432903a8c",
   "files": [
     "modules.d.ts",
     "registry.d.ts"
@@ -11,5 +11,5 @@
   "externals": [
     "react"
   ],
-  "syncedAt": 1791597336984
+  "syncedAt": 1791598089561
 }

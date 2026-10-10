@@ -3,7 +3,7 @@
   "ambientFormat": 2,
   "alias": "bridge-vue-remote",
   "source": "/bridge-vue-remote/fulgurjs-remoteEntry.js",
-  "revision": "05c2086d5a0a1c0a",
+  "revision": "6e2e820a47f98238",
   "files": [
     "modules.d.ts",
     "registry.d.ts"
@@ -11,5 +11,5 @@
   "externals": [
     "@fulgurjs/federation"
   ],
-  "syncedAt": 1791597336974
+  "syncedAt": 1791598089894
 }

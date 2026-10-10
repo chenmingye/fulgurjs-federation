@@ -3,7 +3,7 @@
   "ambientFormat": 2,
   "alias": "bridge-react-remote",
   "source": "/bridge-react-remote/fulgurjs-remoteEntry.js",
-  "revision": "7cb1ce5d915a85e6",
+  "revision": "7a102c48ed50cb3c",
   "files": [
     "modules.d.ts",
     "registry.d.ts"
@@ -12,5 +12,5 @@
     "@fulgurjs/federation",
     "react"
   ],
-  "syncedAt": 1791597338679
+  "syncedAt": 1791598103514
 }

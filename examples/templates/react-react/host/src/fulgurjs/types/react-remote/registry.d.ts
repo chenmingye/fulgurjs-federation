@@ -1,4 +1,4 @@
-// 自动生成：远程类型注册表（remote: react-remote，revision: 38ad9fa42144e844）。
+// 自动生成：远程类型注册表（remote: react-remote，revision: 1de0ea3432903a8c）。
 // 向插件共享注册表（internal/registry.js 的 FgRemoteTypes）登记本远程全部公开入口；
 // loadRemote / remoteComponent / createVueBridgeApp / createReactBridgeApp 共享该注册表。
 import '@fulgurjs/federation/internal/registry.js'
