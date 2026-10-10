@@ -101,6 +101,9 @@ describe('Vue 宿主 createVueBridgeApp', () => {
     const { el, props } = fake.mounts[0]!
     // 容器是 data-fulgurjs-bridge-root 元素本体
     expect(el.getAttribute('data-fulgurjs-bridge-root')).toBe('remote-react/bridge')
+    // 回归：容器默认占满宿主挂载区——无尺寸裸容器会让子应用 height:100% 布局链塌陷为 0
+    expect(el.style.width).toBe('100%')
+    expect(el.style.height).toBe('100%')
     // 浅拷贝快照：嵌套对象与函数保留原引用
     expect(props.label).toBe('L1')
     expect(props.onReady).toBe(onReady)

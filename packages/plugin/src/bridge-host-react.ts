@@ -259,9 +259,12 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
       if (status === 'error') {
         children.push(createElement(Fragment, { key: 'error' }, renderBridgeErrorNode(options.error, error, retry, blockedRef.current)))
       }
+      // 容器默认占满宿主挂载区（与 Vue 宿主一致）：子应用普遍按 height:100% 布局，
+      // 无尺寸的裸容器会让其高度链塌陷为 0
       children.push(createElement('div', {
         key: 'bridge-root',
         ref: containerRef,
+        style: { width: '100%', height: '100%' },
         'data-fulgurjs-bridge-root': spec,
         'data-fulgurjs-bridge-status': status,
       }))

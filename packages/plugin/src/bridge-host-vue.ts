@@ -300,9 +300,12 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
               children.push(h(BridgeErrorPlaceholder, { key: 'error', error: err, retry: containerBlocked ? undefined : retry } as never))
             }
           }
+          // 容器默认占满宿主挂载区：子应用普遍按 height:100% 布局，
+          // 无尺寸的裸容器会让其高度链塌陷为 0（滚动容器内容被定位到视口外）
           children.push(h('div', {
             key: 'bridge-root',
             ref: container,
+            style: { width: '100%', height: '100%' },
             'data-fulgurjs-bridge-root': spec,
             'data-fulgurjs-bridge-status': status.value,
           }))

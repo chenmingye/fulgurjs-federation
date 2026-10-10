@@ -174,6 +174,7 @@ export default function BridgePage() {
 ## DOM 所有权与生命周期边界
 
 - 包装组件只创建并保持稳定的空挂载容器；pending/error 占位是它的兄弟节点，宿主重渲染不 patch 子应用 root 内部；
+- 挂载容器默认 `width:100%; height:100%` 占满宿主提供的挂载区——子应用普遍按 `height:100%` 组织布局，无尺寸的容器会让高度链塌陷为 0（内容被滚动容器定位到视口外）；需要异形尺寸时由宿主在容器外层再包一层并自行约束；
 - React 宿主 StrictMode 双 effect（mount→cleanup→mount）安全；
 - Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态；需要离页即销毁就别缓存该页，登出流程应同时移除缓存的私有页面；
 - 子应用内的 `window` 级监听/定时器/反向注册须自行清理（见[远程页面接入 · 页面卸载清理清单](remote-pages.md#页面卸载清理清单)）。

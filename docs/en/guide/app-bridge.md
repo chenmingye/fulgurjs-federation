@@ -174,6 +174,7 @@ Session change table:
 ## DOM ownership and lifecycle boundaries
 
 - The wrapper component only creates and keeps a stable empty mount container; the pending/error placeholders are its siblings; host re-renders never patch inside the child app's root;
+- The mount container defaults to `width:100%; height:100%` to fill the host-provided area — child apps commonly build layouts on `height:100%`, and an unsized container collapses that chain to zero (content ends up positioned outside the viewport); wrap it with your own sized element if you need a different shape;
 - React host StrictMode double effects (mount→cleanup→mount) are safe;
 - Vue `<KeepAlive>` deactivate is not unmount — a child app in a cached page keeps its root and state; if you want destroy-on-leave, do not cache that page, and the logout flow should also remove cached private pages;
 - Window-level listeners/timers/back-registrations inside the child app must be cleaned up by the child app (see [remote page integration · page unmount cleanup checklist](remote-pages.md#page-unmount-cleanup-checklist)).
