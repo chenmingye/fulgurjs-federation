@@ -126,6 +126,43 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     expect(r.diagnostics.join('\n')).toMatch(/svc\.ts|编译错误/)
   })
 
+  it('自定义 alias 的声明依赖必须入闭包，错误不能被忽略', async () => {
+    const root = makeProject('custom-alias-error', {
+      'src/entry.ts': "export type { User } from '#models/user'",
+      'src/models/user.ts': 'export type User = MissingUserType',
+    }, { paths: { '#models/*': ['src/models/*'] } })
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.diagnostics.join('\n')).toContain('MissingUserType')
+  })
+
+  it('自定义 alias 声明可独立分发，不保留源码别名', async () => {
+    const root = makeProject('custom-alias-ok', {
+      'src/entry.ts': "export type { User } from '#models/user'",
+      'src/models/user.ts': 'export interface User { id: string }',
+    }, { paths: { '#models/*': ['src/models/*'] } })
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect([...result.files.values()].join('\n')).not.toContain('#models/user')
+      expect([...result.files.values()].join('\n')).toContain('id: string')
+    }
+  })
+
+  it('公共 import 类型引用进入声明闭包，运行时动态装配不进入', async () => {
+    const root = makeProject('type-import', {
+      'src/entry.ts': "export type User = import('./model').User; export async function mount(): Promise<void> { await import('./assembly') }",
+      'src/model.ts': 'export interface User { id: string }',
+      'src/assembly.ts': 'const invalid: string = 123; export default invalid',
+    })
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect([...result.files.keys()].some(x => x.endsWith('model.d.ts'))).toBe(true)
+      expect([...result.files.keys()].some(x => x.endsWith('assembly.d.ts'))).toBe(false)
+    }
+  })
+
   it('入口源文件不存在 → 明确诊断', async () => {
     const r = await generateTypesBundle({ root, exposes: [{ name: './nope', import: './src/exposes/nope.ts' }], pluginVersion: 'test' })
     expect(r.ok).toBe(false)

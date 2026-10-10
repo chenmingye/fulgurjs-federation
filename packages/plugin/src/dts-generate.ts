@@ -134,15 +134,29 @@ function computeStaticClosure(
     } catch {
       continue
     }
+    if (file.endsWith('.vue')) {
+      // SFC 的脚本依赖必须通过 Vue 解析器读取，不能把整个模板当作 TypeScript。
+      const req = createRequire(path.join(root, 'package.json'))
+      const { parse } = req('vue/compiler-sfc') as { parse(source: string): { descriptor: { script?: { content: string; src?: string }; scriptSetup?: { content: string; src?: string } } } }
+      const { descriptor } = parse(text)
+      text = [descriptor.script?.content, descriptor.scriptSetup?.content].filter(Boolean).join('\n')
+      if (descriptor.script?.src) text += `\nimport ${JSON.stringify(descriptor.script.src)}`
+    }
     const sfile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    const imports: string[] = []
+    const visitType = (node: import('typescript').Node): void => {
+      if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) imports.push(node.argument.literal.text)
+      ts.forEachChild(node, visitType)
+    }
+    visitType(sfile)
     for (const stmt of sfile.statements) {
       const specNode: import('typescript').StringLiteral | null =
         ((ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt)) && stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier))
           ? stmt.moduleSpecifier
           : null
-      if (!specNode) continue
-      const spec = specNode.text
-      if (!spec.startsWith('.') && !spec.startsWith('@/')) continue
+      if (specNode) imports.push(specNode.text)
+    }
+    for (const spec of imports) {
       const r = resolver(spec, file)
       let resolved = r && !r.fromNodeModules ? r.resolved : null
       if (!resolved) {
@@ -465,7 +479,8 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
               // 闭包外（动态导入类型边/无关业务文件）的错误如实丢弃，不偷换成生成失败
               const errFiles = parseErrorFiles(String(stdout ?? ''), root)
               const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
-              if (closureErrs.size > 0) {
+              const globalError = /(?:^|\n)(?:error )?TS\d+:/.test(String(stdout ?? '') + '\n' + String(stderr ?? ''))
+              if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
                 const tail = `${String(stdout ?? '')}\n${String(stderr ?? '')}\n${err.message}`
                   .split('\n').filter((line) => {
                     const m = line.match(/^([^)(]+)\(\d+,\d+\): error TS/)

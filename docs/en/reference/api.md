@@ -480,7 +480,6 @@ Declaration tooling stays Node-side and never enters the browser runtime or the 
 
 - Declarations inherently expose the remote modules' interface structure — set `dts: false` to opt out of publishing;
 - External type dependencies (third-party packages referenced by remote declarations, e.g. component libraries) must resolve in the host; when missing, the related types degrade with a TYP-005 install hint;
-- Checking inline object literals for **conditionally derived** bridge `appProps` inside Vue templates is limited by vue-tsc — explicitly typed bindings (`const props: FgBridgeAppProps<'x/bridge'> = …`) plus `h()`/JSX paths are fully strict;
 - Dynamically registered remotes (`registerRemote`) / promise remotes cannot be enumerated at compile time — they follow the dynamic boundary.
 
 Whether to commit the generated directory: ignored by default (CI syncs with `fulgurjs types` before typecheck); projects valuing offline reproducibility (like this repo's templates) may explicitly commit the declaration snapshot — a fresh clone can typecheck out of the box while dev/CLI keep it updated as remotes evolve.

@@ -459,7 +459,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 - **已同步的入口字面量**：获得真实模块/组件/桥接类型——参数、返回值、props、`appProps` 全部精确检查；`remoteComponent` 只接受默认导出为组件的暴露项，桥接工厂只接受 `defineBridgeApp` 的默认导出（普通模块冒充会编译报错）；
 - **拼错的入口字面量**：注册表非空时在**调用点编译报错**（不再被宽泛 string 重载兜底通过）；
-- **动态字符串变量**（业务拼接的入口名）：永远放行，结果类型为 `unknown`——这是诚实边界：运行时仍可加载，但类型系统不知道远程真实形状；需要时可显式泛型 `loadRemote<T>(spec as never)` 或先用类型化变量收窄；
+- **动态字符串变量**（业务拼接的入口名）：永远放行，结果类型为 `unknown`——这是诚实边界：运行时仍可加载，但类型系统不知道远程真实形状；需要时可显式泛型 `loadRemote<T>(spec)` 或先用类型化变量收窄；
 - **未同步任何类型**（远程旧版本/`dts: false`）：所有字面量放行、结果 `unknown`，页面正常运行；严格类型检查需要升级远程并保持 `dts: true`。
 
 桥接 `appProps`：提供方 `defineBridgeApp<{ userId: string }>(工厂)` 声明的 props 经声明闭包保留到宿主包装组件（Vue 模板/JSX 均可检查）；未声明具体类型的远程得到诚实的 `Record<string, unknown>`——工具不会凭空推导业务字段。
@@ -476,7 +476,6 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 - 声明本身会暴露远程模块的接口结构——介意时可 `dts: false` 关闭发布；
 - 外部类型依赖（远程声明引用的第三方包，如组件库）须宿主可解析，缺失时相关类型退化并给出 TYP-005 安装指引；
-- Vue 模板对**条件派生**的桥接 `appProps` 内联对象字面量检查受 vue-tsc 能力限制——显式类型化变量绑定（`const props: FgBridgeAppProps<'x/bridge'> = …`）与 `h()`/JSX 路径完全严格；
 - 动态注册（`registerRemote`）/promise remote 的入口无法在编译期枚举——按动态边界处理。
 
 生成目录是否提交 Git：默认忽略（CI 在 typecheck 前用 `fulgurjs types` 同步）；对离线可复现要求高的工程（如本仓库模板）可显式提交声明快照——fresh clone 开箱即可 typecheck，dev/CLI 会随远程演进自动更新它。
