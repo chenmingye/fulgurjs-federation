@@ -10,7 +10,12 @@ fs.rmSync(target, { recursive: true, force: true })
 fs.mkdirSync(target, { recursive: true })
 fs.cpSync(path.join(repositoryRoot, 'examples/templates'), path.join(target, 'templates'), {
   recursive: true,
-  filter: (source) => !['node_modules', 'dist', '.vite', '.DS_Store'].includes(path.basename(source)),
+  filter: (source) => {
+    const name = path.basename(source)
+    return !['node_modules', 'dist', '.vite', '.run', '.DS_Store'].includes(name) &&
+      !name.endsWith('.log') &&
+      !(name.startsWith('.fulgurjs-types-tsconfig-') && name.endsWith('.json'))
+  },
 })
 fs.writeFileSync(path.join(target, 'README.md'), `# 可复制模板\n\n本 npm 包附带五个完整模板，见 [模板指南](templates/README.md)。复制整个模板目录，在模板根执行 pnpm install --frozen-lockfile，再执行 pnpm dev。\n\n功能演示、大型应用集成和展示门户见 [GitHub 统一示例入口](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples)。\n`)
 

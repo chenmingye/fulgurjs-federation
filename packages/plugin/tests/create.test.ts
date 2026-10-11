@@ -48,6 +48,7 @@ function makeTemplatesRoot(): string {
   fs.writeFileSync(path.join(tpl, 'host/dist/index.html'), 'x')
   fs.writeFileSync(path.join(tpl, 'host/.DS_Store'), 'x')
   fs.writeFileSync(path.join(tpl, 'debug.log'), 'x')
+  fs.writeFileSync(path.join(tpl, 'host/.fulgurjs-types-tsconfig-42-unique.json'), 'temporary')
   return root
 }
 
@@ -88,13 +89,15 @@ describe('fulgurjs create', () => {
     ])
   })
 
-  it('复制排除 node_modules/dist/.vite/.run/.DS_Store/*.log，保留锁文件与脚本', () => {
+  it('复制排除安装产物、临时类型配置和日志，保留锁文件与脚本', () => {
     expect(isExcluded('node_modules')).toBe(true)
     expect(isExcluded('dist')).toBe(true)
     expect(isExcluded('.vite')).toBe(true)
     expect(isExcluded('.run')).toBe(true)
     expect(isExcluded('.DS_Store')).toBe(true)
     expect(isExcluded('error.log')).toBe(true)
+    expect(isExcluded('.fulgurjs-types-tsconfig-42-unique.json')).toBe(true)
+    expect(isExcluded('fulgurjs.config.ts')).toBe(false)
     expect(isExcluded('pnpm-lock.yaml')).toBe(false)
     expect(isExcluded('dev.config.json')).toBe(false)
 
@@ -107,6 +110,7 @@ describe('fulgurjs create', () => {
     expect(fs.existsSync(path.join(dest, 'host/dist'))).toBe(false)
     expect(fs.existsSync(path.join(dest, 'host/.DS_Store'))).toBe(false)
     expect(fs.existsSync(path.join(dest, 'debug.log'))).toBe(false)
+    expect(fs.existsSync(path.join(dest, 'host/.fulgurjs-types-tsconfig-42-unique.json'))).toBe(false)
     fs.rmSync(root, { recursive: true, force: true })
   })
 

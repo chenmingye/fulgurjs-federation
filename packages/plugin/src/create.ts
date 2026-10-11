@@ -87,6 +87,7 @@ export const COPY_EXCLUDED = new Set(['node_modules', 'dist', '.vite', '.run', '
 
 export function isExcluded(name: string): boolean {
   if (COPY_EXCLUDED.has(name)) return true
+  if (name.startsWith('.fulgurjs-types-tsconfig-') && name.endsWith('.json')) return true
   return name.endsWith('.log')
 }
 
