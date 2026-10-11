@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.6.1
+
+- 修复 6.6.0 的入口门面缺陷：`scripts/gen-runtime-entry.mjs` 手维护的再导出清单漏掉新增导出（`installVueBridgeRouter` / `createBridgeSession` / `hasBridgeMount`），导致 6.6.0 的 `/vue`、`/react` 运行时门面中这些 API 为 `undefined`（类型声明齐全，仅运行时缺失）。`bridge-session` 纳入 tsup 多入口构建，门面重新生成；新增「dist 门面真实 import ↔ d.ts 值导出面」一致性测试（client-types），门面漂移在 CI 即失败。
+
 ## 6.6.0
 
 围绕「接入成本」新增四个公共能力（均为增量，既有写法继续可用）：
