@@ -41,6 +41,18 @@ describe('WP4: 生成器 round-trip', () => {
     expect(isDevManifest(parsed.manifest!)).toBe(true)
   })
 
+  it('声明编译中显式标 pending；就绪或关闭 dts 不保留该标记', () => {
+    const options = hostOptions()
+    const pending = genDevManifest(options, '/')
+    expect(pending.typesPending).toBe(true)
+    expect(parseManifest(pending).issues).toEqual([])
+    expect(parseManifest({ ...pending, typesPending: 'true' }).issues.some(i => i.field === 'typesPending')).toBe(true)
+    const ready = genDevManifest(options, '/', 'ready-revision')
+    expect(ready.typesPending).toBeUndefined()
+    expect(ready.types?.revision).toBe('ready-revision')
+    expect(genDevManifest({ ...options, dts: false }, '/').typesPending).toBeUndefined()
+  })
+
   it('genDevManifest.version = 远程自身插件版本（DEV-006 回归：0.5.0 前旧包名键恒 0.0.0 误报）', () => {
     const m = genDevManifest(hostOptions(), '/')
     expect(m.version).toBe(hostOptions().pluginVersion)

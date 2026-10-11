@@ -13,7 +13,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { parseManifest, type FederationManifest } from './manifest'
+import { parseManifest, isDevManifest, type FederationManifest } from './manifest'
 import { parseDtsIndex, DTS_FILE_MAX_BYTES, DTS_TOTAL_MAX_BYTES, DTS_FILE_COUNT_MAX, isSafeBundlePath, TYPES_SCHEMA_VERSION, type DtsBundleIndex } from './dts-shared'
 import { buildAmbientDeclarations } from './dts-ambient'
 import { checkTypesDiscovery } from './dts-discovery'
@@ -172,6 +172,12 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
   const types = readManifestTypes(manifest)
   if (!types) {
     const meta = fs.existsSync(dir) ? readMetadata(dir) : null
+    if (isDevManifest(manifest) && manifest.typesPending === true) {
+      return {
+        status: meta ? 'stale' : 'failed', alias, revision: meta?.revision,
+        message: `远程 ${alias} 的类型资源尚未就绪。${meta ? '保留已有声明快照，待提供方编译完成自动更新。' : '等待提供方编译完成后自动同步。'}严格类型验收应等到同步成功。`,
+      }
+    }
     if (meta) {
       cleanupOwnFiles(dir, meta)
       return { status: 'absent', alias, message: `远程 ${alias} 不再提供类型资源，已清理本地生成的声明（用户文件不受影响）。` }

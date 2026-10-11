@@ -116,6 +116,20 @@ describe('syncRemoteTypes', () => {
     expect(fs.readFileSync(path.join(dir, 'modules.d.ts'), 'utf8')).toContain('const value: number')
     expect((await syncRemoteTypes(input)).status).toBe('unchanged')
   })
+  it('提供方启动编译中保留已有声明，未同步过的工程不冒充成功', async () => {
+    const bundle = makeBundle({ math: 'export declare const value: number\n' })
+    const f = fetchRouter(bundle)
+    const input = { alias: 'pending', manifestUrl, typesRoot: typesRoot(), source: 's', fetchJsonImpl: f.json, fetchTextImpl: f.text }
+    await syncRemoteTypes(input)
+    const before = fs.readFileSync(path.join(typesRoot(), 'pending', 'modules.d.ts'), 'utf8')
+    const pending = async () => ({ ...bundle.manifest, types: undefined, typesPending: true })
+    const result = await syncRemoteTypes({ ...input, fetchJsonImpl: pending })
+    expect(result.status).toBe('stale')
+    expect(fs.readFileSync(path.join(typesRoot(), 'pending', 'modules.d.ts'), 'utf8')).toBe(before)
+    expect((await syncRemoteTypes({ ...input, alias: 'new-pending', fetchJsonImpl: pending })).status).toBe('failed')
+    expect((await syncRemoteTypes(input)).status).toBe('unchanged')
+  })
+
   it('manifest 无 types → absent（本地已有则清理账本内文件，用户文件保留）', async () => {
     const bundle = makeBundle({ math: 'export const x = 1\n' })
     const f = fetchRouter(bundle)

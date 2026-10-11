@@ -817,7 +817,9 @@ export function genDevManifest(options: NormalizedOptions, base: string, typesRe
      * 宿主据此下载声明闭包（不再依赖本机源码路径——fsRoot/devFsRoot 已随旧类型
      * 直连链移除）。bundle 未就绪（首次编译中/失败）时省略，宿主重试轮询。
      */
-    ...(typesRevision ? { types: { schemaVersion: 1, index: './@fulgurjs-types/index.json', revision: typesRevision } } : {}),
+    ...(typesRevision
+      ? { types: { schemaVersion: 1, index: './@fulgurjs-types/index.json', revision: typesRevision } }
+      : options.dts && options.exposes.length > 0 ? { typesPending: true } : {}),
     exposes: options.exposes.map((e) => ({
       name: e.name,
       src: e.import,

@@ -48,6 +48,8 @@ export interface DevFederationManifest {
   entry: string
   /** 类型资源定位（dts 启用且声明 bundle 就绪时存在；旧版本远程无此字段） */
   types?: ManifestTypesRef
+  /** 声明仍未就绪；宿主保留已有快照，不能当作 dts 被关闭。 */
+  typesPending?: boolean
   exposes: DevManifestExpose[]
   shared: ManifestSharedEntry[]
   /** setup 生命周期入口的内部 expose 键（配置 federation({ setup }) 时存在；v1 向后兼容字段） */
@@ -162,6 +164,9 @@ export function parseManifest(input: unknown): ManifestParseResult {
       issues.push({ field: 'base', message: '必须是以 / 开头且 / 结尾的路径', got: m.base })
     }
     pushTypesIssues(m.types, issues, 'dev')
+    if (m.typesPending !== undefined && typeof m.typesPending !== 'boolean') {
+      issues.push({ field: 'typesPending', message: '必须是布尔值', got: m.typesPending })
+    }
     if (!validAssetRef(m.entry)) {
       issues.push({ field: 'entry', message: '必须是合法资源地址', got: m.entry })
     }
