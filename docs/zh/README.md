@@ -44,7 +44,7 @@
 | [配置参考](reference/configuration.md) | `federation(options)` 全部字段：类型/默认值/省略语义/有效范围；remotes 四形态、SharedHint 全项、hostPages 具名导出 |
 | [API 参考](reference/api.md) | 四个入口的全部公共 API：用途/导入位置/签名/默认值/返回/生命周期/错误边界/完整用法 |
 | [CLI 参考](reference/cli.md) | create / init / explain / check-pages / doctor / port：语法/参数/默认值/副作用/退出码/示例 |
-| [错误码总表](reference/errors.md) | 48 个错误码，逐条现象/原因/修法 |
+| [错误码总表](reference/errors.md) | 49 个错误码，逐条现象/原因/修法 |
 
 ### 排错（troubleshooting/）
 

@@ -53,7 +53,16 @@ Semantics:
 - Returns a standard Vue async component that renders the remote default export (or the module itself). KeepAlive state is retained within a session. When mounted or activated after a session change, the new session initializes before the page renders;
 - **Zero silent fallback**: a load failure explicitly enters the error state; when no `errorComponent` is passed, the built-in placeholder renders (error code + root cause + fix + "Retry load / Refresh page" buttons), and the `fulgurjs:error` window event is emitted as usual;
 - Multiple component instances with the same spec share `loadRemote`'s internal Promise cache — the container module loads only once.
-- **provide/inject does not cross from the provider's app root**: the remote component renders inside the **consumer's** component tree — `provide` calls at the provider app's root (`App.vue` etc., global `AppProvider`, prefixCls, theme, ConfigProvider) do not travel with the component, while the consumer's own ancestor provides apply as usual. When the exposed surface depends on such context, provide it **inside the exposed entry component** (single source, e.g. wrap `AppProvider` at the root of the exposed component's template); never require every host to re-register it. A missed inject shows up as default empty values (typically a class prefix like `undefined-xxx` or missing theme classes).
+- **provide/inject does not cross from the provider's app root**: the remote component renders inside the **consumer's** component tree — `provide` calls at the provider app's root (`App.vue` etc., global `AppProvider`, prefixCls, theme, ConfigProvider) do not travel with the component, while the consumer's own ancestor provides apply as usual. A missed inject shows up as default empty values (typically a class prefix like `undefined-xxx` or missing theme classes). The recommended fix when the exposed surface depends on such context (one declaration, all exposed components covered): declare `pageProviders` (an ancestor-provider array) in the provider's `federation({ setup })` module — the consumer's `remoteComponent`/`createHostPages` wraps this remote's components automatically outer→inner, so multiple remote pages stop hand-writing wrappers per page:
+
+  ```ts
+  // provider src/fulgurjs/setup.ts — federation({ setup: './src/fulgurjs/setup.ts' })
+  export const pageProviders = [
+    () => import('../components/Application').then((m) => m.AppProvider), // zero-arg loader form
+  ]
+  ```
+
+  It and `globalComponents` (consumer-side registration, solving string-tag resolution) are **two different things and not interchangeable**; global CSS/theme styles travel with the build output and are not carried by providers either. Manual `loadRemote` / `useLoadRemote` (module in hand, self-rendered) apply nothing automatically — wrap the provider yourself in your JSX/template.
 
 - **State injection belongs to the consumer too**: a remote component using injected Pinia may resolve a consumer store with the same ID. When provider-owned state is required, pass the provider Pinia instance explicitly. A complete application requiring its own router, stores and lifecycle should use [app bridging](app-bridge.md).
 
@@ -187,5 +196,6 @@ For debugging, `(globalThis as any).__FULGURJS_RUNTIME__` gives direct access to
 | Unknown remote | `MFU-008` | Verify the `remotes` key matches the spec prefix |
 | Module has no exports at all | `MFU-009` | Check the exports of the expose target file |
 | Component renders, but string tags like `<a-divider>` stay as dead elements | — | The remote declares `globalComponents` in its setup module (auto-installed for `remoteComponent` consumers); see [API reference · setup/onSession](../reference/api.md#setup-on-session) |
+| Component renders, but the class prefix turns `undefined-xxx` / theme classes missing (inject miss) | — | The remote declares `pageProviders` in its setup module (ancestor providers auto-wrapped); see the provide/inject note above |
 
-The full 48 codes: [error code table](../reference/errors.md); symptom-based troubleshooting: [troubleshooting index](../troubleshooting/README.md).
+The full 49 codes: [error code table](../reference/errors.md); symptom-based troubleshooting: [troubleshooting index](../troubleshooting/README.md).

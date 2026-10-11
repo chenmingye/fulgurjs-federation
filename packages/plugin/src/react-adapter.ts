@@ -30,6 +30,7 @@ import {
 } from 'react'
 import type { LoadRemoteOptions } from './runtime/index'
 import type { PageRouteLike } from './pages'
+import { resolvePageProviderEntries } from './page-providers'
 import {
   cleanCompName,
   createHostPagesCore,
@@ -208,6 +209,8 @@ interface LoadState {
   phase: 'pending' | 'error' | 'ready'
   error?: unknown
   Comp?: unknown
+  /** 提供方 setup 声明的祖先 Provider（已解析为数组；无声明时 undefined，渲染零包裹） */
+  providers?: unknown[]
 }
 
 interface RemoteLoaderProps {
@@ -246,9 +249,15 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
     }
 
     setState({ phase: 'pending' })
+    // pageProviders 捕获：consumerApp 协议交付（runtime 只认 pageProviders 方法，
+    // component 方法缺省即 globalComponents 跳过——React 无全局注册表）
+    const captured: { providers?: unknown[] } = {}
     const run = (async () => {
       await beforeLoad?.()
-      return loadRemote(spec, { retries: opts.retries })
+      return loadRemote(spec, {
+        retries: opts.retries,
+        consumerApp: { pageProviders: (list: unknown[]) => { captured.providers = list } },
+      })
     })()
     // 迟到失败吞掉（timeout 先到已终态时，run 的 rejection 若无 handler 会成为未处理拒绝）
     run.catch(() => {})
@@ -267,14 +276,22 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
           }),
         ])
     race.then(
-      (ns) => {
+      async (ns) => {
         if (timer !== undefined) clearTimeout(timer)
         const inner = (ns as any)?.default ?? ns
         if (!isValidComponentType(inner)) {
           commit({ phase: 'error', error: noRenderableExportError(spec, inner) })
           return
         }
-        commit({ phase: 'ready', Comp: inner })
+        // 祖先 Provider 解析（loader 形态在此 await；失败按加载失败进入错误态）
+        let providers: unknown[] | undefined
+        try {
+          providers = await resolvePageProviderEntries(captured.providers)
+        } catch (e) {
+          commit({ phase: 'error', error: e })
+          return
+        }
+        commit({ phase: 'ready', Comp: inner, providers })
       },
       (err: unknown) => {
         if (timer !== undefined) clearTimeout(timer)
@@ -295,6 +312,14 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
   if (state.phase === 'error') return renderErrorNode(opts.error, state.error, retry, 'load')
   const Comp = state.Comp as ComponentType<Record<string, unknown>>
   const merged = fwdRef === undefined ? latest.current.passthrough : { ...latest.current.passthrough, ref: latest.current.fwdRef }
+  // 祖先 Provider 包裹（外→内；children = 业务组件）。无声明时零包裹，既有行为不变。
+  if (state.providers && state.providers.length > 0) {
+    let node = createElement(Comp, merged)
+    for (let i = state.providers.length - 1; i >= 0; i--) {
+      node = createElement(state.providers[i] as ComponentType<{ children?: ReactNode }>, null, node)
+    }
+    return node
+  }
   return createElement(Comp, merged)
 }
 

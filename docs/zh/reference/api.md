@@ -326,6 +326,15 @@ export const globalComponents: RemoteSetupModule['globalComponents'] = {
   // 静态组件值同样支持（同框架消费一步到位）：
   // AButton: Button,
 }
+
+// 6.6.0 起可选具名导出：祖先 Provider 声明（数组，外→内顺序包裹）。本远程的组件被
+// remoteComponent/createHostPages 渲染时自动包裹——暴露页组件不再逐页手写
+// AppProvider 包装。与 globalComponents 互补、不可互相替代：注册解决「模板字符串
+// 标签解析」，Provider 解决「provide/inject 链」（prefixCls/主题/UI 配置注入）。
+export const pageProviders: RemoteSetupModule['pageProviders'] = [
+  // 零参 loader 与静态组件值均支持（判定口径与 globalComponents 一致）：
+  () => import('../components/Application').then((m) => m.AppProvider),
+]
 ```
 
 `RemoteSetupContext`：`{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`。`appContext` 是**调用时**从页面级 AppContext 取得的快照（不保存永不更新的旧引用）；`signal` 在登录代次变化或退出清理时失效。
@@ -338,6 +347,8 @@ export const globalComponents: RemoteSetupModule['globalComponents'] = {
 | 时序 | 取得容器 → `init(shareScope)`（共享作用域收养）→ **setup** → **onSession** → **globalComponents 安装** → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商 |
 | 执行次数（setup） | 每容器一次；并发调用共享同一 Promise；成功后不重复。`preloadRemote` 只预取资源不执行 |
 | 执行次数（globalComponents） | 声明提取随 setup 一次；**安装随每次 `loadRemote` 执行**（幂等，`app.component` 同名覆盖，后注册生效）——桥接子应用每次挂载新建 app 实例也能拿到注册。Vue `remoteComponent` 和 `createHostPages` 自动捕获消费方 app；手动 `loadRemote` 与 React 侧不自动传入（React 无 Vue 全局注册表）——跳过安装，不报错。注册随消费方 app 生命周期驻留，无独立卸载 API |
+| 执行次数（pageProviders） | 声明提取随 setup 一次；**包裹随每次组件渲染生效**（声明数组按引用缓存，loader 项只解析一次；setup 失败重跑换新数组，缓存自然失效）。Vue `remoteComponent`/`createHostPages` 与 React `remoteComponent`/`createReactHostPages` 自动应用（按 外→内 包裹，attrs/slots 透传给最内层业务组件，Provider 不收 props）；手动 `loadRemote` 与 `useLoadRemote`（返回模块自行渲染）不自动应用——这类消费自行包裹 |
+| 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）；`pageProviders` 可选且必须是数组（项=组件对象或零参 loader，带参函数视为函数式组件；项内容在消费方解析时校验）。违反 → MFU-011（报实际类型/预期签名/修法） |
 | 执行次数（onSession） | 按非敏感 `sessionKey` 去重：同一登录代次一次；新代次先作废旧 `signal`，再按远程**串行**衔接旧调用与新调用（防两账号异步写入交错）；`clearAppContext()` 失效去重状态，下次登录必须重跑。应用级 setup 不因退出/换代重复执行 |
 | sessionKey | 宿主登录流程每次成功登录/重登生成新代次（非敏感 ID，禁止用 token）；token 刷新但会话未变时沿用。**有 onSession 却缺 sessionKey → MFU-013**，不凭用户对象引用猜测身份；无 onSession 的远程无需 sessionKey |
 | 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）。违反 → MFU-011（报实际类型/预期签名/修法） |
@@ -378,6 +389,34 @@ shared: {
 - 契约实例按容器 el 分键：同契约多处挂载互不干扰；同容器未卸载再次 mount 拒绝（MFU-016）且不覆盖原实例；
 - 首次根提交后的子应用内部错误由**子应用自己的错误边界**负责——宿主 ErrorBoundary/errorCaptured 捕不到跨 root 渲染错误，插件不冒充兜底。
 
+### 子应用辅助：`installVueBridgeRouter` / `hasBridgeMount`
+
+**`installVueBridgeRouter(app, router, ctx)`**（`/vue`，Vue 子应用）——URL 同步子应用的路由接线一次完成：
+
+```ts
+export default defineBridgeApp(async (props, ctx) => {
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  setupRouterGuard(router)                        // 业务守卫需在接线前就位（初始导航要经过它）
+  const app = createApp(App, props)
+  await installVueBridgeRouter(app, router, ctx)  // 校验→接线→ready→install，顺序由插件保证
+  return app
+}, { routing: true })
+```
+
+| 维度 | 语义 |
+|---|---|
+| 行为 | 等价于 `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })` → `await ready` → `app.use(router)` 的固定序列；`app` 只 install 不 mount。返回连接（`{ ready, dispose }`，多数调用方忽略） |
+| 失败行为 | `ctx?.routing` 缺失 → **MFU-034**（宿主未启用 URL 同步而本契约声明了 routing——与 MFU-031 互为对偶）；`ready` 拒绝（初始路由被守卫取消等）→ 原样传播（宿主侧以 MFU-016 `phase: 'mount'` 携带 cause），此时 router 未 install |
+| 适用边界 | 「桥接/独立双形态同跑」的子应用不要用（宿主未启用同步时它直接失败）——自行判断 `ctx.routing` 并用底层 `connectVueBridgeRouter` 手动接线。React 子应用无需对应函数：`createReactBridgeRouter` 已是收敛形态（返回 `element`），其入口同样校验 routing 缺失（MFU-034） |
+
+**`hasBridgeMount(): boolean`**（`/vue` 与 `/react`）——页面级桥接形态信号，供子应用布局/标题策略区分「被宿主桥接嵌入」与「独立运行」：
+
+| 维度 | 语义 |
+|---|---|
+| 置位时机 | 任一桥接契约的工厂**开始执行前**（插件自动置位）——工厂内动态 import 的业务模块、装配期代码读取即 `true`，不晚于任何业务初始化 |
+| 语义 | 页面级粘性：置位后本页面不复位（卸载后仍 `true`——布局裁剪无需回退），整页刷新自然复位；子应用独立打开恒 `false`。存页面级全局镜像（globalThis），宿主与子应用各持运行时副本时同页读到同一份 |
+| 边界 | `bridge.ts` 模块**静态 import** 的模块求值期仍为 `false`——需要求值期判断的子应用维持「工厂内 `await import(...)` 加载业务模块」模式；远程组件不应依赖此信号（组件联邦无「被桥接」概念）；宿主自己的代码读到 `true` 属正常，宿主布局决策不使用它 |
+
 ### 宿主侧工厂
 
 ```ts
@@ -406,10 +445,30 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 - **`appProps` 快照语义**：挂载时浅拷贝顶层字段传入，嵌套对象/响应式 store/函数保留原引用；之后的顶层替换**不追踪、不重渲染子应用**，需要重置用 `:key`/key 重建。宿主新闭包不会自动传给子应用——实时读取宿主状态请传稳定回调或主动重挂。跨 root 不继承宿主 provide/inject、Pinia、React Context 或路由。
 - **`getContext`**：无副作用的**同步** getter，在首次、重试及换会话的实际加载前调用；返回快照对象（拒绝 Promise/thenable 与非对象——`MFU-016`，`phase: 'getContext'`）。桥接层先校验快照 `sessionKey` 与受控值一致（不一致 `MFU-017`，且不写全局），**校验通过后由桥接层调用 `provideAppContext`**——getter 本身不写全局。未提供 getter 时校验现有 `AppContext.sessionKey` 必须与受控值一致。换代时桥接层先 `clearAppContext()` 清旧账号独有字段再写新快照。
-- **`sessionKey` 受控语义**：只接受 `undefined`（不启用受控会话）/`null`（登出态：立即卸载、保持空容器、不再 loadRemote）/非空字符串（登录代次）。空字符串、数字等非法值按 `MFU-017` 拒绝挂载。完整触发表见[子应用桥接 · 会话](../guide/app-bridge.md#会话sessionkey与-appcontext)。
+- **`sessionKey` 受控语义**：只接受 `undefined`（不启用受控会话）/`null`（登出态：立即卸载、保持空容器、不再 loadRemote）/非空字符串（登录代次）。空字符串、数字等非法值按 `MFU-017` 拒绝挂载。完整触发表见[子应用桥接 · 会话](../guide/app-bridge.md#会话sessionkey与-appcontext)。Vue 宿主可用 `createBridgeSession()` 托管代次（见下）。
 - **多实例与页面级单会话**：同页多个同 spec 实例并存合法（按 el 分键）；`AppContext` 是页面级单例——同页所有受控桥接实例必须同一会话，代次不一致按 `MFU-017` 拒绝。不承诺同页同时承载两个账号。
 - **DOM 所有权**：包装组件只创建并保持稳定的空挂载容器；宿主重渲染不 patch 子应用 root 内部。React 宿主 StrictMode 双 effect 安全。Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态。
 - **旧请求不冒充取消**：已进入 `loadRemote` 的工作不因桥接层作废而被取消——迟到的旧结果按代次丢弃；远程 `onSession` 必须遵守 `signal.aborted` 契约。
+
+### 宿主侧辅助：`createBridgeSession`（Vue）
+
+`createBridgeSession(options?)`（`/vue`）——把 sessionKey 的**契约语义**（非敏感登录代次、禁用 token 充当、null=登出、同会话刷新不变）收进插件，宿主只决定调用时机：
+
+```ts
+// src/fulgurjs/host/session.ts（模块级创建一次）
+import { createBridgeSession } from '@fulgurjs/federation/vue'
+export const bridgeSession = createBridgeSession()
+// 登录成功 → bridgeSession.renew()；退出登录 → bridgeSession.clear()
+// 组件内：<RemoteApp :session-key="bridgeSession.sessionKey.value" />
+```
+
+| 维度 | 语义 |
+|---|---|
+| 返回值 | `{ sessionKey: Ref<string \| null>; renew(): string; clear(): void }`。`renew` 生成并持久化新代次（已登录代次上再调 = 强制换号重挂，与受控语义一致），返回新值；`clear` 置 null 并清存储（桥接组件收到 null 立即卸载） |
+| 持久化 | sessionStorage（默认键 `fulgurjs-bridge-session`）：同会话刷新不变、关闭标签页自然作废。存储不可用（隐私模式等）时静默退化为纯内存——登出/换号不受影响，刷新后回到未登录态，不抛错 |
+| `options.storageKey` | 自定义存储键。嵌套宿主（B 同时是子应用与宿主）同页并存时**必须**各传不同键，避免刷新恢复互相覆盖 |
+| 调用时机 | `renew`/`clear` 由宿主登录流程决定（登录成功/退出登录）；本函数不感知业务登录态 |
+| React 宿主 | 暂不提供（React 宿主自行管理代次值，语义要求同 `sessionKey` 受控语义；见指南） |
 
 <a id="url-sync-api"></a>
 
@@ -425,8 +484,9 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 |---|---|---|
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue 宿主导航端口。Vue Router fullPath 已是逻辑路径，无需传部署 base。Vue Router 4，history/hash 模式皆可 |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React 宿主导航端口。**仅支持 data router**（`createBrowserRouter`/`createHashRouter` + `RouterProvider`）；declarative 模式（BrowserRouter）无取消语义，不支持。React Router ≥ 6.11。`canNavigate` 可选仅作提前拒绝；端口观察真实 blocker 状态，等待 `reset()` 返回 cancelled、`proceed()` 后实际位置提交返回 committed，不能只凭 navigate 的 Promise 落定判成功 |
-| `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue 子应用接线受控 memory 路由；`await …ready` 落定后再 `app.use(router)`（顺序不能反） |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dom 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
+| `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue 子应用接线受控 memory 路由（底层原语）；`await …ready` 落定后再 `app.use(router)`（顺序不能反）。常规桥接子应用直接用上行的 `installVueBridgeRouter`，本函数留给「双形态同跑」等需要手动控制顺序的场景 |
+| `installVueBridgeRouter` | `(app, router, ctx) => Promise<{ ready, dispose }>` | Vue 子应用路由接线一次完成：校验宿主通道（缺失 → MFU-034）→ connect → await ready → `app.use(router)`；顺序合同由插件承担。`ctx` 即桥接工厂第二参数（`{ signal?, routing? }`） |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React 子应用：返回 `RouterProvider` 元素直接作契约产物；routing 缺失统一抛 MFU-034。`routerReady: Promise<Router>` 是已接线 memory router 的就绪合同：fast 路径（模块级预热已就绪，常见）返回**同步已 resolve** 的 Promise，resolve 值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主接线完成时 resolve，缺 react-router-dom 时 reject 清晰错误。宿主内省/断言请优先 `await routerReady`，不要假设 `element.props.router` 同步存在。`dispose()` 幂等销毁接线（signal 触发时自动调用）；已 dispose 后迟到任务不写状态 |
 
 宿主传给桥接组件的通道参数：`routing: BridgeHostRouting = { basePath: '/approval', navigation }`；子应用契约第二参数声明 `{ routing: true }` 后从 `ctx.routing` 接收通道。两端接线第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用 `dispose()`。自定义 `BridgeHostNavigation.navigate(target, action, { signal })` 应在异步提交前复核可选 signal，已 aborted 时禁止迟到写入。
 
@@ -438,7 +498,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 - **取消语义**：Vue Router 4 的 push/replace 落定 `NavigationFailure` 即真实取消；React data router 等待真实 blocker 取消/放行。取消后 URL、历史、子应用位置保持最后确认状态，**绝不自动重试**；
 - **导航与错误**：子应用 push/replace 保留原动作，go/back/forward 委托宿主历史；连续请求串行落定，外部导航作废旧的在飞与排队请求；守卫/加载器/端口执行异常拒绝 Promise（MFU-033，保留 cause），不伪装 cancelled；
 - **会话与生命周期**：`sessionKey→null` 作废旧通道——旧通道导航一律 cancelled、不写 URL、不复活子应用；unmount 后通道销毁（再订阅得 MFU-031）；KeepAlive 缓存离页实例暂停路由写入（激活重同步）；unmount 抛错的持久封锁不因路由绕过；
-- **协议校验**：宿主启用 routing 而子应用未声明 `{ routing: true }` → `MFU-031` 占位，**不静默退回 memory 假装深链成功**；
+- **协议校验**：宿主启用 routing 而子应用未声明 `{ routing: true }` → `MFU-031` 占位，**不静默退回 memory 假装深链成功**；反向不匹配——子应用声明了 routing 而宿主未提供通道（`installVueBridgeRouter`/`createReactBridgeRouter` 入口）→ `MFU-034`；
 - **非法导航与循环**：目标越界自身前缀（`../`、跨前缀）、目标已含 basePath（重复前缀）、非法 `go` 参数 → `MFU-032`；连续内部 replace 超过 5 次（重定向环）→ `MFU-033`（附目标链，不静默回入口）；
 - **按需加载**：`/vue`、`/react` 默认入口不引入任何路由库；路由同步 API 对路由库仅类型导入 + 模块级按需预热；
 - **不承诺**：SSR/RSC、跨浏览器窗口、嵌套多级桥接子应用路由代理、TanStack Router 及其他路由库（可经 `BridgeHostNavigation`/`BridgeChildRoute` 端口自定义扩展）。
@@ -556,7 +616,7 @@ const PREFETCH_REMOTES: string[] = []
 
 - 插件选项字段全集与省略语义：[配置参考](configuration.md)
 - CLI 命令全集：[CLI 参考](cli.md)
-- 48 个错误码：[错误码总表](errors.md)
+- 49 个错误码：[错误码总表](errors.md)
 - 产物端点与部署规则：[部署指南](../guide/deployment.md)
 - 完整可运行工程：[examples](../../../examples/README.md)
 

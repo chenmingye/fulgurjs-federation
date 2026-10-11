@@ -40,7 +40,7 @@ describe('remoteComponent 加载与渲染', () => {
     const btn = await screen.findByText('远程按钮')
     fireEvent.click(btn)
     expect(onClick).toHaveBeenCalledTimes(1)
-    expect(load).toHaveBeenCalledWith('r/Button', { retries: undefined })
+    expect(load).toHaveBeenCalledWith('r/Button', { retries: undefined, consumerApp: expect.objectContaining({ pageProviders: expect.any(Function) }) })
   })
 
   it('工厂创建不触发加载；首次渲染才 loadRemote', () => {

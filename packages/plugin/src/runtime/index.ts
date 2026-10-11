@@ -139,6 +139,18 @@ export interface RemoteSetupModule {
    * 静态组件值仍支持（同框架消费场景一步到位）。运行时对值原样透传，不做形状校验。
    */
   globalComponents?: Record<string, unknown>
+  /**
+   * 远程组件被消费方渲染时的「祖先 Provider」声明（数组，外→内顺序包裹）：
+   * 与 globalComponents 互补且不可互相替代——注册解决模板字符串标签解析，Provider
+   * 解决 provide/inject 链（主题 prefixCls、UI 配置注入等）。提供方在此声明一次，
+   * 消费方 remoteComponent/createHostPages 渲染本远程的任意组件时自动包裹，暴露页
+   * 组件自身保持纯业务（不再每页手写 Provider 包装与异步装配）。
+   * 项 = 组件对象（选项组件）或零参 loader（() => import(...).then(m => m.AppProvider)；
+   * 与 globalComponents 的零参 loader 判定同口径：length === 0 的函数按 loader 处理）。
+   * 运行时只校验数组形态与项类型（函数/对象），逐项解析由消费方框架适配器完成；
+   * 手动 loadRemote / useLoadRemote（返回模块、用户自行渲染）不自动应用。
+   */
+  pageProviders?: unknown[]
 }
 
 /** 每个远程的初始化状态（应用级 setup 一次；会话级 onSession 按 sessionKey 去重） */
@@ -146,6 +158,7 @@ interface LifecycleState {
   setupPromise?: Promise<void>
   setupExports?: Record<string, any>
   globalComponents?: Record<string, unknown>
+  pageProviders?: unknown[]
   sessionKey?: string
   sessionPromise?: Promise<void>
   controller?: AbortController
@@ -311,6 +324,20 @@ function createRuntime() {
         }
         st.globalComponents = mod.globalComponents as Record<string, unknown>
       }
+      if (mod.pageProviders !== undefined) {
+        // 契约校验（与 globalComponents 同口径：导出形态在 runtime 校验，项的内容由
+        // 消费方适配器在解析时校验）：必须是数组（每项=组件对象或函数，外→内顺序）
+        if (!Array.isArray(mod.pageProviders)) {
+          throw new FgError(
+            ErrorCodes.SETUP_INVALID_EXPORT,
+            `现象：远程应用 "${remote.name}" 的 setup 模块 "${setupKey}" 无法初始化。\n` +
+              `原因：pageProviders 导出类型为 ${typeof mod.pageProviders}，应为数组（每项=组件或零参 loader）。\n` +
+              `修法：改为 export const pageProviders = [AppProvider] 或 [() => import('./X').then((m) => m.AppProvider)] 形态，或删除该导出。`,
+            { remote: remote.name, module: setupKey },
+          )
+        }
+        st.pageProviders = mod.pageProviders
+      }
       await invokeLifecycleFn(
         remote.name,
         setupFn,
@@ -323,6 +350,7 @@ function createRuntime() {
       // 只清应用级缓存：onSession 语义不存在，重试从 setup 重新开始
       st.setupExports = undefined
       st.globalComponents = undefined
+      st.pageProviders = undefined
       throw err
     }
   }
@@ -1109,9 +1137,16 @@ function createRuntime() {
     // 每次加载都执行（不随 setup 只跑一次）——桥接子应用每次挂载新建 app 实例，
     // 一次性注册会漏掉重进；app.component 同名覆盖天然幂等，重复注册无副作用。
     const gc = lifecycleOf(name).globalComponents
-    const consumerApp = opts?.consumerApp as { component?: (n: string, c: unknown) => unknown } | undefined
+    const consumerApp = opts?.consumerApp as { component?: (n: string, c: unknown) => unknown; pageProviders?: (list: unknown[]) => void } | undefined
     if (gc && consumerApp && typeof consumerApp.component === 'function') {
       for (const compName of Object.keys(gc)) consumerApp.component(compName, gc[compName])
+    }
+    // 祖先 Provider 交付：消费方适配器经 consumerApp.pageProviders 捕获后在自己的组件
+    // 提取点包裹（与 globalComponents 同一 consumerApp 协议；Vue/React remoteComponent 与
+    // 宿主页面适配器传入，手动 loadRemote / useLoadRemote 不传即不应用）
+    const pp = lifecycleOf(name).pageProviders
+    if (pp && pp.length > 0 && typeof consumerApp?.pageProviders === 'function') {
+      consumerApp.pageProviders(pp)
     }
     const cacheKey = `${name}@${remote.shareScope || 'default'}#${module}`
     if (!loadedModules.has(cacheKey)) {

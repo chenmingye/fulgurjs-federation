@@ -42,17 +42,21 @@ export default {
 // src/bridge.ts —— fulgurjs.config.ts: exposes: { './bridge': './src/bridge.ts' }
 import { createApp, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
 import App from './App.vue'
 import { routes } from './routes'
+import { setupRouterGuard } from './permission'
 
-export default defineBridgeApp((props) => {
-  const app = createApp({ setup: () => () => h(RouterView) }, props)
+export default defineBridgeApp(async (props, ctx) => {
   const router = createRouter({ history: createMemoryHistory(), routes })
-  app.use(router)
+  setupRouterGuard(router)                       // 业务守卫需在接线前就位（初始导航要经过它）
+  const app = createApp(App, props)
+  await installVueBridgeRouter(app, router, ctx) // 校验通道(MFU-034)→接线→ready→install 一次完成
   return app   // 返回装配完整的 Vue App；mount/unmount 由契约负责
-})
+}, { routing: true })
 ```
+
+不需要 URL 同步的子应用省去 `installVueBridgeRouter` 与 `{ routing: true }`，`app.use(router)` 即可（memory 路由）。需要"桥接/独立双形态同跑"的子应用不要用 `installVueBridgeRouter`（它在宿主未启用同步时抛 `MFU-034`）——在工厂内自行判断 `ctx.routing`，用 `connectVueBridgeRouter` 手动接线。
 
 **React 子应用**（`@fulgurjs/federation/react`；`react-dom/client` 实际 mount 时才加载）：
 
@@ -68,6 +72,8 @@ export default defineBridgeApp((props) => (
   </MemoryRouter>
 ))
 ```
+
+**布局感知（被桥接 or 独立运行）**：子应用的布局/标题等业务代码用 `hasBridgeMount()`（`/vue`、`/react` 均导出）区分两种形态——本页面发生过桥接挂载即 `true`，独立打开恒 `false`；不需要再自建 mode 标记模块。需要模块求值期判断的子应用维持「工厂内 `await import(...)` 加载业务模块」的既有模式（工厂调用前信号已置位）。
 
 契约语义（`BridgeApp` 接口，`/vue` 与 `/react` 共享同一类型定义）：
 
@@ -153,6 +159,18 @@ export default function BridgePage() {
 | 非空字符串 | 登录代次。首次渲染走：getContext（若提供）→ 校验快照/现有 context → 桥接层 `provideAppContext` → loadRemote → 契约校验 → `contract.mount(el, appProps 快照)`；远程 `onSession` 用同一代次 |
 
 空字符串、数字等非法值按 `MFU-017` 拒绝挂载。
+
+Vue 宿主可用 `createBridgeSession()`（`@fulgurjs/federation/vue`）管理代次——生成非敏感 ID、sessionStorage 持久化（刷新不变、关标签页作废）、renew/clear 一个模块级实例完成，替代每项目手写：
+
+```ts
+// src/fulgurjs/host/session.ts（模块级创建一次）
+import { createBridgeSession } from '@fulgurjs/federation/vue'
+export const bridgeSession = createBridgeSession()
+// 登录成功 → bridgeSession.renew()；退出 → bridgeSession.clear()
+// 组件内：<RemoteApp :session-key="bridgeSession.sessionKey.value" />
+```
+
+`renew` 的调用时机（登录成功后）与 `clear`（退出时）由宿主登录流程决定；值形态与持久化语义由插件承担。嵌套宿主（B 同时是子应用与宿主）同页并存时给各会话传不同 `storageKey`。React 宿主自行管理代次值（如 `useState`），语义要求同上。
 
 `getContext` 是**无副作用的同步 getter**：在首次、重试及换会话的实际加载前调用；返回快照对象（拒绝 Promise/thenable 与非对象——`MFU-016`，`phase: 'getContext'`）。桥接层先校验快照 `sessionKey` 与受控值一致（不一致 `MFU-017` 且不写全局），**校验通过后由桥接层调用 `provideAppContext`**——getter 本身不写全局。未提供 getter 时校验现有 `AppContext.sessionKey` 必须与受控值一致。换代时桥接层先 `clearAppContext()` 清旧账号独有字段再写新快照，保证零旧账号残留。
 

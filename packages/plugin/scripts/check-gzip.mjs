@@ -1,7 +1,8 @@
 /**
  * runtime bundle gzip 门禁（build 末尾自动执行，CI 同步）。
- * 阈值 10496B（zlib level9）：中文运行时诊断需要保留可操作的原因与修法，
- * 4.3.0 英文诊断基线为 7547B，本轮中文化后实测 8649B；当前预算包含共享协商屏障与兼容处理的必要增量。
+ * 阈值 10752B（zlib level9）：中文运行时诊断需要保留可操作的原因与修法。
+ * 历史基线：4.3.0 英文 7547B → 中文化 8649B → 共享协商屏障 10273B（阈值 10496B）。
+ * 6.6.0：setup pageProviders 契约（数组校验+消费方交付）实测 10597B，阈值上调至 10752B（CHANGELOG 已说明）。
  * 超限 exit 1 —— runtime 体积是本插件核心卖点之一，防止无意膨胀。
  */
 import zlib from 'node:zlib'
@@ -9,13 +10,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const LIMIT = 10496 // 5.7.1：异步入口屏障与旧冻结内核兼容；实测 10273B，保留硬门禁
+const LIMIT = 10752 // 6.6.0：pageProviders 契约增量；实测 10597B，保留硬门禁余量
 const dist = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist')
 const file = path.join(dist, 'runtime.js')
 // React 适配器预算（5.1.0）：任务书建议 3072B，实测 3538B——差值全部来自两条中文三段式
 // 诊断文案（与 runtime.js 同一「中文诊断保留可操作性」口径）+ timeout/retry/代次守卫状态机。
 // 显式定档 4096B（zlib level9，external react 剔除后）；超限退出码 1，与 runtime 同级硬门禁。
-const REACT_ADAPTER_LIMIT = 4096
+const REACT_ADAPTER_LIMIT = 4224 // 6.6.0：pageProviders 捕获/解析/包裹；实测 4130B（此前 4096B 预算已满）
 const reactAdapter = path.join(dist, 'react-adapter.js')
 
 if (!fs.existsSync(file)) {
@@ -69,7 +70,9 @@ for (const name of ['bridge-host-vue.js', 'bridge-host-react.js']) {
 // 显式定档防止路由层无意膨胀。6.0.0 上调 4096→4352B：/react 统一入口要求 react-router-dom
 // 成为可选依赖（react-router-dom 值导入改为模块级按需预热 + 未就绪惰性宿主 + 空 chunk 形状
 // 校验），该合同增量实测 4143B（zlib level9）；CHANGELOG 记录同口径。
-const BRIDGE_ROUTER_LIMIT = 4352
+// 6.6.0 上调 4352→4736B：接线入口统一 MFU-034（宿主未提供路由通道，替代项目手写守卫）；
+// react 侧 chunk 首次引入 bridge-errors 的该条错误文案，实测 4590B（vue 侧 3676B）。
+const BRIDGE_ROUTER_LIMIT = 4736
 for (const name of ['bridge-router-vue.js', 'bridge-router-react.js']) {
   const file = path.join(dist, name)
   if (!fs.existsSync(file)) {

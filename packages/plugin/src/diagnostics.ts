@@ -79,6 +79,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-031', stage: 'MFU', title: '桥接路由协议缺失/通道失效（子应用未声明 routing 协议、销毁通道复用；定义于 bridge-errors.ts）' },
   { code: 'MFU-032', stage: 'MFU', title: '桥接非法导航（目标越界前缀、非法 go 参数、失效通道请求；定义于 bridge-errors.ts）' },
   { code: 'MFU-033', stage: 'MFU', title: '桥接路由同步失败（重定向循环超出上限；定义于 bridge-errors.ts）' },
+  { code: 'MFU-034', stage: 'MFU', title: 'URL 同步通道未被宿主提供（子应用契约要求 routing 而宿主未启用；installVueBridgeRouter/createReactBridgeRouter 入口统一抛出；定义于 bridge-errors.ts）' },
   // ── CC 跨应用上下文（定义于 context.ts，此处登记供手册一致性校验） ──
   { code: 'CC-001', stage: 'CC', title: 'AppContext 必需字段缺失（修法指向宿主桥 provideAppContext）' },
   { code: 'CC-002', stage: 'CC', title: '运行时单例不可用（独立直开远程页，须经宿主联邦加载）' },

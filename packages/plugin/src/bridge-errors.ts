@@ -23,6 +23,8 @@ export const BridgeErrorCodes = {
   ROUTING_NAVIGATION_INVALID: 'MFU-032',
   /** 路由准备/同步失败（重定向循环、子应用路由准备失败且已阻止错误页面显示） */
   ROUTING_SYNC_FAILED: 'MFU-033',
+  /** URL 同步通道未被宿主提供（子应用契约要求 routing 而宿主未启用；MFU-031 的对偶） */
+  ROUTING_CHANNEL_NOT_PROVIDED: 'MFU-034',
 } as const
 
 /** 桥接生命周期阶段（MFU-016 details.phase 取值） */
@@ -162,5 +164,21 @@ export function routingSyncError(spec: string, reason: string, chain: string[], 
     `现象：桥接应用 "${spec}" 的 URL 同步失败。\n原因：${reason}\n修法：检查路由守卫、加载器与导航异常；重定向链不应成环。目标链：${chain.join(' → ')}。`,
     { spec, chain: [...chain] },
     { cause },
+  )
+}
+
+/**
+ * MFU-034：宿主未提供 URL 同步通道（子应用契约要求 routing，宿主桥接组件未传）。
+ * 与 MFU-031 互为对偶：031=子应用未声明协议而宿主要求同步；034=宿主未启用同步而子应用要求。
+ * 由 installVueBridgeRouter / createReactBridgeRouter 在接线入口统一抛出（替代各项目手写的
+ * 各式 `if (!ctx?.routing) throw new Error(...)` 守卫）。
+ */
+export function routingChannelNotProvidedError(spec: string): FgError {
+  return new FgError(
+    BridgeErrorCodes.ROUTING_CHANNEL_NOT_PROVIDED,
+    `现象：桥接应用 "${spec}" 声明了 URL 同步，但宿主未提供路由通道（ctx.routing 缺失）。\n` +
+      `原因：宿主桥接组件未传 routing prop（或宿主未启用 URL 同步）。\n` +
+      `修法：宿主传入 routing = { basePath, navigation }（导航端口用 createVueBridgeNavigation/createReactBridgeNavigation 创建）；双形态子应用改用 connectVueBridgeRouter 手动接线并自行判断。`,
+    { spec },
   )
 }

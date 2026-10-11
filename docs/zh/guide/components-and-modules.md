@@ -53,7 +53,16 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 - 返回标准 Vue 异步组件，加载完成后渲染远程默认导出（或模块本身）。同会话的保活状态保留；换会话后重新挂载或激活时，先执行新会话初始化，再渲染页面；
 - **零兜底**：加载失败显式进错误态；不传 `errorComponent` 时渲染内置占位（错误码 + 根因 + 修法 + 「重试加载 / 刷新页面重试」按钮），`window` 的 `fulgurjs:error` 事件照常发出；
 - 同 spec 多组件实例共享 `loadRemote` 内部 Promise 缓存，容器模块只加载一次。
-- **provide/inject 不跨提供方根部**：远程组件渲染在**消费方**的组件树里——提供方 app 根部（`App.vue` 等）的 `provide`（全局 `AppProvider`、prefixCls、主题、ConfigProvider 等）不会跟着组件走；消费方自己的祖先 provide 正常生效。暴露面依赖这类上下文时，在**暴露入口组件**内自 provide（单一来源，如把 `AppProvider` 包进暴露组件模板根），不要要求每个宿主重复注册。未命中 inject 的症状是取到默认空值（典型：类名前缀变成 `undefined-xxx`、主题类缺失）。
+- **provide/inject 不跨提供方根部**：远程组件渲染在**消费方**的组件树里——提供方 app 根部（`App.vue` 等）的 `provide`（全局 `AppProvider`、prefixCls、主题、ConfigProvider 等）不会跟着组件走；消费方自己的祖先 provide 正常生效。未命中 inject 的症状是取到默认空值（典型：类名前缀变成 `undefined-xxx`、主题类缺失）。暴露面依赖这类上下文时的推荐做法（一处声明、全部暴露面生效）：在提供方 `federation({ setup })` 模块声明 `pageProviders`（祖先 Provider 数组，消费方 `remoteComponent`/`createHostPages` 渲染本远程组件时自动按 外→内 包裹），多个远程页面不再逐页手写包装：
+
+  ```ts
+  // 提供方 src/fulgurjs/setup.ts —— federation({ setup: './src/fulgurjs/setup.ts' })
+  export const pageProviders = [
+    () => import('../components/Application').then((m) => m.AppProvider), // 零参 loader 形态
+  ]
+  ```
+
+  它与 `globalComponents`（消费方全局注册，解决模板字符串标签解析）是**两件不同的事、不能互相替代**；全局 CSS/主题样式随构建产物走，也不由 Provider 承担。仅手动 `loadRemote` / `useLoadRemote`（拿到模块自行渲染）不自动应用——这类消费在 JSX/模板里自己包 Provider。
 
 - **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
@@ -187,5 +196,6 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | 未知远程 | `MFU-008` | 核对 `remotes` 键名与 spec 前缀一致 |
 | 模块没有任何导出 | `MFU-009` | 检查 expose 目标文件的导出 |
 | 组件渲染成功但字符串标签（如 `<a-divider>`）成死元素 | — | 远程在 setup 模块声明 `globalComponents`（`remoteComponent` 消费时自动安装），见 [API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期) |
+| 组件渲染成功但类名前缀变 `undefined-xxx` / 主题类缺失（inject 未命中） | — | 远程在 setup 模块声明 `pageProviders`（祖先 Provider 自动包裹），见上文 provide/inject 说明 |
 
-完整 48 码见[错误码总表](../reference/errors.md)；按症状排查见[排错目录](../troubleshooting/README.md)。
+完整 49 码见[错误码总表](../reference/errors.md)；按症状排查见[排错目录](../troubleshooting/README.md)。

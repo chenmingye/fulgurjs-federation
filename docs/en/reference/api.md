@@ -330,6 +330,16 @@ export const globalComponents: RemoteSetupModule['globalComponents'] = {
   // Static component values also work (one step for same-framework consumers):
   // AButton: Button,
 }
+
+// Optional named export since 6.6.0: ancestor provider declaration (array, outer→inner).
+// Components of this remote are automatically wrapped when rendered via
+// remoteComponent/createHostPages — exposed pages no longer hand-write AppProvider wrappers.
+// Complementary to globalComponents and not interchangeable: registration solves "string
+// tag resolution", providers solve the "provide/inject chain" (prefixCls/theme/UI config).
+export const pageProviders: RemoteSetupModule['pageProviders'] = [
+  // Zero-arg loaders and static component values both work (same convention as globalComponents):
+  () => import('../components/Application').then((m) => m.AppProvider),
+]
 ```
 
 `RemoteSetupContext`: `{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`. `appContext` is the snapshot taken from the page-level AppContext **at call time** (never a saved stale reference); `signal` is invalidated when the login generation changes or on logout cleanup.
@@ -342,9 +352,10 @@ Fixed contract:
 | Timing | Container acquired → `init(shareScope)` (shared scope adoption) → **setup** → **onSession** → **globalComponents install** → business module returned. The setup module's own imports complete their shared negotiation at that stage |
 | Execution count (setup) | Once per container; concurrent calls share one Promise; never repeated after success. `preloadRemote` only prefetches resources and never executes |
 | Execution count (globalComponents) | Declaration is extracted once with setup; **installation runs on every `loadRemote`** (idempotent — `app.component` same-name overwrite, later registration wins) so bridge child apps that create a fresh app instance per mount also receive the registration. Vue `remoteComponent` and `createHostPages` capture the consumer app automatically; a manual `loadRemote` and the React side do not automatically pass it (React has no Vue global-registry concept) — installation is skipped without error. Registrations live for the consumer app's lifetime; there is no separate uninstall API |
+| Execution count (pageProviders) | Declaration is extracted once with setup; **wrapping applies on every component render** (the declared array is cached by reference, loader entries resolve once; a failed-then-retried setup produces a new array and the cache naturally misses). Vue `remoteComponent`/`createHostPages` and React `remoteComponent`/`createReactHostPages` apply it automatically (outer→inner wrap; attrs/slots pass through to the innermost business component; providers receive no props); manual `loadRemote` and `useLoadRemote` (returning the module for self-rendering) do not — wrap yourself there |
 | Execution count (onSession) | Deduplicated by the non-sensitive `sessionKey`: once per login generation; a new generation first invalidates the old `signal`, then chains the old call and the new call **serially** per remote (preventing two accounts' async writes from interleaving); `clearAppContext()` invalidates the dedup state, forcing a rerun on the next login. App-level setup does not re-run on logout/generation switch |
 | sessionKey | The host login flow generates a new generation on every successful login/re-login (non-sensitive ID, never a token); kept when a token refreshes but the session does not. **onSession present but sessionKey missing → MFU-013**; identity is never guessed from a user object reference; remotes without onSession need no sessionKey |
-| Export validation | Must default-export a function; the named `onSession` is optional and must be a function; `globalComponents` is optional and must be an object (key = registered name, value = component). Violations → MFU-011 (reports actual type / expected signature / fix) |
+| Export validation | Must default-export a function; the named `onSession` is optional and must be a function; `globalComponents` is optional and must be an object (key = registered name, value = component); `pageProviders` is optional and must be an array (entries = component objects or zero-arg loaders; a function with parameters is treated as a functional component; entry contents are validated at consumer-side resolution). Violations → MFU-011 (reports actual type / expected signature / fix) |
 | Failure and retry | setup/onSession throwing → that `loadRemote` rejects (MFU-012); **only the failed stage's cache is cleared** (after a setup failure the retry starts at setup; an onSession failure only reruns the session segment); already-successful stages are not repeated. `fallbackModule` never masks an initialization failure |
 | Self-recursion | `loadRemote(same remote/…)` inside setup/onSession's synchronous segment → MFU-014 (the call waits on itself, deadlocking). Same-remote recursion inside the async segment cannot be attributed precisely and shows up as a hang — never load same-remote modules inside initialization |
 | dev/prod parity | The dev container (middleware-served) and the prod container (build artifact) carry the same setup metadata (the container's `__fulgurjsSetup` field + the manifest's `setup` field); the internal expose key `./__fulgurjs_setup__` never appears in type artifacts or public exposes lists |
@@ -382,6 +393,34 @@ The module exposed as `./bridge` declares the contract object as its **default e
 - Contract instances are keyed per container el: mounting the same contract in several places does not interfere; mounting again into the same container without unmounting is rejected (MFU-016) and does not overwrite the original instance;
 - Child app internal errors after the first root commit are the responsibility of the **child app's own error boundary** — the host's ErrorBoundary/errorCaptured cannot catch render errors across roots, and the plugin does not pretend to be the fallback.
 
+### Child-app helpers: `installVueBridgeRouter` / `hasBridgeMount`
+
+**`installVueBridgeRouter(app, router, ctx)`** (`/vue`, Vue child app) — one call completes the URL-sync router wiring:
+
+```ts
+export default defineBridgeApp(async (props, ctx) => {
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  setupRouterGuard(router)                        // business guards must be ready before wiring (the initial navigation goes through them)
+  const app = createApp(App, props)
+  await installVueBridgeRouter(app, router, ctx)  // validate → connect → ready → install, order guaranteed by the plugin
+  return app
+}, { routing: true })
+```
+
+| Dimension | Semantics |
+|---|---|
+| Behavior | Equivalent to the fixed sequence `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })` → `await ready` → `app.use(router)`; `app` is only installed, never mounted. Returns the connection (`{ ready, dispose }`; most callers ignore it) |
+| Failure | A missing `ctx?.routing` → **MFU-034** (the host did not enable URL sync while this contract declared routing — the dual of MFU-031); a `ready` rejection (e.g. the initial route cancelled by a guard) propagates as-is (the host reports MFU-016 `phase: 'mount'` carrying the cause) and the router was never installed |
+| Boundary | Sub apps that must run in both bridged and standalone forms should not use it (it fails outright when the host did not enable sync) — check `ctx.routing` yourself and wire manually with the lower-level `connectVueBridgeRouter`. React child apps need no counterpart: `createReactBridgeRouter` is already the converged form (returns `element`) and likewise validates a missing routing at its entry (MFU-034) |
+
+**`hasBridgeMount(): boolean`** (`/vue` and `/react`) — a page-level bridge-form signal for sub-app layout/title strategies to distinguish "embedded via a host bridge" from "running standalone":
+
+| Dimension | Semantics |
+|---|---|
+| Set timing | Automatically set by the plugin **before any bridge contract's factory starts executing** — business modules dynamically imported inside the factory and assembly-time code already read `true`, never later than any business initialization |
+| Semantics | Page-level and sticky: once set it never resets on that page (still `true` after unmount — layout trimming needs no rollback); a full page refresh naturally resets it; always `false` when a sub app is opened standalone. Stored in a page-level global mirror (globalThis) so host and child app runtime copies on one page read the same value |
+| Boundary | Modules **statically imported** by `bridge.ts` still evaluate to `false` — keep the established pattern of loading business modules via `await import(...)` inside the factory when evaluation-time detection is needed; remote components should not depend on this signal (component federation has no "being bridged" concept); host code reading `true` is normal and hosts should not use it for their own layout decisions |
+
 ### Host-side factories
 
 ```ts
@@ -410,10 +449,30 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 - **`appProps` snapshot semantics**: top-level fields are shallow-copied at mount time, while nested objects/reactive stores/functions keep their original references; later top-level replacements are **not tracked and do not re-render the child app** — to reset, rebuild with `:key`/key. New host closures are not passed to the child app automatically — to read live host state, pass stable callbacks or remount explicitly. Crossing roots inherits nothing: no host provide/inject, Pinia, React Context, or routing.
 - **`getContext`**: a side-effect-free **synchronous** getter, called before the actual load on first load, retries, and session switches; it returns a snapshot object (Promises/thenables and non-objects are rejected — `MFU-016`, `phase: 'getContext'`). The bridge layer first validates that the snapshot's `sessionKey` matches the controlled value (on mismatch `MFU-017`, and nothing is written globally); **after validation passes, the bridge layer calls `provideAppContext`** — the getter itself never writes globally. Without a getter, the existing `AppContext.sessionKey` must match the controlled value. On a generation switch, the bridge layer first calls `clearAppContext()` to clear old-account-only fields, then writes the new snapshot.
-- **`sessionKey` controlled semantics**: only `undefined` (no controlled session) / `null` (logged-out state: unmount immediately, keep an empty container, no more loadRemote) / a non-empty string (login generation) are accepted. Illegal values such as empty strings or numbers are rejected at mount with `MFU-017`. The full trigger table: [sub app bridge · session](../guide/app-bridge.md#session-sessionkey-and-appcontext).
+- **`sessionKey` controlled semantics**: only `undefined` (no controlled session) / `null` (logged-out state: unmount immediately, keep an empty container, no more loadRemote) / a non-empty string (login generation) are accepted. Illegal values such as empty strings or numbers are rejected at mount with `MFU-017`. The full trigger table: [sub app bridge · session](../guide/app-bridge.md#session-sessionkey-and-appcontext). Vue hosts can delegate the generation to `createBridgeSession()` (below).
 - **Multiple instances and page-level single session**: multiple instances of the same spec on one page are legal (keyed per el); `AppContext` is a page-level singleton — all controlled bridge instances on a page must share one session, and mismatched generations are rejected with `MFU-017`. Hosting two accounts simultaneously on one page is not promised.
 - **DOM ownership**: the wrapper component only creates and keeps a stable empty mount container; host re-renders never patch inside the child app's root. React host StrictMode double effects are safe. Vue `<KeepAlive>` deactivate is not unmount — a child app in a cached page keeps its root and state.
 - **Old requests never pretend to be cancelled**: work already inside `loadRemote` is not cancelled because the bridge layer invalidates it — late old results are discarded by generation; the remote's `onSession` must honor the `signal.aborted` contract.
+
+### Host-side helper: `createBridgeSession` (Vue)
+
+`createBridgeSession(options?)` (`/vue`) — moves the **contract semantics** of sessionKey (non-sensitive login generation, never the token itself, null = logged out, unchanged across reloads within one session) into the plugin; the host only decides when to call it:
+
+```ts
+// src/fulgurjs/host/session.ts (create once at module level)
+import { createBridgeSession } from '@fulgurjs/federation/vue'
+export const bridgeSession = createBridgeSession()
+// on successful login → bridgeSession.renew(); on logout → bridgeSession.clear()
+// in components: <RemoteApp :session-key="bridgeSession.sessionKey.value" />
+```
+
+| Dimension | Semantics |
+|---|---|
+| Return value | `{ sessionKey: Ref<string \| null>; renew(): string; clear(): void }`. `renew` generates and persists a new generation (calling it again while a generation is active = a forced account switch remount, consistent with the controlled semantics) and returns the new value; `clear` sets null and removes the stored value (the bridge component unmounts immediately on receiving null) |
+| Persistence | sessionStorage (default key `fulgurjs-bridge-session`): unchanged across reloads within the session, naturally invalidated when the tab closes. When storage is unavailable (private mode etc.) it silently degrades to pure memory — logout/account switch keep working, a reload lands logged out, no throw |
+| `options.storageKey` | Custom storage key. Nested hosts (B being both a child app and a host) coexisting on one page **must** pass distinct keys so refresh-restore cannot overwrite each other |
+| Call timing | `renew`/`clear` are decided by the host's login flow (successful login / logout); the helper is unaware of business login state |
+| React hosts | Not provided yet (React hosts manage the generation value themselves with the same semantic requirements; see the guide) |
 
 <a id="url-sync-api"></a>
 
@@ -429,8 +488,9 @@ The bridge defaults to memory routing; URL sync makes the **host URL express the
 |---|---|---|
 | `createVueBridgeNavigation` | `(router: VueRouterLike) => BridgeHostNavigation` | Vue host navigation port. Vue Router fullPath is already the logical path; no deployment base needed. Vue Router 4, history or hash mode |
 | `createReactBridgeNavigation` | `(navigate, { basename?, canNavigate? }) => BridgeHostNavigation` | React host navigation port. **Data router only** (`createBrowserRouter`/`createHashRouter` + `RouterProvider`); declarative mode (BrowserRouter) has no cancellation semantics and is not supported. React Router ≥ 6.11. `canNavigate` is optional and only an early rejection; the port observes the real blocker state — wait for `reset()` to resolve as cancelled and for the actual location to commit after `proceed()`; success is never judged solely by the settle of navigate's Promise |
-| `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue child app wiring for the controlled memory router; `await …ready` settles before `app.use(router)` (order must not be reversed) |
-| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React child app: returns a `RouterProvider` element used directly as the contract product. `routerReady: Promise<Router>` is the wired memory-router readiness contract: the fast path (module-level warmup already settled, the common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Introspect via `await routerReady` instead of assuming `element.props.router` exists synchronously. `dispose()` tears down the wiring idempotently (auto-invoked by the signal); late tasks after dispose never write state |
+| `connectVueBridgeRouter` | `(routing: BridgeChildRouting, router: Router, { signal? }) => { ready: Promise, dispose(): void }` | Vue child app wiring for the controlled memory router (the low-level primitive); `await …ready` settles before `app.use(router)` (order must not be reversed). Regular bridged sub apps use `installVueBridgeRouter` above; this function remains for "dual-form" setups that need manual order control |
+| `installVueBridgeRouter` | `(app, router, ctx) => Promise<{ ready, dispose }>` | Vue child app router wiring in one call: validate the host channel (missing → MFU-034) → connect → await ready → `app.use(router)`; the ordering contract is owned by the plugin. `ctx` is the bridge factory's second parameter (`{ signal?, routing? }`) |
+| `createReactBridgeRouter` | `(routing, routes, { signal? }) => { element, dispose(), routerReady }` | React child app: returns a `RouterProvider` element used directly as the contract product; a missing routing throws the standardized MFU-034. `routerReady: Promise<Router>` is the wired memory-router readiness contract: the fast path (module-level warmup already settled, the common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Introspect via `await routerReady` instead of assuming `element.props.router` exists synchronously. `dispose()` tears down the wiring idempotently (auto-invoked by the signal); late tasks after dispose never write state |
 
 The channel parameter the host passes to the bridge component: `routing: BridgeHostRouting = { basePath: '/approval', navigation }`; after the child app contract's second parameter declares `{ routing: true }`, it receives the channel from `ctx.routing`. The wiring's third argument on both ends, `{ signal?: AbortSignal }`, defaults to empty; passing `ctx.signal` is recommended for automatic dispose — without it, the child app explicitly calls `dispose()`. A custom `BridgeHostNavigation.navigate(target, action, { signal })` should re-check the optional signal before an async commit and forbid late writes once aborted.
 

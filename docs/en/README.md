@@ -44,7 +44,7 @@
 | [Configuration reference](reference/configuration.md) | Every `federation(options)` field: type/default value/omitted-vs-explicit semantics/valid range; the four remotes forms, every SharedHint field, the `hostPages` named export |
 | [API reference](reference/api.md) | Every public API of the four entries: purpose/import location/signature/default value/return value/lifecycle/error boundaries/full usage |
 | [CLI reference](reference/cli.md) | create / init / explain / check-pages / doctor / port: syntax/flags/default values/side effects/exit codes/examples |
-| [Error code table](reference/errors.md) | All 48 error codes, each with symptom/cause/fix |
+| [Error code table](reference/errors.md) | All 49 error codes, each with symptom/cause/fix |
 
 ### Troubleshooting (troubleshooting/)
 

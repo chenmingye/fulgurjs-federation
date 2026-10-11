@@ -1,5 +1,16 @@
 # 当前发布说明
 
+## 6.6.0
+
+围绕「接入成本」新增四个公共能力（均为增量，既有写法继续可用）：
+
+- **`installVueBridgeRouter(app, router, ctx)`**（/vue）：Vue 子应用 URL 同步路由接线一次完成（校验宿主通道 → connect → await ready → `app.use(router)`）。此前的 `connect → await ready → install` 顺序合同与 `if (!ctx?.routing) throw` 守卫在每个项目手写、顺序写反即深链失效；现由插件承担。宿主未提供路由通道统一抛新错误码 **`MFU-034`**（与 MFU-031 互为对偶）；`createReactBridgeRouter` 入口同样校验（替代 React 侧手写守卫）。
+- **`hasBridgeMount()`**（/vue、/react）：页面级桥接形态信号——任一桥接契约工厂开始执行前由插件置位，子应用布局/标题策略不再需要自建 mode 标记模块。粘性语义与边界（静态 import 求值期、远程组件不依赖）见 API 参考。
+- **`createBridgeSession(options?)`**（/vue）：宿主 sessionKey 生命周期托管（非敏感代次生成、sessionStorage 持久化、renew/clear、嵌套宿主 storageKey）。存储不可用退化为纯内存，不抛错。React 宿主自行管理（无实测需求，暂不提供）。
+- **`setup.pageProviders`**（setup 模块可选具名导出）：提供方一处声明祖先 Provider 数组（组件或零参 loader），消费方 `remoteComponent`/`createHostPages`（Vue 与 React）渲染该远程组件时自动按 外→内 包裹——多个暴露页不再逐页手写 AppProvider 包装链。与 `globalComponents`（消费方注册表）互补、不可互相替代；手动 `loadRemote`/`useLoadRemote` 不自动应用。导出非数组 → MFU-011。
+
+gzip 门禁随契约增量上调（CHANGELOG 口径）：runtime 10496→10752B（pageProviders 交付，实测 10597B）；react-adapter 4096→4224B（Provider 捕获/解析/包裹，实测 4130B）；bridge-router 4352→4736B（react 侧 chunk 首次携带 MFU-034 文案，实测 4590B / vue 侧 3676B）。
+
 ## 6.5.12
 
 - 提供方首次编译时保留宿主已有的类型快照，避免暂时未就绪被误判为关闭类型、删除补全；未就绪仍不能算严格类型验收通过。

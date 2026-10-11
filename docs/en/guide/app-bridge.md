@@ -42,17 +42,21 @@ The module exposed as `./bridge` declares the contract object as its **default e
 // src/bridge.ts — fulgurjs.config.ts: exposes: { './bridge': './src/bridge.ts' }
 import { createApp, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
 import App from './App.vue'
 import { routes } from './routes'
+import { setupRouterGuard } from './permission'
 
-export default defineBridgeApp((props) => {
-  const app = createApp({ setup: () => () => h(RouterView) }, props)
+export default defineBridgeApp(async (props, ctx) => {
   const router = createRouter({ history: createMemoryHistory(), routes })
-  app.use(router)
+  setupRouterGuard(router)                       // business guards must be ready before wiring (the initial navigation goes through them)
+  const app = createApp(App, props)
+  await installVueBridgeRouter(app, router, ctx) // validate channel (MFU-034) → connect → ready → install, one call
   return app   // Returns a fully assembled Vue App; mount/unmount are handled by the contract
-})
+}, { routing: true })
 ```
+
+Sub apps that do not need URL sync simply omit `installVueBridgeRouter` and `{ routing: true }` and call `app.use(router)` (memory routing). Sub apps that must run in **both** bridged and standalone forms should not use `installVueBridgeRouter` (it throws `MFU-034` when the host did not enable sync) — check `ctx.routing` yourself and wire with the lower-level `connectVueBridgeRouter`.
 
 **React child app** (`@fulgurjs/federation/react`; `react-dom/client` loads only at actual mount time):
 
@@ -68,6 +72,8 @@ export default defineBridgeApp((props) => (
   </MemoryRouter>
 ))
 ```
+
+**Layout awareness (bridged vs. standalone)**: sub-app layout/title code can distinguish the two forms with `hasBridgeMount()` (exported from both `/vue` and `/react`) — `true` once a bridge mount has happened on this page, always `false` when opened standalone; a hand-rolled mode-flag module is no longer needed. Sub apps that need the flag during module evaluation keep the established pattern of loading business modules via `await import(...)` inside the factory (the signal is set before the factory runs).
 
 Contract semantics (the `BridgeApp` interface; `/vue` and `/react` share the same type definitions):
 
@@ -153,6 +159,18 @@ Crossing roots inherits nothing: no host provide/inject, Pinia, React Context, o
 | Non-empty string | Login generation. First render goes: getContext (if provided) → validate snapshot/existing context → the bridge layer calls `provideAppContext` → loadRemote → contract validation → `contract.mount(el, appProps snapshot)`; the remote's `onSession` uses the same generation |
 
 Illegal values such as empty strings or numbers are rejected at mount with `MFU-017`.
+
+Vue hosts can manage the generation with `createBridgeSession()` (`@fulgurjs/federation/vue`) — it generates a non-sensitive ID, persists it in sessionStorage (unchanged across reloads, invalidated when the tab closes), and exposes renew/clear on one module-level instance, replacing per-project hand-written session code:
+
+```ts
+// src/fulgurjs/host/session.ts (create once at module level)
+import { createBridgeSession } from '@fulgurjs/federation/vue'
+export const bridgeSession = createBridgeSession()
+// on successful login → bridgeSession.renew(); on logout → bridgeSession.clear()
+// in components: <RemoteApp :session-key="bridgeSession.sessionKey.value" />
+```
+
+When to call `renew` (after a successful login) and `clear` (on logout) is decided by the host's login flow; the value format and persistence semantics are owned by the plugin. Nested hosts (B being both a child app and a host) coexisting on one page must pass distinct `storageKey`s to each session. React hosts manage the generation value themselves (e.g. `useState`) with the same semantic requirements.
 
 `getContext` is a **synchronous, side-effect-free getter**: called before the actual load on first load, retries, and session switches; it returns a snapshot object (Promises/thenables and non-objects are rejected — `MFU-016`, `phase: 'getContext'`). The bridge layer first validates that the snapshot's `sessionKey` matches the controlled value (on mismatch `MFU-017` and nothing is written globally); **after validation passes, the bridge layer calls `provideAppContext`** — the getter itself never writes globally. Without a getter, the existing `AppContext.sessionKey` must match the controlled value. On a generation switch, the bridge layer first calls `clearAppContext()` to clear old-account-only fields, then writes the new snapshot, guaranteeing zero residue of the old account.
 

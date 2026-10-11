@@ -96,16 +96,15 @@ export function ApprovalBridgePage() {
 
 ## ③ 子应用端（声明协议 + 接线受控路由）
 
-**Vue 子应用**：`defineBridgeApp(工厂, { routing: true })`——工厂第二参数拿到 `{ signal, routing }`：
+**Vue 子应用**：`defineBridgeApp(工厂, { routing: true })` + `installVueBridgeRouter`——校验宿主通道（缺失 → `MFU-034`）、接线、等待初始位置落定、`app.use(router)` 的固定顺序由插件一次完成：
 
 ```ts
 // src/bridge.ts（Vue 子应用）
 import { createApp, h } from 'vue'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
-import { defineBridgeApp, connectVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
 
 export default defineBridgeApp(async (props, ctx) => {
-  if (!ctx?.routing) throw new Error('本契约需要宿主启用 URL 同步')
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -113,27 +112,25 @@ export default defineBridgeApp(async (props, ctx) => {
       { path: '/detail/:id', component: Detail },
     ],
   })
-  // 初始 push 落定后再 install（顺序不能反）
-  await connectVueBridgeRouter(ctx.routing!, router, { signal: ctx.signal }).ready
   const app = createApp({ setup: () => () => h(RouterView) }, props)
-  app.use(router)
+  await installVueBridgeRouter(app, router, ctx)   // connect → ready → install，顺序由插件保证
   return app
 }, { routing: true })
 ```
 
-**React 子应用**：`createReactBridgeRouter` 返回 `{ element, dispose(), routerReady }`，`element` 是直接可用的 `RouterProvider` 元素：
+业务路由守卫（`router.beforeEach` 等）在 `installVueBridgeRouter` **之前**注册——初始导航要经过守卫装配动态路由。需要"桥接/独立双形态同跑"的子应用不用该函数（宿主未启用同步时它抛 `MFU-034`）：自行判断 `ctx.routing`，用底层 `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })` 接线，`await connection.ready` 后再 `app.use(router)`。
+
+**React 子应用**：`createReactBridgeRouter` 返回 `{ element, dispose(), routerReady }`，`element` 是直接可用的 `RouterProvider` 元素；routing 缺失时统一抛 `MFU-034`（不再需要工厂里手写守卫）：
 
 ```tsx
 // src/bridge.tsx（React 子应用）
-import { createReactBridgeRouter } from '@fulgurjs/federation/react'
-import { defineBridgeApp } from '@fulgurjs/federation/react'
+import { createReactBridgeRouter, defineBridgeApp } from '@fulgurjs/federation/react'
 
 export default defineBridgeApp((_props, ctx) => {
-  if (!ctx?.routing) throw new Error('本契约需要宿主启用 URL 同步')
-  return createReactBridgeRouter(ctx.routing, [
+  return createReactBridgeRouter(ctx!.routing!, [
     { path: '/list', element: <List /> },
     { path: '/detail/:id', element: <Detail /> },
-  ], { signal: ctx.signal }).element
+  ], { signal: ctx!.signal }).element
 }, { routing: true })
 ```
 
@@ -190,6 +187,7 @@ search/hash **原样保留**：重复 query 键、编码、中文、片段不二
 | `MFU-031` | 子应用未声明 `{ routing: true }` 却被宿主要求同步；或通道销毁后复用 | 占位报错，**不静默退回 memory 假装深链成功** |
 | `MFU-032` | 子应用导航目标越界自身前缀（`../`、跨前缀）、目标已含 basePath（重复前缀）、非法 `go` 参数、失效通道的请求 | 拒绝该次导航（宿主历史零污染） |
 | `MFU-033` | 路由准备/同步失败（重定向超限或导航异常，附目标链/cause） | 显式报错，不静默回退 |
+| `MFU-034` | 子应用契约声明了 URL 同步而宿主未提供路由通道（`installVueBridgeRouter` / `createReactBridgeRouter` 入口统一抛出） | 子应用装配失败（宿主侧 `MFU-016` mount 段携带 cause） |
 
 连续内部 replace 超过 5 次（重定向环）按 `MFU-033` 报告（附目标链，不静默回入口）。
 

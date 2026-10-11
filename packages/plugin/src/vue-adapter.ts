@@ -140,7 +140,8 @@ function createRecoverableErrorPlaceholder(
   })
 }
 
-function consumerRegistry(app: App | undefined) {
+/** consumerApp 协议实现：globalComponents 注册 + pageProviders 捕获（runtime 经此交付） */
+function consumerRegistry(app: App | undefined, captured?: { providers?: unknown[] }) {
   return app ? {
     component(name: string, comp: unknown) {
       const wrapped = typeof comp === 'function' && comp.length === 0
@@ -151,7 +152,44 @@ function consumerRegistry(app: App | undefined) {
         : comp
       return app.component(name, wrapped as Component)
     },
+    pageProviders(list: unknown[]) {
+      if (captured) captured.providers = list
+    },
   } : undefined
+}
+
+// ── pageProviders（祖先 Provider）解析与包裹 ───────────────────────────────────
+//
+// 提供方 setup 声明 pageProviders 后，本远程的组件在组件提取点统一包裹（首载/重试恢复/
+// 会话重建三条路径都过该点）。loader 解析与缓存见 page-providers.ts（与 React 适配器
+// 共用）；本层只做 Vue 的包裹渲染。
+
+import { resolvePageProviderEntries } from './page-providers'
+
+function resolvePageProviders(list: unknown[] | undefined): Promise<Component[] | undefined> {
+  return resolvePageProviderEntries(list) as Promise<Component[] | undefined>
+}
+
+/** 业务组件外按 外→内 顺序包 Provider；attrs/slots 全部透传给最内层业务组件 */
+function withPageProviders(inner: Component, providers: Component[]): Component {
+  return defineComponent({
+    name: 'FgRemotePageProviders',
+    inheritAttrs: false,
+    setup(_, { attrs, slots }) {
+      const renderNested = (idx: number): ReturnType<typeof h> =>
+        idx >= providers.length
+          ? h(inner as never, attrs as never, slots as never)
+          : h(providers[idx] as never, null, { default: () => renderNested(idx + 1) } as never)
+      return () => renderNested(0)
+    },
+  })
+}
+
+/** 组件提取点的统一包裹：无 Provider 声明时原样返回（零包装层，既有行为不变） */
+async function applyPageProviders(comp: Component | undefined, captured: { providers?: unknown[] } | undefined): Promise<Component | undefined> {
+  if (!comp || !captured?.providers || captured.providers.length === 0) return comp
+  const providers = await resolvePageProviders(captured.providers)
+  return providers && providers.length > 0 ? withPageProviders(comp, providers) : comp
 }
 
 /** 异步组件解析后仍会跨挂载复用；每个消费方及登录代次须重新完成初始化。 */
@@ -231,9 +269,12 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
     // 注册器包装：globalComponents 值为「零参 loader（() => import(...)）」时包一层
     // defineAsyncComponent——setup 模块因此可以完全惰性引用组件，不把框架依赖图
     // 拖进非本框架消费页面（跨框架纯 TS 模块消费实测会因根相对 dev URL 断链）。
-    const load = (app: App | undefined): Promise<any> => loadRemote(spec, {
-      retries: opts.retries, consumerApp: consumerRegistry(app),
-    }).then(m => m.default ?? m)
+    const load = (app: App | undefined): Promise<any> => {
+      const captured: { providers?: unknown[] } = {}
+      return loadRemote(spec, {
+        retries: opts.retries, consumerApp: consumerRegistry(app, captured),
+      }).then(async (m: any) => applyPageProviders((m?.default ?? m) as Component | undefined, captured))
+    }
     let initialApp: App | undefined
     const loader = async (): Promise<any> => {
       const app = getCurrentInstance()?.appContext.app ?? initialApp
@@ -319,7 +360,8 @@ export function createHostPages(
       const keepAlivePage = core.pages.some((p) => p.keepAlive && core.specOf(p) === spec)
       const loadPage = async (app: App | undefined): Promise<any> => {
         await beforeLoad?.()
-        const mod = await load(spec, { consumerApp: consumerRegistry(app) })
+        const captured: { providers?: unknown[] } = {}
+        const mod = await load(spec, { consumerApp: consumerRegistry(app, captured) })
         let inner = mod?.default ?? mod
         if (!inner) {
           throw noRenderableExportError(spec, inner)
@@ -332,7 +374,9 @@ export function createHostPages(
           // 非选项组件（函数式）保持原样退化为旧行为（每次重挂），不阻断加载。
           inner = Object.defineProperties({ ...inner }, { name: { value: name, configurable: true } })
         }
-        return inner
+        // 祖先 Provider 包裹放在命名副本之后：KeepAlive include 匹配的是外层异步包装名，
+        // Provider 包装层不影响保活；三条渲染路径（首载/重试/会话重建）都经过本提取点。
+        return applyPageProviders(inner as Component, captured)
       }
       let initialApp: App | undefined
       const pageLoader = async (): Promise<any> => {

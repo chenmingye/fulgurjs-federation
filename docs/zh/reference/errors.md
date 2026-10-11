@@ -1,6 +1,6 @@
 # 错误码总表
 
-> 48 个错误码，按段分组：CFG（配置期）/ DEV（开发期）/ BLD（构建期）/ MFU（运行时）/ CC（跨应用上下文）。每条给出**现象 / 原因 / 修法**三段式。错误文案中的修法具体到配置键 / 文件 / 命令；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
+> 49 个错误码，按段分组：CFG（配置期）/ DEV（开发期）/ BLD（构建期）/ MFU（运行时）/ CC（跨应用上下文）。每条给出**现象 / 原因 / 修法**三段式。错误文案中的修法具体到配置键 / 文件 / 命令；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
 >
 > 维护提示：新增/修改错误码必须三处同步——源码码表（`src/runtime/errors.ts` 的 MFU 段 / `src/context.ts` 的 CC 段）＋ 登记表 `CODE_REGISTRY`（`src/diagnostics.ts`）＋ 本表；`npm run build` 里的 `scripts/check-manual-codes.mjs` 做三方一致性校验（见[维护者 · 测试方法](../../maintainers/testing.md)）。
 
@@ -76,6 +76,7 @@
 | `MFU-031` | 桥接报路由协议缺失/通道失效 | 宿主启用 routing 但子应用未声明 `{ routing: true }`；或通道销毁后复用/再订阅 | 子应用契约第二参数声明 `{ routing: true }` 并从 `ctx.routing` 接线；换会话/卸载后不复活旧通道 |
 | `MFU-032` | 桥接报非法导航 | 子应用导航目标越界自身前缀（`../`、跨前缀）、目标已含 basePath（重复前缀，宿主 URL 会叠加成 `/x/x/...`）、非法 `go` 参数、或失效通道的请求 | 子应用只导航自身 basePath 内的逻辑路径（不含 basePath，错误信息附去掉前缀后的目标）；go 参数用合法整数；通道作废后不再发起导航 |
 | `MFU-033` | 桥接报路由准备/同步失败（附目标链/cause，不静默回退 memory） | 守卫/加载器/端口执行异常拒绝、或连续内部 replace 超过 5 次（重定向环） | 修复子应用守卫/加载器异常；排查重定向环（子应用路由定义的循环重定向） |
+| `MFU-034` | 子应用桥接契约抛「宿主未提供路由通道」 | 契约声明了 URL 同步（`{ routing: true }`），宿主桥接组件未传 `routing` prop；`installVueBridgeRouter`/`createReactBridgeRouter` 在接线入口统一抛出 | 宿主按 URL 同步文档传入 `routing = { basePath, navigation }`；若子应用需支持无同步运行，工厂内自行判断 `ctx.routing` 并用 `connectVueBridgeRouter` 手动接线 |
 
 ### CC 跨应用上下文
 

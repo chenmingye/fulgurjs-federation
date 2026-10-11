@@ -96,16 +96,15 @@ export function ApprovalBridgePage() {
 
 ## ③ Child app side (declare the protocol and wire the controlled router)
 
-**Vue child app**: `defineBridgeApp(factory, { routing: true })` — the factory's second parameter receives `{ signal, routing }`:
+**Vue child app**: `defineBridgeApp(factory, { routing: true })` + `installVueBridgeRouter` — validating the host channel (missing → `MFU-034`), wiring, waiting for the initial position to settle, and `app.use(router)` happen in the fixed order inside one plugin call:
 
 ```ts
 // src/bridge.ts (Vue child app)
 import { createApp, h } from 'vue'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
-import { defineBridgeApp, connectVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
 
 export default defineBridgeApp(async (props, ctx) => {
-  if (!ctx?.routing) throw new Error('This contract requires the host to enable URL sync')
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -113,27 +112,25 @@ export default defineBridgeApp(async (props, ctx) => {
       { path: '/detail/:id', component: Detail },
     ],
   })
-  // Install after the initial push settles (order must not be reversed)
-  await connectVueBridgeRouter(ctx.routing!, router, { signal: ctx.signal }).ready
   const app = createApp({ setup: () => () => h(RouterView) }, props)
-  app.use(router)
+  await installVueBridgeRouter(app, router, ctx)   // connect → ready → install, order guaranteed by the plugin
   return app
 }, { routing: true })
 ```
 
-**React child app**: `createReactBridgeRouter` returns `{ element, dispose(), routerReady }`, where `element` is a directly usable `RouterProvider` element:
+Business route guards (`router.beforeEach`, …) must be registered **before** `installVueBridgeRouter` — the initial navigation goes through the guards to assemble dynamic routes. Sub apps that must run in both bridged and standalone forms do not use this function (it throws `MFU-034` when the host did not enable sync): check `ctx.routing` yourself and wire with the lower-level `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })`, then `app.use(router)` after `await connection.ready`.
+
+**React child app**: `createReactBridgeRouter` returns `{ element, dispose(), routerReady }`, where `element` is a directly usable `RouterProvider` element; a missing routing channel throws the standardized `MFU-034` (no hand-written guard needed in the factory):
 
 ```tsx
 // src/bridge.tsx (React child app)
-import { createReactBridgeRouter } from '@fulgurjs/federation/react'
-import { defineBridgeApp } from '@fulgurjs/federation/react'
+import { createReactBridgeRouter, defineBridgeApp } from '@fulgurjs/federation/react'
 
 export default defineBridgeApp((_props, ctx) => {
-  if (!ctx?.routing) throw new Error('This contract requires the host to enable URL sync')
-  return createReactBridgeRouter(ctx.routing, [
+  return createReactBridgeRouter(ctx!.routing!, [
     { path: '/list', element: <List /> },
     { path: '/detail/:id', element: <Detail /> },
-  ], { signal: ctx.signal }).element
+  ], { signal: ctx!.signal }).element
 }, { routing: true })
 ```
 
@@ -190,6 +187,7 @@ search/hash are **preserved verbatim**: repeated query keys, encoding, non-ASCII
 | `MFU-031` | The host demands sync but the child app did not declare `{ routing: true }`; or the channel is reused after destruction | Placeholder error, **never silently falls back to memory while pretending the deep link worked** |
 | `MFU-032` | The sub app navigates outside its own prefix (`../`, across prefixes), its target already contains the basePath (duplicated prefix), an illegal `go` argument, or a request on a dead channel | That navigation is rejected (host history stays untouched) |
 | `MFU-033` | Route preparation/sync failure (redirect overflow or a navigation error, with the target chain/cause attached) | Explicit error, no silent fallback |
+| `MFU-034` | The child-app contract declared URL sync but the host provided no routing channel (thrown uniformly at the entry of `installVueBridgeRouter` / `createReactBridgeRouter`) | Child-app assembly fails (the host reports `MFU-016` mount phase carrying the cause) |
 
 More than 5 consecutive internal replaces (a redirect loop) are reported as `MFU-033` (with the target chain attached; never silently back to the entry).
 

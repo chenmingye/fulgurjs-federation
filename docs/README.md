@@ -44,7 +44,7 @@ docs/
 | 全部插件配置项与默认值（省略/显式值语义） | [配置参考](zh/reference/configuration.md) |
 | 全部公共 API（用途/签名/默认值/生命周期/错误边界） | [API 参考](zh/reference/api.md) |
 | CLI 全部命令（语法/参数/退出码/示例） | [CLI 参考](zh/reference/cli.md) |
-| 48 个错误码总表（现象/原因/修法） | [错误码总表](zh/reference/errors.md) |
+| 49 个错误码总表（现象/原因/修法） | [错误码总表](zh/reference/errors.md) |
 
 ## 英文文档
 

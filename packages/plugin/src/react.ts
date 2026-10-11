@@ -42,6 +42,7 @@ import {
 import { defineBridgeApp as defineReactBridgeApp } from './bridge-app-react'
 import { createReactBridgeAppWithLoader } from './bridge-host-react'
 import { createReactBridgeNavigation, createReactBridgeRouter, type ReactBridgeCancelPolicy, type ReactBridgeRouterConnection, type BridgeHostRouting } from './bridge-router-react'
+import { hasBridgeMount } from './bridge-core'
 
 export { RemoteErrorBoundary }
 export const remoteComponent = createRemoteComponent(loadRemote)
@@ -54,6 +55,8 @@ export const createReactBridgeApp = createReactBridgeAppWithLoader(loadRemote)
 export { createReactBridgeNavigation }
 /** 子应用侧受控 memory data router（返回 { element, dispose }，element 直接作为工厂返回值） */
 export { createReactBridgeRouter }
+/** 本页面是否已发生过桥接契约挂载（子应用布局/标题策略用；独立打开恒 false） */
+export { hasBridgeMount }
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入） */
 export type { BridgeHostRouting }
 /** 宿主导航可取消预判 */

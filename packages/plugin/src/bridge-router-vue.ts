@@ -3,9 +3,10 @@
 // /vue 时不得被强制解析 vue-router。运行期所需的唯一值语义（cancelled 失败判定）以内联
 // 常量等价替代：NavigationFailureType.cancelled 在 vue-router 4.x/5.x 公开枚举均为 8
 // （本仓 4.6.4 与 5.3.1 实测一致）；bridge-router 测试以真实 vue-router 覆盖该分支。
+import type { App as VueApp } from 'vue'
 import type { BridgeChildRoute, BridgeHostNavigation, BridgeLocation, BridgeHostRouting, VueRouterLike } from './bridge-router-core'
 import { collapseConsecutiveReports, connectChildNavigation } from './bridge-router-sync'
-import { routingSyncError } from './bridge-errors'
+import { routingChannelNotProvidedError, routingSyncError } from './bridge-errors'
 
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；README §8.3） */
 export type { BridgeHostRouting }
@@ -132,5 +133,42 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: VueRou
   }
   options.signal?.addEventListener('abort', connection.dispose, { once: true })
   if (options.signal?.aborted) connection.dispose()
+  return connection
+}
+
+/**
+ * 子应用路由接线一次完成：校验宿主通道（缺失 → MFU-034）→ connectVueBridgeRouter →
+ * await ready → app.use(router)。URL 同步的固定顺序（初始位置落定后才能 install，否则
+ * install 触发的初始导航会覆盖深链位置）由本函数承担，调用方无需知道顺序合同。
+ *
+ * 典型用法（桥接工厂内）：
+ * ```ts
+ * export default defineBridgeApp(async (props, ctx) => {
+ *   const router = createRouter({ history: createMemoryHistory(), routes })
+ *   setupRouterGuard(router)                      // 业务守卫需在接线前就位（初始导航要经过它）
+ *   const app = createApp(App, props)
+ *   await installVueBridgeRouter(app, router, ctx)
+ *   return app
+ * }, { routing: true })
+ * ```
+ *
+ * @param app   子应用 Vue App（未挂载；本函数只 install router，不 mount）
+ * @param router 子应用自己的 memory router（createMemoryHistory）
+ * @param ctx   桥接工厂第二参数（{ signal?, routing? }）；routing 缺失即 MFU-034——
+ *              双形态（桥接/独立同跑）的子应用不要用本函数，改用 connectVueBridgeRouter
+ *              手动接线并自行判断
+ * @returns 连接（dispose 随 signal 自动触发；需要内省时可用，多数调用方忽略）
+ */
+export async function installVueBridgeRouter(
+  app: VueApp,
+  router: VueRouterLike,
+  ctx?: { signal?: AbortSignal; routing?: BridgeChildRoute },
+): Promise<VueBridgeRouterConnection> {
+  if (!ctx?.routing) throw routingChannelNotProvidedError(ctx?.routing?.spec ?? 'vue-router')
+  const connection = connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })
+  await connection.ready
+  // VueRouterLike 是结构化最小面（不依赖 vue-router 类型路径）；vue-router 的 Router 实现
+  // vue 的 Plugin 接口，经 unknown 中转后 install（真实 Router 实例的 app.use 语义）
+  app.use(router as unknown as Parameters<VueApp['use']>[0])
   return connection
 }

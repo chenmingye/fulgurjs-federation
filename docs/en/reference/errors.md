@@ -1,6 +1,6 @@
 # Error code table
 
-> 48 error codes, grouped by segment: CFG (config time) / DEV (dev time) / BLD (build time) / MFU (runtime) / CC (cross-app context). Each entry gives the three-part **symptom / cause / fix**. The fix in the error message is concrete down to the config key / file / command; `fulgurjs doctor` can catch deployment-side MFU-001-class problems before release.
+> 49 error codes, grouped by segment: CFG (config time) / DEV (dev time) / BLD (build time) / MFU (runtime) / CC (cross-app context). Each entry gives the three-part **symptom / cause / fix**. The fix in the error message is concrete down to the config key / file / command; `fulgurjs doctor` can catch deployment-side MFU-001-class problems before release.
 >
 > Maintenance note: adding or changing an error code requires a three-place sync — the source code tables (the MFU segment in `src/runtime/errors.ts` / the CC segment in `src/context.ts`) + the registry `CODE_REGISTRY` (`src/diagnostics.ts`) + this table; `scripts/check-manual-codes.mjs` inside `npm run build` verifies the three-way consistency (see [maintainers · testing (Chinese)](../../maintainers/testing.md)).
 
@@ -77,6 +77,7 @@
 | `MFU-031` | Bridge reports a missing route protocol / dead channel | The host enabled routing but the child app did not declare `{ routing: true }`; or the channel was reused/re-subscribed after destruction | Declare `{ routing: true }` in the child app contract's second parameter and wire from `ctx.routing`; never revive an old channel after a session switch/unmount |
 | `MFU-032` | Bridge reports an illegal navigation | The sub app navigates outside its own prefix (`../`, across prefixes), its target already contains the basePath (duplicated prefix — the host URL would stack into `/x/x/...`), an illegal `go` argument, or a request on a dead channel | The sub app only navigates logical paths inside its own basePath (without the basePath; the error message suggests the de-prefixed target); `go` takes legal integers; issue no navigation after the channel is invalidated |
 | `MFU-033` | Bridge reports route preparation/sync failure (with the target chain/cause; never silently falls back to memory) | Guard/loader/port execution errors rejected, or more than 5 consecutive internal replaces (a redirect loop) | Fix the child app guard/loader errors; hunt down the redirect loop (cyclic redirects in the sub app's route definitions) |
+| `MFU-034` | A child-app bridge contract throws "host provided no routing channel" | The contract declared URL sync (`{ routing: true }`) but the host bridge component passed no `routing` prop; thrown uniformly at the wiring entry of `installVueBridgeRouter`/`createReactBridgeRouter` | The host passes `routing = { basePath, navigation }` per the URL sync docs; if the sub app must also run without sync, check `ctx.routing` in the factory and wire manually with `connectVueBridgeRouter` |
 
 #### CC cross-app context
 

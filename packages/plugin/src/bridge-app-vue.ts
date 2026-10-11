@@ -15,6 +15,7 @@
  * 本文件零 React：/runtime 导入图隔离由 tests/runtime-entry-graph.test.ts 守护。
  */
 import type { App as VueApp } from 'vue'
+import { markBridgeMount } from './bridge-core'
 import type { BridgeApp } from './bridge-core'
 import type { BridgeChildRoute } from './bridge-router-core'
 
@@ -109,6 +110,8 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       if (appsByEl.has(el)) {
         throw new Error('同一容器 el 已挂载本桥接应用（容器已被占用）。同一容器未卸载前重复 mount 是契约违例——先 unmount 再 mount。')
       }
+      // 桥接形态信号：工厂调用前置位（装配期业务代码经 hasBridgeMount() 可见）
+      markBridgeMount()
       // 浅拷贝顶层字段（挂载时快照；嵌套对象/函数保留原引用，任务书 §4.2）
       const snapshot = { ...(props ?? {}) }
       const ctx: VueBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }

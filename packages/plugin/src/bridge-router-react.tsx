@@ -13,6 +13,7 @@ import { createElement, useEffect, useState, type ReactElement } from 'react'
 import type { RouterProvider, createMemoryRouter, RouteObject } from 'react-router-dom'
 import { sameLocation, type BridgeChildRoute, type BridgeHostNavigation, type BridgeLocation, type BridgeHostRouting } from './bridge-router-core'
 import { collapseConsecutiveReports, connectChildNavigation } from './bridge-router-sync'
+import { routingChannelNotProvidedError } from './bridge-errors'
 
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入；见 API 手册 url-sync） */
 export type { BridgeHostRouting }
@@ -246,6 +247,8 @@ function LazyRouterProviderHost(props: {
 
 /** 返回 RouterProvider 元素，直接作为 defineBridgeApp 工厂的 ReactElement 返回值。 */
 export function createReactBridgeRouter(routing: BridgeChildRoute, routes: RouteObject[], options: { signal?: AbortSignal } = {}): ReactBridgeRouterConnection {
+  // 宿主未提供路由通道：统一 MFU-034（此前各项目在工厂里手写各式 if (!ctx?.routing) throw）
+  if (!routing) throw routingChannelNotProvidedError('react-router')
   let disposed = false
   let wired: WiredRouter | null = null
   const dispose = () => {

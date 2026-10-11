@@ -37,13 +37,16 @@ import { loadRemote } from './runtime/index'
 import { createRemoteComponent, createHostPages as createHostPagesWithLoader } from './vue-adapter'
 import { defineBridgeApp as defineVueBridgeApp } from './bridge-app-vue'
 import { createVueBridgeAppWithLoader } from './bridge-host-vue'
-import { createVueBridgeNavigation, connectVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
+import { createVueBridgeNavigation, connectVueBridgeRouter, installVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
+import { createBridgeSession, type BridgeSession } from './bridge-session'
+import { hasBridgeMount } from './bridge-core'
 import type { BridgeHostRouting } from './bridge-router-core'
 
 export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage, FgRemoteVueComponent } from './vue-adapter'
 export type { BridgeApp, VueBridgeAppFactory } from './bridge-app-vue'
 export type { VueBridgeAppOptions, FgVueBridgeWrapper } from './bridge-host-vue'
 export type { VueBridgeRouterConnection, BridgeHostRouting }
+export type { BridgeSession }
 
 export const remoteComponent = createRemoteComponent(loadRemote)
 /** 宿主页面适配器（绑定本包运行时的 loadRemote；选项与返回值类型见 vue-adapter） */
@@ -58,6 +61,15 @@ export const createVueBridgeApp = createVueBridgeAppWithLoader(loadRemote)
 export { createVueBridgeNavigation }
 /** 子应用侧 memory router 接线（await connection.ready 后再 app.use(router)） */
 export { connectVueBridgeRouter }
+/**
+ * 子应用路由接线一次完成（校验宿主通道 MFU-034 → connect → await ready → app.use(router)）：
+ * URL 同步的顺序合同由插件承担。双形态（桥接/独立同跑）子应用不用本函数。
+ */
+export { installVueBridgeRouter }
+/** 宿主会话代次管理器（sessionKey 生成/持久化/renew/clear；绑定桥接组件 :session-key） */
+export { createBridgeSession }
+/** 本页面是否已发生过桥接契约挂载（子应用布局/标题策略用；独立打开恒 false） */
+export { hasBridgeMount }
 
 import type { RemoteSchemaEntry } from './pages'
 export type RemoteSchema = Record<string, RemoteSchemaEntry>
