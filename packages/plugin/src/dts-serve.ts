@@ -11,7 +11,18 @@
  * 失败经 WARN 输出一次（按错误签名去重），manifest 不带 types——绝不标记成功。
  */
 import type { NormalizedOptions } from './options'
+import path from 'node:path'
 import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
+
+/** 类型输出不是输入：避免临时配置和宿主同步声明触发自循环生成。 */
+export function isTypesInputChange(root: string, id: string, outputDir: string): boolean {
+  const relative = path.relative(root, id)
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return false
+  if (relative.split(path.sep).some(part => part === 'node_modules' || part === '.vite')) return false
+  if (path.basename(id).startsWith('.fulgurjs-types-tsconfig-')) return false
+  const outputRelative = path.relative(outputDir, id)
+  return outputRelative.startsWith(`..${path.sep}`) || path.isAbsolute(outputRelative)
+}
 
 export interface ServedTypesFile {
   body: string

@@ -23,7 +23,6 @@ import {
 import {
   getFacadeEntry,
   isTransformableId,
-  isPluginProcessedModule,
   transformModule,
   serializeShareCallForFacade,
   isExposeTargetFile,
@@ -53,7 +52,7 @@ import {
   REACT_REFRESH_SHIM_URL,
   type ManifestExposeEntry,
 } from './virtual'
-import { createDevTypesServer, type DevTypesServer } from './dts-serve'
+import { createDevTypesServer, isTypesInputChange, type DevTypesServer } from './dts-serve'
 import { startRemoteTypesSyncLoop, removeGeneratedTypes } from './dts-sync'
 import { generateTypesBundle } from './dts-generate'
 import { probeRemotesAndBuildSchema, genEmptyRemoteSchemaModule, genRemoteSchemaModule } from './remote-schema'
@@ -368,7 +367,7 @@ export function federation(options: FederationOptions): Plugin[] {
       // dev remote：向依赖预构建注入 shared 键外部化 resolver——CJS/UMD-only 依赖（element-plus、
       // dayjs 等 CJS/UMD 依赖）得以正常预构建（esbuild 的 CJS interop 正确保留 default 静态方法），
       // 而其内部对 shared 键（vue 等）的导入在运行时协商到联邦实例，不内联本地副本形成双运行时。
-      // 作用面与改写管线的 devSharedSelf 一致：纯 remote 默认开启，双向宿主显式 devSharedSelf 才开。
+      // 作用面与改写管线的 devSharedSelf 一致：提供 exposes 的应用默认开启，纯消费方默认关闭。
       if (env.command === 'serve' && normalized.exposes.length > 0 && normalized.devSharedSelf) {
         const aliasToShare = new Map<string, (typeof normalized.shared)[number]>()
         for (const s of normalized.shared) {
@@ -687,6 +686,16 @@ export function federation(options: FederationOptions): Plugin[] {
     },
 
     configResolved(resolved) {
+      // 后置自动导入插件可能排在 federation() 后面。共享改写必须读取它们的最终
+      // 导入，又必须早于 Vite import-analysis（否则浏览器已绑定本地运行时）。
+      const orderedPlugins = resolved.plugins as Plugin[]
+      const postIndex = orderedPlugins.indexOf(post)
+      if (postIndex >= 0) {
+        orderedPlugins.splice(postIndex, 1)
+        const analysisIndex = orderedPlugins.findIndex((plugin) => plugin.name === 'vite:import-analysis')
+        if (analysisIndex >= 0) orderedPlugins.splice(analysisIndex, 0, post)
+        else orderedPlugins.push(post)
+      }
       state.base = normalizeBase(resolved.base)
       if ((resolved as unknown as { build?: { ssr?: boolean } }).build?.ssr) {
         console.warn('[fulgurjs] 当前版本不支持 SSR 构建；联邦插件钩子已停用。请使用客户端构建。')
@@ -1428,9 +1437,11 @@ export function federation(options: FederationOptions): Plugin[] {
         typesServer = createDevTypesServer(n)
         // 源码变化 → 防抖重生成声明 bundle（revision 变化经 manifest 轮询传导到宿主）
         let regenTimer: ReturnType<typeof setTimeout> | null = null
+        const syncedTypesDir = typeof n.dts === 'object' && n.dts.dir
+          ? path.resolve(n.root, n.dts.dir)
+          : path.join(n.root, fs.existsSync(path.join(n.root, 'src')) ? 'src/fulgurjs/types' : '.fulgurjs/types')
         const scheduleRegen = (id: string): void => {
-          if (!id.startsWith(n.root + path.sep)) return
-          if (id.includes(`${path.sep}node_modules${path.sep}`) || id.includes(`${path.sep}.vite${path.sep}`)) return
+          if (!isTypesInputChange(n.root, id, syncedTypesDir)) return
           if (regenTimer) clearTimeout(regenTimer)
           regenTimer = setTimeout(() => {
             regenTimer = null
@@ -1440,7 +1451,13 @@ export function federation(options: FederationOptions): Plugin[] {
         server.watcher?.on('change', scheduleRegen)
         server.watcher?.on('unlink', scheduleRegen)
         server.watcher?.on('add', scheduleRegen)
-        server.httpServer?.once('close', () => typesServer?.dispose())
+        server.httpServer?.once('close', () => {
+          if (regenTimer) clearTimeout(regenTimer)
+          server.watcher?.off('change', scheduleRegen)
+          server.watcher?.off('unlink', scheduleRegen)
+          server.watcher?.off('add', scheduleRegen)
+          typesServer?.dispose()
+        })
       }
       if (n.exposes.length > 0) {
         const baseNorm = state.base
@@ -1580,16 +1597,8 @@ export function federation(options: FederationOptions): Plugin[] {
       ) {
         return { code: code.split('virtual:fulgurjs-runtime').join('virtual:fulgurjs-runtime-proxy'), map: null }
       }
-      // pre 阶段已改写过的模块（代理化远程页 / 构建入口 init 注入 / 已改写模块）不再处理，
-      // 防双重生成。按插件生成物特征精确判定，不能按「含 virtual:fulgurjs-runtime 字样」
-      // 一刀切——用户源码本可合法直接导入该虚拟模块（README §2 标准用法），同文件再写
-      // 远程动态导入属正常混用，一刀切会让远程导入漏改写（vite:import-analysis 500）。
-      // D6（2026-09-23）：build 下此守卫撤到 D6 兜底之后仅对 serve 生效——auto-import 类
-      // 后置插件会在 pre 之后向「pre 已处理过」的文件（尤其 .vue script 子请求）注入
-      // shared 导入，全量跳过会让这些注入绕过门面化（双响应性系统，lowcode 实测：
-      // 产物 201 个 chunk 直接引用本地 vue 碎片）。transformModule 幂等（已门面化的导入
-      // 不再匹配、helper 不重复 prepend），build 下重复跑安全；serve 语义不同保持原守卫。
-      if (state.command === 'serve' && isPluginProcessedModule(code)) return entryRewrite === null ? null : { code, map: null }
+      // 不因 pre 已改写而跳过：后置插件仍可新增 shared 导入。
+      // transformModule 的门面匹配与助手生成是幂等的，dev/build 均补跑最终导入。
       // dev：所有 JS/TS/Vue 模块统一在此改写；build：.vue 主请求 + D6 兜底（见下）
       if (/type=(style|template)/.test(id)) return entryRewrite === null ? null : { code, map: null } // 样式与模板子请求不走这里
       const isJsLike = /\.(m|c)?[jt]sx?$/.test(clean) || clean.endsWith('.vue')
@@ -1605,7 +1614,7 @@ export function federation(options: FederationOptions): Plugin[] {
         return entryRewrite === null ? null : { code, map: null }
       }
       // D6（2026-09-23）：build 下的 post 兜底见 buildFallbackTransform（与 fulgurjs:post-last
-      // 共用的共享函数）——auto-import 类后置插件在 pre 之后注入的 shared 导入在此兜底门面化。
+      // 共享函数）——auto-import 类后置插件在 pre 之后注入的 shared 导入在此兜底门面化。
       if (state.command === 'build') {
         return buildFallbackTransform(code, id)
       }

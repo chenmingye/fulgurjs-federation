@@ -161,6 +161,7 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 
 - Plain modules, Vue/React component props and bridge `appProps` all come from the remote's real declarations (produced by the official vue-tsc/TypeScript toolchain, not loose placeholders);
 - Hosts need no hand-written tsconfig `paths`, no remote source and no symlinks; cross-machine development works the same;
+- Provider source changes update declarations automatically. Temporary compiler configs and downloaded declarations do not trigger generation again. Temporary configs are removed when generation finishes or is aborted; do not add them to the project or maintain them manually;
 - A remote without type resources (older version / `dts: false`): pages run normally and entries follow the dynamic boundary (`unknown`); run `npx @fulgurjs/federation types` in CI for strict checks (see the [CLI reference](../reference/cli.md#fulgurjs-types));
 - `dts: false` disables everything (no generation, no download); details and known limits in the [API reference · remote types](../reference/api.md#remote-types-generation-and-sync).
 

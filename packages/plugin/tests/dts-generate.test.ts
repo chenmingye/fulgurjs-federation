@@ -207,6 +207,24 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toContain('MissingName')
   }, 30000)
 
+  it('同进程并发 Vue 声明生成各自使用独立配置且清理不互相干扰', async () => {
+    const root = makeProject('vue-concurrent', {
+      'src/anchor.ts': 'export {}',
+      'src/first.vue': '<script setup lang="ts">defineProps<{ first: string }>();</script><template />',
+      'src/second.vue': '<script setup lang="ts">defineProps<{ second: number }>();</script><template />',
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const results = await Promise.all(['first', 'second'].map(name => generateTypesBundle({
+      root, exposes: [{ name: `./${name}`, import: `./src/${name}.vue` }], pluginVersion: 'test',
+    })))
+    results.forEach((result, i) => {
+      expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+      if (result.ok) expect([...result.files.values()].join('\n')).toContain(i === 0 ? 'first: string' : 'second: number')
+    })
+    expect(fs.readdirSync(root).filter(name => name.startsWith('.fulgurjs-types-tsconfig-'))).toEqual([])
+    expect(fs.readdirSync(path.join(root, 'node_modules')).filter(name => name.startsWith('.fulgurjs-types-emit-'))).toEqual([])
+  }, 30000)
+
   it('入口源文件不存在 → 明确诊断', async () => {
     const r = await generateTypesBundle({ root, exposes: [{ name: './nope', import: './src/exposes/nope.ts' }], pluginVersion: 'test' })
     expect(r.ok).toBe(false)

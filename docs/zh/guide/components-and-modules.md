@@ -161,6 +161,7 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 
 - 普通模块、Vue/React 组件 props、桥接 `appProps` 都来自远程真实声明（vue-tsc/TypeScript 官方工具链产出，非宽松占位）；
 - 宿主不需要手工 tsconfig `paths`，也不需要远程源码或软链接；跨机器联调同样工作；
+- 提供方源码修改后会自动更新声明；生成器的临时配置和宿主下载的声明不会反过来触发生成。临时配置在本次生成结束或中止后自动清理，无需加入项目或手工维护；
 - 远程未提供类型（旧版本/`dts: false`）：页面正常运行，入口按动态边界放行（`unknown`）；严格类型检查在 CI 运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](../reference/cli.md#fulgurjs-types)）；
 - `dts: false` 完全关闭（不生成、不下载）；细节与已知限制见 [API 参考 · 远程类型](../reference/api.md#远程类型自动生成与同步)。
 

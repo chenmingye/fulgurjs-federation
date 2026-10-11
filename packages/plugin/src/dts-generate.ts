@@ -428,7 +428,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       return { ok: false, diagnostics: [`vue-tsc 入口不存在（${binPath}）。请重新安装 vue-tsc。`] }
     }
     // 临时 tsconfig 写在提供方根（include 相对路径语义正确；用完即删）
-    const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${process.pid}.json`)
+    // 同一进程内重启/重建可与上一轮取消后的清理重叠，PID不能作为唯一文件名。
+    // 每次生成拥有独立配置，避免旧任务finally删除新任务仍在读取的配置。
+    const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${process.pid}-${crypto.randomUUID()}.json`)
     const outDir = fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
     const baseCo: Record<string, unknown> = { ...rawOptionsWithInherited(ctx) }
     delete baseCo.noEmit
