@@ -1,5 +1,13 @@
 # 当前发布说明
 
+## 6.6.3
+
+- 五模板升钉 6.6.2（registry 实际解析重建锁文件；逐模板干净副本冻结安装 5/5、全部 12 个子应用构建通过；showcase 干净副本 dev+生产浏览器交互复验：双宿主深链/push/replace/go(-1)，mount 恒 1）；包内模板资产同步（fulgurjs create 模板唯一来源）。运行时与 6.6.2 零差异。
+
+## 6.6.2
+
+- 修复 dev 门面缺陷：`virtual:fulgurjs-api-facade-vue`（开发态 expose 目标的内部代理门面，由消费方插件生成）同样漏掉 6.6.0 的新导出——dev 下子应用 import `installVueBridgeRouter` 等新 API 报 MFU-001（构建产物正常，仅 dev 受影响；showcase 干净副本实测发现）。dev 门面补齐新导出；新增 `./internal/bridge-session.js` 内部导出路径；api-facade-bindings 测试继续守护绑定真实性。
+
 ## 6.6.1
 
 - 修复 6.6.0 的入口门面缺陷：`scripts/gen-runtime-entry.mjs` 手维护的再导出清单漏掉新增导出（`installVueBridgeRouter` / `createBridgeSession` / `hasBridgeMount`），导致 6.6.0 的 `/vue`、`/react` 运行时门面中这些 API 为 `undefined`（类型声明齐全，仅运行时缺失）。`bridge-session` 纳入 tsup 多入口构建，门面重新生成；新增「dist 门面真实 import ↔ d.ts 值导出面」一致性测试（client-types），门面漂移在 CI 即失败。
