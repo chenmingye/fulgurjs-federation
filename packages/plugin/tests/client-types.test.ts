@@ -97,6 +97,17 @@ describe('/react 物理入口类型', () => {
     expect(pkg.peerDependenciesMeta.react?.optional).toBe(true)
     expect(pkg.peerDependenciesMeta['react-dom']?.optional).toBe(true)
   })
+
+  it('运行时导出面与 d.ts 声明一致（dist/react.js 真实 import，防门面生成器漏导出）', async () => {
+    const text = readFileSync(join(PKG, 'dist/react.d.ts'), 'utf8')
+    const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
+    const valueNames = exports.split(',').map((s) => s.trim()).filter((s) => s && !s.startsWith('type '))
+      .map((s) => s.split(/\s+as\s+/).pop()!.trim())
+    expect(valueNames.length).toBeGreaterThan(20)
+    const mod = await import('../dist/react.js')
+    const missing = valueNames.filter((n) => (mod as Record<string, unknown>)[n] === undefined)
+    expect(missing, `dist/react.js 门面缺少 d.ts 声明的导出（gen-runtime-entry.mjs 需同步）：${missing.join(', ')}`).toEqual([])
+  })
 })
 
 describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
@@ -143,6 +154,20 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
     expect(pkg.exports['./internal/bridge-router-vue.js'].import).toBe('./dist/bridge-router-vue.js')
     expect(pkg.exports['./internal/bridge-router-react.js'].import).toBe('./dist/bridge-router-react.js')
     expect(pkg.typesVersions['*'].vue).toEqual(['dist/vue.d.ts'])
+  })
+
+  it('运行时导出面与 d.ts 声明一致（dist/vue.js 真实 import，防门面生成器漏导出）', async () => {
+    // dist/vue.js 由 scripts/gen-runtime-entry.mjs 手维护再生成——d.ts 走 tsup 源码直出，
+    // 两条链路曾漂移（6.6.0 门面缺新 API 而 d.ts 齐全）。本用例按 d.ts 的值导出名单
+    // 真实 import 门面逐一断言非 undefined，漂移在本地/CI 即失败。
+    const text = readFileSync(join(PKG, 'dist/vue.d.ts'), 'utf8')
+    const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
+    const valueNames = exports.split(',').map((s) => s.trim()).filter((s) => s && !s.startsWith('type '))
+      .map((s) => s.split(/\s+as\s+/).pop()!.trim())
+    expect(valueNames.length).toBeGreaterThan(20)
+    const mod = await import('../dist/vue.js')
+    const missing = valueNames.filter((n) => (mod as Record<string, unknown>)[n] === undefined)
+    expect(missing, `dist/vue.js 门面缺少 d.ts 声明的导出（gen-runtime-entry.mjs 需同步）：${missing.join(', ')}`).toEqual([])
   })
 })
 
