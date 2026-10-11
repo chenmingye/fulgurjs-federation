@@ -2,11 +2,11 @@
  * examples/templates/showcase/react-remote/src/bridge.tsx — React 子应用桥接契约（exposes './bridge'）。
  * defineBridgeApp(factory, { routing: true }) 声明路由协议（缺失时宿主启用同步即 MFU-031 占位）。
  * 受控路由 = createReactBridgeRouter（memory data router）：工厂返回 RouterProvider 元素；
- * 根路径 / 经 loader redirect 规范化到 /orders，由插件以 replace 同步宿主（无新增历史条目）。
+ * 宿主未提供路由通道时由插件统一抛 MFU-034（工厂无需手写守卫）；根路径 / 经 loader
+ * redirect 规范化到 /orders，由插件以 replace 同步宿主（无新增历史条目）。
  */
 import { redirect } from 'react-router-dom'
-import { defineBridgeApp } from '@fulgurjs/federation/react'
-import { createReactBridgeRouter } from '@fulgurjs/federation/react'
+import { defineBridgeApp, createReactBridgeRouter } from '@fulgurjs/federation/react'
 import ChildLayout from './ChildLayout'
 import OrderList from './pages/OrderList'
 import OrderDetail from './pages/OrderDetail'
@@ -33,12 +33,9 @@ const routes = [
 ]
 
 export default defineBridgeApp((props, ctx) => {
-  if (!ctx?.routing) {
-    throw new Error('本契约需要宿主启用 URL 同步（mount 第三参数 routing）')
-  }
   bindReporter(props)
-  const init = ctx.routing.getLocation()
-  const conn = createReactBridgeRouter(ctx.routing, routes, { signal: ctx.signal })
+  const init = ctx!.routing!.getLocation()
+  const conn = createReactBridgeRouter(ctx!.routing!, routes, { signal: ctx!.signal })
   // 冷加载（模块级预热未落定的慢路径）时 element 是 LazyRouterProviderHost 包装、无 router
   // prop——同步读 props.router 会静默跳过初始位置上报。routerReady 是就绪合同：fast 路径
   // 同步已 resolve、slow 路径在惰性接线完成时 resolve，两条路径行为一致。

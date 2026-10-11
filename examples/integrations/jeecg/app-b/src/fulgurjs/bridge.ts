@@ -2,8 +2,8 @@
  * Jeecg-B 桥接契约（./bridge expose 的默认导出）。
  *
  * 复用 JeecgBoot 官方 bootstrap 的装配序列（src/main.ts），差异点：
- * - 路由用 createMemoryHistory（受控 memory 路由），经 connectVueBridgeRouter
- *   接入宿主导航端口；await ready 落定后再 app.use(router)（5.4.0 协议要求）。
+ * - 路由用 createMemoryHistory（受控 memory 路由），经 installVueBridgeRouter 接入
+ *   宿主导航端口（connect → ready → install 顺序由插件承担）。
  * - 独立 Pinia 实例（createAppStore）+ setActivePinia，保证与宿主实例状态隔离。
  * - token/用户由宿主 appProps 传入（props.ts 中转），权限守卫照常工作（mock 数据层）。
  * - 挂载由桥接契约负责（本工厂只装配返回 VueApp）；unmount 清理参照官方
@@ -13,7 +13,7 @@ import { createApp } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import { setActivePinia } from 'pinia'
 import { defineBridgeApp } from '@fulgurjs/federation/vue'
-import { connectVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { installVueBridgeRouter } from '@fulgurjs/federation/vue'
 
 import 'uno.css'
 import '/@/design/index.less'
@@ -51,11 +51,10 @@ export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routi
   const userStore = useUserStoreWithOut()
   userStore.setToken(String(props?.token ?? 'jeecg-bridge-demo-token'))
 
-  // 受控 memory 路由 + 宿主导航端口接线（初始 push 在 connect 时即开始，
-  // 因此守卫必须在 connect 之前注册，保证权限路由在初始导航中装配）
+  // 受控 memory 路由（守卫在接线前注册，保证权限路由在初始导航中装配；
+  // connect → ready → install 的顺序合同由 installVueBridgeRouter 承担）
   const router = createRouter({ history: createMemoryHistory('/') })
   setupRouterGuard(router)
-  const connection = connectVueBridgeRouter(routing, router, { signal })
 
   const app = createApp(App)
   app.use(store)
@@ -72,8 +71,7 @@ export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routi
   registerGlobComp(app)
   await registerSuper(app)
 
-  await connection.ready
-  app.use(router)
+  await installVueBridgeRouter(app, router, { signal, routing })
   await router.isReady()
 
   setupGlobDirectives(app)
