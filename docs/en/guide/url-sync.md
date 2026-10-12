@@ -64,11 +64,11 @@ const RemoteApp = createVueBridgeApp('react-remote/bridge', { /* factory options
 `createReactBridgeNavigation(router, { basename, canNavigate })` supports only the **data router** (`createBrowserRouter` / `createHashRouter` + `RouterProvider`); declarative mode (`BrowserRouter`) has no cancellation semantics and is not supported. React Router requires ≥ 6.11 (`createMemoryRouter`).
 
 ```tsx
-// main.tsx
+// router.tsx
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { ApprovalBridgePage } from './ApprovalBridgePage'
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   { path: '/approval/*', element: <ApprovalBridgePage /> },
 ])
@@ -80,12 +80,12 @@ export function App() {
 
 ```tsx
 // ApprovalBridgePage.tsx
-import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { router } from './router'
 import { createReactBridgeApp, createReactBridgeNavigation } from '@fulgurjs/federation/react'
 
 export function ApprovalBridgePage() {
-  const navigate = useNavigate()
-  const navigation = createReactBridgeNavigation(navigate, { basename: '/' })
+  const navigation = useMemo(() => createReactBridgeNavigation(router, { basename: '/' }), [])
   const routing = { basePath: '/approval', navigation }
   const RemoteApp = createReactBridgeApp('vue-remote/bridge', { /* factory options as in the bridge guide */ })
   return <RemoteApp sessionKey={sess} routing={routing} appProps={props} />

@@ -111,6 +111,25 @@ describe('remoteComponent（@fulgurjs/federation/vue）', () => {
     expect(el.querySelector('remote-section')).toBeNull()
   })
 
+  it('保留零参数静态函数组件的身份与库标记，不作为 loader 执行', async () => {
+    const { createRemoteComponent } = await import('../src/vue-adapter')
+    const Option = Object.assign(() => null, { displayName: 'ASelectOption', isSelectOption: true })
+    let consumer: any
+    const load = async (_spec: string, opts?: any) => {
+      consumer = opts.consumerApp
+      consumer.component('ASelectOption', Option)
+      return { default: { template: '<div>静态组件注册完成</div>' } }
+    }
+    const el = document.createElement('div')
+    const app = createApp({ render: () => h(createRemoteComponent(load)('options/form')) })
+    app.mount(el)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await nextTick()
+    expect(app.component('ASelectOption')).toBe(Option)
+    expect((app.component('ASelectOption') as any).isSelectOption).toBe(true)
+    app.unmount()
+  })
+
   it('V-10 globalComponents 零参 loader 形态：注册时包 defineAsyncComponent，组件惰性加载（6.1.0 跨框架安全形态）', async () => {
     const rt = await import('../src/runtime/index')
     let loaderCalls = 0

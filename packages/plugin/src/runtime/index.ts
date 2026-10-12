@@ -136,7 +136,7 @@ export interface RemoteSetupModule {
    * 当次传入的 consumerApp 上；无 consumerApp（无组件上下文的手动加载）时静默跳过。
    * 值推荐「零参 loader（() => import('./X.vue')）」：setup 模块保持零重依赖，
    * 组件只在本框架消费方真实渲染时才加载——Vue 适配器注册时自动包 defineAsyncComponent；
-   * 静态组件值仍支持（同框架消费场景一步到位）。运行时对值原样透传，不做形状校验。
+   * 静态组件值仍支持；函数有 displayName/props/emits 时保留组件身份，未标记零参函数按 loader 处理。运行时对值原样透传。
    */
   globalComponents?: Record<string, unknown>
   /**
@@ -146,7 +146,7 @@ export interface RemoteSetupModule {
    * 消费方 remoteComponent/createHostPages 渲染本远程的任意组件时自动包裹，暴露页
    * 组件自身保持纯业务（不再每页手写 Provider 包装与异步装配）。
    * 项 = 组件对象（选项组件）或零参 loader（() => import(...).then(m => m.AppProvider)；
-   * 与 globalComponents 的零参 loader 判定同口径：length === 0 的函数按 loader 处理）。
+   * 与 globalComponents 的零参 loader 判定同口径：无组件元数据的零参函数按 loader 处理）。
    * 运行时只校验数组形态与项类型（函数/对象），逐项解析由消费方框架适配器完成；
    * 手动 loadRemote / useLoadRemote（返回模块、用户自行渲染）不自动应用。
    */

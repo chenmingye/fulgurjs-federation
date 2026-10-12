@@ -64,11 +64,11 @@ const RemoteApp = createVueBridgeApp('react-remote/bridge', { /* 工厂选项同
 `createReactBridgeNavigation(router, { basename, canNavigate })` 只支持 **data router**（`createBrowserRouter` / `createHashRouter` + `RouterProvider`）；declarative 模式（`BrowserRouter`）无取消语义，不支持。React Router 要求 ≥ 6.11（`createMemoryRouter`）。
 
 ```tsx
-// main.tsx
+// router.tsx
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { ApprovalBridgePage } from './ApprovalBridgePage'
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   { path: '/approval/*', element: <ApprovalBridgePage /> },
 ])
@@ -80,14 +80,15 @@ export function App() {
 
 ```tsx
 // ApprovalBridgePage.tsx
-import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { router } from './router'
 import { createReactBridgeApp, createReactBridgeNavigation } from '@fulgurjs/federation/react'
 
+const RemoteApp = createReactBridgeApp('vue-remote/bridge')
+
 export function ApprovalBridgePage() {
-  const navigate = useNavigate()
-  const navigation = createReactBridgeNavigation(navigate, { basename: '/' })
+  const navigation = useMemo(() => createReactBridgeNavigation(router, { basename: '/' }), [])
   const routing = { basePath: '/approval', navigation }
-  const RemoteApp = createReactBridgeApp('vue-remote/bridge', { /* 工厂选项同桥接篇 */ })
   return <RemoteApp sessionKey={sess} routing={routing} appProps={props} />
 }
 ```

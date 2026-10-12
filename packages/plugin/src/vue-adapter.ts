@@ -144,7 +144,7 @@ function createRecoverableErrorPlaceholder(
 function consumerRegistry(app: App | undefined, captured?: { providers?: unknown[] }) {
   return app ? {
     component(name: string, comp: unknown) {
-      const wrapped = typeof comp === 'function' && comp.length === 0
+      const wrapped = isComponentLoader(comp)
         ? defineAsyncComponent(async () => {
             const mod = await (comp as () => Promise<any>)()
             return mod?.default ?? mod
@@ -164,7 +164,7 @@ function consumerRegistry(app: App | undefined, captured?: { providers?: unknown
 // 会话重建三条路径都过该点）。loader 解析与缓存见 page-providers.ts（与 React 适配器
 // 共用）；本层只做 Vue 的包裹渲染。
 
-import { resolvePageProviderEntries } from './page-providers'
+import { isComponentLoader, resolvePageProviderEntries } from './page-providers'
 
 function resolvePageProviders(list: unknown[] | undefined): Promise<Component[] | undefined> {
   return resolvePageProviderEntries(list) as Promise<Component[] | undefined>

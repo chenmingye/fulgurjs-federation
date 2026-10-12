@@ -110,14 +110,16 @@ describe('resolvePageProviderEntries（解析层：loader / 项校验 / 缓存�
     const { resolvePageProviderEntries } = await import('../src/page-providers')
     const Comp = { name: 'AppProvider' }
     const FnComp = (props: unknown) => null
+    const ZeroArgComp = Object.assign(() => null, { displayName: 'StaticProvider' })
     const list = [
       () => Promise.resolve({ default: Comp }),
       () => Promise.resolve(Comp),
       Comp,
       FnComp,
+      ZeroArgComp,
     ]
     const resolved = await resolvePageProviderEntries(list as unknown[])
-    expect(resolved).toEqual([Comp, Comp, Comp, FnComp])
+    expect(resolved).toEqual([Comp, Comp, Comp, FnComp, ZeroArgComp])
   })
 
   it('loader 返回非组件 / 数组含 null：按项报错并指明位置', async () => {

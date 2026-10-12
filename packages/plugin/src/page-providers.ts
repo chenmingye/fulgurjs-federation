@@ -3,11 +3,19 @@
  *
  * 提供方 setup 声明 pageProviders（组件数组，每项=组件对象或零参 loader）后，运行时经
  * consumerApp 协议把声明数组原样交付消费方适配器；本模块负责逐项解析为零参 loader 已
- * await 的组件值。与 globalComponents 的零参判定同口径：length === 0 的函数 = loader，
+ * await 的组件值。与 globalComponents 的零参判定同口径：无组件元数据的零参函数 = loader，
  * 其余函数 = 函数式组件，对象 = 选项组件（Vue）/ memo·forwardRef 等（React）。
  *
  * 组件的「包裹渲染」是框架行为，分别在 vue-adapter / react-adapter 内实现。
  */
+
+/** 函数组件的显式元数据优先于零参数 loader 判定，保留静态组件身份。 */
+export function isComponentLoader(value: unknown): value is () => Promise<unknown> {
+  if (typeof value !== 'function' || value.length !== 0) return false
+  // Vue/React 函数组件可无参数；库常以 displayName/props/emits 标记组件。
+  // 无元数据的零参函数仍按公开合同作 loader；裸零参组件可用 defineComponent 包装。
+  return !('displayName' in value || 'props' in value || 'emits' in value)
+}
 
 /** 解析结果缓存：按声明数组引用（setup 生命周期持有的同一数组）——setup 失败重跑换新数组，缓存自然失效 */
 const resolvedCache = new WeakMap<unknown[], Promise<unknown[]>>()
@@ -19,7 +27,7 @@ export function resolvePageProviderEntries(list: unknown[] | undefined): Promise
     cached = Promise.all(list.map(async (entry, index) => {
       // 项校验在解析层完成（与 globalComponents 值透传的分工同口径）：
       // 零参函数 = loader（await 取组件），其余函数 = 函数式组件，对象 = 选项/memo 组件
-      if (typeof entry === 'function' && entry.length === 0) {
+      if (isComponentLoader(entry)) {
         const mod = await (entry as () => Promise<any>)()
         const comp = mod?.default ?? mod
         if (!comp || (typeof comp !== 'object' && typeof comp !== 'function')) {

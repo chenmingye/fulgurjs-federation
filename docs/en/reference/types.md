@@ -215,7 +215,7 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 |---|---|---|---|
 | `default` | no | `(ctx: RemoteSetupContext) => void \| Promise<void>` | See the owning API for lifecycle and runtime defaults. |
 | `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | See the owning API for lifecycle and runtime defaults. |
-| `globalComponents` | yes | `Record<string, unknown>` | See the owning API for lifecycle and runtime defaults. |
+| `globalComponents` | yes | `Record<string, unknown>` | Static components retain their identity. Zero-argument functions with displayName/props/emits metadata are components; unmarked zero-argument functions are lazy loaders. See the setup API for installation and retry semantics. |
 
 ## AppContext
 
