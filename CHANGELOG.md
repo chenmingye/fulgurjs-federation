@@ -3,6 +3,7 @@
 ## 6.7.0
 
 - **签名调整**：`hasBridgeMount(target)` 必须传当前 Vue app 或 Vue/React 桥接工厂上下文。删除页面级全局开关，避免任意子应用的挂载、失败或卸载影响宿主及其他应用。Vue 在 setup 中捕获 `getCurrentInstance()?.appContext.app`；工厂内使用 ctx。标记说明对象的运行形态，不表示容器当前是否挂载。
+- React Provider 等待纳入组件加载 timeout，避免远程模块已加载但 Provider 挂起时无限等待。
 - Provider loader 失败清除解析缓存，允许同页重试重新加载；成功仍复用，并发消费共享本次加载。补 React 祖先 Context/props 渲染、失败恢复和卸载重挂回归。
 - `/vue`、`/react` 分别公开导出 `VueBridgeAppContext`、`ReactBridgeAppContext`，无需使用 Parameters 推导工厂上下文类型。
 

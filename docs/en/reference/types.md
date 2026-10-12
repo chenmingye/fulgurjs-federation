@@ -376,6 +376,17 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/vue`.
 | `unmount` | no | `(el: HTMLElement) => void` | See the owning API for lifecycle and runtime defaults. |
 | `routing` | yes | `BridgeRoutingProtocol` | See the owning API for lifecycle and runtime defaults. |
 
+## VueBridgeAppContext
+
+Import from `@fulgurjs/federation/vue`. The plugin supplies this second factory argument; business props are separate.
+
+| Field | Optional | Type | Meaning |
+|---|---|---|---|
+| `signal` | yes | `AbortSignal` | Aborted when the session becomes invalid; check before asynchronous writes. |
+| `routing` | yes | `BridgeChildRoute` | Controlled route channel when the host enables URL synchronization; see the URL sync guide. |
+
+`hasBridgeMount(ctx)` queries this factory context's mode, without page-global state.
+
 ## VueBridgeAppFactory
 
 Factory creating an independent Vue application.
@@ -538,6 +549,17 @@ Import from: `@fulgurjs/federation/react`.
 | `pages` | no | `PageRouteLike[]` | See the owning API for lifecycle and runtime defaults. |
 | `resolve` | no | `(path: string) => ResolvedHostPage` | See the owning API for lifecycle and runtime defaults. |
 | `component` | no | `<P = Record<string, unknown>>(spec: string) => ComponentType<P>` | See the owning API for lifecycle and runtime defaults. |
+
+## ReactBridgeAppContext
+
+Import from `@fulgurjs/federation/react`. The plugin supplies this second factory argument; business props are separate.
+
+| Field | Optional | Type | Meaning |
+|---|---|---|---|
+| `signal` | yes | `AbortSignal` | Aborted when the session becomes invalid; check before asynchronous writes. |
+| `routing` | yes | `BridgeChildRoute` | Controlled route channel when the host enables URL synchronization; see the URL sync guide. |
+
+`hasBridgeMount(ctx)` queries this factory context's mode, without page-global state.
 
 ## ReactBridgeAppFactory
 

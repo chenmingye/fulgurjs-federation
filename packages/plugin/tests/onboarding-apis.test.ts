@@ -393,6 +393,22 @@ describe('createReactBridgeRouter：routing 缺失统一 MFU-034', () => {
 
 
 describe('React Provider 真实渲染和恢复', () => {
+  it('Provider 挂起也受加载 timeout 约束，卸载不产生迟到更新', async () => {
+    const React = await import('react')
+    const { render, waitFor } = await import('@testing-library/react')
+    const { createRemoteComponent } = await import('../src/react-adapter')
+    const providers = [() => new Promise(() => {})]
+    const load = async (_spec: string, opts?: { consumerApp?: { pageProviders?: (list: unknown[]) => void } }) => {
+      opts?.consumerApp?.pageProviders?.(providers)
+      return { default: () => React.createElement('span', null, 'must not render') }
+    }
+    const Remote = createRemoteComponent(load as never)('react-r/hanging', { timeout: 20 })
+    const view = render(React.createElement(Remote))
+    await waitFor(() => expect(view.container.textContent).toContain('超过 20 毫秒'))
+    expect(view.container.textContent).not.toContain('must not render')
+    view.unmount()
+  })
+
   it('并发两个 consumer、祖先 context、props、卸载重挂与 loader 失败重试', async () => {
     const React = await import('react')
     const { render, waitFor, fireEvent } = await import('@testing-library/react')

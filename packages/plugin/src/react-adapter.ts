@@ -254,15 +254,18 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
     const captured: { providers?: unknown[] } = {}
     const run = (async () => {
       await beforeLoad?.()
-      return loadRemote(spec, {
+      const ns = await loadRemote(spec, {
         retries: opts.retries,
         consumerApp: { pageProviders: (list: unknown[]) => { captured.providers = list } },
       })
+      // Provider 就绪同样属于本次加载，必须受 timeout/旧代次取消约束。
+      const providers = await resolvePageProviderEntries(captured.providers)
+      return { ns, providers }
     })()
     // 迟到失败吞掉（timeout 先到已终态时，run 的 rejection 若无 handler 会成为未处理拒绝）
     run.catch(() => {})
 
-    const race: Promise<unknown> = opts.timeout === undefined
+    const race = opts.timeout === undefined
       ? run
       : Promise.race([
           run,
@@ -276,19 +279,11 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
           }),
         ])
     race.then(
-      async (ns) => {
+      ({ ns, providers }) => {
         if (timer !== undefined) clearTimeout(timer)
         const inner = (ns as any)?.default ?? ns
         if (!isValidComponentType(inner)) {
           commit({ phase: 'error', error: noRenderableExportError(spec, inner) })
-          return
-        }
-        // 祖先 Provider 解析（loader 形态在此 await；失败按加载失败进入错误态）
-        let providers: unknown[] | undefined
-        try {
-          providers = await resolvePageProviderEntries(captured.providers)
-        } catch (e) {
-          commit({ phase: 'error', error: e })
           return
         }
         commit({ phase: 'ready', Comp: inner, providers })

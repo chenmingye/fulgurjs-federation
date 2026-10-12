@@ -362,6 +362,17 @@ Vue 页面解析和组件创建对象.
 | `unmount` | no | `(el: HTMLElement) => void` | 同步使当前挂载代次失效并清理已创建的 root；未知容器为 no-op |
 | `routing` | yes | `BridgeRoutingProtocol` | 路由协议声明（URL 同步）：defineBridgeApp(工厂, { routing: true }) 时写入 { protocol: 1 }。宿主启用 routing 时必须存在且 protocol === 1（MFU-031）， 不允许静默退回 memory 假装深链成功。 |
 
+## VueBridgeAppContext
+
+导入入口：`@fulgurjs/federation/vue`。桥接工厂第二参数，由插件提供；不包含业务 props。
+
+| 字段 | 可省略 | 类型 | 说明 |
+|---|---|---|---|
+| `signal` | yes | `AbortSignal` | 会话失效时取消；异步写回前检查 aborted。 |
+| `routing` | yes | `BridgeChildRoute` | 宿主开启 URL 同步时的受控路由通道，见 URL 同步指南。 |
+
+`hasBridgeMount(ctx)` 查询该工厂上下文的运行形态；不读取页面全局状态。
+
 ## VueBridgeAppFactory
 
 创建独立 Vue 应用的工厂.
@@ -524,6 +535,17 @@ React 页面解析和组件创建对象.
 | `pages` | no | `PageRouteLike[]` | 原页面记录 |
 | `resolve` | no | `(path: string) => ResolvedHostPage` | 路径 → 页面解析（base 前缀、最长前缀、参数解码、R1–R5 语义与 Vue 完全一致） |
 | `component` | no | `<P = Record<string, unknown>>(spec: string) => ComponentType<P>` | 按 spec 取页面组件（同 spec 同登录代次复用；新非空 sessionKey 到来时重建以触发 onSession） |
+
+## ReactBridgeAppContext
+
+导入入口：`@fulgurjs/federation/react`。桥接工厂第二参数，由插件提供；不包含业务 props。
+
+| 字段 | 可省略 | 类型 | 说明 |
+|---|---|---|---|
+| `signal` | yes | `AbortSignal` | 会话失效时取消；异步写回前检查 aborted。 |
+| `routing` | yes | `BridgeChildRoute` | 宿主开启 URL 同步时的受控路由通道，见 URL 同步指南。 |
+
+`hasBridgeMount(ctx)` 查询该工厂上下文的运行形态；不读取页面全局状态。
 
 ## ReactBridgeAppFactory
 
