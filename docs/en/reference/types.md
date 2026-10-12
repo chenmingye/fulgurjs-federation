@@ -404,8 +404,19 @@ Factory creating an independent Vue application.
 Import from: `@fulgurjs/federation/vue`.
 
 ```ts
-export type VueBridgeAppFactory = ( props: Record<string, unknown>, ctx?: VueBridgeAppContext, ) => VueApp | Promise<VueApp>
+export type VueBridgeAppFactory = ( props: Record<string, unknown>, ctx?: VueBridgeAppContext, ) => VueApp | VueBridgeAppSetup | Promise<VueApp | VueBridgeAppSetup>
 ```
+
+## VueBridgeAppSetup
+
+Import from `@fulgurjs/federation/vue`. A `defineBridgeApp` factory may return this object or a Promise of it. Declare `{ routing: true }`; the plugin syncs and installs the router before mounting.
+
+| Field | Optional | Type | Description |
+|---|---|---|---|
+| `app` | no | `VueApp` | Unmounted app with business plugins initialized. |
+| `router` | no | `VueRouterLike` | This app’s memory router, guards registered, not yet installed with app.use(router). |
+
+The connection is released on unmount, guard failure and mount failure. Do not reuse an already mounted app or connected router. Return an app directly when URL sync is not needed.
 
 ## VueBridgeAppOptions
 

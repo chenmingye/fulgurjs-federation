@@ -139,7 +139,7 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
-      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppContext', 'VueBridgeAppOptions',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppContext', 'VueBridgeAppSetup', 'VueBridgeAppOptions',
       'VueBridgeRouterConnection',
     ].sort())
     // 注册表三类型经包内共享子路径再导出（与 /runtime、/react 同一声明）

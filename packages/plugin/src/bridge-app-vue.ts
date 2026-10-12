@@ -1,8 +1,8 @@
 /**
  * Vue 子应用桥接适配（/runtime 导出 defineBridgeApp；任务书 §3.3 D1/D2）。
  *
- * 工厂形态：接收 props 快照，返回已装配完整的 VueApp（router/pinia 等由子应用自行装配）；
- * helper 负责 app.mount(el) / app.unmount() 与按容器 el 的实例跟踪。
+ * 工厂返回 VueApp，或已装配业务插件与守卫的 { app, router }；后者自动接线 memory
+ * router、等待初始导航再安装。helper 管理挂载/卸载及每容器每代次的路由释放。
  *
  * 契约语义（§3.2）：
  * - 契约实例按容器 el 分键（WeakMap）：同一契约多处挂载互不干扰；
@@ -17,7 +17,8 @@
 import type { App as VueApp } from 'vue'
 import { markBridgeMount } from './bridge-core'
 import type { BridgeApp } from './bridge-core'
-import type { BridgeChildRoute } from './bridge-router-core'
+import type { BridgeChildRoute, VueRouterLike } from './bridge-router-core'
+import { installVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
 
 export type { BridgeApp } from './bridge-core'
 
@@ -31,15 +32,19 @@ export interface VueBridgeAppContext {
 
 /**
  * Vue 子应用工厂：接收挂载时 props 快照与生命周期上下文，返回装配完成的 VueApp。
- * 允许返回 Promise<VueApp>（URL 同步子应用的初始 memory 路由准备是异步的——
- * 必须等初始 push 落定再 app.use(router)，否则 install 的初始导航会覆盖深链位置；
- * 见 /bridge/router/vue 的 connectVueBridgeRouter 与任务书 §1 原型结论 1）。
+ * 可异步返回；{ app, router } 形态由插件保证初始位置落定后才安装 router。
  * Promise 被作废（signal aborted / 容器已换代）时结果丢弃，不落挂。
  */
+/** 已装配业务插件与守卫的 app + 尚未 app.use 的 memory router；插件负责接线及释放。 */
+export interface VueBridgeAppSetup {
+  app: VueApp
+  router: VueRouterLike
+}
+
 export type VueBridgeAppFactory<P = Record<string, unknown>> = (
   props: P,
   ctx?: VueBridgeAppContext,
-) => VueApp | Promise<VueApp>
+) => VueApp | VueBridgeAppSetup | Promise<VueApp | VueBridgeAppSetup>
 
 /**
  * 桥接 props 的类型标记（phantom）：defineBridgeApp<P> 把工厂声明的 props 类型
@@ -58,15 +63,15 @@ export interface DefineVueBridgeAppOptions {
 }
 
 /** 按容器 el 的实例跟踪（同一契约对象被页面多处挂载时各实例互不干扰） */
-const appsByEl = new WeakMap<HTMLElement, VueApp>()
-
-/** 异步工厂挂起占位：占用容器（拒绝并发重复 mount）且可被 unmount 作废 */
-const PENDING_MARKER = { __fulgurjsPending: true }
-
-/** 容器挂起态被作废（unmount 已到/标记被清除） */
-function entriesAborted(el: HTMLElement): boolean {
-  return appsByEl.get(el) !== (PENDING_MARKER as unknown as VueApp)
+interface VueBridgeInstance {
+  app?: VueApp
+  mounted: boolean
+  controller: AbortController
+  connection?: VueBridgeRouterConnection
+  removeAbortListener(): void
 }
+// 每次挂载都有独立对象；不能用同一个 pending 标志，否则旧工厂可能覆盖新代次。
+const appsByEl = new WeakMap<HTMLElement, VueBridgeInstance>()
 
 /**
  * 定义 Vue 子应用的桥接契约（远程 ./bridge 模块默认导出）。
@@ -81,13 +86,14 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
   factory: VueBridgeAppFactory<P>,
   options: DefineVueBridgeAppOptions = {},
 ): BridgeApp & FgBridgePropsMarker<P> {
-  const attach = (el: HTMLElement, app: VueApp, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): void => {
+  const attach = (el: HTMLElement, app: VueApp, instance: VueBridgeInstance): void => {
     if (!app || typeof app.mount !== 'function' || typeof app.unmount !== 'function') {
       throw new Error(
         `defineBridgeApp 工厂返回值不是 VueApp（当前 ${app === null ? 'null' : typeof app}）；` +
           '工厂必须返回 createApp(...) 创建的应用实例。',
       )
     }
+    instance.app = app
     markBridgeMount(app)
     try {
       app.mount(el)
@@ -99,8 +105,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       }
       throw e
     }
-    appsByEl.set(el, app)
-    void mountOptions
+    instance.mounted = true
   }
   return {
     ...(options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
@@ -115,46 +120,74 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       const snapshot = { ...(props ?? {}) }
       const ctx: VueBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }
       markBridgeMount(ctx)
-      let app: VueApp | undefined
+      const controller = new AbortController()
+      const abort = () => controller.abort()
+      mountOptions?.signal?.addEventListener('abort', abort, { once: true })
+      if (mountOptions?.signal?.aborted) controller.abort()
+      const instance: VueBridgeInstance = {
+        mounted: false, controller,
+        removeAbortListener: () => mountOptions?.signal?.removeEventListener('abort', abort),
+      }
+      appsByEl.set(el, instance)
+      const active = () => appsByEl.get(el) === instance && !controller.signal.aborted
+      const fail = (error: unknown): void => {
+        instance.connection?.dispose()
+        instance.removeAbortListener()
+        controller.abort()
+        if (appsByEl.get(el) === instance) appsByEl.delete(el)
+        throw error
+      }
+      const prepare = async (result: VueApp | VueBridgeAppSetup): Promise<void> => {
+        if (!active()) return
+        try {
+          if (result && 'app' in result && 'router' in result) {
+            if (!options.routing) {
+              throw new Error('defineBridgeApp 返回 { app, router } 时必须声明 { routing: true }；router 应使用 createMemoryHistory()，不要提前 app.use(router)。')
+            }
+            markBridgeMount(result.app)
+            instance.connection = await installVueBridgeRouter(result.app, result.router, {
+              routing: ctx.routing, signal: controller.signal,
+            })
+            if (!active()) { instance.connection.dispose(); return }
+            attach(el, result.app, instance)
+          } else {
+            attach(el, result as VueApp, instance)
+          }
+        } catch (error) {
+          if (!active()) return
+          fail(error)
+        }
+      }
       try {
-        const produced = (factory as (props: Record<string, unknown>, ctx?: VueBridgeAppContext) => VueApp | Promise<VueApp>)(snapshot, ctx)
-        const thenable = (produced as { then?: unknown }).then
+        const produced = factory(snapshot as P, ctx)
+        const thenable = (produced as { then?: unknown } | null)?.then
         if (typeof thenable === 'function') {
           // 异步工厂：注册占位防并发重复 mount；作废后结果丢弃
-          appsByEl.set(el, PENDING_MARKER as unknown as VueApp)
-          return (produced as Promise<VueApp>).then(
-            (resolved: VueApp) => {
-              if (entriesAborted(el)) return
-              attach(el, resolved, mountOptions)
-            },
+          return Promise.resolve(produced).then(
+            (resolved) => prepare(resolved),
             (e: unknown) => {
-              if (entriesAborted(el)) return
-              appsByEl.delete(el)
-              throw e
+              if (!active()) return
+              fail(e)
             },
           )
         }
-        app = produced as VueApp
+        if (produced && 'app' in produced && 'router' in produced) return prepare(produced as VueBridgeAppSetup)
+        if (active()) attach(el, produced as VueApp, instance)
       } catch (e) {
         // 首次挂载失败：清理已创建的 app，不留半挂状态
-        if (app) {
-          try {
-            app.unmount()
-          } catch {
-            /* 清理失败以原始错误为准 */
-          }
-        }
-        throw e
+        fail(e)
       }
-      attach(el, app, mountOptions)
     },
     unmount(el: HTMLElement): void {
-      const app = appsByEl.get(el)
-      if (!app) return
+      const instance = appsByEl.get(el)
+      if (!instance) return
       appsByEl.delete(el)
-      if (app === (PENDING_MARKER as unknown as VueApp)) return // 异步工厂挂起中：仅作废，不触真实实例
+      instance.controller.abort()
+      instance.removeAbortListener()
+      instance.connection?.dispose()
+      if (!instance.mounted) return
       try {
-        app.unmount()
+        instance.app!.unmount()
       } catch (e) {
         throw e instanceof Error ? e : new Error(String(e))
       }

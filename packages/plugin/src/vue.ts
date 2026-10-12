@@ -43,7 +43,7 @@ import { hasBridgeMount } from './bridge-core'
 import type { BridgeHostRouting } from './bridge-router-core'
 
 export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage, FgRemoteVueComponent } from './vue-adapter'
-export type { BridgeApp, VueBridgeAppFactory, VueBridgeAppContext } from './bridge-app-vue'
+export type { BridgeApp, VueBridgeAppFactory, VueBridgeAppContext, VueBridgeAppSetup } from './bridge-app-vue'
 export type { VueBridgeAppOptions, FgVueBridgeWrapper } from './bridge-host-vue'
 export type { VueBridgeRouterConnection, BridgeHostRouting }
 export type { BridgeSession }
@@ -63,7 +63,7 @@ export { createVueBridgeNavigation }
 export { connectVueBridgeRouter }
 /**
  * 子应用路由接线一次完成（校验宿主通道 MFU-034 → connect → await ready → app.use(router)）：
- * URL 同步的顺序合同由插件承担。双形态（桥接/独立同跑）子应用不用本函数。
+ * 需要在初始路由就绪后继续装配时使用；一般工厂返回 { app, router } 自动接线。
  */
 export { installVueBridgeRouter }
 /** 宿主会话代次管理器（sessionKey 生成/持久化/renew/clear；绑定桥接组件 :session-key） */

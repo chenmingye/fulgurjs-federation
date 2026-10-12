@@ -390,8 +390,19 @@ Vue 页面解析和组件创建对象.
 导入入口：`@fulgurjs/federation/vue`.
 
 ```ts
-export type VueBridgeAppFactory = ( props: Record<string, unknown>, ctx?: VueBridgeAppContext, ) => VueApp | Promise<VueApp>
+export type VueBridgeAppFactory = ( props: Record<string, unknown>, ctx?: VueBridgeAppContext, ) => VueApp | VueBridgeAppSetup | Promise<VueApp | VueBridgeAppSetup>
 ```
+
+## VueBridgeAppSetup
+
+导入入口：`@fulgurjs/federation/vue`。`defineBridgeApp` 的工厂可返回此对象，也可返回 Promise。必须声明 `{ routing: true }`；插件自动同步和安装 router，再 mount。
+
+| 字段 | 可省略 | 类型 | 说明 |
+|---|---|---|---|
+| `app` | no | `VueApp` | 未挂载的 app；业务插件已装配。 |
+| `router` | no | `VueRouterLike` | 本应用的 memory router；守卫已注册、尚未 app.use(router)。 |
+
+卸载、守卫失败、挂载失败时释放连接。不要复用已挂载 app 或已接线 router。无需 URL 同步时直接返回 app。
 
 ## VueBridgeAppOptions
 

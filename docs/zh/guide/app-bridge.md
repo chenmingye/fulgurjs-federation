@@ -40,23 +40,25 @@ export default {
 
 ```ts
 // src/bridge.ts —— fulgurjs.config.ts: exposes: { './bridge': './src/bridge.ts' }
-import { createApp, h } from 'vue'
-import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
-import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { createApp } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 import App from './App.vue'
 import { routes } from './routes'
 import { setupRouterGuard } from './permission'
 
-export default defineBridgeApp(async (props, ctx) => {
-  const router = createRouter({ history: createMemoryHistory(), routes })
-  setupRouterGuard(router)                       // 业务守卫需在接线前就位（初始导航要经过它）
+export default defineBridgeApp((props) => {
   const app = createApp(App, props)
-  await installVueBridgeRouter(app, router, ctx) // 校验通道(MFU-034)→接线→ready→install 一次完成
-  return app   // 返回装配完整的 Vue App；mount/unmount 由契约负责
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  setupRouterGuard(router)
+  // 在这里安装本项目的 Pinia、i18n 等业务插件；不要提前 app.use(router)。
+  return { app, router }
 }, { routing: true })
 ```
 
-不需要 URL 同步的子应用省去 `installVueBridgeRouter` 与 `{ routing: true }`，`app.use(router)` 即可（memory 路由）。需要"桥接/独立双形态同跑"的子应用不要用 `installVueBridgeRouter`（它在宿主未启用同步时抛 `MFU-034`）——在工厂内自行判断 `ctx.routing`，用 `connectVueBridgeRouter` 手动接线。
+返回 `{ app, router }` 后，插件校验宿主通道、等待初始深链经过业务守卫、安装 router，再挂载 app；卸载和初始化失败时自动释放路由连接。工厂可为 async，异步业务装配完成后再返回。缺少宿主通道报 `MFU-034`，必须声明 `{ routing: true }`。
+
+不需要 URL 同步时返回 app（可自行 `app.use(memoryRouter)`），省略 `{ routing: true }`。同一项目的独立入口仍用 web history 并正常 `app.use(router)`，桥接入口用 memory history；两者可共用业务初始化函数，无需手写全局运行模式开关。需要在路由就绪后继续执行逻辑时，使用 `installVueBridgeRouter(app, router, ctx)` 并返回 app；不能再返回同一个 router，避免重复接线。
 
 **React 子应用**（`@fulgurjs/federation/react`；`react-dom/client` 实际 mount 时才加载）：
 

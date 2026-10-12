@@ -40,23 +40,25 @@ The module exposed as `./bridge` declares the contract object as its **default e
 
 ```ts
 // src/bridge.ts — fulgurjs.config.ts: exposes: { './bridge': './src/bridge.ts' }
-import { createApp, h } from 'vue'
-import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
-import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { createApp } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 import App from './App.vue'
 import { routes } from './routes'
 import { setupRouterGuard } from './permission'
 
-export default defineBridgeApp(async (props, ctx) => {
-  const router = createRouter({ history: createMemoryHistory(), routes })
-  setupRouterGuard(router)                       // business guards must be ready before wiring (the initial navigation goes through them)
+export default defineBridgeApp((props) => {
   const app = createApp(App, props)
-  await installVueBridgeRouter(app, router, ctx) // validate channel (MFU-034) → connect → ready → install, one call
-  return app   // Returns a fully assembled Vue App; mount/unmount are handled by the contract
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  setupRouterGuard(router)
+  // Install this app’s Pinia, i18n and other business plugins here; do not call app.use(router).
+  return { app, router }
 }, { routing: true })
 ```
 
-Sub apps that do not need URL sync simply omit `installVueBridgeRouter` and `{ routing: true }` and call `app.use(router)` (memory routing). Sub apps that must run in **both** bridged and standalone forms should not use `installVueBridgeRouter` (it throws `MFU-034` when the host did not enable sync) — check `ctx.routing` yourself and wire with the lower-level `connectVueBridgeRouter`.
+Returning `{ app, router }` lets the plugin validate the host channel, await initial deep-link navigation through business guards, install the router, and mount the app. It disposes the connection on unmount and initialization failure. Async factories are supported. A missing host channel throws `MFU-034`; declare `{ routing: true }`.
+
+Without URL sync, return an app (you may install a memory router yourself) and omit `{ routing: true }`. A standalone entry still uses web history and normal `app.use(router)`; a bridge entry uses memory history. Both entries can reuse business initialization without a global mode flag. To run additional logic after the initial route settles, use `installVueBridgeRouter(app, router, ctx)` and return the app only; do not return that router again.
 
 **React child app** (`@fulgurjs/federation/react`; `react-dom/client` loads only at actual mount time):
 

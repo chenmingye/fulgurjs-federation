@@ -389,6 +389,22 @@ shared: {
 - 契约实例按容器 el 分键：同契约多处挂载互不干扰；同容器未卸载再次 mount 拒绝（MFU-016）且不覆盖原实例；
 - 首次根提交后的子应用内部错误由**子应用自己的错误边界**负责——宿主 ErrorBoundary/errorCaptured 捕不到跨 root 渲染错误，插件不冒充兜底。
 
+### Vue 自动路由装配：返回 `{ app, router }`
+
+```ts
+export default defineBridgeApp(async (props) => {
+  const app = createApp(App, props)
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  await setupBusinessPlugins(app)
+  setupRouterGuard(router)
+  return { app, router }
+}, { routing: true })
+```
+
+工厂返回 `VueApp | VueBridgeAppSetup | Promise<VueApp | VueBridgeAppSetup>`。`VueBridgeAppSetup` 的两个必填字段是 app 和 router；业务插件/守卫在返回前准备完成，router 尚未安装。自动装配只用于声明 routing 的桥接入口，校验缺通道 MFU-034；initial ready 拒绝原样传播，失败后可重试；卸载自动 dispose，迟到的旧代次不挂载也不覆盖新实例。裸 app 的同步工厂保持同步首次提交语义。业务登录/权限/菜单不会被插件猜测。
+
+若必须手动控制初始导航后的装配顺序，使用下节 `installVueBridgeRouter` 并仅返回 app。不能与自动装配重复使用。
+
 ### 子应用辅助：`installVueBridgeRouter` / `hasBridgeMount`
 
 **`installVueBridgeRouter(app, router, ctx)`**（`/vue`，Vue 子应用）——URL 同步子应用的路由接线一次完成：
@@ -407,7 +423,7 @@ export default defineBridgeApp(async (props, ctx) => {
 |---|---|
 | 行为 | 等价于 `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })` → `await ready` → `app.use(router)` 的固定序列；`app` 只 install 不 mount。返回连接（`{ ready, dispose }`，多数调用方忽略） |
 | 失败行为 | `ctx?.routing` 缺失 → **MFU-034**（宿主未启用 URL 同步而本契约声明了 routing——与 MFU-031 互为对偶）；`ready` 拒绝（初始路由被守卫取消等）→ 原样传播（宿主侧以 MFU-016 `phase: 'mount'` 携带 cause），此时 router 未 install |
-| 适用边界 | 「桥接/独立双形态同跑」的子应用不要用（宿主未启用同步时它直接失败）——自行判断 `ctx.routing` 并用底层 `connectVueBridgeRouter` 手动接线。React 子应用无需对应函数：`createReactBridgeRouter` 已是收敛形态（返回 `element`），其入口同样校验 routing 缺失（MFU-034） |
+| 适用边界 | 适用于需要在初始路由就绪后继续装配的桥接入口。独立入口正常 app.use(webRouter)；桥接入口仍要求宿主通道，不因同时支持独立运行而静默关闭同步。React 子应用无需对应函数：`createReactBridgeRouter` 已是收敛形态（返回 `element`），其入口同样校验 routing 缺失（MFU-034） |
 
 **`hasBridgeMount(target: object | undefined | null): boolean`**（`/vue` 与 `/react`）判断指定应用或桥接工厂上下文的运行形态。
 

@@ -96,15 +96,15 @@ export function ApprovalBridgePage() {
 
 ## ③ 子应用端（声明协议 + 接线受控路由）
 
-**Vue 子应用**：`defineBridgeApp(工厂, { routing: true })` + `installVueBridgeRouter`——校验宿主通道（缺失 → `MFU-034`）、接线、等待初始位置落定、`app.use(router)` 的固定顺序由插件一次完成：
+**Vue 子应用**：工厂返回 `{ app, router }`，插件负责接线、等待初始路由、安装与释放连接。
 
 ```ts
-// src/bridge.ts（Vue 子应用）
 import { createApp, h } from 'vue'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
-import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
-export default defineBridgeApp(async (props, ctx) => {
+export default defineBridgeApp((props) => {
+  const app = createApp({ render: () => h(RouterView) }, props)
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -112,13 +112,14 @@ export default defineBridgeApp(async (props, ctx) => {
       { path: '/detail/:id', component: Detail },
     ],
   })
-  const app = createApp({ setup: () => () => h(RouterView) }, props)
-  await installVueBridgeRouter(app, router, ctx)   // connect → ready → install，顺序由插件保证
-  return app
+  // 业务插件与 router.beforeEach 等守卫在返回前完成，不要 app.use(router)。
+  return { app, router }
 }, { routing: true })
 ```
 
-业务路由守卫（`router.beforeEach` 等）在 `installVueBridgeRouter` **之前**注册——初始导航要经过守卫装配动态路由。需要"桥接/独立双形态同跑"的子应用不用该函数（宿主未启用同步时它抛 `MFU-034`）：自行判断 `ctx.routing`，用底层 `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })` 接线，`await connection.ready` 后再 `app.use(router)`。
+初始导航也经过业务守卫。插件先等位置落定再安装 router，避免深链被默认导航覆盖；卸载与初始化失败自动释放连接。缺少宿主通道明确报 `MFU-034`。独立入口另用 web history，按普通 Vue 应用安装路由；不需要为独立运行关闭桥接入口的同步合同。
+
+若装配逻辑必须读取已落定的初始路由，可手动 `await installVueBridgeRouter(app, router, ctx)` 后继续，并只返回 app；不要同时返回 router。更底层的 `connectVueBridgeRouter` 供自行管理连接的集成使用，调用方负责等待 ready、安装和 dispose。
 
 **React 子应用**：`createReactBridgeRouter` 返回 `{ element, dispose(), routerReady }`，`element` 是直接可用的 `RouterProvider` 元素；routing 缺失时统一抛 `MFU-034`（不再需要工厂里手写守卫）：
 

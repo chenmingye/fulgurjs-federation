@@ -393,6 +393,22 @@ The module exposed as `./bridge` declares the contract object as its **default e
 - Contract instances are keyed per container el: mounting the same contract in several places does not interfere; mounting again into the same container without unmounting is rejected (MFU-016) and does not overwrite the original instance;
 - Child app internal errors after the first root commit are the responsibility of the **child app's own error boundary** — the host's ErrorBoundary/errorCaptured cannot catch render errors across roots, and the plugin does not pretend to be the fallback.
 
+### Vue automatic router setup: return `{ app, router }`
+
+```ts
+export default defineBridgeApp(async (props) => {
+  const app = createApp(App, props)
+  const router = createRouter({ history: createMemoryHistory(), routes })
+  await setupBusinessPlugins(app)
+  setupRouterGuard(router)
+  return { app, router }
+}, { routing: true })
+```
+
+The factory returns `VueApp | VueBridgeAppSetup | Promise<VueApp | VueBridgeAppSetup>`. `VueBridgeAppSetup` requires app and router. Prepare business plugins/guards before returning, and leave the router uninstalled. Automatic setup requires a bridge entry declaring routing; a missing channel throws MFU-034. Initial ready rejection propagates, allowing retry; unmount disposes the connection, and stale attempts cannot mount or replace newer instances. Synchronous factories returning a bare app keep synchronous first-commit semantics. The plugin does not infer login, permissions or menus.
+
+To control initialization after initial navigation, use `installVueBridgeRouter` below and return the app only. Do not combine manual and automatic setup.
+
 ### Child-app helpers: `installVueBridgeRouter` / `hasBridgeMount`
 
 **`installVueBridgeRouter(app, router, ctx)`** (`/vue`, Vue child app) — one call completes the URL-sync router wiring:
@@ -411,7 +427,7 @@ export default defineBridgeApp(async (props, ctx) => {
 |---|---|
 | Behavior | Equivalent to the fixed sequence `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })` → `await ready` → `app.use(router)`; `app` is only installed, never mounted. Returns the connection (`{ ready, dispose }`; most callers ignore it) |
 | Failure | A missing `ctx?.routing` → **MFU-034** (the host did not enable URL sync while this contract declared routing — the dual of MFU-031); a `ready` rejection (e.g. the initial route cancelled by a guard) propagates as-is (the host reports MFU-016 `phase: 'mount'` carrying the cause) and the router was never installed |
-| Boundary | Sub apps that must run in both bridged and standalone forms should not use it (it fails outright when the host did not enable sync) — check `ctx.routing` yourself and wire manually with the lower-level `connectVueBridgeRouter`. React child apps need no counterpart: `createReactBridgeRouter` is already the converged form (returns `element`) and likewise validates a missing routing at its entry (MFU-034) |
+| Boundary | Use it when bridge initialization must continue after the initial route settles. Standalone entries install their web router normally; a bridge entry still requires the host channel even when the project also supports standalone startup. React child apps need no counterpart: `createReactBridgeRouter` is already the converged form (returns `element`) and likewise validates a missing routing at its entry (MFU-034) |
 
 **`hasBridgeMount(target: object | undefined | null): boolean`** (`/vue`, `/react`) checks a specific app or bridge factory context.
 

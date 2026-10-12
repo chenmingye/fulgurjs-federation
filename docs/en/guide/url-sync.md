@@ -96,15 +96,15 @@ export function ApprovalBridgePage() {
 
 ## ③ Child app side (declare the protocol and wire the controlled router)
 
-**Vue child app**: `defineBridgeApp(factory, { routing: true })` + `installVueBridgeRouter` — validating the host channel (missing → `MFU-034`), wiring, waiting for the initial position to settle, and `app.use(router)` happen in the fixed order inside one plugin call:
+**Vue child app**: return `{ app, router }`; the plugin wires the router, awaits the initial route, installs it and disposes the connection.
 
 ```ts
-// src/bridge.ts (Vue child app)
 import { createApp, h } from 'vue'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
-import { defineBridgeApp, installVueBridgeRouter } from '@fulgurjs/federation/vue'
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
 
-export default defineBridgeApp(async (props, ctx) => {
+export default defineBridgeApp((props) => {
+  const app = createApp({ render: () => h(RouterView) }, props)
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -112,13 +112,14 @@ export default defineBridgeApp(async (props, ctx) => {
       { path: '/detail/:id', component: Detail },
     ],
   })
-  const app = createApp({ setup: () => () => h(RouterView) }, props)
-  await installVueBridgeRouter(app, router, ctx)   // connect → ready → install, order guaranteed by the plugin
-  return app
+  // Install business plugins and router.beforeEach guards before returning; do not call app.use(router).
+  return { app, router }
 }, { routing: true })
 ```
 
-Business route guards (`router.beforeEach`, …) must be registered **before** `installVueBridgeRouter` — the initial navigation goes through the guards to assemble dynamic routes. Sub apps that must run in both bridged and standalone forms do not use this function (it throws `MFU-034` when the host did not enable sync): check `ctx.routing` yourself and wire with the lower-level `connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })`, then `app.use(router)` after `await connection.ready`.
+Initial navigation runs through business guards. The plugin waits for the position before installing the router, preventing a default navigation from overwriting the deep link. It releases the connection on unmount or initialization failure. A missing host channel throws `MFU-034`. A standalone entry uses web history and ordinary Vue router installation; standalone support does not require weakening the bridge entry’s sync contract.
+
+If initialization must inspect the settled initial route, manually `await installVueBridgeRouter(app, router, ctx)`, continue the initialization, and return only the app. Do not also return the router. The lower-level `connectVueBridgeRouter` is for integrations managing their own connection, including waiting for ready, installation and disposal.
 
 **React child app**: `createReactBridgeRouter` returns `{ element, dispose(), routerReady }`, where `element` is a directly usable `RouterProvider` element; a missing routing channel throws the standardized `MFU-034` (no hand-written guard needed in the factory):
 

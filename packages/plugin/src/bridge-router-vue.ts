@@ -155,8 +155,8 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: VueRou
  * @param app   子应用 Vue App（未挂载；本函数只 install router，不 mount）
  * @param router 子应用自己的 memory router（createMemoryHistory）
  * @param ctx   桥接工厂第二参数（{ signal?, routing? }）；routing 缺失即 MFU-034——
- *              双形态（桥接/独立同跑）的子应用不要用本函数，改用 connectVueBridgeRouter
- *              手动接线并自行判断
+ *              独立入口正常 app.use(webRouter)；桥接入口仍要求宿主通道。
+ *              一般工厂直接返回 { app, router }，无需手动调用本函数
  * @returns 连接（dispose 随 signal 自动触发；需要内省时可用，多数调用方忽略）
  */
 export async function installVueBridgeRouter(
@@ -166,9 +166,15 @@ export async function installVueBridgeRouter(
 ): Promise<VueBridgeRouterConnection> {
   if (!ctx?.routing) throw routingChannelNotProvidedError(ctx?.routing?.spec ?? 'vue-router')
   const connection = connectVueBridgeRouter(ctx.routing, router, { signal: ctx.signal })
-  await connection.ready
+  try {
+    await connection.ready
+    if (ctx.signal?.aborted) throw new DOMException('子应用挂载已取消。', 'AbortError')
   // VueRouterLike 是结构化最小面（不依赖 vue-router 类型路径）；vue-router 的 Router 实现
   // vue 的 Plugin 接口，经 unknown 中转后 install（真实 Router 实例的 app.use 语义）
-  app.use(router as unknown as Parameters<VueApp['use']>[0])
+    app.use(router as unknown as Parameters<VueApp['use']>[0])
+  } catch (error) {
+    connection.dispose()
+    throw error
+  }
   return connection
 }
