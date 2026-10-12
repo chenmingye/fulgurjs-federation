@@ -18,7 +18,7 @@ pnpm dev                       # 同时启动远程和宿主
 # http://localhost:5214
 ```
 
-环境要求与 pnpm 版本说明见[模板指南](../README.md)。单独启动用 `pnpm dev:remote`、`pnpm dev:host`，构建整个组合用 `pnpm build`。
+环境要求与 pnpm 版本说明见[模板指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/README.md)。单独启动用 `pnpm dev:remote`、`pnpm dev:host`，构建整个组合用 `pnpm build`。
 
 打开 <http://localhost:5214/>：
 

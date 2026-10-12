@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -56,4 +56,28 @@ test('npm 示例同步只收录完整模板，不收录大型集成、门户或�
     }
   }
   inspect(output)
+})
+
+
+test('模板整目录独立复制后，Markdown 相对链接不越出模板且目标存在', () => {
+  const templates = path.join(root, 'examples/templates')
+  for (const name of ['vue-vue', 'react-react', 'vue-host-react-remote', 'react-host-vue-remote', 'showcase']) {
+    const group = path.join(templates, name)
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (['node_modules', 'dist', '.vite', '.run'].includes(entry.name)) continue
+        const file = path.join(dir, entry.name)
+        if (entry.isDirectory()) { walk(file); continue }
+        if (!file.endsWith('.md')) continue
+        for (const match of readFileSync(file, 'utf8').matchAll(/\]\(([^\s)]+)\)/g)) {
+          const link = match[1]
+          if (/^(?:https?:|mailto:|#)/.test(link)) continue
+          const target = path.resolve(path.dirname(file), link.split('#')[0])
+          assert.ok(target === group || target.startsWith(group + path.sep), `${file}: 链接越出独立模板 ${link}`)
+          assert.ok(existsSync(target), `${file}: 链接目标不存在 ${link}`)
+        }
+      }
+    }
+    walk(group)
+  }
 })

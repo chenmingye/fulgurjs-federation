@@ -12,10 +12,10 @@ pnpm dev
 
 - 单独启动：`pnpm dev:remote`、`pnpm dev:host`。
 - 生产构建：`pnpm build`，按各子应用配置的 base 部署 dist；远程入口与宿主的 prod 地址必须一致。各子应用 README 提供配置与部署细节。
-- 本模板展示挂载、卸载与会话，不开启宿主/子应用 URL 同步；需要深链、刷新和前进后退，使用 [showcase](../showcase/)。
+- 本模板展示挂载、卸载与会话，不开启宿主/子应用 URL 同步；需要深链、刷新和前进后退，使用 [showcase](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/showcase)。
 - 无 JS 沙箱或自动 CSS 隔离，子应用全局样式和 body 副作用需要自行管理。
 
-环境要求见[模板指南](../README.md)。所有依赖来自 registry，不需要本仓库源码或其他模板。
+环境要求见[模板指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/examples/templates/README.md)。所有依赖来自 registry，不需要本仓库源码或其他模板。
 
 ## 改端口（四处必须同步，漏一处启动器会被旧端口卡住）
 
