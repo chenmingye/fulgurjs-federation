@@ -102,6 +102,8 @@ export function ApprovalBridgePage() {
 import { createApp, h } from 'vue'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import List from './pages/List.vue'
+import Detail from './pages/Detail.vue'
 
 export default defineBridgeApp((props) => {
   const app = createApp({ render: () => h(RouterView) }, props)

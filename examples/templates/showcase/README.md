@@ -4,7 +4,7 @@
 两个方向的宿主 × 子应用各一套——
 
 - **vue-host（:5334）× react-remote（:5333）**：Vue Router 4 宿主 + `createReactBridgeRouter` React 子应用
-- **react-host（:5336）× vue-remote（:5335）**：React Router 7 data router 宿主（含 `useBlocker` 原生守卫）+ `installVueBridgeRouter` Vue 子应用
+- **react-host（:5336）× vue-remote（:5335）**：React Router 7 data router 宿主（含 `useBlocker` 原生守卫）+ 工厂返回 `{ app, router }` 的 Vue 子应用（自动路由装配与释放）
 
 宿主 URL 表达子应用内部位置：刷新直达、收藏分享、前进后退、宿主菜单深链、宿主导航唯一写历史的全部语义在本页可逐条操作验证。
 

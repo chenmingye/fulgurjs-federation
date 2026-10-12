@@ -150,7 +150,9 @@ describe('Vue bridge app/router 自动装配', () => {
     const contract = track(defineBridgeApp(() => createApp({ render: () => h('p', 'sync') })))
     expect(contract.mount(el)).toBeUndefined()
     expect(el.textContent).toBe('sync')
-    const invalid = defineBridgeApp(() => null as never)
-    expect(() => invalid.mount(target())).toThrow(/工厂返回值不是 VueApp/)
+    for (const value of [null, 'invalid', 42]) {
+      const invalid = defineBridgeApp(() => value as never)
+      expect(() => invalid.mount(target())).toThrow(/工厂返回值不是 VueApp/)
+    }
   })
 })

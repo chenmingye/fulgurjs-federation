@@ -1,5 +1,10 @@
 # 当前发布说明
 
+## 6.8.1
+
+- 五模板精确依赖基础版本 6.8.0；showcase Vue 子应用改为返回 `{ app, router }` 自动装配，包内模板与 GitHub 源码同步。更新指南入口与 AI 接手规则。
+- 非法工厂返回字符串/数字时保持明确的 VueApp 合同错误，避免 `in` 运算产生 TypeError；补负向回归。
+
 ## 6.8.0
 
 - Vue `defineBridgeApp` 工厂支持直接返回 `{ app, router }`（或 Promise），在声明 routing 的桥接入口自动校验通道、等待初始路由、安装、挂载和释放连接。业务插件与守卫在工厂返回前准备完成，无需手写接线与 dispose。公开类型 `VueBridgeAppSetup` 从 `/vue` 导入。

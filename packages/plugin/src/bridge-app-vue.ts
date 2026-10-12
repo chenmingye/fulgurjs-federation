@@ -73,6 +73,10 @@ interface VueBridgeInstance {
 // 每次挂载都有独立对象；不能用同一个 pending 标志，否则旧工厂可能覆盖新代次。
 const appsByEl = new WeakMap<HTMLElement, VueBridgeInstance>()
 
+function isAppSetup(result: unknown): result is VueBridgeAppSetup {
+  return !!result && typeof result === 'object' && 'app' in result && 'router' in result
+}
+
 /**
  * 定义 Vue 子应用的桥接契约（远程 ./bridge 模块默认导出）。
  *
@@ -140,7 +144,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       const prepare = async (result: VueApp | VueBridgeAppSetup): Promise<void> => {
         if (!active()) return
         try {
-          if (result && 'app' in result && 'router' in result) {
+          if (isAppSetup(result)) {
             if (!options.routing) {
               throw new Error('defineBridgeApp 返回 { app, router } 时必须声明 { routing: true }；router 应使用 createMemoryHistory()，不要提前 app.use(router)。')
             }
@@ -171,7 +175,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
             },
           )
         }
-        if (produced && 'app' in produced && 'router' in produced) return prepare(produced as VueBridgeAppSetup)
+        if (isAppSetup(produced)) return prepare(produced)
         if (active()) attach(el, produced as VueApp, instance)
       } catch (e) {
         // 首次挂载失败：清理已创建的 app，不留半挂状态
