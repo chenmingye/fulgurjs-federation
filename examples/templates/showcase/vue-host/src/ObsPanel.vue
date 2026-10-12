@@ -4,11 +4,14 @@
  * 展示：宿主当前 URL（location.href）、子应用逻辑位置、history.length、
  * 子应用挂载计数、最近 10 条导航事件（带来源标注）。
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, getCurrentInstance, onMounted, onUnmounted, ref, watch } from 'vue'
+import { hasBridgeMount } from '@fulgurjs/federation/vue'
 import { useRoute } from 'vue-router'
 import { navLog, mountCount } from './demo-log'
 import { BRIDGE_BASE_PATH } from './routing'
 
+// 宿主自己是独立 app；子应用挂载不会改变宿主的模式。
+const bridged = hasBridgeMount(getCurrentInstance()?.appContext.app)
 const route = useRoute()
 
 const hostHref = ref(window.location.href)
@@ -34,6 +37,7 @@ onUnmounted(() => window.removeEventListener('popstate', handlePop))
 
 <template>
   <section class="demo-obs">
+    <p data-demo-host-mode>当前宿主被桥接：{{ String(bridged) }}</p>
     <h3 class="demo-obs-title">URL 同步观测台</h3>
     <p>宿主当前 URL：<code data-demo-host-url>{{ hostHref }}</code></p>
     <p>子应用逻辑位置：<code data-demo-child-location>{{ childLocation }}</code></p>

@@ -6,7 +6,7 @@
  * redirect 规范化到 /orders，由插件以 replace 同步宿主（无新增历史条目）。
  */
 import { redirect } from 'react-router-dom'
-import { defineBridgeApp, createReactBridgeRouter } from '@fulgurjs/federation/react'
+import { defineBridgeApp, createReactBridgeRouter, hasBridgeMount } from '@fulgurjs/federation/react'
 import ChildLayout from './ChildLayout'
 import OrderList from './pages/OrderList'
 import OrderDetail from './pages/OrderDetail'
@@ -35,7 +35,11 @@ const routes = [
 export default defineBridgeApp((props, ctx) => {
   bindReporter(props)
   const init = ctx!.routing!.getLocation()
-  const conn = createReactBridgeRouter(ctx!.routing!, routes, { signal: ctx!.signal })
+  // 工厂上下文只属于当前实例；通过 props 传给布局，不写页面全局模式。
+  const instanceRoutes = routes.map(route => route.element
+    ? { ...route, element: <ChildLayout bridged={hasBridgeMount(ctx)} /> }
+    : route)
+  const conn = createReactBridgeRouter(ctx!.routing!, instanceRoutes, { signal: ctx!.signal })
   // 冷加载（模块级预热未落定的慢路径）时 element 是 LazyRouterProviderHost 包装、无 router
   // prop——同步读 props.router 会静默跳过初始位置上报。routerReady 是就绪合同：fast 路径
   // 同步已 resolve、slow 路径在惰性接线完成时 resolve，两条路径行为一致。

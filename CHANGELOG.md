@@ -1,5 +1,11 @@
 # 当前发布说明
 
+## 6.7.1
+
+- 五模板统一依赖正式基础版本 6.7.0，锁文件仅更新联邦包；包内模板与 GitHub 源码同步。按两阶段发布规则，本交付包与 6.7.0 功能实现一致。
+- showcase 增加 Vue 当前 app 与 React 工厂上下文的运行模式演示，同页 Vue 宿主保持独立形态；补 BridgeSession 公开类型参考。
+- 验证五模板干净冻结安装、12 个应用构建、12 组 dev/生产真实交互，以及 showcase 四应用类型检查。
+
 ## 6.7.0
 
 - **签名调整**：`hasBridgeMount(target)` 必须传当前 Vue app 或 Vue/React 桥接工厂上下文。删除页面级全局开关，避免任意子应用的挂载、失败或卸载影响宿主及其他应用。Vue 在 setup 中捕获 `getCurrentInstance()?.appContext.app`；工厂内使用 ctx。标记说明对象的运行形态，不表示容器当前是否挂载。

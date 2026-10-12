@@ -376,6 +376,16 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/vue`.
 | `unmount` | no | `(el: HTMLElement) => void` | See the owning API for lifecycle and runtime defaults. |
 | `routing` | yes | `BridgeRoutingProtocol` | See the owning API for lifecycle and runtime defaults. |
 
+## BridgeSession
+
+Import from `@fulgurjs/federation/vue`. Return type of `createBridgeSession`.
+
+| Field | Optional | Type | Meaning |
+|---|---|---|---|
+| `sessionKey` | no | `Ref<string \| null>` | Non-sensitive login generation; null means logged out. |
+| `renew` | no | `() => string` | Create, persist and return a new generation; do not call for token refresh. |
+| `clear` | no | `() => void` | Clear the generation and storage; controlled bridges unmount. |
+
 ## VueBridgeAppContext
 
 Import from `@fulgurjs/federation/vue`. The plugin supplies this second factory argument; business props are separate.

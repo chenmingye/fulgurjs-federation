@@ -4,9 +4,13 @@
  * push/replace 走被 connectVueBridgeRouter 接管的 router.push/replace（经通道同步宿主 URL）；
  * go 委托宿主浏览器历史，不创建第二条独立历史。
  */
+import { getCurrentInstance } from 'vue'
+import { hasBridgeMount } from '@fulgurjs/federation/vue'
 import { RouterView, useRouter } from 'vue-router'
 import { getMountCount, reportNav } from './child-bus'
 
+// 查询当前 app，而不是页面是否存在其他桥接实例。
+const bridged = hasBridgeMount(getCurrentInstance()?.appContext.app)
 const router = useRouter()
 
 const handlePushDemo = (): void => {
@@ -33,6 +37,7 @@ const handleGoForward = (): void => {
 
 <template>
   <section class="demo-child">
+    <p data-demo-bridge-mode>当前应用被桥接：{{ String(bridged) }}</p>
     <p class="demo-child-title">
       <strong>Vue 子应用</strong>（受控 memory 路由）· 本会话挂载次数：{{ getMountCount() }}
     </p>

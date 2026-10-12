@@ -362,6 +362,16 @@ Vue 页面解析和组件创建对象.
 | `unmount` | no | `(el: HTMLElement) => void` | 同步使当前挂载代次失效并清理已创建的 root；未知容器为 no-op |
 | `routing` | yes | `BridgeRoutingProtocol` | 路由协议声明（URL 同步）：defineBridgeApp(工厂, { routing: true }) 时写入 { protocol: 1 }。宿主启用 routing 时必须存在且 protocol === 1（MFU-031）， 不允许静默退回 memory 假装深链成功。 |
 
+## BridgeSession
+
+导入入口：`@fulgurjs/federation/vue`。`createBridgeSession` 的返回类型。
+
+| 字段 | 可省略 | 类型 | 说明 |
+|---|---|---|---|
+| `sessionKey` | no | `Ref<string \| null>` | 非敏感登录代次；null 表示退出。 |
+| `renew` | no | `() => string` | 创建、保存并返回新的登录代次；不要在 token 刷新时调用。 |
+| `clear` | no | `() => void` | 清除代次及存储，受控桥接随之卸载。 |
+
 ## VueBridgeAppContext
 
 导入入口：`@fulgurjs/federation/vue`。桥接工厂第二参数，由插件提供；不包含业务 props。

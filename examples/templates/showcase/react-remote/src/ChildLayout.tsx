@@ -7,7 +7,7 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { getMountCount, reportNav } from './child-bus'
 
-export default function ChildLayout(): ReactElement {
+export default function ChildLayout({ bridged = false }: { bridged?: boolean }): ReactElement {
   const navigate = useNavigate()
 
   const handlePushDemo = (): void => {
@@ -33,6 +33,7 @@ export default function ChildLayout(): ReactElement {
 
   return (
     <div style={{ borderTop: '1px dashed #ccc', marginTop: 8, paddingTop: 8 }}>
+      <p data-demo-bridge-mode>当前应用被桥接：{String(bridged)}</p>
       <p style={{ margin: '4px 0' }}>
         <strong>React 子应用</strong>（受控 memory 路由）· 本会话挂载次数：{getMountCount()}
       </p>

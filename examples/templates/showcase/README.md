@@ -124,3 +124,7 @@ pnpm run build
 - 两个站点都要为 `fulgurjs-remoteEntry.js` 配 no-cache 与正确 Content-Type，SPA 回退不得吞 JS（参考各子应用 README 与 [部署指南](../../../docs/zh/guide/deployment.md)）。
 
 生产部署地址（各应用 `prod`）是站点路径，与 dev 端口无关，改端口不要动它。改完自查：`grep -rn "533" --include="*.json" --include="*.ts" .` 不应再出现旧端口。
+
+## 查看应用运行模式
+
+子应用显示“当前应用被桥接：true”；Vue 宿主观测台显示“当前宿主被桥接：false”。两者同页并存也不会串模式。Vue 在组件 setup 中调用 `hasBridgeMount(getCurrentInstance()?.appContext.app)`；React 在桥接工厂中查询 `hasBridgeMount(ctx)`，通过 props 传给布局。独立启动的子应用显示 false。该值描述实例的运行方式，不是当前挂载数量。
