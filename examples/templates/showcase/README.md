@@ -127,4 +127,4 @@ pnpm run build
 
 ## 查看应用运行模式
 
-子应用显示“当前应用被桥接：true”；Vue 宿主观测台显示“当前宿主被桥接：false”。两者同页并存也不会串模式。Vue 在组件 setup 中调用 `hasBridgeMount(getCurrentInstance()?.appContext.app)`；React 在桥接工厂中查询 `hasBridgeMount(ctx)`，通过 props 传给布局。独立启动的子应用显示 false。该值描述实例的运行方式，不是当前挂载数量。
+子应用显示“当前应用被桥接：true”；Vue 宿主观测台显示“当前宿主被桥接：false”。两者同页并存也不会串模式。Vue 在组件 setup 中调用 `hasBridgeMount(getCurrentInstance()?.appContext.app)`；React 在桥接工厂中查询 `hasBridgeMount(ctx)`，通过 props 传给布局。独立 createApp 实例的查询结果为 false；本模板的子应用独立入口只提供健康检查壳，不展示业务布局。该值描述实例的运行方式，不是当前挂载数量。
