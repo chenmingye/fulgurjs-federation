@@ -4,7 +4,7 @@
  *   非数组 MFU-011 / 无声明零行为）+ 解析层（零参 loader / 项校验 / 缓存）
  * - Vue remoteComponent 祖先 Provider 包裹（外→内、attrs/slots 透传、无声明零包裹）
  * - installVueBridgeRouter：MFU-034 / connect→ready→install 顺序 / ready 拒绝传播且不 install
- * - hasBridgeMount：工厂调用前置位（Vue/React）、粘性、独立打开恒 false
+ * - hasBridgeMount：按应用/工厂上下文隔离，失败不影响独立应用
  * - createBridgeSession：renew/clear、持久化恢复、storageKey、存储不可用退化
  * - createReactBridgeRouter：routing 缺失统一 MFU-034
  */
@@ -134,6 +134,21 @@ describe('resolvePageProviderEntries（解析层：loader / 项校验 / 缓存�
     await resolvePageProviderEntries(list)
     await resolvePageProviderEntries(list)
     expect(loader).toHaveBeenCalledTimes(1)
+  })
+
+  it('并发消费共享加载；loader 拒绝后同一声明能真正重试', async () => {
+    const { resolvePageProviderEntries } = await import('../src/page-providers')
+    const failure = new Error('provider temporarily unavailable')
+    const Provider = { name: 'RecoveredProvider' }
+    const loader = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(Provider)
+    const list = [loader]
+    const first = resolvePageProviderEntries(list)
+    const second = resolvePageProviderEntries(list)
+    expect(first).toBe(second)
+    await expect(first).rejects.toBe(failure)
+    await expect(second).rejects.toBe(failure)
+    await expect(resolvePageProviderEntries(list)).resolves.toEqual([Provider])
+    expect(loader).toHaveBeenCalledTimes(2)
   })
 
   it('空数组 / undefined：返回 undefined（渲染零包裹）', async () => {
@@ -268,49 +283,58 @@ describe('installVueBridgeRouter（一次完成 校验→接线→ready→instal
   })
 })
 
-describe('hasBridgeMount（页面级桥接形态信号）', () => {
-  beforeEach(() => {
-    delete (globalThis as any).__FULGURJS_BRIDGE_MOUNTED__
-  })
-
-  it('独立打开（未发生过桥接挂载）恒 false', async () => {
-    const { hasBridgeMount } = await import('../src/bridge-core')
-    expect(hasBridgeMount()).toBe(false)
-  })
-
-  it('Vue defineBridgeApp：工厂执行前已置位（装配期可见）；unmount 后粘性为 true', async () => {
+describe('hasBridgeMount（应用隔离）', () => {
+  it('两个 Vue 应用、失败工厂与独立 app 不共享形态', async () => {
     const { hasBridgeMount } = await import('../src/bridge-core')
     const { defineBridgeApp } = await import('../src/bridge-app-vue')
-    let seenInFactory: boolean | undefined
-    const contract = defineBridgeApp(() => {
-      seenInFactory = hasBridgeMount()
-      return createApp({ render: () => h('div', 'x') })
+    const standalone = createApp({ render: () => h('div') })
+    const apps: ReturnType<typeof createApp>[] = []
+    const contexts: object[] = []
+    const contract = defineBridgeApp((_, ctx) => {
+      expect(hasBridgeMount(ctx)).toBe(true)
+      contexts.push(ctx!)
+      const app = createApp({ render: () => h('div', 'bridge') })
+      apps.push(app)
+      return app
     })
-    const el = document.createElement('div')
-    document.body.appendChild(el)
-    contract.mount(el)
-    expect(seenInFactory).toBe(true)
-    expect(hasBridgeMount()).toBe(true)
-    contract.unmount(el)
-    expect(hasBridgeMount()).toBe(true)
+    const els = [document.createElement('div'), document.createElement('div')]
+    for (const el of els) contract.mount(el)
+    expect(contexts[0]).not.toBe(contexts[1])
+    expect(apps.map(hasBridgeMount)).toEqual([true, true])
+    expect(hasBridgeMount(standalone)).toBe(false)
+    expect(hasBridgeMount({})).toBe(false)
+    for (const el of els) contract.unmount(el)
+    expect(hasBridgeMount(standalone)).toBe(false)
+    const failed = defineBridgeApp((_, ctx) => {
+      expect(hasBridgeMount(ctx)).toBe(true)
+      throw new Error('factory failed')
+    })
+    expect(() => failed.mount(document.createElement('div'))).toThrow('factory failed')
+    expect(hasBridgeMount(standalone)).toBe(false)
   })
 
-  it('React defineBridgeApp：工厂执行前同样置位', async () => {
+  it('React 工厂失败仅标记自己的上下文', async () => {
     const { hasBridgeMount } = await import('../src/bridge-core')
     const { defineBridgeApp } = await import('../src/bridge-app-react')
-    const { createElement } = await import('react')
-    let seenInFactory: boolean | undefined
-    const contract = defineBridgeApp(() => {
-      seenInFactory = hasBridgeMount()
-      return createElement('div', null, 'x')
+    const unrelated = {}
+    const contract = defineBridgeApp((_, ctx) => {
+      expect(hasBridgeMount(ctx)).toBe(true)
+      expect(hasBridgeMount(unrelated)).toBe(false)
+      throw new Error('react factory failed')
     })
-    const el = document.createElement('div')
-    document.body.appendChild(el)
-    const pending = contract.mount(el)
-    expect(seenInFactory).toBe(true)
-    // jsdom 无真实提交环境：mount 会以首次提交失败拒绝——只验证置位时序，吞掉预期拒绝
-    void pending.catch(() => {})
-    contract.unmount(el)
+    expect(() => contract.mount(document.createElement('div'))).toThrow('react factory failed')
+    expect(hasBridgeMount(unrelated)).toBe(false)
+  })
+
+  it('不同运行时副本读取同一 app 标记，且不写 globalThis', async () => {
+    const first = await import('../src/bridge-core')
+    const context = {}
+    first.markBridgeMount(context)
+    vi.resetModules()
+    const second = await import('../src/bridge-core')
+    expect(second.hasBridgeMount(context)).toBe(true)
+    expect(second.hasBridgeMount({})).toBe(false)
+    expect((globalThis as Record<string, unknown>).__FULGURJS_BRIDGE_MOUNTED__).toBeUndefined()
   })
 })
 
@@ -364,5 +388,38 @@ describe('createReactBridgeRouter：routing 缺失统一 MFU-034', () => {
   it('第一参数为 undefined：抛 MFU-034（替代项目手写守卫）', async () => {
     const { createReactBridgeRouter } = await import('../src/bridge-router-react')
     expect(() => createReactBridgeRouter(undefined as never, [{ path: '/', element: null }])).toThrow(/MFU-034/)
+  })
+})
+
+
+describe('React Provider 真实渲染和恢复', () => {
+  it('并发两个 consumer、祖先 context、props、卸载重挂与 loader 失败重试', async () => {
+    const React = await import('react')
+    const { render, waitFor, fireEvent } = await import('@testing-library/react')
+    const { createRemoteComponent } = await import('../src/react-adapter')
+    const Context = React.createContext('missing')
+    const Provider = (props: { children?: import('react').ReactNode }) =>
+      React.createElement(Context.Provider, { value: 'provided' }, props.children)
+    const Page = (props: { label: string }) =>
+      React.createElement('span', null, `${React.useContext(Context)}:${props.label}`)
+    const loader = vi.fn().mockRejectedValueOnce(new Error('provider offline')).mockResolvedValue(Provider)
+    const providers = [loader]
+    const load = async (_spec: string, opts?: { consumerApp?: { pageProviders?: (list: unknown[]) => void } }) => {
+      opts?.consumerApp?.pageProviders?.(providers)
+      return { default: Page }
+    }
+    const Remote = createRemoteComponent(load as never)('react-r/page')
+    const left = render(React.createElement(Remote, { label: 'left' }))
+    await waitFor(() => expect(left.container.textContent).toContain('provider offline'))
+    fireEvent.click(left.container.querySelector('[data-fulgurjs-retry]')!)
+    await waitFor(() => expect(left.container.textContent).toBe('provided:left'))
+    const right = render(React.createElement(Remote, { label: 'right' }))
+    await waitFor(() => expect(right.container.textContent).toBe('provided:right'))
+    left.unmount()
+    right.unmount()
+    const again = render(React.createElement(Remote, { label: 'again' }))
+    await waitFor(() => expect(again.container.textContent).toBe('provided:again'))
+    expect(loader).toHaveBeenCalledTimes(2)
+    again.unmount()
   })
 })

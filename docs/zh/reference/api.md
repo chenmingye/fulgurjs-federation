@@ -347,7 +347,7 @@ export const pageProviders: RemoteSetupModule['pageProviders'] = [
 | 时序 | 取得容器 → `init(shareScope)`（共享作用域收养）→ **setup** → **onSession** → **globalComponents 安装** → 返回业务模块。setup 模块自身的导入在该阶段完成共享协商 |
 | 执行次数（setup） | 每容器一次；并发调用共享同一 Promise；成功后不重复。`preloadRemote` 只预取资源不执行 |
 | 执行次数（globalComponents） | 声明提取随 setup 一次；**安装随每次 `loadRemote` 执行**（幂等，`app.component` 同名覆盖，后注册生效）——桥接子应用每次挂载新建 app 实例也能拿到注册。Vue `remoteComponent` 和 `createHostPages` 自动捕获消费方 app；手动 `loadRemote` 与 React 侧不自动传入（React 无 Vue 全局注册表）——跳过安装，不报错。注册随消费方 app 生命周期驻留，无独立卸载 API |
-| 执行次数（pageProviders） | 声明提取随 setup 一次；**包裹随每次组件渲染生效**（声明数组按引用缓存，loader 项只解析一次；setup 失败重跑换新数组，缓存自然失效）。Vue `remoteComponent`/`createHostPages` 与 React `remoteComponent`/`createReactHostPages` 自动应用（按 外→内 包裹，attrs/slots 透传给最内层业务组件，Provider 不收 props）；手动 `loadRemote` 与 `useLoadRemote`（返回模块自行渲染）不自动应用——这类消费自行包裹 |
+| 执行次数（pageProviders） | 声明提取随 setup 一次；**包裹随每次组件渲染生效**（声明数组按引用缓存，成功的 loader 结果复用，失败清缓存允许同页重试；setup 重跑换新数组时也重新解析）。Vue `remoteComponent`/`createHostPages` 与 React `remoteComponent`/`createReactHostPages` 自动应用（按 外→内 包裹，attrs/slots 透传给最内层业务组件，Provider 不收 props）；手动 `loadRemote` 与 `useLoadRemote`（返回模块自行渲染）不自动应用——这类消费自行包裹 |
 | 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）；`pageProviders` 可选且必须是数组（项=组件对象或零参 loader，带参函数视为函数式组件；项内容在消费方解析时校验）。违反 → MFU-011（报实际类型/预期签名/修法） |
 | 执行次数（onSession） | 按非敏感 `sessionKey` 去重：同一登录代次一次；新代次先作废旧 `signal`，再按远程**串行**衔接旧调用与新调用（防两账号异步写入交错）；`clearAppContext()` 失效去重状态，下次登录必须重跑。应用级 setup 不因退出/换代重复执行 |
 | sessionKey | 宿主登录流程每次成功登录/重登生成新代次（非敏感 ID，禁止用 token）；token 刷新但会话未变时沿用。**有 onSession 却缺 sessionKey → MFU-013**，不凭用户对象引用猜测身份；无 onSession 的远程无需 sessionKey |
@@ -409,13 +409,14 @@ export default defineBridgeApp(async (props, ctx) => {
 | 失败行为 | `ctx?.routing` 缺失 → **MFU-034**（宿主未启用 URL 同步而本契约声明了 routing——与 MFU-031 互为对偶）；`ready` 拒绝（初始路由被守卫取消等）→ 原样传播（宿主侧以 MFU-016 `phase: 'mount'` 携带 cause），此时 router 未 install |
 | 适用边界 | 「桥接/独立双形态同跑」的子应用不要用（宿主未启用同步时它直接失败）——自行判断 `ctx.routing` 并用底层 `connectVueBridgeRouter` 手动接线。React 子应用无需对应函数：`createReactBridgeRouter` 已是收敛形态（返回 `element`），其入口同样校验 routing 缺失（MFU-034） |
 
-**`hasBridgeMount(): boolean`**（`/vue` 与 `/react`）——页面级桥接形态信号，供子应用布局/标题策略区分「被宿主桥接嵌入」与「独立运行」：
+**`hasBridgeMount(target: object | undefined | null): boolean`**（`/vue` 与 `/react`）判断指定应用或桥接工厂上下文的运行形态。
 
-| 维度 | 语义 |
-|---|---|
-| 置位时机 | 任一桥接契约的工厂**开始执行前**（插件自动置位）——工厂内动态 import 的业务模块、装配期代码读取即 `true`，不晚于任何业务初始化 |
-| 语义 | 页面级粘性：置位后本页面不复位（卸载后仍 `true`——布局裁剪无需回退），整页刷新自然复位；子应用独立打开恒 `false`。存页面级全局镜像（globalThis），宿主与子应用各持运行时副本时同页读到同一份 |
-| 边界 | `bridge.ts` 模块**静态 import** 的模块求值期仍为 `false`——需要求值期判断的子应用维持「工厂内 `await import(...)` 加载业务模块」模式；远程组件不应依赖此信号（组件联邦无「被桥接」概念）；宿主自己的代码读到 `true` 属正常，宿主布局决策不使用它 |
+- Vue 工厂返回的 app 在 mount 前自动标记；组件 setup 中捕获 `getCurrentInstance()?.appContext.app` 后查询。
+- Vue/React 工厂的第二参数 ctx 在调用前自动标记；可把判断结果通过 props 或 Context 传给业务代码。
+- undefined/null 或独立应用返回 false；同页其他应用的挂载、失败、卸载不会改变它。
+- 标记表示对象的运行形态，卸载后不把该对象变成独立应用；它不表示当前容器是否仍挂载。
+- 静态模块求值不能判断当前 app：路由创建由独立入口和桥接工厂明确选择，不依赖全局开关。
+- `VueBridgeAppContext`、`ReactBridgeAppContext` 分别从 `/vue`、`/react` 公开导出。
 
 ### 宿主侧工厂
 

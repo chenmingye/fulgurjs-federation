@@ -43,7 +43,7 @@ import { hasBridgeMount } from './bridge-core'
 import type { BridgeHostRouting } from './bridge-router-core'
 
 export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage, FgRemoteVueComponent } from './vue-adapter'
-export type { BridgeApp, VueBridgeAppFactory } from './bridge-app-vue'
+export type { BridgeApp, VueBridgeAppFactory, VueBridgeAppContext } from './bridge-app-vue'
 export type { VueBridgeAppOptions, FgVueBridgeWrapper } from './bridge-host-vue'
 export type { VueBridgeRouterConnection, BridgeHostRouting }
 export type { BridgeSession }
@@ -68,7 +68,7 @@ export { connectVueBridgeRouter }
 export { installVueBridgeRouter }
 /** 宿主会话代次管理器（sessionKey 生成/持久化/renew/clear；绑定桥接组件 :session-key） */
 export { createBridgeSession }
-/** 本页面是否已发生过桥接契约挂载（子应用布局/标题策略用；独立打开恒 false） */
+/** 判断指定应用或工厂上下文是否属于桥接形态。 */
 export { hasBridgeMount }
 
 import type { RemoteSchemaEntry } from './pages'

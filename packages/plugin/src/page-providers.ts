@@ -37,6 +37,11 @@ export function resolvePageProviderEntries(list: unknown[] | undefined): Promise
       }
       return entry
     }))
+    // 失败不保留负缓存：同页重试必须重新调用 loader；并发调用仍共享本次 Promise。
+    const attempt = cached
+    void attempt.catch(() => {
+      if (resolvedCache.get(list) === attempt) resolvedCache.delete(list)
+    })
     resolvedCache.set(list, cached)
   }
   return cached

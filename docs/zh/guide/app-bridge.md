@@ -73,7 +73,7 @@ export default defineBridgeApp((props) => (
 ))
 ```
 
-**布局感知（被桥接 or 独立运行）**：子应用的布局/标题等业务代码用 `hasBridgeMount()`（`/vue`、`/react` 均导出）区分两种形态——本页面发生过桥接挂载即 `true`，独立打开恒 `false`；不需要再自建 mode 标记模块。需要模块求值期判断的子应用维持「工厂内 `await import(...)` 加载业务模块」的既有模式（工厂调用前信号已置位）。
+**布局与标题感知**：Vue 组件在 setup 中捕获 `getCurrentInstance()?.appContext.app`，然后调用 `hasBridgeMount(app)`；React 工厂调用 `hasBridgeMount(ctx)` 并通过 props 或 Context 传给业务组件。标记属于具体 app/工厂上下文，不影响同页宿主或其他应用。静态模块初始化不要判断页面运行模式；独立入口创建 web router，桥接工厂创建 memory router。
 
 契约语义（`BridgeApp` 接口，`/vue` 与 `/react` 共享同一类型定义）：
 

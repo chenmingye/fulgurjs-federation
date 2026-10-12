@@ -44,32 +44,18 @@ export function assertBridgeContract(spec: string, mod: unknown): BridgeApp {
   return contract as BridgeApp
 }
 
-// ── 页面级桥接形态信号（hasBridgeMount）────────────────────────────────────────
+// 应用/工厂上下文携带自己的形态，不在页面存储全局开关。
+// Symbol.for 只统一标记键；值位于具体对象上，跨运行时副本也不会串应用。
+const BRIDGE_MOUNT_KEY = Symbol.for('@fulgurjs/federation/bridge-mode')
 
-/**
- * 页面级镜像键：任一桥接契约的工厂开始执行即置位。放 globalThis 而非模块级变量的原因：
- * 宿主与子应用可能各持插件运行时副本，只有全局镜像保证同页读到同一份。
- */
-const BRIDGE_MOUNT_GLOBAL_KEY = '__FULGURJS_BRIDGE_MOUNTED__'
-
-/**
- * 子应用适配器（defineBridgeApp，Vue/React）在调用工厂前置位：装配期（工厂内动态
- * import 业务模块、组件求值）即可读到 true，不晚于任何业务初始化。
- */
-export function markBridgeMount(): void {
-  ;(globalThis as Record<string, unknown>)[BRIDGE_MOUNT_GLOBAL_KEY] = true
+/** 内部装配标记：上下文在工厂前标记，Vue app 在 mount 前标记。 */
+export function markBridgeMount(target: object): void {
+  Object.defineProperty(target, BRIDGE_MOUNT_KEY, { value: true })
 }
 
-/**
- * 本页面是否已发生过桥接契约挂载（页面级粘性信号：置位后本页面不复位，整页刷新自然复位）。
- *
- * 供完整子应用自己的布局/标题策略区分「被宿主桥接嵌入」与「独立运行」；子应用独立打开时
- * 恒为 false。边界：① bridge.ts 模块静态 import 的模块求值期仍为 false——需要求值期判断的
- * 子应用维持「工厂内动态 import 业务模块」模式；② 远程组件不应依赖此信号（组件联邦无
- * 「被桥接」概念）；③ 宿主自己的代码在本页读到 true 属正常，宿主布局决策不使用它。
- */
-export function hasBridgeMount(): boolean {
-  return (globalThis as Record<string, unknown>)[BRIDGE_MOUNT_GLOBAL_KEY] === true
+/** 判断指定应用或工厂上下文的运行形态；不是页面是否存在任意子应用。 */
+export function hasBridgeMount(target: object | undefined | null): boolean {
+  return target != null && (target as Record<symbol, unknown>)[BRIDGE_MOUNT_KEY] === true
 }
 
 // ── 页面级桥接会话登记（同页多实例单会话约束，任务书 §4.5）──────────────────────

@@ -63,7 +63,7 @@ describe('/react 物理入口类型', () => {
       'FgReactRemoteProps', 'FgRuntime',
       'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
-      'ReactBridgeAppFactory', 'ReactBridgeAppOptions', 'ReactBridgeCancelPolicy', 'ReactBridgeRouterConnection',
+      'ReactBridgeAppFactory', 'ReactBridgeAppContext', 'ReactBridgeAppOptions', 'ReactBridgeCancelPolicy', 'ReactBridgeRouterConnection',
       'ReactHostPages', 'ReactHostPagesOptions', 'ReactRemoteComponentOptions',
       'RemoteConfig', 'RemoteDebugInfo', 'RemoteErrorBoundaryProps', 'RemoteErrorFallback',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
@@ -139,7 +139,7 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
-      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppOptions',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppContext', 'VueBridgeAppOptions',
       'VueBridgeRouterConnection',
     ].sort())
     // 注册表三类型经包内共享子路径再导出（与 /runtime、/react 同一声明）

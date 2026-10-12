@@ -73,7 +73,7 @@ export default defineBridgeApp((props) => (
 ))
 ```
 
-**Layout awareness (bridged vs. standalone)**: sub-app layout/title code can distinguish the two forms with `hasBridgeMount()` (exported from both `/vue` and `/react`) — `true` once a bridge mount has happened on this page, always `false` when opened standalone; a hand-rolled mode-flag module is no longer needed. Sub apps that need the flag during module evaluation keep the established pattern of loading business modules via `await import(...)` inside the factory (the signal is set before the factory runs).
+**Layout and title awareness**: Vue components capture `getCurrentInstance()?.appContext.app` during setup and call `hasBridgeMount(app)`. React factories call `hasBridgeMount(ctx)` and pass the result through props or Context. The marker belongs to that app/context and does not affect other apps. Do not select router mode during static module evaluation: the standalone entry creates web history; the bridge factory creates memory history.
 
 Contract semantics (the `BridgeApp` interface; `/vue` and `/react` share the same type definitions):
 

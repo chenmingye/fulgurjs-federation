@@ -55,7 +55,7 @@ export const createReactBridgeApp = createReactBridgeAppWithLoader(loadRemote)
 export { createReactBridgeNavigation }
 /** 子应用侧受控 memory data router（返回 { element, dispose }，element 直接作为工厂返回值） */
 export { createReactBridgeRouter }
-/** 本页面是否已发生过桥接契约挂载（子应用布局/标题策略用；独立打开恒 false） */
+/** 判断指定应用或工厂上下文是否属于桥接形态。 */
 export { hasBridgeMount }
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入） */
 export type { BridgeHostRouting }
@@ -74,7 +74,7 @@ export type {
   RemoteErrorBoundaryProps,
   ReactHostPagesOptions, ReactHostPages, ResolvedHostPage, FgReactRemoteProps,
 } from './react-adapter'
-export type { BridgeApp, ReactBridgeAppFactory } from './bridge-app-react'
+export type { BridgeApp, ReactBridgeAppFactory, ReactBridgeAppContext } from './bridge-app-react'
 import type { RemoteSchemaEntry } from './pages'
 export type RemoteSchema = Record<string, RemoteSchemaEntry>
 /** 无插件转换的场景（构建、Node 导入）如实返回空清单。 */
