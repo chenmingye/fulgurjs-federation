@@ -68,7 +68,7 @@ node examples/scripts/serve-prod.mjs     # http://localhost:5391/jeecg-a/
 
 - 同一份官方基线生成两个**独立应用实例**（A/B 各自完整的 main/bootstrap、Pinia、router、主题），非共用根实例。
 - 联邦名：`jeecg-a` / `jeecg-b` / `react-c`，容器与部署地址互不冲突；`shared` 只共享 vue/vue-router/pinia/dayjs（+宿主侧 react 生态，桥接使用合同），实例状态与身份可观测（各页身份徽标 + depth + user）。
-- **浏览器历史唯一写入方**：各场景的宿主（A 或 react-host）。B/C 用受控 memory 路由经 `/bridge/router/*` 端口逐层协调，内层绝不直接写 `window.history`/`location`。
+- **浏览器历史唯一写入方**：各场景的宿主（A 或 react-host）。B/C 用受控 memory 路由经 `/vue`、`/react` 的桥接导航端口逐层协调，内层绝不直接写 `window.history`/`location`。
 - 实例数据通道隔离：B 的 API 前缀 `/jeecgboot-b`（数据服务按前缀返回 B 结构菜单）；**宿主 dev proxy 必须把长前缀 `/jeecgboot-b` 放在 `/jeecgboot` 之前**（http-proxy 按键序匹配）。
 
 ## 从上游基线生成实例（可选的可复现路径）
@@ -118,4 +118,4 @@ react-c / react-host 为全新独立工程（非上游改造），源码即全�
 
 - 无 JS 沙箱/CSS 隔离：B 的样式与全局副作用与宿主同域（fulgurjs 桥接边界即挂载容器）；B 作为子应用时桥接工厂将 vben 布局 `fixed` 关闭以避免 fixed 定位逃逸容器（`src/fulgurjs/bridge.ts` 内 setProjectConfig）。
 - 官方前端的部分页面依赖真实后端数据（如在线表单、报表），演示只保证「联邦演示」菜单与仪表盘/账户列表可用；点击其他业务页面得到的是数据服务 404 诊断（这是如实暴露，不是故障）。
-- **vite 版本说明（如实声明）**：插件 5.5.0 已修复 rolldown 漏标 async 导致的 vite8 生产**构建失败**（A/B 产物 1920/1924 chunks 全部语法合法，vite 8.1.4/8.3.2 双版本验证）；但 jeecg 规模 Vue 应用在 vite8（rolldown 1.1.5/1.2.12 实测）生产**页面**仍存在启动挂起（零报错、全部资源与模块初始化完成、应用引导未执行——组合缺陷，插件 5.5.x 未解，开发态不受影响，小形态应用 vite8 生产基本可用）。因此演示实例生产路径锁 **vite 6.4.3**（vite 5–7 为插件验证过的生产区间），开发态可用上游基线版本。
+- **Vite 版本**：本示例生产验收使用工程锁定的 Vite 6.4.3。插件完整支持范围见[仓库说明](../../../README.md)与[兼容矩阵](../../../docs/maintainers/compatibility-testing.md)。

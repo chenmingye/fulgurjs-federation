@@ -4,7 +4,7 @@ Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（README §8.
 每个子应用是一个**自带路由与状态、可整站挂载/卸载**的完整业务系统（工单中心），
 每个宿主以三页对照呈现「组件级联邦 vs 应用级桥接」的差异与各自适用场景。
 
-四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.4.2` + lockfile），
+四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.8.5` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 |
@@ -99,7 +99,7 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 | `defineBridgeApp(factory)` | `@fulgurjs/federation/react` | [react-remote/src/bridge.tsx](react-remote/src/bridge.tsx) | `bridge-app-react.ts` |
 | `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | [vue-host/src/pages/AppBridgePage.vue](vue-host/src/pages/AppBridgePage.vue) | `bridge-host-vue.ts` |
 | `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | [react-host/src/pages/AppBridgePage.tsx](react-host/src/pages/AppBridgePage.tsx) | `bridge-host-react.ts` |
-| `remoteComponent(spec, options)` | `@fulgurjs/federation/runtime`（React 侧 `/react`） | vue-host / react-host 的 `pages/ComponentLevelPage.*` | `runtime/` |
+| `remoteComponent(spec, options)` | `@fulgurjs/federation/vue` / `@fulgurjs/federation/react` | vue-host / react-host 的 `pages/ComponentLevelPage.*` | `vue-adapter.ts` / `react-adapter.ts` |
 | `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/runtime`（React 侧 `/react`） | 宿主 `host-session.ts` + 桥接层内部写入；子应用 `App.vue` / `ChildLayout.tsx` 读取 | `context.ts` |
 | 受控 `sessionKey`（undefined/null/非空串） | 桥接组件 prop | 两宿主 `AppBridgePage` 的 `handleSwitchSession` / `handleRemount` | `bridge-core.ts`（`assertControlledSessionKey`、`resolveBridgeContext`） |
 | `getContext`（同步纯 getter 快照） | 工厂选项 | 两宿主 `host-session.ts` 的 `getLatestHostContext` | `bridge-core.ts` |
@@ -111,12 +111,11 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 | 维度 | examples/templates（跨框架） | examples/demos/same-frame（本场景） |
 |---|---|---|
 | 框架组合 | Vue 宿主 × React 子应用、React 宿主 × Vue 子应用 | Vue 套 Vue、React 套 React（同框架） |
-| 宿主依赖合同 | 宿主必须同时装 vue + react + react-dom，shared 三键全 singleton | 宿主只装自己框架：vue 对 shared 仅 `vue`、react 对仅 `react` + `react-dom`（纯项目零对方依赖承诺不受影响） |
+| 宿主依赖合同 | 模板声明 vue + react + react-dom 并演示共享协商；按模板 package.json 安装，实际应用依赖按其使用的共享键声明 | 宿主只装自己框架：vue 对 shared 仅 `vue`、react 对仅 `react` + `react-dom`（纯项目零对方依赖承诺不受影响） |
 | 演示重心 | 最小接线：契约 + 受控会话 + appProps 快照 | 完整业务子应用（列表/详情/编辑、筛选分页）+ 三页对照 + 诊断面板 |
 | 子应用路由 | memory 路由两个页面（首页/关于） | Vue 侧 vue-router `createMemoryHistory`、React 侧 `createMemoryRouter` 自包含（列表/详情/编辑带参路由） |
 | 组件级对照项 | 无（bridge 专属示例） | 每宿主页面1 用 `remoteComponent` 直渲染远程组件，与页面2 形成显式对照 |
 | 诊断能力 | 页面级 onReady 计数 | 每页 `<details>` 诊断面板：mount/unmount/会话切换计数 + 真实事件日志（含 `fulgurjs:error` 监听）+ AppContext 快照 JSON |
-| 版本 / 端口 | 5.3.3；5303/5313 + 5314/5304 | **6.4.2**（registry 精确版本 + lockfile）；5323/5324 + 5325/5326 |
 | 相同点 | 同一套 `/bridge` 契约、同一套受控 sessionKey 顺序（null → clearAppContext → 新快照 → 新 key）、同一套 MFU-015/016/017 错误语义 | |
 
 ## 构建 / 类型检查 / 部署
@@ -133,7 +132,7 @@ npm run typecheck   # Vue 工程：vue-tsc --noEmit --skipLibCheck；React 工�
 
 ## 边界声明（如实）
 
-- 子应用 memory 路由不与宿主 URL 同步（URL 同步是 §8.3 `/bridge/router/*` 的能力，本场景未启用）；
+- 子应用 memory 路由不与宿主 URL 同步（URL 同步使用 `/vue`、`/react` 的宿主导航端口，本场景未启用）；
 - 无 JS 沙箱 / CSS 隔离：双方样式用 `.sfh-`（宿主）/ `.sfc-`（子应用）类名命名空间治理；
 - 子应用工单数据为本地内存数据（模块级单例）：页面会话内跨卸载/重挂持久，整页刷新后重置；
 - vue-remote / react-remote 的 `index.html` + `main.ts(x)` 只是独立开发态入口，被宿主桥接消费时走
