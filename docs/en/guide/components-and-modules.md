@@ -161,6 +161,8 @@ Vue has no separate boundary component: `remoteComponent`'s built-in error place
 
 Generated `.d.ts` files are for editors and TypeScript, not runtime modules. If application code uses `import.meta.glob` to scan every `.ts` file, exclude declarations, for example `import.meta.glob(["./**/*.ts", "!./**/*.d.ts"])`. Component/tool registries should also exclude application bootstrap and federation assembly files.
 
+In type positions, `typeof import(...)` and `import("vue").DefineComponent` only describe types and do not load a module. In a value expression, `typeof import(...)` does start a real load. `import(...)` returns a Promise; use `await` to access the module.
+
 For a hands-on completion and error-checking example, see the [Vue template type demo](../../../examples/templates/vue-vue/README.md#体验远程类型提示与错误检查). Its browser page shows real function results and a remote component; `host/src/type-demo.ts` contains five non-executed negative examples, and `typecheck` verifies that all five are rejected. Hover over `sumNumbers` or request completion after `utils.`. Temporarily remove an `@ts-expect-error` to see its diagnostic, then restore it.
 
 `dts` is on by default: providers ship a **distributable declaration resource** with dev/build output (never depending on the remote's source being on the host machine), and hosts sync it automatically in dev into `src/fulgurjs/types/` (`.fulgurjs/types` without a src layout); src-layout projects work with zero tsconfig configuration:

@@ -397,6 +397,19 @@ describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
 describe('transform: TS 类型位置的动态 import 不改写（易用性审查·发布阻塞回归）', () => {
   const REMOTES: FederationOptions = { name: 'host', remotes: { 'remote-a': 'http://localhost:5101' } }
 
+  it.each([
+    `type Form = import('vue').DefineComponent\nexport type { Form }`,
+    `export const form: import('vue').DefineComponent | null = null`,
+    `export interface Form { component: import('vue').DefineComponent }`,
+  ])('普通 TS 文件的限定类型导入保持类型语法：%s', async (source) => {
+    expect(await transformModule(source, '/src/form-types.ts', ctx({ name: 'host', shared: { vue: '^3.5.0' } }))).toBeNull()
+  })
+
+  it.each(['js', 'ts'])('%s 值位置的 typeof import 仍加载远程模块', async (extension) => {
+    const result = await transformModule(`export const kind = typeof import('remote-a/money')`, `/src/value.${extension}`, ctx(REMOTES))
+    expect(result?.code).toContain('__fulgurjs_loadRemote("remote-a/./money")')
+  })
+
   it.each(['.d.ts', '.d.mts', '.d.cts'])('声明文件 %s 不参与运行时改写', async (extension) => {
     const source = `declare module 'remote-a/Form' { const component: import('vue').DefineComponent<{ id: string }>; export default component }`
     expect(await transformModule(source, `/src/types/remote${extension}?v=1`, ctx({ ...REMOTES, shared: { vue: '^3.5.0' } }))).toBeNull()

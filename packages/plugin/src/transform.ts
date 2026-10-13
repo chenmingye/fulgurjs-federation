@@ -10,6 +10,7 @@
  */
 import { init as initLexer, parse } from 'es-module-lexer'
 import MagicString from 'magic-string'
+import { transform as parseTypeScript } from 'esbuild'
 import path from 'node:path'
 import type { NormalizedOptions, NormalizedShared } from './options'
 import { SHARED_FACADE_PREFIX } from './options'
@@ -19,6 +20,39 @@ let lexerReady: Promise<unknown> | null = null
 function ensureLexer() {
   lexerReady ??= initLexer
   return lexerReady
+}
+
+/** 在分析副本中标记导入，再让 TS 解析器擦除类型；保留下来的标记才是运行时调用。
+ * 不靠 typeof/冒号猜测类型位置，不改最终源码，也不解析或下载目标模块。
+ */
+async function runtimeDynamicImportStarts(
+  code: string,
+  id: string,
+  imports: Awaited<ReturnType<typeof parse>>[0],
+): Promise<Set<number> | null> {
+  const clean = id.split('?')[0]
+  const typed = /\.[cm]?tsx?$/i.test(clean) || /[?&]lang\.tsx?(?:&|$)/i.test(id)
+  if (!typed) return null
+  const source = new MagicString(code)
+  const starts = new Map<string, number>()
+  for (const item of imports) {
+    if (item.d < 0 || item.n === undefined) continue
+    const marker = `fulgurjs-type-analysis:${item.ss}`
+    source.overwrite(item.s, item.e, JSON.stringify(marker))
+    starts.set(marker, item.ss)
+  }
+  if (starts.size === 0) return new Set()
+  const result = await parseTypeScript(source.toString(), {
+    loader: /\.tsx(?:$|[?&])/i.test(id) ? 'tsx' : 'ts',
+    target: 'esnext', jsx: 'preserve', treeShaking: false,
+    tsconfigRaw: { compilerOptions: { experimentalDecorators: true } },
+  })
+  const runtime = new Set<number>()
+  for (const item of parse(result.code)[0]) {
+    const start = item.n === undefined ? undefined : starts.get(item.n)
+    if (item.d >= 0 && start !== undefined) runtime.add(start)
+  }
+  return runtime
 }
 
 function splitNamedImportBindings(inner: string): string[] {
@@ -424,6 +458,7 @@ export async function transformModule(
     return null
   }
 
+  const runtimeImports = await runtimeDynamicImportStarts(code, id, imports)
   const matcher = ctx.rewriteShared ? buildSharedMatcher(options.shared) : null
   const remotesByKey = new Map(options.remotes.map((r) => [r.key, r]))
   const s = new MagicString(code)
@@ -551,16 +586,7 @@ export async function transformModule(
     const specExpr = code.slice(imp.s, imp.e).trim()
     const literal = specExpr.match(/^['"](.*)['"]$/s)
     if (!literal) continue
-    // TS 类型位置的动态 import（`typeof import('x')`）不是真实导入——运行时没有这次调用。
-    // 误改写会把运行时调用插进类型语法（如文档官方形态 loadRemote<typeof import('x')>('x')
-    // 变成 loadRemote<typeof __fulgurjs_loadRemote(...)>(...)），下游 esbuild 报语法错或产出
-    // 损坏代码。只按紧邻的 `typeof` 关键字判定；`cond ? a : import('x')` 的 `:` 属合法
-    // 运行时形态，不能作为跳过标记。
-    {
-      const importStart = code.lastIndexOf('import', d)
-      const before = code.slice(Math.max(0, importStart - 32), importStart)
-      if (/typeof\s*$/u.test(before)) continue
-    }
+    if (runtimeImports && !runtimeImports.has(imp.ss)) continue
     const spec = remap(literal[1])
     const matched = matcher ? matchShared(spec, matcher) : null
     const shared =
