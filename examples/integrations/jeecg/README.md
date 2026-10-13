@@ -86,7 +86,7 @@ for inst in app-a app-b; do
   patch -p1 --directory=$inst < patches/${inst}.patch
 done
 
-# ④ 匹配锁文件安装（补丁含 package.json：@fulgurjs/federation 精确 5.5.2 + vite 8.1.4）
+# ④ 匹配锁文件安装（补丁含 package.json：@fulgurjs/federation 与 Vite 的精确版本以实例 package.json 和锁文件为准）
 for inst in app-a app-b; do
   (cd $inst && pnpm install --registry=https://registry.npmmirror.com)
 done
@@ -100,7 +100,7 @@ done
 |---|---|
 | `.env*`：端口/标题/代理/`VITE_GLOB_API_URL`（B 用 `-b` 前缀） | 实例身份与数据通道 |
 | `src/router/{index,router}.ts`（B）：createRouter 支持 historyOverride 并返回实例 | 桥接工厂注入 createMemoryHistory |
-| `src/store/index.ts`（B）：新增 createAppStore() | 子应用实例独立 Pinia |
+| `src/store/index.ts`（B）：新增 createAppStore()，装配与异步初始化明确使用本应用 Pinia | 子应用实例独立 Pinia |
 | `src/fulgurjs/bridge.ts`（B）/ `fulgurjs.config.ts` | defineBridgeApp 契约 + 联邦配置（B 另含嵌入 C 的视图 `src/views/fed/InnerReactDemo.vue`） |
 | `src/views/fed/*.vue`（A） | 宿主桥接视图（会话切换/卸载重挂/URL 同步观测） |
 | `mock/sys/menu.ts`：联邦演示菜单（A/B 结构不同，catch-all 子路由防内层导航重挂） | 演示入口 |

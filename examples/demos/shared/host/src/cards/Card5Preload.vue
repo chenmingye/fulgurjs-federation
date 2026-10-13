@@ -2,7 +2,7 @@
   <DemoCard
     no="⑤"
     title="预载：preloadRemote 的 preload / prefetch 两种模式"
-    description="预载目标 sh-remote-b/info——默认页面不消费该模块，因此每次点击都能看到 performance 资源时间线里真实新增的条目。preload（等待 CSS load/error）与 prefetch（低优先级、立即返回）各一按钮。"
+    description="预载目标 sh-remote-b/info——默认页面不消费该模块，首次预载可观察资源时间线新增请求；再次预载可能复用已下载资源。preload（等待 CSS load/error）与 prefetch（低优先级、立即返回）各一按钮。"
     api="preloadRemote('sh-remote-b/info', { mode }) / performance.getEntriesByType('resource')"
     source="host/src/cards/Card5Preload.vue + remote-b/src/exposes/info.ts"
   >
@@ -10,7 +10,7 @@
     <button class="btn ghost" type="button" :disabled="busy" @click="run('prefetch')">prefetch 模式预载 sh-remote-b/info</button>
     <table v-if="results.length" class="grid-table">
       <thead>
-        <tr><th>新增资源条目（:5345）</th><th style="width: 100px">耗时 ms</th></tr>
+        <tr><th>新增资源条目（remote-b）</th><th style="width: 100px">耗时 ms</th></tr>
       </thead>
       <tbody>
         <tr v-for="row in results" :key="row.url">
@@ -43,12 +43,15 @@ interface ResourceRow {
 const busy = ref(false)
 const results = ref<ResourceRow[]>([])
 const lastMode = ref<'preload' | 'prefetch' | ''>('')
+const remoteResourceBase = import.meta.env.DEV
+  ? 'http://localhost:5345/'
+  : new URL('/sh-remote-b/', window.location.origin).href
 
 function snapshot(): ResourceRow[] {
   return performance
     .getEntriesByType('resource')
     .map((entry) => entry as PerformanceResourceTiming)
-    .filter((entry) => entry.name.includes(':5345'))
+    .filter((entry) => entry.name.startsWith(remoteResourceBase))
     .map((entry) => ({ url: entry.name, ms: Math.round(entry.duration) }))
 }
 

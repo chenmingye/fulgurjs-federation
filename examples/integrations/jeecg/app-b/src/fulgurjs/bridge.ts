@@ -21,7 +21,7 @@ import 'ant-design-vue/dist/reset.css'
 import 'virtual:svg-icons-register'
 
 import App from '/@/App.vue'
-import { createAppStore } from '/@/store'
+import { createAppStore, setupStore } from '/@/store'
 import { createRouter } from '/@/router'
 import { setupRouterGuard } from '/@/router/guard'
 import { useUserStoreWithOut } from '/@/store/modules/user'
@@ -57,7 +57,7 @@ export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routi
   setupRouterGuard(router)
 
   const app = createApp(App)
-  app.use(store)
+  setupStore(app)
 
   await setupI18n(app)
   initAppConfigStore()

@@ -17,7 +17,9 @@ export function setupStore($app: App<Element>) {
  * 联邦桥接专用：创建独立 Pinia 实例（桥接工厂给子应用实例用，普通启动不受影响）
  */
 export function createAppStore(): Pinia {
-  return createPinia();
+  // 异步装配后，WithOut 辅助函数仍须明确取得本应用的 Pinia。
+  store = createPinia();
+  return store;
 }
 
 // 销毁store

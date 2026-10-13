@@ -13,7 +13,7 @@
         <template v-else>
           <a-space wrap>
             <a-tag color="blue">memory 路由 + 宿主 URL 同步（basePath=/fed/inner）</a-tag>
-            <a-tag color="green">宿主历史唯一写入方：Jeecg-A</a-tag>
+            <a-tag color="green">宿主历史唯一写入方：最外层宿主</a-tag>
           </a-space>
           <div class="fed-bridge-container" data-fulgurjs="jeecg-b-embeds-react-c">
             <BridgeReactC :app-props="{ depth: depth + 1, host: 'jeecg-b', user: userLabel }"

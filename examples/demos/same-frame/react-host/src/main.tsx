@@ -11,7 +11,7 @@ installFulgurjsErrorListener()
 // （StrictMode 双 effect 下计数按其语义各多一次；桥接契约对两种模式都安全）。
 // BrowserRouter：宿主自己的路由（浏览器历史唯一写入方），子应用用 memory 路由互不干扰。
 createRoot(document.getElementById('root')!).render(
-  <BrowserRouter>
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
     <App />
   </BrowserRouter>,
 )

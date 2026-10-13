@@ -3,8 +3,8 @@
     <header class="page-header">
       <h1>错误恢复隔离演示（examples/demos/errors）</h1>
       <p class="page-sub">
-        remote-good：<a href="http://localhost:5352/err-good/" target="_blank" rel="noreferrer">http://localhost:5352</a>
-        · host：本页 http://localhost:5353 · 每张卡一次「注入 → 展示真实错误 → 恢复 → 验证可用」循环；重玩请刷新页面。
+        remote-good：<a :href="remoteHome" target="_blank" rel="noreferrer">{{ remoteHome }}</a>
+        · host：本页 {{ hostOrigin }} · 每张卡一次「注入 → 展示真实错误 → 恢复 → 验证可用」循环；重玩请刷新页面。
       </p>
       <div class="monitor" data-testid="error-monitor">
         <div class="monitor-row">
@@ -71,6 +71,10 @@ import Card8BridgeUnmountFail from './cards/Card8BridgeUnmountFail.vue'
 import Card9SetupFail from './cards/Card9SetupFail.vue'
 import Card10Normal from './cards/Card10Normal.vue'
 import { monitor } from './error-monitor'
+import { ERR_GOOD_ENTRY } from './shared'
+
+const hostOrigin = window.location.origin
+const remoteHome = new URL('.', new URL(ERR_GOOD_ENTRY, window.location.href)).href
 </script>
 
 <style>

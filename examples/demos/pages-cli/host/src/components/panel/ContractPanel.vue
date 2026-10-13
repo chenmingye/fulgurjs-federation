@@ -3,15 +3,15 @@
     <h2>⑤ 宿主页面表 ↔ 远程 manifest 契约 <small>呼应 CLI check-pages 的核对逻辑</small></h2>
 
     <p v-if="state === 'unreachable'" class="pc-error">
-      远程 dev manifest 不可达（{{ manifestUrl }}）——远程 dev server 未启动时如实展示，不假装通过。
+      远程 manifest 不可达（{{ manifestUrl }}）——检查当前模式的远程部署与入口地址，不假装通过。
       CLI 侧对应「无法验证」（unverified）语义；manifest 来源可显式指定：
       <code>npx @fulgurjs/federation check-pages --manifest pc-remote=&lt;路径或URL&gt;</code>。
     </p>
 
     <template v-if="state === 'ready'">
       <p class="pc-hint" style="margin-bottom: 6px">
-        远程 dev manifest（{{ manifestUrl }}）exposes 键与宿主页面表 spec 逐条对照——
-        这正是 <code>fulgurjs check-pages</code> 自动化的核对（本面板只读 dev manifest 做实时演示；
+        远程 manifest（{{ manifestUrl }}）exposes 键与宿主页面表 spec 逐条对照——
+        这正是 <code>fulgurjs check-pages</code> 自动化的核对（本面板按开发/生产模式读取对应 manifest；
         CLI 还支持 --site/prod 推导与本地 dist 文件，且报告「无法验证」而非假装通过）。
       </p>
       <table class="pc-table">
@@ -34,7 +34,7 @@
       与运行时 createHostPages 同一份数据模块）；远程 fulgurjs.config.ts 也具名导出同构 hostPages
       （examples/demos/pages-cli/remote/src/fulgurjs/pages.data.ts，内容一致表达「同源」）。分别在两个工程根目录跑
       <code>npx @fulgurjs/federation explain</code> 可以看到两侧的页面 spec 映射；
-      <code>npx @fulgurjs/federation check-pages --manifest pc-remote=http://localhost:5363/fulgurjs-manifest.json</code>
+      <code>npx @fulgurjs/federation check-pages --manifest pc-remote={{ manifestUrl }}</code>
       则在宿主侧自动完成本面板的对照（远程 dist 已构建时，脚本会改用本地 dist 的 prod manifest 真实核对）。
     </p>
   </section>
@@ -51,16 +51,17 @@ type ManifestState = 'loading' | 'ready' | 'unreachable'
 const state = ref<ManifestState>('loading')
 const exposes = ref<string[]>([])
 
-// dev manifest URL 由 remotes 的 dev 地址推导（与运行时/CLI 同一拼接语义：<dev>/@fulgurjs-manifest.json）
+// 与实际远程加载使用同一模式的地址；生产演示不依赖另一个开发服务。
 const manifestUrl = computed(() => {
   const remote = fulgurjsConfig.remotes?.['pc-remote']
-  const dev =
+  const base =
     typeof remote === 'string'
       ? remote
       : typeof remote === 'object' && remote !== null
-        ? (remote.dev ?? '')
+        ? (import.meta.env.PROD ? remote.prod : remote.dev) ?? ''
         : ''
-  return `${dev.replace(/\/+$/, '')}/@fulgurjs-manifest.json`
+  const file = import.meta.env.PROD ? 'fulgurjs-manifest.json' : '@fulgurjs-manifest.json'
+  return new URL(`${base.replace(/\/+$/, '')}/${file}`, window.location.origin).href
 })
 
 const rows = computed(() =>

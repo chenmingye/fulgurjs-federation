@@ -41,7 +41,9 @@ const injectFault = async (): Promise<void> => {
   error.value = undefined
   successText.value = ''
   try {
-    const ghost = await loadRemote('err-good/no-such-module')
+    // 故意错误的地址在运行时构造，测试运行时诊断；静态已知入口仍由生成类型校验。
+    const missingSpec = ['err-good', 'no-such-module'].join('/')
+    const ghost = await loadRemote(missingSpec)
     successText.value = `意外成功：${JSON.stringify(Object.keys(ghost ?? {}))}（故障注入下不应出现）`
   } catch (e) {
     error.value = e

@@ -28,7 +28,7 @@ interface AppState {
   mainAppProps: MainAppProps,
 }
 let timeId: TimeoutHandle;
-export const useAppStore = defineStore('app', {
+const useAppStoreDefinition = defineStore('app', {
   state: (): AppState => ({
     darkMode: undefined,
     pageLoading: false,
@@ -157,6 +157,12 @@ export const useAppStore = defineStore('app', {
 
   },
 });
+
+// 多应用共享 Pinia 时，异步守卫与组件必须读取本应用状态；保留显式实例与热更新参数。
+export const useAppStore: typeof useAppStoreDefinition = Object.assign(
+  (...args: Parameters<typeof useAppStoreDefinition>) => useAppStoreDefinition(args[0] ?? store, args[1]),
+  useAppStoreDefinition,
+);
 
 // Need to be used outside the setup
 export function useAppStoreWithOut() {

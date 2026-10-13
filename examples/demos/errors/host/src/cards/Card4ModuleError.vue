@@ -39,7 +39,9 @@ import { computed, ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
 import CardShell from '../components/CardShell.vue'
 
-const FaultComp = remoteComponent('err-good/module-error', { retries: 0 })
+// 故障模块在运行时加载；不绕过普通组件的静态类型校验。
+const failingSpec = ['err-good', 'module-error'].join('/')
+const FaultComp = remoteComponent(failingSpec, { retries: 0 })
 const GoodComp = remoteComponent('err-good/ClickButton', { retries: 0 })
 
 const showFault = ref(false)
