@@ -199,17 +199,17 @@ remoteSchema = {}
 
 | API（README 锚点） | 导出入口 | 本 demo 使用位置 | 插件源码（packages/plugin/src） |
 |---|---|---|---|
-| `definePages` / `validatePages`（§3） | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/pages.data.ts](host/src/fulgurjs/pages.data.ts)（数据源）、ValidatePanel.vue（违例渲染） | `pages.ts` |
-| `createHostPages`（§10.1） | `@fulgurjs/federation/vue` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（beforeLoad/loadingComponent/delay/schema 全参接线）、[host/src/main.ts](host/src/main.ts)（路由注册） | `vue-adapter.ts` + `host-pages-core.ts` |
+| `definePages` / `validatePages` | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/pages.data.ts](host/src/fulgurjs/pages.data.ts)（数据源）、ValidatePanel.vue（违例渲染） | `pages.ts` |
+| `createHostPages` | `@fulgurjs/federation/vue` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（beforeLoad/loadingComponent/delay/schema 全参接线）、[host/src/main.ts](host/src/main.ts)（路由注册） | `vue-adapter.ts` + `host-pages-core.ts` |
 | `remoteSchema`（§路径②） | `@fulgurjs/federation/vue` | [host/src/fulgurjs/host/pages.ts](host/src/fulgurjs/host/pages.ts)（R3 数据源）、RemoteSchemaPanel.vue（JSON 视图） | `remote-schema.ts` + `virtual.ts` |
-| `provideAppContext` / `clearAppContext` / `getAppContext`（§9） | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/host/bridge.ts](host/src/fulgurjs/host/bridge.ts)、ContextPanel.vue | `context.ts` |
+| `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/runtime` | [host/src/fulgurjs/host/bridge.ts](host/src/fulgurjs/host/bridge.ts)、ContextPanel.vue | `context.ts` |
 | `requireAppContext`（§9，CC-001） | `@fulgurjs/federation/runtime` | [remote/src/pages/Orders.vue](remote/src/pages/Orders.vue)（缺键捕获展示） | `context.ts` |
-| `federation({ setup })` + `onSession`（§10.2） | Vite 插件选项 + 生命周期约定 | [remote/src/fulgurjs/setup.ts](remote/src/fulgurjs/setup.ts)（记录到 `globalThis.__PC_SETUP_LOG__`）、[remote/fulgurjs.config.ts](remote/fulgurjs.config.ts) | `transform.ts` + runtime 生命周期段 |
-| `keepAlive`（§9.1.1） | 页面表条目字段 | [host/src/App.vue](host/src/App.vue)（`<KeepAlive :include="hostPages.keepAliveNames">`）、[remote/src/pages/Dashboard.vue](remote/src/pages/Dashboard.vue) | `host-pages-core.ts`（keepAliveNames） |
-| `loadingComponent` + `delay`（§9.1.2） | `createHostPages` 选项 | [host/src/components/PcSkeleton.vue](host/src/components/PcSkeleton.vue) + TracePanel.vue（loading→ready 时序） | `vue-adapter.ts` |
-| `remoteComponent`（§8） | `@fulgurjs/federation/vue` | WidgetPanel.vue（`pc-remote/widgets/stat-card` 直渲染） | `vue-adapter.ts` |
+| `federation({ setup })` + `onSession` | Vite 插件选项 + 生命周期约定 | [remote/src/fulgurjs/setup.ts](remote/src/fulgurjs/setup.ts)（记录到 `globalThis.__PC_SETUP_LOG__`）、[remote/fulgurjs.config.ts](remote/fulgurjs.config.ts) | `transform.ts` + runtime 生命周期段 |
+| `keepAlive` | 页面表条目字段 | [host/src/App.vue](host/src/App.vue)（`<KeepAlive :include="hostPages.keepAliveNames">`）、[remote/src/pages/Dashboard.vue](remote/src/pages/Dashboard.vue) | `host-pages-core.ts`（keepAliveNames） |
+| `loadingComponent` + `delay` | `createHostPages` 选项 | [host/src/components/PcSkeleton.vue](host/src/components/PcSkeleton.vue) + TracePanel.vue（loading→ready 时序） | `vue-adapter.ts` |
+| `remoteComponent` | `@fulgurjs/federation/vue` | WidgetPanel.vue（`pc-remote/widgets/stat-card` 直渲染） | `vue-adapter.ts` |
 | `hostPages` 具名导出（§4，CLI 数据源） | `fulgurjs.config.ts` 具名导出 | [host/fulgurjs.config.ts](host/fulgurjs.config.ts)、[remote/fulgurjs.config.ts](remote/fulgurjs.config.ts)（远程侧同构对照） | `app-config.ts` + `commands.ts` |
-| `fulgurjs init/explain/check-pages/doctor`（§5） | `fulgurjs` bin | [scripts/run-cli-checks.sh](scripts/run-cli-checks.sh)（真实采样） | `cli.ts` / `init.ts` / `commands.ts` / `doctor.ts` |
+| `fulgurjs init/explain/check-pages/doctor` | `fulgurjs` bin | [scripts/run-cli-checks.sh](scripts/run-cli-checks.sh)（真实采样） | `cli.ts` / `init.ts` / `commands.ts` / `doctor.ts` |
 
 ## 负向工程 negative/（长期「预期编译失败」）
 
