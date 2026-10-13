@@ -64,6 +64,8 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
   它与 `globalComponents`（消费方全局注册，解决模板字符串标签解析）是**两件不同的事、不能互相替代**；全局 CSS/主题样式随构建产物走，也不由 Provider 承担。仅手动 `loadRemote` / `useLoadRemote`（拿到模块自行渲染）不自动应用——这类消费在 JSX/模板里自己包 Provider。
 
+- **自定义指令也需要消费方注册**：`globalComponents` 只注册组件，不复制提供方的 `app.directive(...)`。远程模板使用权限等指令时，在消费方应用初始化阶段注册同一实现，或由统一的 Provider 装配；同名指令冲突应明确处理，不能用空指令跳过权限。
+
 - **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
 **React**（`@fulgurjs/federation/react`）：
@@ -156,6 +158,8 @@ import { RemoteErrorBoundary } from '@fulgurjs/federation/react'
 Vue 侧无独立边界组件：`remoteComponent` 的内置错误占位 + `errorComponent` 选项承担同一职责。
 
 ## 远程类型（自动同步）
+
+生成的 `.d.ts` 供编辑器和 TypeScript 使用，不是运行模块。若业务用 `import.meta.glob` 扫描所有 `.ts` 文件，必须排除声明文件，例如 `import.meta.glob(["./**/*.ts", "!./**/*.d.ts"])`；组件/工具注册器也应排除应用启动及联邦装配文件。
 
 想直接体验补全和错误检查？打开 [Vue 模板的类型演示](../../../examples/templates/vue-vue/README.md#体验远程类型提示与错误检查)：浏览器显示真实函数结果和远程组件，`host/src/type-demo.ts` 提供五条不执行的错误示例，`typecheck` 验证这些错误确实被拒绝。
 

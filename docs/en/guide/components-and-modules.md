@@ -64,6 +64,8 @@ Semantics:
 
   It and `globalComponents` (consumer-side registration, solving string-tag resolution) are **two different things and not interchangeable**; global CSS/theme styles travel with the build output and are not carried by providers either. Manual `loadRemote` / `useLoadRemote` (module in hand, self-rendered) apply nothing automatically — wrap the provider yourself in your JSX/template.
 
+- **Custom directives require consumer registration**: `globalComponents` registers components; it does not copy the provider’s `app.directive(...)` calls. Register the required directive implementation when initializing the consumer app, or assemble it in a shared provider. Handle name conflicts explicitly; never replace a permission directive with a no-op.
+
 - **State injection belongs to the consumer too**: a remote component using injected Pinia may resolve a consumer store with the same ID. When provider-owned state is required, pass the provider Pinia instance explicitly. A complete application requiring its own router, stores and lifecycle should use [app bridging](app-bridge.md).
 
 **React** (`@fulgurjs/federation/react`):
@@ -156,6 +158,8 @@ import { RemoteErrorBoundary } from '@fulgurjs/federation/react'
 Vue has no separate boundary component: `remoteComponent`'s built-in error placeholder plus the `errorComponent` option carry the same responsibility.
 
 ## Remote types (automatic sync)
+
+Generated `.d.ts` files are for editors and TypeScript, not runtime modules. If application code uses `import.meta.glob` to scan every `.ts` file, exclude declarations, for example `import.meta.glob(["./**/*.ts", "!./**/*.d.ts"])`. Component/tool registries should also exclude application bootstrap and federation assembly files.
 
 For a hands-on completion and error-checking example, see the [Vue template type demo](../../../examples/templates/vue-vue/README.md#体验远程类型提示与错误检查). Its browser page shows real function results and a remote component; `host/src/type-demo.ts` contains five non-executed negative examples, and `typecheck` verifies that all five are rejected. Hover over `sumNumbers` or request completion after `utils.`. Temporarily remove an `@ts-expect-error` to see its diagnostic, then restore it.
 

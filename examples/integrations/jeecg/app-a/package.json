@@ -2,7 +2,7 @@
   "name": "jeecgboot-vue3",
   "version": "3.9.5",
   "author": {
-    "name": "北京国炬信息技术有限公司",
+    "name": "\u5317\u4eac\u56fd\u70ac\u4fe1\u606f\u6280\u672f\u6709\u9650\u516c\u53f8",
     "email": "jeecgos@163.com",
     "url": "https://www.jeecg.com"
   },
@@ -25,7 +25,7 @@
   "dependencies": {
     "@ant-design/colors": "^7.2.1",
     "@ant-design/icons-vue": "^7.0.1",
-    "@fulgurjs/federation": "6.8.2",
+    "@fulgurjs/federation": "6.8.3",
     "@iconify/iconify": "^3.1.1",
     "@jeecg/aiflow": "3.9.5-beta",
     "@logicflow/core": "^2.2.4",
