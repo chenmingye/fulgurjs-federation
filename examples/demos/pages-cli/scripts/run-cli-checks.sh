@@ -92,15 +92,15 @@ expect_rc 0 "fulgurjs --help"
 step "2) fulgurjs init 在临时目录生成单项目起步模板；第二次运行预期退出码 2（拒绝覆盖）"
 TMP_DIR="$(mktemp -d)"
 echo "[info] 临时目录：${TMP_DIR}"
-run_cmd_in "${TMP_DIR}" "${HOST_DIR}/node_modules/.bin/fulgurjs" init
+run_cmd_in "${TMP_DIR}" "${HOST_DIR}/node_modules/.bin/fulgurjs" init --framework vue
 expect_rc 0 "fulgurjs init 生成模板"
 echo "--- 生成的 fulgurjs.config.ts 模板内容： ---"
 cat "${TMP_DIR}/fulgurjs.config.ts"
 echo "--- 模板内容结束 ---"
 # 「--force 拒绝路径」演示：已存在且未加 --force → CLI 打印拒绝覆盖并退出码 2
-run_cmd_in "${TMP_DIR}" "${HOST_DIR}/node_modules/.bin/fulgurjs" init
+run_cmd_in "${TMP_DIR}" "${HOST_DIR}/node_modules/.bin/fulgurjs" init --framework vue
 expect_rc 2 "fulgurjs init 已存在时拒绝覆盖（--force 才可覆盖）"
-run_cmd_in "${TMP_DIR}" "${HOST_DIR}/node_modules/.bin/fulgurjs" init --force
+run_cmd_in "${TMP_DIR}" "${HOST_DIR}/node_modules/.bin/fulgurjs" init --framework vue --force
 expect_rc 0 "fulgurjs init --force 覆盖已有模板"
 rm -rf "${TMP_DIR}"
 echo "[info] 临时目录已清理"
