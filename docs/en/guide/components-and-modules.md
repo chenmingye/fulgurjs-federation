@@ -20,7 +20,7 @@ export default {
 } satisfies FederationOptions
 ```
 
-Key convention `'./X'` (the `./` prefix may be omitted; the config normalizes it and reminds you); the value is a source file path relative to the project root. Only modules used as "pages" in a host page route table must be standalone pages (taking route params); ordinary components have no such requirement. Required props of an exposed component should have default values, otherwise the build reports `BLD-003`.
+Key convention `'./X'` (the `./` prefix may be omitted; the config normalizes it and reminds you); the value is a source file path relative to the project root. Only modules used as "pages" in a host page route table must be standalone pages (taking route params); ordinary components have no such requirement. Consumers must supply required props of ordinary remote components, or the component can provide defaults. `BLD-003` is a page independence check, not a build restriction requiring defaults for every required prop.
 
 ## Consumer: three ways to load
 

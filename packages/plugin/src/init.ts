@@ -176,7 +176,7 @@ export function checklistFor(scenario: InitScenario): string[] {
   out.push('1. 安装依赖：npm/pnpm add @fulgurjs/federation')
   if (provide) {
     out.push('2. expose 目标按用途分类：普通组件/函数模块可直接 expose（使用方 remoteComponent/loadRemote 消费）；')
-    out.push('   作为「页面」接入宿主页面路由表时才要求独立页（页面从路由取参）；组件必填 props 给默认值（BLD-003）')
+    out.push('   作为「页面」接入宿主页面路由表时才要求独立页（页面从路由取参）；普通组件的必填 props 在消费处传入，或提供默认值；BLD-003 为人工检查项，不是自动构建限制')
   }
   if (consume) {
     out.push('3. 消费方式按需选择：普通组件/模块用 remoteComponent/loadRemote（不需要页面表、不需要桥接配置）；')
