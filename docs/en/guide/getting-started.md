@@ -143,7 +143,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 
 | Role | Required | Notes |
 |---|---|---|
-| Provider | `name` + `exposes` | Loaded by others. Components with required props must give default values (otherwise `BLD-003`) |
+| Provider | `name` + `exposes` | Loaded by others. Pass required props at the consumption site or give them defaults; generated remote types check the consumer arguments. |
 | Consumer | `name` + `remotes` | Loads others. Two-slot dev/prod addresses or a single address string |
 | Dual | `name` + `exposes` + `remotes` | Federation in both directions. `devSharedSelf` defaults to `true` (inferred from the role); no explicit configuration needed |
 

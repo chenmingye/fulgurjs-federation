@@ -90,7 +90,9 @@ const BridgeErrorPlaceholder = defineComponent({
       return h('div', { style: ERROR_STYLE, 'data-fulgurjs-error': code }, [
         h('p', { style: 'margin:0 0 4px;font-weight:600' }, `桥接应用加载失败（错误码 ${code}）`),
         h('p', { style: 'margin:0 0 8px;word-break:break-all' }, message),
-        h('p', { style: 'margin:0 0 10px' }, '「重试加载」在当前页面重建挂载；若浏览器已缓存失败的模块，请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。'),
+        h('p', { style: 'margin:0 0 10px' }, props.retry
+          ? '「重试加载」在当前页面重建挂载；若浏览器已缓存失败的模块，请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。'
+          : '该容器已封锁（同页无法安全重挂），只能整页刷新恢复——点击「刷新页面重试」会重新加载页面（保留当前地址），未保存的页面状态会丢失。'),
         h('div', { style: 'margin:0' }, [
           props.retry
             ? h('button', {

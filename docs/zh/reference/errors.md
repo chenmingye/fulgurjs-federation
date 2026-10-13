@@ -48,7 +48,7 @@
 |---|---|---|---|
 | `BLD-001` | 构建报 expose 源文件解析失败 | `exposes` 值指向的文件不存在/语法错误/路径指向项目外 | 核对 exposes 的源文件路径（相对项目根）；修复文件或路径 |
 | `BLD-002` | 构建报构建目标低于 es2022 | `build.target` 低于 es2022——顶层 await（TLA）需要 | `build.target: 'es2022'` 或更新 |
-| `BLD-003` | 构建警告 expose 目标组件含必填 props | expose 的组件声明了无默认值的必填 props——宿主按 props 透传时可能渲染缺参 | 必填 props 给默认值，或在使用处保证始终传入 |
+| `BLD-003` | 人工检查项：expose 组件缺少必填 props（不自动发射告警） | 组件需要参数，但消费处未传入；插件无法在提供方构建时知道宿主是否传值 | 必填 props 给默认值，或在使用处保证始终传入 |
 | `BLD-006` | 构建报 output 数组形态下无法自动注入协商门面 chunk 隔离 | `build.rollupOptions.output` 是数组，插件无法自动加协商门面 chunk 隔离分支 | 手工在 output 各分支补齐插件提示的隔离规则 |
 
 ### MFU 运行时

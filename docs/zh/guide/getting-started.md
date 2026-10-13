@@ -143,7 +143,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 
 | 角色 | 必写 | 说明 |
 |---|---|---|
-| 提供方（provider） | `name` + `exposes` | 被别人加载。组件必填 props 给默认值（否则 `BLD-003`） |
+| 提供方（provider） | `name` + `exposes` | 被别人加载。组件的必填 props 由消费方传入，或在组件中设置默认值；生成的远程类型会检查消费方参数。 |
 | 消费方（consumer） | `name` + `remotes` | 加载别人。dev/prod 地址二段式或单地址字符串 |
 | 双角色（dual） | `name` + `exposes` + `remotes` | 双向联邦。`devSharedSelf` 缺省即 `true`（按角色推断），无需显式配置 |
 

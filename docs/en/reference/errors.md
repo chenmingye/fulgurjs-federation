@@ -49,7 +49,7 @@
 |---|---|---|---|
 | `BLD-001` | Build reports an expose source file parse failure | The file at an `exposes` value does not exist / has a syntax error / the path points outside the project | Check the expose source paths (relative to the project root); fix the file or the path |
 | `BLD-002` | Build reports a build target below es2022 | `build.target` is below es2022 — top-level await (TLA) needs it | `build.target: 'es2022'` or newer |
-| `BLD-003` | Build warns that an expose target component has required props | An exposed component declared required props without defaults — when the host passes props through, rendering may lack them | Give required props defaults, or guarantee they are always passed at the usage site |
+| `BLD-003` | Manual check: required exposed-component props are missing (no automatic warning) | The consumer did not provide a required prop; provider-side builds cannot know whether a host supplies values | Give required props defaults, or guarantee they are always passed at the usage site |
 | `BLD-006` | Build reports that the negotiation facade chunk isolation cannot be injected automatically under an array-shaped output | `build.rollupOptions.output` is an array, so the plugin cannot add the facade chunk isolation branch automatically | Manually complete the isolation rules the plugin suggests in every output branch |
 
 #### MFU runtime

@@ -1707,10 +1707,8 @@ export function federation(options: FederationOptions): Plugin[] {
     })
   }
 
-  // W5/BLD-003 说明：expose 目标必填 props 的启发式扫描（scanExposeRequiredProps，见
-  // diagnostics.ts 与单测）在 testbed 实测出现误报——bpm 流程详情页声明必填 id，但宿主
-  // 路由以 props 回调（params+query 全量透传）供给，页面完全正常。插件无法感知宿主是否
-  // 透传 props，按预授权（排期文档 §4.5 #6）降级为手册 §8 文档化检查项，不自动发射。
+  // 提供方构建无法知道消费方是否传入组件 props，因此不自动发射必填参数告警。
+  // 消费方参数检查由分发的远程声明承担；未使用类型时需在调用处自行保证。
 
   // D3：页面级 react-refresh 单例发布（跨源 Fast Refresh 的宿主侧）。post 阶段执行：
   // @vitejs/plugin-react 的 preamble 注入在 normal 阶段（晚于本插件 pre 钩子），只有

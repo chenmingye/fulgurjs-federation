@@ -373,6 +373,8 @@ export async function transformModule(
 ): Promise<TransformResult | null> {
   const { options } = ctx
   const clean = id.split('?')[0].replace(/^\0/, '')
+  // 声明文件描述类型，不包含运行时导入；业务 glob 误收集时也不能改写其类型语法。
+  if (/\.d\.[cm]?ts$/i.test(clean)) return null
   // 插件生成的虚拟模块（pre/post 两个钩子都会到达这里）一律不改写：相对路径 share 键
   // 带 .ts/.js 扩展时虚拟 id 能通过扩展名检查（含 \0 前缀形态），门面内的 export *
   // 即被自家 transform 拒绝

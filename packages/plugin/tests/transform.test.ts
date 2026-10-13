@@ -397,6 +397,11 @@ describe('D.1 守卫：exposes 目标文件静态导入虚拟运行时', () => {
 describe('transform: TS 类型位置的动态 import 不改写（易用性审查·发布阻塞回归）', () => {
   const REMOTES: FederationOptions = { name: 'host', remotes: { 'remote-a': 'http://localhost:5101' } }
 
+  it.each(['.d.ts', '.d.mts', '.d.cts'])('声明文件 %s 不参与运行时改写', async (extension) => {
+    const source = `declare module 'remote-a/Form' { const component: import('vue').DefineComponent<{ id: string }>; export default component }`
+    expect(await transformModule(source, `/src/types/remote${extension}?v=1`, ctx({ ...REMOTES, shared: { vue: '^3.5.0' } }))).toBeNull()
+  })
+
   it('文档官方形态 loadRemote<typeof import(...)>：类型位置的 import(...) 保持原样', async () => {
     const r = await transformModule(
       `import { loadRemote } from 'virtual:fulgurjs-runtime'\nconst { formatMoney } = await loadRemote<typeof import('remote-a/money')>('remote-a/money')\n`,

@@ -282,6 +282,8 @@ describe('Vue 宿主 createVueBridgeApp', () => {
     expect(errEl?.getAttribute('data-fulgurjs-error')).toBe('MFU-016')
     expect(errEl?.textContent).toContain('unmount 阶段失败')
     expect(errEl?.textContent).toContain('sub unmount boom')
+    expect(errEl?.textContent).toContain('只能整页刷新恢复')
+    expect(errEl?.textContent).not.toContain('「重试加载」在当前页面重建挂载')
     expect(fake.mounts).toHaveLength(1)
     // 封锁后：默认占位不提供「重试加载」（重挂不安全），只保留整页刷新恢复
     expect(host.root.querySelector('[data-fulgurjs-retry]')).toBeNull()

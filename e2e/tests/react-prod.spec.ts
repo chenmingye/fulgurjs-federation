@@ -7,11 +7,9 @@ import { expect, test } from '@playwright/test'
 // host-react 部署在隔离 Nginx 的 /host-react/ 子路径（不覆盖 Vue 主站与 8662 MES）
 const PROD_BASE = '/host-react'
 
-test.beforeEach(async ({ page }) => {
-  await page.goto(`${PROD_BASE}/`)
-})
-
 async function login(page: import('@playwright/test').Page, who: 'alice' | 'bob') {
+  // 故障注入须先于第一次导航；首页本身也可能加载远程入口。
+  if (page.url() === 'about:blank') await page.goto(`${PROD_BASE}/`)
   await page.getByTestId(`login-${who}`).click()
   await expect(page.getByTestId('account-state')).toHaveText(`account:${who}`)
 }
@@ -141,8 +139,9 @@ test('prod B2 并发失败→解除→同页重试：单代次推进（重试 UR
 
 test('prod B3a 入口失败→解除→同页重试恢复（runtime importEntry 失败计数重试）', async ({ page }) => {
   let blocked = true
+  let abortedEntries = 0
   await page.route(/\/remote-react\/fulgurjs-remoteEntry\.js(\?.*)?$/, (route) => {
-    if (blocked) route.abort('connectionrefused')
+    if (blocked) { abortedEntries++; route.abort('connectionrefused') }
     else route.continue()
   })
   await login(page, 'alice')
@@ -150,9 +149,12 @@ test('prod B3a 入口失败→解除→同页重试恢复（runtime importEntry 
   const box = page.locator('[data-fulgurjs-error]').first()
   await expect(box).toBeVisible({ timeout: 20000 })
   await expect(box).toContainText('远程组件加载失败')
+  expect(abortedEntries).toBeGreaterThan(0)
+  await page.evaluate(() => { (window as unknown as Record<string, number>).__FG_ENTRY_RECOVERY__ = 1 })
   blocked = false
   await page.getByRole('button', { name: '重试' }).first().click()
   await expect(page.getByTestId('remote-home')).toBeVisible({ timeout: 20000 })
+  expect(await page.evaluate(() => (window as unknown as Record<string, number>).__FG_ENTRY_RECOVERY__)).toBe(1)
 })
 
 test('prod B3b expose chunk 失败→解除→同页重试恢复（__fgR 换 URL 穿透失败缓存）', async ({ page }) => {
