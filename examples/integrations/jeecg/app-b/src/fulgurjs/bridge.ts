@@ -36,12 +36,14 @@ import { registerSuper } from '/@/views/super/registerSuper'
 import { registerPackages } from '/@/utils/monorepo/registerPackages'
 import { setBridgeProps, type JeecgBridgeProps } from './props'
 
-export interface BridgeFactoryProps extends JeecgBridgeProps {
+export interface BridgeFactoryProps extends JeecgBridgeProps, Record<string, unknown> {
   /** 宿主 AppContext 快照（演示展示用） */
   appContext?: Record<string, unknown>
+  /** Vue 根节点真实挂载后通知宿主 */
+  onReady?: () => void
 }
 
-export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routing }) => {
+export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routing } = {}) => {
   setBridgeProps(props)
 
   const store = createAppStore()
@@ -56,7 +58,7 @@ export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routi
   const router = createRouter({ history: createMemoryHistory('/') })
   setupRouterGuard(router)
 
-  const app = createApp(App)
+  const app = createApp(App, { onVnodeMounted: props?.onReady })
   setupStore(app)
 
   await setupI18n(app)
@@ -80,9 +82,6 @@ export default defineBridgeApp<BridgeFactoryProps>(async (props, { signal, routi
 
   // 布局参数：与官方 MainAppProps 对齐（演示保持完整布局：菜单/页签/头部可见）
   useAppStoreWithOut().setMainAppProps({ hideSider: false, hideHeader: false, hideMultiTabs: false })
-
-  // 宿主挂载计数回调（桥接合同：appProps.onReady 由子应用装配完成时调用）
-  ;(props as { onReady?: () => void } | undefined)?.onReady?.()
 
   return app
 }, { routing: true })
