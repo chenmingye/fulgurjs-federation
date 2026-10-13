@@ -15,6 +15,8 @@
 | 上游许可证 | MIT 原文随实例源码保留（上游文件未删改）；对上游的全部改动见 `patches/app-{a,b}.patch`（可审查的完整 diff） |
 | 插件版本 | 四工程统一 `@fulgurjs/federation` 精确 `6.8.5`（npm registry 安装） |
 
+桥接菜单父路由与 catch-all 子路由共享 `meta.bridgeViewKey`；布局据此复用桥接视图。不要对桥接视图使用 `route.fullPath` 作为组件 key，否则子应用每次导航都会整体重挂。普通业务页保持原 key。
+
 ## 快速开始（clone / ZIP 后直接跑）
 
 环境：Node ≥ 20；`react-c`、`react-host` 用 **npm**（有 package-lock.json），`app-a`、`app-b` 用 **pnpm ≥ 9**（官方基线锁文件形态）。

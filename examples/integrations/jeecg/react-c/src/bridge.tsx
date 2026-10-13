@@ -1,7 +1,7 @@
 /**
  * React-C 桥接契约（./bridge expose 的默认导出）。
  *
- * 受控 memory data router = createReactBridgeRouter（/bridge/router/react，5.4.0）：
+ * 受控 memory data router = createReactBridgeRouter（公开 /react 入口）：
  * - 导航全部经 Link/useNavigate 真实入口进入同步协议；
  * - 子应用自身不写浏览器历史（宿主是唯一写入方）；
  * - 根路径以 replace 规范化重定向到 /orders（不凭空制造历史条目）。
@@ -14,6 +14,7 @@ import { defineBridgeApp } from '@fulgurjs/federation/react'
 import { createReactBridgeRouter } from '@fulgurjs/federation/react'
 import { Dashboard, NotFound, OrderDetail, Orders, Settings, type ShellProps } from './pages'
 import { Shell, ShellPropsContext } from './Shell'
+import { PageStateProvider } from './PageStateProvider'
 
 export default defineBridgeApp((props, ctx) => {
   if (!ctx?.routing) {
@@ -32,6 +33,6 @@ export default defineBridgeApp((props, ctx) => {
   ]
   const conn = createReactBridgeRouter(ctx.routing, routes, { signal: ctx.signal })
   ;(globalThis as any).__RC_ROUTER__ = (conn.element as any).props.router
-  ;(props as { onReady?: () => void } | undefined)?.onReady?.()
-  return conn.element
+  const onReady = (props as { onReady?: () => void } | undefined)?.onReady
+  return <PageStateProvider onReady={onReady}>{conn.element}</PageStateProvider>
 }, { routing: true })

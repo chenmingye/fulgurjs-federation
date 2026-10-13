@@ -252,7 +252,7 @@ const fedRoute = {
       path: 'inner',
       name: 'FedInnerReact',
       component: '/fed/InnerReactDemo',
-      meta: {
+      meta: { bridgeViewKey: 'fed-inner-react',
         title: '嵌入 React-C（三层嵌套）',
         icon: 'ant-design:code-outlined',
       },
@@ -261,7 +261,7 @@ const fedRoute = {
           path: ':pathMatch(.*)*',
           name: 'FedInnerReactAny',
           component: '/fed/InnerReactDemo',
-          meta: { title: '', hideMenu: true, hideBreadcrumb: true },
+          meta: { bridgeViewKey: 'fed-inner-react', title: '', hideMenu: true, hideBreadcrumb: true },
         },
       ],
     },

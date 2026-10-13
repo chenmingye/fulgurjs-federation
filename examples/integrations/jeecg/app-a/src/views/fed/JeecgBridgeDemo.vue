@@ -39,7 +39,7 @@
 <script setup lang="ts">
 /**
  * Jeecg-A 宿主桥接视图：嵌入同源异实例的 Jeecg-B。
- * - createVueBridgeApp（/bridge/vue）+ createVueBridgeNavigation（/bridge/router/vue）；
+ * - createVueBridgeApp + createVueBridgeNavigation（均从 /vue 入口导入）；
  * - 受控会话：sessionKey 组件 prop 驱动（换账号=卸载→清 context→新代次重挂，§8.2 合同）；
  * - URL 同步：B 的 memory 路由写入本实例浏览器历史（唯一写入方=A）。
  */

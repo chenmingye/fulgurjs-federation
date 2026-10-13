@@ -2,7 +2,7 @@
  * React-C 页面集：工单列表（筛选+分页，状态写入 URL query）、详情、设置表单、仪表盘。
  * 路由跳转全部使用 Link/useNavigate 真实入口（受控 memory data router）。
  */
-import { useState } from 'react'
+import { usePageState } from './PageStateProvider'
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 export interface ShellProps {
@@ -17,13 +17,8 @@ const ORDERS = Array.from({ length: 23 }, (_, i) => ({
   status: i % 3 === 0 ? '待处理' : i % 3 === 1 ? '进行中' : '已完成',
 }))
 
-function useTick() {
-  const [t] = useState(() => new Date().toLocaleTimeString())
-  return t
-}
-
 export function Dashboard(): React.ReactNode {
-  const tick = useTick()
+  const { dashboardStartedAt: tick } = usePageState()
   return (
     <div data-testid="rc-page-dashboard">
       <h3>仪表盘（挂载于 {tick}）</h3>
@@ -69,7 +64,7 @@ export function Orders(): React.ReactNode {
               <td>{o.id}</td>
               <td>{o.title}</td>
               <td>{o.status}</td>
-              <td><Link to={`/orders/${o.id}`}>详情</Link></td>
+              <td><Link to={`/orders/${o.id}?${params.toString()}`}>详情</Link></td>
             </tr>
           ))}
         </tbody>
@@ -92,14 +87,13 @@ export function OrderDetail(): React.ReactNode {
     <div data-testid="rc-page-order-detail">
       <h3>工单详情 {id}{loc.search}{loc.hash}</h3>
       <p>{order ? `${order.title} · ${order.status}` : '未找到该工单（演示数据 1001-1023）'}</p>
-      <p><Link to="/orders">← 返回列表（筛选与页码应保留）</Link></p>
+      <p><Link to={`/orders${loc.search}`}>← 返回列表（筛选与页码应保留）</Link></p>
     </div>
   )
 }
 
 export function Settings(): React.ReactNode {
-  const [name, setName] = useState('默认策略')
-  const [saved, setSaved] = useState('')
+  const { settingsName: name, setSettingsName: setName, saved, setSaved } = usePageState()
   return (
     <div data-testid="rc-page-settings">
       <h3>设置表单（本地状态跨路由保留验证点）</h3>

@@ -1,4 +1,4 @@
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env app-b/.env
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env app-b/.env
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env	2026-10-02 19:48:21
 +++ app-b/.env	2026-10-02 20:23:54
 @@ -1,11 +1,11 @@
@@ -16,7 +16,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
  
  # 单点登录服务端地址
  VITE_GLOB_APP_CAS_BASE_URL=http://cas.test.com:8443/cas
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development app-b/.env.development
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development app-b/.env.development
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.development	2026-10-02 19:48:21
 +++ app-b/.env.development	2026-10-02 21:25:28
 @@ -6,13 +6,13 @@
@@ -35,7 +35,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
  
  # 接口前缀
  VITE_GLOB_API_URL_PREFIX=
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production app-b/.env.production
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production app-b/.env.production
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/.env.production	2026-10-02 22:15:11
 +++ app-b/.env.production	2026-10-02 22:55:34
 @@ -2,7 +2,7 @@
@@ -62,7 +62,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
  
 +# 联邦演示：关闭 PWA（SW 拦截子应用资源请求）
  VITE_USE_PWA = false
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts app-b/build/vite/plugin/index.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts app-b/build/vite/plugin/index.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/build/vite/plugin/index.ts	2026-10-02 19:48:21
 +++ app-b/build/vite/plugin/index.ts	2026-10-02 21:58:18
 @@ -144,7 +144,8 @@
@@ -75,7 +75,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
        vitePlugins.push(configPwaPlugin(isBuild));
      }
    }
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/fulgurjs.config.ts app-b/fulgurjs.config.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/fulgurjs.config.ts app-b/fulgurjs.config.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/fulgurjs.config.ts	1970-01-01 08:00:00
 +++ app-b/fulgurjs.config.ts	2026-10-02 22:47:55
 @@ -0,0 +1,33 @@
@@ -84,7 +84,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +/**
 + * Jeecg-B（联邦子应用实例）联邦配置。
 + *
-+ * 本工程由 JeecgBoot 官方 v3.9.5 前端基线生成（来源/锁定见 examples/integrations/jeecg/README.md），
++ * 本工程由 JeecgBoot 官方 v3.9.5 前端基线生成（来源/锁定见 demo/jeecg/README.md），
 + * 仅做联邦接线补丁：expose ./bridge = defineBridgeApp 桥接契约模块。
 + * shared 只共享 vue 生态四键（singleton），ant-design-vue 等 UI 库不共享以保同步语义。
 + */
@@ -112,9 +112,9 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +    dayjs: { singleton: true, requiredVersion: false },
 +  },
 +} satisfies FederationOptions
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts app-b/mock/sys/menu.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts app-b/mock/sys/menu.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/mock/sys/menu.ts	2026-10-02 19:48:21
-+++ app-b/mock/sys/menu.ts	2026-10-02 20:23:31
++++ app-b/mock/sys/menu.ts	2026-10-13 14:17:09
 @@ -236,6 +236,38 @@
    ],
  };
@@ -135,7 +135,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +      path: 'inner',
 +      name: 'FedInnerReact',
 +      component: '/fed/InnerReactDemo',
-+      meta: {
++      meta: { bridgeViewKey: 'fed-inner-react',
 +        title: '嵌入 React-C（三层嵌套）',
 +        icon: 'ant-design:code-outlined',
 +      },
@@ -144,7 +144,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +          path: ':pathMatch(.*)*',
 +          name: 'FedInnerReactAny',
 +          component: '/fed/InnerReactDemo',
-+          meta: { title: '', hideMenu: true, hideBreadcrumb: true },
++          meta: { bridgeViewKey: 'fed-inner-react', title: '', hideMenu: true, hideBreadcrumb: true },
 +        },
 +      ],
 +    },
@@ -168,9 +168,18 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
            break;
          default:
            menu = [];
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json app-b/package.json
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json app-b/package.json
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/package.json	2026-10-02 20:15:39
-+++ app-b/package.json	2026-10-03 04:43:11
++++ app-b/package.json	2026-10-13 13:33:32
+@@ -2,7 +2,7 @@
+   "name": "jeecgboot-vue3",
+   "version": "3.9.5",
+   "author": {
+-    "name": "北京国炬信息技术有限公司",
++    "name": "\u5317\u4eac\u56fd\u70ac\u4fe1\u606f\u6280\u672f\u6709\u9650\u516c\u53f8",
+     "email": "jeecgos@163.com",
+     "url": "https://www.jeecg.com"
+   },
 @@ -23,20 +23,23 @@
      "husky:install": "husky install"
    },
@@ -182,7 +191,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 -    "@vue/shared": "^3.5.39",
 -    "@vueuse/core": "^10.11.1",
 -    "@tinymce/tinymce-vue": "4.0.7",
-+    "@fulgurjs/federation": "5.5.2",
++    "@fulgurjs/federation": "6.8.5",
 +    "@iconify/iconify": "^3.1.1",
 +    "@jeecg/aiflow": "3.9.5-beta",
      "@logicflow/core": "^2.2.4",
@@ -330,25 +339,295 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
    },
    "repository": {
      "type": "git",
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml app-b/pnpm-workspace.yaml
---- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml	2026-10-02 20:19:23
-+++ app-b/pnpm-workspace.yaml	2026-10-03 03:56:41
-@@ -6,3 +6,5 @@
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml app-b/pnpm-workspace.yaml
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/pnpm-workspace.yaml	2026-10-13 13:31:35
++++ app-b/pnpm-workspace.yaml	2026-10-13 13:31:28
+@@ -6,3 +6,8 @@
    core-js: true
    esbuild: true
    vue-demi: true
 +minimumReleaseAgeExclude:
-+  - '@fulgurjs/federation@5.4.1 || 5.4.2 || 5.4.3 || 5.5.0 || 5.5.1 || 5.5.2'
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/bridge.ts app-b/src/fulgurjs/bridge.ts
++  - '@fulgurjs/federation@6.8.5'
++
++patchedDependencies:
++  tinymce@6.6.2: ../patches/tinymce-6.6.2.patch
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/components/Application/src/AppProvider.vue app-b/src/components/Application/src/AppProvider.vue
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/components/Application/src/AppProvider.vue	2026-10-02 19:48:21
++++ app-b/src/components/Application/src/AppProvider.vue	2026-10-07 09:05:37
+@@ -3,7 +3,7 @@
+   import { createAppProviderContext } from './useAppContext';
+   import { createBreakpointListen } from '/@/hooks/event/useBreakpoint';
+   import { prefixCls } from '/@/settings/designSetting';
+-  import { useAppStore } from '/@/store/modules/app';
++  import { useAppStoreWithOut } from '/@/store/modules/app';
+   import { MenuModeEnum, MenuTypeEnum } from '/@/enums/menuEnum';
+ 
+   const props = {
+@@ -21,7 +21,7 @@
+       const isMobile = ref(false);
+       const isSetState = ref(false);
+ 
+-      const appStore = useAppStore();
++      const appStore = useAppStoreWithOut();
+ 
+       // Monitor screen breakpoint information changes
+       createBreakpointListen(({ screenMap, sizeEnum, width }) => {
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/components/Form/src/hooks/useForm.ts app-b/src/components/Form/src/hooks/useForm.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/components/Form/src/hooks/useForm.ts	2026-10-02 19:48:21
++++ app-b/src/components/Form/src/hooks/useForm.ts	2026-10-07 08:57:06
+@@ -4,35 +4,87 @@
+ import { handleRangeValue } from '../utils/formUtils';
+ import { ref, onUnmounted, unref, nextTick, watch } from 'vue';
+ import { isProdMode } from '/@/utils/env';
+-import { error } from '/@/utils/log';
+ import { getDynamicProps, getValueType, getValueTypeBySchema } from '/@/utils';
+ export declare type ValidateFields = (nameList?: NamePath[], options?: ValidateOptions) => Promise<Recordable>;
+ 
+ type Props = Partial<DynamicProps<FormProps>>;
+ 
++// 表单实例未就绪的两种口径：
++// 1) 未注册但组件仍在：等待 register（真实就绪事件），不靠一次 nextTick 碰运气；
++// 2) 组件已卸载仍未注册（异步离页/快速关闭）：挂起的操作显式失败，不吞错、不写死实例。
++const FORM_NOT_READY_UNMOUNTED_MESSAGE =
++  'The form instance has not been obtained: the component owning this useForm was unmounted before the form registered. ' +
++  '现象：表单操作早于表单渲染发起，且所属组件在表单注册前卸载（异步离页/快速关闭）。\n' +
++  '影响：本次表单操作被显式取消，不会写入任何实例。\n' +
++  '修法：组件卸载后不要再调用 useForm 方法；若表单在 v-if 下可能不渲染，调用前先确认渲染条件。';
++
+ export function useForm(props?: Props): UseFormReturnType {
+   const formRef = ref<Nullable<FormActionType>>(null);
+   const loadedRef = ref<Nullable<boolean>>(false);
+ 
++  // D38 就绪合同：register() 是唯一就绪事件。
++  // onUnmounted 必须放在 useForm 所在的 setup 里（原实现挂在 register 内，
++  // 而 register 由子组件 emit 触发、无活跃实例，清理从未真正执行过）。
++  let isDisposed = false;
++  let hasReadyWaiters = false;
++  let resolveReady: ((form: FormActionType) => void) | null = null;
++  let rejectReady: ((reason: Error) => void) | null = null;
++  const readyPromise = new Promise<FormActionType>((resolve, reject) => {
++    resolveReady = (form) => {
++      hasReadyWaiters = false;
++      resolveReady = null;
++      rejectReady = null;
++      resolve(form);
++    };
++    rejectReady = (reason) => {
++      hasReadyWaiters = false;
++      resolveReady = null;
++      rejectReady = null;
++      reject(reason);
++    };
++  });
++
++  onUnmounted(() => {
++    isDisposed = true;
++    // 只在有等待者时 reject：无人等待的 promise 保持 pending（GC 随闭包回收），
++    // 避免制造 unhandledrejection 噪音；有等待者时必须显式失败，不能挂死。
++    if (hasReadyWaiters && rejectReady) {
++      rejectReady(new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE));
++    }
++    formRef.value = null;
++    loadedRef.value = null;
++  });
++
+   async function getForm() {
++    if (isDisposed) throw new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE);
+     const form = unref(formRef);
+     if (!form) {
+-      error('The form instance has not been obtained, please make sure that the form has been rendered when performing the form operation!');
++      // 未注册属于初始化窗口；等待 register，不调用会抛异常的 error()。
++      const readyForm = await waitReadyForm();
++      await nextTick();
++      if (isDisposed) throw new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE);
++      return readyForm;
+     }
+     await nextTick();
++    if (isDisposed) throw new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE);
+     return form as FormActionType;
+   }
+ 
++  function waitReadyForm(): Promise<FormActionType> {
++    const registered = unref(formRef);
++    if (registered) return Promise.resolve(registered as FormActionType);
++    if (isDisposed) return Promise.reject(new Error(FORM_NOT_READY_UNMOUNTED_MESSAGE));
++    hasReadyWaiters = true;
++    return readyPromise;
++  }
++
+   function register(instance: FormActionType) {
+-    isProdMode() &&
+-      onUnmounted(() => {
+-        formRef.value = null;
+-        loadedRef.value = null;
+-      });
++    if (isDisposed) return;
+     if (unref(loadedRef) && isProdMode() && instance === unref(formRef)) return;
+ 
+     formRef.value = instance;
+     loadedRef.value = true;
++    resolveReady?.(instance);
+ 
+     watch(
+       () => props,
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/components/Tinymce/src/Editor.vue app-b/src/components/Tinymce/src/Editor.vue
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/components/Tinymce/src/Editor.vue	2026-10-02 19:48:21
++++ app-b/src/components/Tinymce/src/Editor.vue	2026-10-08 22:34:10
+@@ -17,7 +17,7 @@
+ </template>
+ 
+ <script lang="ts">
+-  import type { RawEditorOptions } from 'tinymce';
++  import type { RawEditorOptions, Editor as TinyMceEditor } from 'tinymce';
+   // update-begin--author:copilot---date:20260711---for:【依赖升级排查】修复 Rolldown 严格 CJS 互操作导致 tinymce 全局未挂载
+   import tinymce from '/@/utils/tinymceGlobalShim';
+   // update-end--author:copilot---date:20260711---for:【依赖升级排查】修复 Rolldown 严格 CJS 互操作导致 tinymce 全局未挂载
+@@ -34,7 +34,7 @@
+   import 'tinymce/plugins/preview';
+   import 'tinymce/plugins/image';
+   import 'tinymce/plugins/media';
+-  import { defineComponent, computed, nextTick, ref, unref, watch, onDeactivated, onBeforeUnmount, onMounted } from 'vue';
++  import { defineComponent, computed, nextTick, ref, shallowRef, unref, watch, onDeactivated, onBeforeUnmount, onMounted } from 'vue';
+   import ImgUpload from './ImgUpload.vue';
+   import ProcessMask from './ProcessMask.vue';
+   import {simpleToolbar, menubar, simplePlugins} from './tinymce';
+@@ -44,7 +44,7 @@
+   import { useDesign } from '/@/hooks/web/useDesign';
+   import { isNumber } from '/@/utils/is';
+   import { useLocale } from '/@/locales/useLocale';
+-  import { useAppStore } from '/@/store/modules/app';
++  import { useAppStoreWithOut } from '/@/store/modules/app';
+   import { uploadFile } from '/@/api/common/api';
+   import { getFileAccessHttpUrl } from '/@/utils/common/compUtils';
+   import { ThemeEnum } from '/@/enums/appEnum';
+@@ -107,7 +107,7 @@
+     setup(props, { emit, attrs }) {
+       console.log("---Tinymce---初始化---")
+ 
+-      const editorRef = ref<Nullable<any>>(null);
++      const editorRef = shallowRef<Nullable<TinyMceEditor>>(null);
+       const fullscreen = ref(false);
+       const tinymceId = ref<string>(buildShortUUID('tiny-vue'));
+       const elRef = ref<Nullable<HTMLElement>>(null);
+@@ -118,7 +118,7 @@
+ 
+       const { prefixCls } = useDesign('tinymce-container');
+ 
+-      const appStore = useAppStore();
++      const appStore = useAppStoreWithOut();
+ 
+       const tinymceContent = computed(() => props.modelValue);
+ 
+@@ -355,50 +355,72 @@
+         }
+       );
+ 
++      // 只由本组件初始化一次；使用原始编辑器实例，避免深层代理破坏 TinyMCE 管理器身份。
++      let editorGeneration = 0;
++      let editorActive = false;
++      let initTimer: ReturnType<typeof setTimeout> | undefined;
++
+       onMountedOrActivated(() => {
++        editorActive = true;
++        const generation = ++editorGeneration;
+         if (!initOptions.value.inline) {
+           tinymceId.value = buildShortUUID('tiny-vue');
+         }
+         nextTick(() => {
+-          setTimeout(() => {
+-            initEditor();
++          if (!editorActive || generation !== editorGeneration) return;
++          initTimer = setTimeout(() => {
++            initTimer = undefined;
++            initEditor(generation);
+           }, 30);
+         });
+       });
+ 
+-      onBeforeUnmount(() => {
+-        destory();
+-      });
++      onBeforeUnmount(destroyEditor);
++      onDeactivated(destroyEditor);
+ 
+-      onDeactivated(() => {
+-        destory();
+-      });
+-
+-      function destory() {
+-        if (tinymce !== null) {
+-          tinymce?.remove?.(unref(initOptions).selector!);
+-        }
++      function destroyEditor() {
++        editorActive = false;
++        ++editorGeneration;
++        clearTimeout(initTimer);
++        initTimer = undefined;
++        const editor = unref(editorRef);
++        editorRef.value = null;
++        // 对应 TinyMCE 补丁会在异步恢复后检查 removed，初始化期间也可安全取消。
++        if (editor && !editor.removed) editor.remove();
+       }
+ 
+-      function initEditor() {
++      function initEditor(generation: number) {
++        if (!editorActive || generation !== editorGeneration) return;
++        const options = unref(initOptions);
+         const el = unref(elRef);
+-        if (el && el?.style && el?.style?.visibility) {
+-          el.style.visibility = '';
+-        }
+-        tinymce
+-          .init(unref(initOptions))
+-          .then((editor) => {
+-            changeColor();
+-            emit('inited', editor);
+-          })
+-          .catch((err) => {
+-            emit('init-error', err);
+-          });
++        if (!options.inline && !el?.isConnected) return;
++        if (el?.style) el.style.visibility = '';
++        let initializingEditor: TinyMceEditor | undefined;
++        tinymce.init({
++          ...options,
++          ...(options.inline ? {} : { target: el! }),
++          readonly: unref(disabled),
++          setup(editor) {
++            initializingEditor = editor;
++            if (editorActive && generation === editorGeneration) options.setup?.(editor);
++          },
++        }).then((editors) => {
++          if (!editorActive || generation !== editorGeneration) {
++            editors.forEach((editor) => { if (!editor.removed) editor.remove(); });
++            return;
++          }
++          changeColor();
++          emit('inited', editors);
++        }).catch((error) => {
++          if (initializingEditor && !initializingEditor.removed) initializingEditor.remove();
++          if (editorRef.value === initializingEditor) editorRef.value = null;
++          if (editorActive && generation === editorGeneration) emit('init-error', error);
++        });
+       }
+ 
+       function initSetup(e) {
+         const editor = unref(editorRef);
+-        if (!editor) {
++        if (!editorActive || !editor || e.target !== editor) {
+           return;
+         }
+         const value = props.modelValue || '';
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/bridge.ts app-b/src/fulgurjs/bridge.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/bridge.ts	1970-01-01 08:00:00
-+++ app-b/src/fulgurjs/bridge.ts	2026-10-02 21:01:35
-@@ -0,0 +1,90 @@
++++ app-b/src/fulgurjs/bridge.ts	2026-10-11 23:55:31
+@@ -0,0 +1,88 @@
 +/**
 + * Jeecg-B 桥接契约（./bridge expose 的默认导出）。
 + *
 + * 复用 JeecgBoot 官方 bootstrap 的装配序列（src/main.ts），差异点：
-+ * - 路由用 createMemoryHistory（受控 memory 路由），经 connectVueBridgeRouter
-+ *   接入宿主导航端口；await ready 落定后再 app.use(router)（5.4.0 协议要求）。
++ * - 路由用 createMemoryHistory（受控 memory 路由），经 installVueBridgeRouter 接入
++ *   宿主导航端口（connect → ready → install 顺序由插件承担）。
 + * - 独立 Pinia 实例（createAppStore）+ setActivePinia，保证与宿主实例状态隔离。
 + * - token/用户由宿主 appProps 传入（props.ts 中转），权限守卫照常工作（mock 数据层）。
 + * - 挂载由桥接契约负责（本工厂只装配返回 VueApp）；unmount 清理参照官方
@@ -357,8 +636,8 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +import { createApp } from 'vue'
 +import { createMemoryHistory } from 'vue-router'
 +import { setActivePinia } from 'pinia'
-+import { defineBridgeApp } from '@fulgurjs/federation/runtime'
-+import { connectVueBridgeRouter } from '@fulgurjs/federation/bridge/router/vue'
++import { defineBridgeApp } from '@fulgurjs/federation/vue'
++import { installVueBridgeRouter } from '@fulgurjs/federation/vue'
 +
 +import 'uno.css'
 +import '/@/design/index.less'
@@ -396,11 +675,10 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +  const userStore = useUserStoreWithOut()
 +  userStore.setToken(String(props?.token ?? 'jeecg-bridge-demo-token'))
 +
-+  // 受控 memory 路由 + 宿主导航端口接线（初始 push 在 connect 时即开始，
-+  // 因此守卫必须在 connect 之前注册，保证权限路由在初始导航中装配）
++  // 受控 memory 路由（守卫在接线前注册，保证权限路由在初始导航中装配；
++  // connect → ready → install 的顺序合同由 installVueBridgeRouter 承担）
 +  const router = createRouter({ history: createMemoryHistory('/') })
 +  setupRouterGuard(router)
-+  const connection = connectVueBridgeRouter(routing, router, { signal })
 +
 +  const app = createApp(App)
 +  app.use(store)
@@ -417,8 +695,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +  registerGlobComp(app)
 +  await registerSuper(app)
 +
-+  await connection.ready
-+  app.use(router)
++  await installVueBridgeRouter(app, router, { signal, routing })
 +  await router.isReady()
 +
 +  setupGlobDirectives(app)
@@ -433,7 +710,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +
 +  return app
 +}, { routing: true })
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/props.ts app-b/src/fulgurjs/props.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/props.ts app-b/src/fulgurjs/props.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/fulgurjs/props.ts	1970-01-01 08:00:00
 +++ app-b/src/fulgurjs/props.ts	2026-10-02 20:20:47
 @@ -0,0 +1,24 @@
@@ -461,7 +738,30 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +export function useBridgeProps(): Readonly<JeecgBridgeProps> {
 +  return state
 +}
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/index.ts app-b/src/router/index.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/layouts/page/index.vue app-b/src/layouts/page/index.vue
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/layouts/page/index.vue	2026-10-02 19:48:21
++++ app-b/src/layouts/page/index.vue	2026-10-13 14:17:09
+@@ -1,4 +1,5 @@
+ <template>
++  <!-- 桥接内部 URL 变化复用同一视图；普通页面保留完整路径 key。 -->
+   <RouterView>
+     <template #default="{ Component, route }">
+       <!--      <transition-->
+@@ -16,11 +17,11 @@
+       <!--      >-->
+       <keep-alive v-if="openCache" :include="getCaches">
+         <template v-if="Component">
+-          <component :is="Component" :key="route.fullPath"/>
++          <component :is="Component" :key="route.meta.bridgeViewKey || route.fullPath"/>
+         </template>
+         <EmptyPage v-else/>
+       </keep-alive>
+-      <component v-else-if="Component" :is="Component" :key="route.fullPath"/>
++      <component v-else-if="Component" :is="Component" :key="route.meta.bridgeViewKey || route.fullPath"/>
+       <EmptyPage v-else/>
+       <!--      </transition>-->
+     </template>
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/index.ts app-b/src/router/index.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/index.ts	2026-10-02 19:48:21
 +++ app-b/src/router/index.ts	2026-10-02 20:10:25
 @@ -1,4 +1,4 @@
@@ -498,7 +798,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
  }
  
  // reset router
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/router.ts app-b/src/router/router.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/router.ts app-b/src/router/router.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/router/router.ts	2026-10-02 19:48:21
 +++ app-b/src/router/router.ts	2026-10-02 20:10:18
 @@ -16,10 +16,11 @@
@@ -515,7 +815,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
    // app router
    let router = createVueRouter({
      history: webHistory,
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/store/index.ts app-b/src/store/index.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/store/index.ts app-b/src/store/index.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/store/index.ts	2026-10-02 19:48:21
 +++ app-b/src/store/index.ts	2026-10-02 20:10:29
 @@ -13,6 +13,13 @@
@@ -532,9 +832,47 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
  // 销毁store
  export function destroyStore() {
    store = null;
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/InnerReactDemo.vue app-b/src/views/fed/InnerReactDemo.vue
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/utils/env.ts app-b/src/utils/env.ts
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/utils/env.ts	2026-10-02 19:48:21
++++ app-b/src/utils/env.ts	2026-10-08 09:17:59
+@@ -5,6 +5,34 @@
+ import { getConfigFileName } from '../../build/getConfigFileName';
+ import { getGlobal } from "@/qiankun/micro";
+ 
++// 子应用环境快照兜底（跨框架宿主支持）：_app.config.js 只在本实例独立 index.html
++// 加载；作为桥接子应用在非 Jeecg 宿主页（如 react-host）内初始化时，window 上没有
++// 本实例的 __PRODUCTION__<SHORT_NAME>__CONF__ 全局，getAppEnvConfig() 解构即抛错。
++// 守卫必须放在本模块顶层（本模块是全部调用方的依赖，求值先于任何 getAppEnvConfig
++// 调用）：全局缺失时用构建期 .env 内联的同源快照补齐；宿主页面自己加载过
++// _app.config.js 时以宿主侧为准，兜底不生效。dev 构建直接读 import.meta.env，无需兜底。
++const __bridgeEnvName = getConfigFileName(import.meta.env);
++const __bridgeGlobal = getGlobal() as unknown as Record<string, unknown>;
++if (import.meta.env.PROD && __bridgeGlobal[__bridgeEnvName] === undefined) {
++  __bridgeGlobal[__bridgeEnvName] = {
++    VITE_GLOB_APP_TITLE: import.meta.env.VITE_GLOB_APP_TITLE,
++    VITE_GLOB_API_URL: import.meta.env.VITE_GLOB_API_URL,
++    VITE_USE_MOCK: import.meta.env.VITE_USE_MOCK,
++    VITE_GLOB_APP_SHORT_NAME: import.meta.env.VITE_GLOB_APP_SHORT_NAME,
++    VITE_GLOB_API_URL_PREFIX: import.meta.env.VITE_GLOB_API_URL_PREFIX,
++    VITE_GLOB_APP_OPEN_SSO: import.meta.env.VITE_GLOB_APP_OPEN_SSO,
++    VITE_GLOB_APP_OPEN_QIANKUN: import.meta.env.VITE_GLOB_APP_OPEN_QIANKUN,
++    VITE_GLOB_APP_CAS_BASE_URL: import.meta.env.VITE_GLOB_APP_CAS_BASE_URL,
++    VITE_GLOB_DOMAIN_URL: import.meta.env.VITE_GLOB_DOMAIN_URL,
++    VITE_GLOB_ONLINE_VIEW_URL: import.meta.env.VITE_GLOB_ONLINE_VIEW_URL,
++    VITE_GLOB_HIDE_LAYOUT_TYPES: import.meta.env.VITE_GLOB_HIDE_LAYOUT_TYPES,
++    VITE_GLOB_RUN_PLATFORM: import.meta.env.VITE_GLOB_RUN_PLATFORM,
++    VITE_GLOB_QIANKUN_MICRO_APP_NAME: import.meta.env.VITE_GLOB_QIANKUN_MICRO_APP_NAME,
++    VITE_GLOB_QIANKUN_MICRO_APP_ENTRY: import.meta.env.VITE_GLOB_QIANKUN_MICRO_APP_ENTRY,
++    VITE_GLOB_ONLINE_DOCUMENT_VERSION: import.meta.env.VITE_GLOB_ONLINE_DOCUMENT_VERSION,
++  };
++}
++
+ export function getCommonStoragePrefix() {
+   const { VITE_GLOB_APP_SHORT_NAME } = getAppEnvConfig();
+   return `${VITE_GLOB_APP_SHORT_NAME}__${getEnv()}`.toUpperCase();
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/InnerReactDemo.vue app-b/src/views/fed/InnerReactDemo.vue
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/src/views/fed/InnerReactDemo.vue	1970-01-01 08:00:00
-+++ app-b/src/views/fed/InnerReactDemo.vue	2026-10-02 21:40:52
++++ app-b/src/views/fed/InnerReactDemo.vue	2026-10-13 14:17:09
 @@ -0,0 +1,65 @@
 +<template>
 +  <div class="fed-inner-react">
@@ -578,8 +916,8 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 + */
 +import { onMounted, ref, computed } from 'vue'
 +import { useRoute, useRouter } from 'vue-router'
-+import { createVueBridgeApp } from '@fulgurjs/federation/bridge/vue'
-+import { createVueBridgeNavigation } from '@fulgurjs/federation/bridge/router/vue'
++import { createVueBridgeApp } from '@fulgurjs/federation/vue'
++import { createVueBridgeNavigation } from '@fulgurjs/federation/vue'
 +import { useBridgeProps } from '/@/fulgurjs/props'
 +
 +const route = useRoute()
@@ -601,7 +939,7 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
 +<style scoped>
 +.fed-bridge-container { border: 1px dashed #1890ff; border-radius: 6px; padding: 8px; min-height: 320px; }
 +</style>
-diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts app-b/vite.config.ts
+diff -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.html -x *.log -x types -x .fulgurjs-types-tsconfig-* upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts app-b/vite.config.ts
 --- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/vite.config.ts	2026-10-02 19:48:21
 +++ app-b/vite.config.ts	2026-10-02 22:50:06
 @@ -8,6 +8,8 @@
@@ -654,3 +992,14 @@ diff --color -ruN -x node_modules -x dist -x pnpm-lock.yaml -x .vite -x stats.ht
        // @iconify/iconify: The dependency is dynamically and virtually loaded by @purge-icons/generated, so it needs to be specified explicitly
        // vite8 显式预构建路由独有的重量级依赖，避免首次打开对应路由时因运行时才发现依赖而产生大量瀑布式请求
        include: [
+--- upstream/JeecgBoot-v3.9.5/jeecgboot-vue3/types/vue-router.d.ts	2026-10-02 19:48:21
++++ app-b/types/vue-router.d.ts	2026-10-13 14:17:09
+@@ -3,6 +3,8 @@
+ declare module 'vue-router' {
+   interface RouteMeta extends Record<string | number | symbol, unknown> {
+     orderNo?: number;
++    /** 本演示桥接根视图稳定 key，内部导航不重建整个子应用。 */
++    bridgeViewKey?: string;
+     // title
+     title: string;
+     // dynamic router level.

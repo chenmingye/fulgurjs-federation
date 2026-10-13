@@ -76,20 +76,20 @@ const sysRoute = () => ({
 const fedChildrenA = () => [
   {
     path: 'bridge', name: 'FedJeecgB', component: '/fed/JeecgBridgeDemo',
-    meta: { title: '嵌入 Jeecg-B（自嵌套）', icon: 'ant-design:appstore-outlined' },
-    children: [{ path: ':pathMatch(.*)*', name: 'FedJeecgBAny', component: '/fed/JeecgBridgeDemo', meta: { title: '', hideMenu: true, hideBreadcrumb: true } }],
+    meta: { bridgeViewKey: 'fed-jeecg-b', title: '嵌入 Jeecg-B（自嵌套）', icon: 'ant-design:appstore-outlined' },
+    children: [{ path: ':pathMatch(.*)*', name: 'FedJeecgBAny', component: '/fed/JeecgBridgeDemo', meta: { bridgeViewKey: 'fed-jeecg-b', title: '', hideMenu: true, hideBreadcrumb: true } }],
   },
   {
     path: 'react', name: 'FedReactC', component: '/fed/ReactBridgeDemo',
-    meta: { title: '嵌入 React-C（跨框架）', icon: 'ant-design:code-outlined' },
-    children: [{ path: ':pathMatch(.*)*', name: 'FedReactCAny', component: '/fed/ReactBridgeDemo', meta: { title: '', hideMenu: true, hideBreadcrumb: true } }],
+    meta: { bridgeViewKey: 'fed-react-c', title: '嵌入 React-C（跨框架）', icon: 'ant-design:code-outlined' },
+    children: [{ path: ':pathMatch(.*)*', name: 'FedReactCAny', component: '/fed/ReactBridgeDemo', meta: { bridgeViewKey: 'fed-react-c', title: '', hideMenu: true, hideBreadcrumb: true } }],
   },
 ]
 const fedChildrenB = () => [
   {
     path: 'inner', name: 'FedInnerReact', component: '/fed/InnerReactDemo',
-    meta: { title: '嵌入 React-C（三层嵌套）', icon: 'ant-design:code-outlined' },
-    children: [{ path: ':pathMatch(.*)*', name: 'FedInnerReactAny', component: '/fed/InnerReactDemo', meta: { title: '', hideMenu: true, hideBreadcrumb: true } }],
+    meta: { bridgeViewKey: 'fed-inner-react', title: '嵌入 React-C（三层嵌套）', icon: 'ant-design:code-outlined' },
+    children: [{ path: ':pathMatch(.*)*', name: 'FedInnerReactAny', component: '/fed/InnerReactDemo', meta: { bridgeViewKey: 'fed-inner-react', title: '', hideMenu: true, hideBreadcrumb: true } }],
   },
 ]
 const fedRoute = (isB) => ({

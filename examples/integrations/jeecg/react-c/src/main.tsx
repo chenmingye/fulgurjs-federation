@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { Dashboard, NotFound, OrderDetail, Orders, Settings } from './pages'
 import { Shell, ShellPropsContext } from './Shell'
+import { PageStateProvider } from './PageStateProvider'
 
 // 独立运行入口：单独开发/调试 React-C 自身时使用（本地 memory 路由直开预览）。
 // 被桥接宿主消费时走 fulgurjs-remoteEntry.js 容器入口与 ./bridge 契约，与本文件无关。
@@ -19,6 +20,6 @@ const router = createMemoryRouter(
 
 createRoot(document.getElementById('root')!).render(
   <ShellPropsContext.Provider value={{ host: '独立预览' }}>
-    <RouterProvider router={router} />
+    <PageStateProvider><RouterProvider router={router} /></PageStateProvider>
   </ShellPropsContext.Provider>,
 )

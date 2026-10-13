@@ -1,4 +1,5 @@
 <template>
+  <!-- 桥接内部 URL 变化复用同一视图；普通页面保留完整路径 key。 -->
   <RouterView>
     <template #default="{ Component, route }">
       <!--      <transition-->
@@ -16,11 +17,11 @@
       <!--      >-->
       <keep-alive v-if="openCache" :include="getCaches">
         <template v-if="Component">
-          <component :is="Component" :key="route.fullPath"/>
+          <component :is="Component" :key="route.meta.bridgeViewKey || route.fullPath"/>
         </template>
         <EmptyPage v-else/>
       </keep-alive>
-      <component v-else-if="Component" :is="Component" :key="route.fullPath"/>
+      <component v-else-if="Component" :is="Component" :key="route.meta.bridgeViewKey || route.fullPath"/>
       <EmptyPage v-else/>
       <!--      </transition>-->
     </template>

@@ -3,6 +3,8 @@ export {};
 declare module 'vue-router' {
   interface RouteMeta extends Record<string | number | symbol, unknown> {
     orderNo?: number;
+    /** 本演示桥接根视图稳定 key，内部导航不重建整个子应用。 */
+    bridgeViewKey?: string;
     // title
     title: string;
     // dynamic router level.
