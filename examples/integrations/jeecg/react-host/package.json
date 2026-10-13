@@ -12,7 +12,6 @@
   "dependencies": {
     "@fulgurjs/federation": "6.8.5",
     "dayjs": "^1.11.23",
-    "pinia": "^3.0.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.1.0",
