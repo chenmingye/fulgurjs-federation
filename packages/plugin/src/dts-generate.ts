@@ -748,17 +748,29 @@ function rewriteSpecifiers(
   }
   out += text.slice(pos)
 
-  // import() 类型节点（typeof import('./x')）中的说明符：相对/alias → bundle 内相对；裸包名 → externals
-  out = out.replace(/import\((['"])([^'"]+)\1\)/g, (full, q: string, spec: string) => {
-    const viaResolver = spec.startsWith('.') ? null : resolver(spec, srcAbs)
-    const isAlias = viaResolver !== null && !viaResolver.fromNodeModules
-    if (!spec.startsWith('.') && !isAlias) {
-      const seg = spec.split('/')
-      externals.add(spec.startsWith('@') ? seg.slice(0, 2).join('/') : seg[0]!)
-      return full
+  // 重新解析声明，只处理真实 import 类型节点；注释/字符串中的示例不是依赖。
+  const rewrittenFile = ts.createSourceFile(declRel, out, ts.ScriptTarget.Latest, true)
+  const edits: Array<{ start: number; end: number; text: string }> = []
+  const visit = (node: import('typescript').Node): void => {
+    if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) {
+      const literal = node.argument.literal
+      const spec = literal.text
+      const viaResolver = spec.startsWith('.') ? null : resolver(spec, srcAbs)
+      const isAlias = viaResolver !== null && !viaResolver.fromNodeModules
+      if (!spec.startsWith('.') && !isAlias) {
+        const segments = spec.split('/')
+        externals.add(spec.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0]!)
+      } else {
+        const targetRel = resolveTarget(spec)
+        if (targetRel) edits.push({ start: literal.getStart(rewrittenFile), end: literal.end, text: JSON.stringify(rewriteTo(targetRel)) })
+      }
     }
-    const targetRel = resolveTarget(spec)
-    return targetRel ? `import(${q}${rewriteTo(targetRel)}${q})` : full
-  })
+    ts.forEachChild(node, visit)
+  }
+  visit(rewrittenFile)
+  for (const edit of edits.sort((a, b) => b.start - a.start)) {
+    out = out.slice(0, edit.start) + edit.text + out.slice(edit.end)
+  }
+
   return out
 }

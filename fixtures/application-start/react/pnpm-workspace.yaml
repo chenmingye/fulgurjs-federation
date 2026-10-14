@@ -1,0 +1,5 @@
+# 单工程 fixture，独立安装，避免继承父目录 workspace。
+packages:
+  - '.'
+allowBuilds:
+  esbuild: true

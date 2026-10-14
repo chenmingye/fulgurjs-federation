@@ -118,6 +118,27 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     if (result.ok) expect(result.files.get('files/model.d.ts')).toContain('interface User')
   })
 
+  it('import 类型只改写语法节点，不将注释和字符串字面量登记为外部依赖', async () => {
+    const project = makeProject('type-import-syntax-only', {
+      'src/entry.ts': [
+        '/** 示例：typeof import("<远程名>/types")，不是声明依赖。 */',
+        'export interface Packet {',
+        "  user: import('./model').User;",
+        '  example: "import(\'not-a-package\')";',
+        '}',
+      ].join('\n'),
+      'src/model.ts': 'export interface User { id: string }',
+    })
+    const result = await generateTypesBundle({ root: project, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    expect(result.index.externals).toEqual([])
+    const declaration = result.files.get('files/entry.d.ts')!
+    expect(declaration).toContain('import("<远程名>/types")')
+    expect(declaration).toContain("import('not-a-package')")
+    expect(declaration).toMatch(/import\(["']\.\/model["']\)\.User/)
+  })
+
   it('声明移除样式副作用导入，但缺失代码依赖仍失败', async () => {
     const project = makeProject('style-import', {
       'src/entry.ts': "import './theme.less'; export const title: string = 'demo'",

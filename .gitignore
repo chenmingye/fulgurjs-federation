@@ -96,3 +96,6 @@ artifacts/
 
 # 类型生成器按任务创建、结束即清理的临时配置。
 **/.fulgurjs-types-tsconfig-*.json
+
+# 内部装配 fixture 的同步类型由插件重新生成，不提交运行缓存。
+fixtures/application-start/*/src/fulgurjs/types/

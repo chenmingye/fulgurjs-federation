@@ -13,7 +13,7 @@
 | commit | `e3b9dc0aefe1943d9772b026f64ed671a7c82802`（fetch 脚本校验） |
 | 前端目录 | `jeecgboot-vue3/`（vue 3.5 / vue-router 5 / pinia 3 / antd 4；演示实例 vite 锁 6.4.3，见下方说明） |
 | 上游许可证 | MIT 原文随实例源码保留（上游文件未删改）；对上游的全部改动见 `patches/app-{a,b}.patch`（可审查的完整 diff） |
-| 插件版本 | 四工程统一 `@fulgurjs/federation` 精确 `6.8.5`（npm registry 安装） |
+| 插件版本 | 各工程 package.json 与锁文件精确声明的正式 registry 版本（实际版本以安装结果为准） |
 
 桥接菜单父路由与 catch-all 子路由共享 `meta.bridgeViewKey`；布局据此复用桥接视图。不要对桥接视图使用 `route.fullPath` 作为组件 key，否则子应用每次导航都会整体重挂。普通业务页保持原 key。
 

@@ -10,7 +10,18 @@
     "types": [
       "vite/client",
       "node"
-    ]
+    ],
+    "paths": {
+      "vite": [
+        "./node_modules/vite"
+      ],
+      "vue": [
+        "./node_modules/vue"
+      ],
+      "vue-router": [
+        "./node_modules/vue-router"
+      ]
+    }
   },
   "include": [
     "src",

@@ -32,7 +32,7 @@ function Shell(props: BridgeReactProps) {
       <p data-testid="demo-react-props" style={{ margin: '0 0 6px' }}>
         {`appProps.label = ${props.label || '（未传）'}`}
       </p>
-      <p data-testid="demo-react-route" style={{ margin: '0 0 8px' }}>{`memory 路由：${location.pathname}`}</p>
+      <p data-testid="demo-react-route" style={{ margin: '0 0 8px' }}>{`路由：${location.pathname}`}</p>
       <nav style={{ marginBottom: 8 }}>
         <button style={{ marginRight: 8 }} onClick={() => navigate('/')}>首页</button>
         <button onClick={() => navigate('/about')}>关于</button>
