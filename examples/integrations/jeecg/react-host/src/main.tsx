@@ -66,18 +66,20 @@ function BridgePage(): React.ReactNode {
   )
 }
 
+// 开发为根路径，生产由 Vite base 指定；router 与导航端口必须使用同一来源。
+const basename = import.meta.env.BASE_URL
 const router = createBrowserRouter(
   [
     { path: '/', element: <Home /> },
     { path: '/jeecg-b/*', element: <BridgePage /> },
   ],
   // 子目录部署：RR7 的 location.pathname 含 basename，宿主导航端口依赖剥前缀后的逻辑路径
-  { basename: '/jeecg-react-host' },
+  { basename },
 )
 
 // 宿主导航端口：读 createBrowserRouter 实例（data router，RR7 协议要求）
-// 子目录部署（basename /jeecg-react-host）：端口必须同源传 basename，否则 getLocation 返回带前缀路径，
+// 部署时端口与 router 使用同一个 basename，否则 getLocation 返回带前缀路径，
 // 通道前缀匹配失败 → 子应用导航全部被拒、宿主地址不更新（showcase routing.ts 同款口径）
-const navPort = createReactBridgeNavigation(router, { basename: '/jeecg-react-host' })
+const navPort = createReactBridgeNavigation(router, { basename })
 
 createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />)
