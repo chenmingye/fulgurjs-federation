@@ -119,3 +119,7 @@ react-c / react-host 为全新独立工程（非上游改造），源码即全�
 - 无 JS 沙箱/CSS 隔离：B 的样式与全局副作用与宿主同域（fulgurjs 桥接边界即挂载容器）；B 作为子应用时桥接工厂将 vben 布局 `fixed` 关闭以避免 fixed 定位逃逸容器（`src/fulgurjs/bridge.ts` 内 setProjectConfig）。
 - 官方前端的部分页面依赖真实后端数据（如在线表单、报表），演示只保证「联邦演示」菜单与仪表盘/账户列表可用；点击其他业务页面得到的是数据服务 404 诊断（这是如实暴露，不是故障）。
 - **Vite 版本**：本示例生产验收使用工程锁定的 Vite 6.4.3。插件完整支持范围见[仓库说明](../../../README.md)与[兼容矩阵](../../../docs/maintainers/compatibility-testing.md)。
+
+## 真实浏览器回归
+
+先按本文启动全部 dev 应用及演示数据服务，再执行 `npm --prefix e2e run test:jeecg-integration -- dev`。生产模式先构建四应用、启动数据服务与 `node examples/scripts/serve-prod.mjs --scenario jeecg`，再执行同一命令的 `prod` 模式。脚本验证实际登录、A套B、三层订单与刷新、换用户/登出/重挂、React宿主套B；不以 body 文本长度代替成功。证据位于 examples/.run/jeecg-integration，脚本只关闭自己启动的浏览器，场景服务由启动者管理。
