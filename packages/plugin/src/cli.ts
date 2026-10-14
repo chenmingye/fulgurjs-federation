@@ -7,6 +7,7 @@
  * - fulgurjs init [--out <路径>] [--config <path>] [--force]  单项目起步模板 / 配置校验 + 接入块输出（已有项目用）
  * - fulgurjs explain [--config <path>] [--json]                    配置解释器（角色/remotes/exposes/setup/shared/页面映射/加载链）
  * - fulgurjs check-pages [--config <path>] [--site <URL>] [--manifest <r>=<p|URL>]... [--require-verified] [--json]
+ * - fulgurjs doctor --config <path> [--json]                      本地接入预检
  * - fulgurjs doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
  *
  * 插件保持项目无关：init 不改写任何项目文件，只输出模板与可粘贴接入块；
@@ -55,6 +56,8 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
   fulgurjs port <应用> <新端口> [--write]           一次更新四处：应用 package.json dev/preview、
                                                    宿主 fulgurjs.config.ts 该远程 dev 地址、
                                                    scripts/dev.config.json、README 端口表
+本地接入预检（不启动应用、不请求站点；WARN 是人工核查项）：
+  fulgurjs doctor --config <path> [--json]         查入口/地址/glob/状态归属，输出必改与可选文件清单
 部署体检（--apps 必填：站点根下的部署子目录，远程部署在 /remote-a/ 就写 remote-a；
           '.' 表示部署在站点根；条目可写完整 URL 检查多 origin；不做任何默认猜测）：
   fulgurjs doctor --base <URL> --apps <a,b,c> [--entry <文件名>] [--no-entry]
@@ -313,6 +316,28 @@ async function main(): Promise<number> {
   if (cmd === 'doctor') {
     const base = argOf('--base')
     const appsRaw = argOf('--apps')
+    const config = argOf('--config')
+    if (has('--config') && !config) {
+      console.error('[fulgurjs:doctor] --config 缺少路径。用法：doctor --config ./fulgurjs.config.ts')
+      return 2
+    }
+    if (config) {
+      if (has('--base') || has('--apps')) {
+        console.error('[fulgurjs:doctor] 本地 --config 与部署 --base/--apps 分开执行，避免把源码预检当成部署验收。')
+        return 2
+      }
+      const { runSourceDoctor } = await import('./doctor-source')
+      const report = await runSourceDoctor(resolve(config))
+      if (has('--json')) console.log(JSON.stringify({ mode: 'source', ...report }, null, 2))
+      else {
+        console.log(formatDoctorReport(report.checks))
+        console.log('\n必需入口文件：\n' + report.integrationFiles.required.map(file => `  ${file}`).join('\n'))
+        console.log('\n已有文件需要接线：\n' + report.integrationFiles.existing.map(file => `  ${file}`).join('\n'))
+        console.log('\n按需求选用：\n' + report.integrationFiles.optional.map(file => `  ${file}`).join('\n'))
+        console.log('\n必须人工验收：\n' + report.manualChecks.map(line => `  ${line}`).join('\n'))
+      }
+      return report.failed ? 1 : 0
+    }
     if (!base) {
       console.error('[fulgurjs:doctor] 缺少 --base <URL>（站点根地址，如 http://your-site）')
       return 2

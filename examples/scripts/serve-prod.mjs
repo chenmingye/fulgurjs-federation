@@ -9,49 +9,48 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadScenarios } from './lib.mjs'
 
 const args = process.argv.slice(2)
 const value = (name, fallback) => {
   const index = args.indexOf(name)
   return index < 0 ? fallback : args[index + 1]
 }
-const scenario = value('--scenario', 'jeecg')
-const PORT = Number(value('--port', '5391'))
+const requested = value('--scenario', 'jeecg')
+const scenario = requested === 'shared' ? 'shared-runtime' : requested
+const catalog = loadScenarios().find(item => item.id === scenario)
+if (!catalog?.production) throw new Error(`场景 ${scenario} 未登记生产启动方式；查看 examples/scenarios.json 的 production 字段。`)
+const PORT = Number(value('--port', String(catalog.production.port)))
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error('无效端口')
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const JEECG_APPS = [
-  { prefix: '/jeecg-a/', dir: 'integrations/jeecg/app-a/dist' },
-  { prefix: '/jeecg-b/', dir: 'integrations/jeecg/app-b/dist' },
-  { prefix: '/react-c/', dir: 'integrations/jeecg/react-c/dist' },
-  { prefix: '/jeecg-react-host/', dir: 'integrations/jeecg/react-host/dist' },
-]
-const DEMOS = {
-  shared: [
-    { prefix: '/sh-remote-a/', dir: 'demos/shared/remote-a/dist' },
-    { prefix: '/sh-remote-b/', dir: 'demos/shared/remote-b/dist' },
-    { prefix: '/', dir: 'demos/shared/host/dist' },
-  ],
-  errors: [
-    { prefix: '/err-good/', dir: 'demos/errors/remote-good/dist' },
-    { prefix: '/', dir: 'demos/errors/host/dist' },
-  ],
-  'pages-cli': [
-    { prefix: '/pc-remote/', dir: 'demos/pages-cli/remote/dist' },
-    { prefix: '/', dir: 'demos/pages-cli/host/dist' },
-  ],
-}
-const APPS = scenario === 'jeecg' ? JEECG_APPS : DEMOS[scenario]
-if (!APPS) throw new Error('场景应为 jeecg、shared、errors 或 pages-cli')
+const prefixes = new Set()
+const APPS = catalog.production.mounts.map(mount => {
+  const app = catalog.apps.find(item => item.name === mount.app && item.role !== 'service')
+  if (!app || typeof mount.prefix !== 'string' || !mount.prefix.startsWith('/') || !mount.prefix.endsWith('/') || /[?#]|\.\./.test(mount.prefix)) throw new Error(`无效生产挂载：${mount.app} ${mount.prefix}`)
+  if (prefixes.has(mount.prefix)) throw new Error(`重复生产前缀：${mount.prefix}`)
+  prefixes.add(mount.prefix)
+  const dir = path.relative(ROOT, path.resolve(ROOT, '..', app.dir, 'dist'))
+  const index = path.resolve(ROOT, dir, 'index.html')
+  if (!fs.existsSync(index)) throw new Error(`${app.name} 缺少 dist/index.html；先运行 node examples/scripts/build-demo.mjs --scenario ${scenario}`)
+  for (const tag of fs.readFileSync(index, 'utf8').matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/gi)) {
+    if (tag[1].startsWith('/') && !tag[1].startsWith(mount.prefix)) throw new Error(`${app.name} 的入口 ${tag[1]} 与生产前缀 ${mount.prefix} 不一致；核对 Vite base 后重新构建。`)
+  }
+  return { prefix: mount.prefix, dir }
+}).sort((a, b) => b.prefix.length - a.prefix.length)
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.map': 'application/json' }
-const NO_CACHE = /fulgurjs-remoteEntry\.js$|fulgurjs-manifest\.json$|\/index\.html$|^\/$/ // eslint-disable-line no-useless-escape
+const NO_CACHE = /fulgurjs-remoteEntry\.js$|fulgurjs-manifest\.json$|\/_app\.config\.js$|\/index\.html$|^\/$/ // eslint-disable-line no-useless-escape
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`)
+  if (url.pathname === '/' && !prefixes.has('/')) {
+    res.writeHead(302, { location: catalog.production.entry, 'cache-control': 'no-cache' })
+    return res.end()
+  }
   // 超时故障卡的真实网络黑洞；客户端断开时由 Node 清理连接，不制造假错误。
   if (scenario === 'errors' && url.pathname === '/fulgurjs-hang-entry.js') return
   // API 反代：/jeecgboot-b → 5380/jeecg-boot-b；/jeecgboot → 5380/jeecg-boot（长前缀先匹配）
   const apiMatch = url.pathname.match(/^\/(jeecgboot-b|jeecgboot)(\/|$)/)
-  if (apiMatch) {
+  if (scenario === 'jeecg' && apiMatch) {
     const target = `http://localhost:5380/${apiMatch[1] === 'jeecgboot' ? 'jeecg-boot' : 'jeecg-boot-b'}${url.pathname.slice(apiMatch[1].length + 1)}${url.search}`
     const upstream = await fetch(target, {
       method: req.method,
@@ -67,10 +66,11 @@ const server = http.createServer(async (req, res) => {
   }
   const app = APPS.find((a) => url.pathname === a.prefix.slice(0, -1) || url.pathname.startsWith(a.prefix))
     ?? (url.pathname === '/' ? APPS[0] : null)
-  if (!app) { res.writeHead(404); return res.end('not found (use /jeecg-a/ /jeecg-b/ /react-c/ /jeecg-react-host/)') }
+  if (!app) { res.writeHead(404); return res.end(`not found (use ${APPS.map(item => item.prefix).join(' ')})`) }
   const rel = url.pathname.slice(app.prefix.length) || 'index.html'
   let fp = path.resolve(ROOT, app.dir, path.normalize(rel).replace(/^([/\\]|\.\.)+/, ''))
-  if (!fp.startsWith(path.resolve(ROOT, app.dir))) { res.writeHead(403); return res.end() }
+  const appRoot = path.resolve(ROOT, app.dir)
+  if (fp !== appRoot && !fp.startsWith(appRoot + path.sep)) { res.writeHead(403); return res.end() }
   if (!fs.existsSync(fp) || fs.statSync(fp).isDirectory()) {
     if (path.extname(url.pathname)) { res.writeHead(404); return res.end('not found') }
     fp = path.resolve(ROOT, app.dir, 'index.html')
@@ -94,4 +94,5 @@ const server = http.createServer(async (req, res) => {
   res.end(fs.readFileSync(fp))
 })
 
-server.listen(PORT, () => console.log(`生产部署预览: http://localhost:${PORT}${scenario === 'jeecg' ? '/jeecg-a/' : '/'} (SPA fallback + remoteEntry no-cache)`))
+server.on('error', error => { console.error(`生产服务启动失败：${error.message}`); process.exitCode = 1 })
+server.listen(PORT, () => console.log(`生产部署预览: http://localhost:${PORT}${catalog.production.entry} (SPA fallback + remoteEntry no-cache)`))

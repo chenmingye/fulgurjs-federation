@@ -8,6 +8,7 @@
     "dev:vue-host": "pnpm --dir vue-host dev",
     "dev:react-host": "pnpm --dir react-host dev",
     "dev": "node scripts/dev.mjs",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "prod": "node scripts/prod.mjs"
   }
 }

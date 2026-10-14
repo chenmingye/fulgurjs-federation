@@ -1,6 +1,6 @@
 # 同框架完整子应用桥接（examples/demos/same-frame）
 
-Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（README §8.2 `/bridge` API 的同框架形态）。
+Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（Vue/React 统一入口的同框架形态）。
 每个子应用是一个**自带路由与状态、可整站挂载/卸载**的完整业务系统（工单中心），
 每个宿主以三页对照呈现「组件级联邦 vs 应用级桥接」的差异与各自适用场景。
 
@@ -137,3 +137,14 @@ npm run typecheck   # Vue 工程：vue-tsc --noEmit --skipLibCheck；React 工�
 - 子应用工单数据为本地内存数据（模块级单例）：页面会话内跨卸载/重挂持久，整页刷新后重置；
 - vue-remote / react-remote 的 `index.html` + `main.ts(x)` 只是独立开发态入口，被宿主桥接消费时走
   `./bridge` 契约，与独立入口无关。
+
+## 统一生产启动（本轮源码新增，待验收）
+
+在仓库根按场景构建并启动：
+
+```bash
+node examples/scripts/build-demo.mjs --scenario same-frame
+node examples/scripts/serve-prod.mjs --scenario same-frame
+```
+
+入口为 `http://localhost:6394/sf-vue-host/`，React 宿主为同端口 `/sf-react-host/`。四应用的 dist 按 scenarios.json.production 挂载；无需保留 dev server。构建前按本文各工程说明安装依赖，Ctrl+C 停本次生产服务。

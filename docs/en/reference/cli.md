@@ -378,3 +378,18 @@ $ npx @fulgurjs/federation port vue-remote 6213 --write
 ## `fulgurjs --help`
 
 Prints help (all commands, flags, and examples). `fulgurjs` (no subcommand), `-h`, and `help` are equivalent. An unknown command prints help and exits with code 2.
+
+## Local integration preflight: `doctor --config`
+
+> New mode in the unaccepted/unpublished source candidate 6.9.0. Run separately from deployment checks.
+
+```bash
+npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts
+npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts --json
+```
+
+Loads and executes the specified trusted configuration, like explain, and statically scans at most 256 application source files. It does not execute business modules, initiate site requests, or edit files. Configuration side effects remain the configuration author's responsibility. Cannot be combined with --base/--apps.
+
+Checks expose/setup paths, dev/prod addresses, browser history in bridge assembly, asynchronous store ownership and declaration files entering runtime globs. Reports required/optional/existing integration files and manual Provider/global-component checks. Definite source-file errors are FAIL; potential risks are WARN. Custom aliases, dynamic imports, globs, external source directories and the scan limit can make scanning incomplete. Remote address callbacks are not executed.
+
+JSON: checks (DoctorCheck[]), failed, complete (static scan completeness only), filesScanned, manualChecks, integrationFiles { required, optional, existing }. Exit 0 means no definite FAIL, **not successful typechecking/build/integration/browser acceptance**; FAIL exits 1, invalid arguments/configuration errors exit 2. Validate integration files using the project's real configuration afterwards.

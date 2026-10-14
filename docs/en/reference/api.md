@@ -7,8 +7,8 @@
 | Entry | Purpose | Export surface |
 |---|---|---|
 | `@fulgurjs/federation` (package root) | Vite config | the `federation(options)` plugin + the `FederationOptions` type (full field set in the [configuration reference](configuration.md)) |
-| `@fulgurjs/federation/vue` | **The single entry for Vue apps** | full runtime + `provideAppContext`/`getAppContext`/`requireAppContext`/`clearAppContext` + `definePages`/`validatePages` + `remoteComponent` + `createHostPages` + `defineBridgeApp` + `createVueBridgeApp` + `createVueBridgeNavigation` + `connectVueBridgeRouter` + `remoteSchema` |
-| `@fulgurjs/federation/react` | **The single entry for React apps** | the same full runtime + context + pages (`createReactHostPages`) + `remoteComponent`/`useLoadRemote`/`RemoteErrorBoundary` + `defineBridgeApp` + `createReactBridgeApp` + `createReactBridgeNavigation` + `createReactBridgeRouter` + `remoteSchema` |
+| `@fulgurjs/federation/vue` | **The single entry for Vue apps** | full runtime + `provideAppContext`/`getAppContext`/`requireAppContext`/`clearAppContext` + `definePages`/`validatePages` + `remoteComponent` + `bindStoreToApp` + `createHostPages` + `defineApplication` + `defineBridgeApp` + `createVueBridgeApp` + `createVueBridgeNavigation` + `connectVueBridgeRouter` + `remoteSchema` |
+| `@fulgurjs/federation/react` | **The single entry for React apps** | the same full runtime + context + pages (`createReactHostPages`) + `remoteComponent`/`useLoadRemote`/`RemoteErrorBoundary` + `defineApplication` + `defineBridgeApp` + `createReactBridgeApp` + `createReactBridgeNavigation` + `createReactBridgeRouter` + `remoteSchema` |
 | `@fulgurjs/federation/runtime` | **Framework-agnostic** | full runtime (loadRemote/loadShare/initSharing/registerRemotes/registerShare/registerRemote/registerPlugins/preloadRemote/getContainer/getLoadedShare/pinLoadedShare/parseSpec/getRuntime/shareScopeMap/unwrapDefault/version/clearSessionState) + context + pages (`definePages`/`validatePages`) + `remoteSchema`; zero Vue/React/router dependency |
 
 <a id="runtime-api"></a>
@@ -644,3 +644,40 @@ A project can build its own runtime diagnostics page (route `meta.ignoreAuth`), 
 ## Complete public types
 
 The [public type reference](types.md) lists every exported type and its fields by current import location.
+
+## One application for standalone and bridge startup: `defineApplication`
+
+> This section describes the source candidate 6.9.0, not yet accepted or published. Installed package capabilities depend on its version.
+
+Import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; no additional subpath. See [existing application assembly](../guide/existing-apps.md) for complete examples. `defineBridgeApp` remains available for bridge-only applications.
+
+| Item | Contract |
+|---|---|
+| Signature | `defineApplication<P extends object>(factory, options?) => Application<P>`; ordinary interfaces need no index signature |
+| Options | Existing `DefineVueBridgeAppOptions` / `DefineReactBridgeAppOptions`; routing defaults to false, set true for host URL synchronization |
+| Factory | Called for each mount/container; Vue accepts an asynchronous result, React requires a synchronous result |
+| context.mode | Required: standalone or bridge |
+| context.signal | Required, owned by this instance; aborted on unmount/external mount cancellation. Asynchronous tasks must observe it |
+| context.routing | Provided by a routing-enabled bridge host, absent during standalone startup |
+| Vue result | app or { app, router }; prefer the latter. Assemble stores, components, Providers and guards before returning an app whose router is not yet installed. Standalone uses a real web/hash router, installed and awaited by the plugin; bridge uses memory history with routing:true |
+| React result | ReactElement or { element: ReactElement, dispose?: () => void }. Dispose synchronously releases instance-owned resources. Return createReactBridgeRouter's element/dispose for bridge mode or RouterProvider plus router.dispose for standalone mode |
+| start(target, props) | Selector or HTMLElement; props is required when P contains required fields. Resolves { element, unmount() } after Vue initial navigation/mount or React first root commit; does not await every page loader/request |
+| Pending cancellation | application.unmount(element) cancels a pending start with AbortError; callers handle rejection and late factory results do not remount |
+| Unmount | A handle only stops its own generation. Old handles cannot stop replacement instances. Failed unmount seals that definition's container until page refresh |
+| Repeated mounts | Unmount before another start/mount in the same container. Different containers need different app/router/store instances |
+| Host | The result implements BridgeApp (mount/unmount/routing) and is loaded by createVueBridgeApp/createReactBridgeApp; hosts do not call start |
+
+### Explicit store ownership: `bindStoreToApp` (Vue only)
+
+```ts
+import { bindStoreToApp } from '@fulgurjs/federation/vue'
+import { createPinia } from 'pinia'
+import { useCounterStore } from './stores/counter'
+const pinia = createPinia()
+const useCounter = bindStoreToApp(useCounterStore, pinia)
+const counter = useCounter()
+```
+
+Signature: `bindStoreToApp<T extends (...args: never[]) => unknown>(useStore: T, pinia: Parameters<T>[0] | (() => Parameters<T>[0])): T`. A proxy retains the function's parameter/return types and properties such as $id. An omitted/null first argument gets the bound instance; explicitly supplied instances are respected. No Pinia import, global activePinia mutation or global business store is introduced.
+
+A getter is suitable only for a module with one unambiguous default instance initialized later; an unavailable instance throws a readable error. Concurrent application containers must bind their actual instances per factory and inject the bound functions into their own trees. Do not use a module variable overwritten by each mount. Normal component injection can keep native useStore.

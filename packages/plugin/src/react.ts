@@ -1,10 +1,10 @@
 /**
- * React 应用统一入口（/react，6.0.0 入口统一合同）。
+ * React 应用统一入口（/react）。
  *
  * 一个入口覆盖 React 应用代码需要的全部能力：
  * - 框架无关运行时（loadRemote/loadShare/上下文/页面表契约——与 /runtime 同一份单例）；
  * - React 组件与页面适配（remoteComponent/useLoadRemote/RemoteErrorBoundary/createReactHostPages）；
- * - React 子应用桥接契约（defineBridgeApp，远程 ./bridge 模块默认导出）；
+ * - React 统一装配与子应用桥接契约（defineApplication / defineBridgeApp，远程 ./bridge 模块默认导出）；
  * - React 宿主桥接工厂（createReactBridgeApp）；
  * - React 路由同步（createReactBridgeNavigation 宿主端口 + createReactBridgeRouter 子应用接线）。
  *
@@ -49,6 +49,9 @@ export const remoteComponent = createRemoteComponent(loadRemote)
 export const useLoadRemote = createUseLoadRemote(loadRemote)
 /** React 子应用桥接契约（远程 ./bridge 模块默认导出） */
 export const defineBridgeApp = defineReactBridgeApp
+export { defineApplication } from './bridge-app-react'
+export type { ReactApplicationContext, ReactApplicationFactory, ReactApplicationSetup, DefineReactBridgeAppOptions } from './bridge-app-react'
+export type { Application, ApplicationHandle } from './application-core'
 /** React 宿主桥接工厂：返回 `ComponentType<{ appProps: P; sessionKey?: string | null }>` */
 export const createReactBridgeApp = createReactBridgeAppWithLoader(loadRemote)
 /** 宿主导航端口（URL 同步）：包住宿主 data router，传给桥接组件的 routing prop */

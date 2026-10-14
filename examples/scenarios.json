@@ -151,7 +151,29 @@
           "framework": "react",
           "packageManager": "npm"
         }
-      ]
+      ],
+      "production": {
+        "port": 6394,
+        "entry": "/sf-vue-host/",
+        "mounts": [
+          {
+            "app": "sf-vue-host",
+            "prefix": "/sf-vue-host/"
+          },
+          {
+            "app": "sf-vue-remote",
+            "prefix": "/sf-vue-remote/"
+          },
+          {
+            "app": "sf-react-host",
+            "prefix": "/sf-react-host/"
+          },
+          {
+            "app": "sf-react-remote",
+            "prefix": "/sf-react-remote/"
+          }
+        ]
+      }
     },
     {
       "id": "bridge-router",
@@ -236,7 +258,25 @@
           "framework": "vue",
           "packageManager": "npm"
         }
-      ]
+      ],
+      "production": {
+        "port": 6391,
+        "entry": "/",
+        "mounts": [
+          {
+            "app": "sh-remote-a",
+            "prefix": "/sh-remote-a/"
+          },
+          {
+            "app": "sh-remote-b",
+            "prefix": "/sh-remote-b/"
+          },
+          {
+            "app": "sh-host",
+            "prefix": "/"
+          }
+        ]
+      }
     },
     {
       "id": "pages-cli",
@@ -263,7 +303,21 @@
           "framework": "vue",
           "packageManager": "npm"
         }
-      ]
+      ],
+      "production": {
+        "port": 6392,
+        "entry": "/",
+        "mounts": [
+          {
+            "app": "pc-remote",
+            "prefix": "/pc-remote/"
+          },
+          {
+            "app": "pc-host",
+            "prefix": "/"
+          }
+        ]
+      }
     },
     {
       "id": "errors",
@@ -290,7 +344,21 @@
           "framework": "vue",
           "packageManager": "npm"
         }
-      ]
+      ],
+      "production": {
+        "port": 6393,
+        "entry": "/",
+        "mounts": [
+          {
+            "app": "err-remote-good",
+            "prefix": "/err-good/"
+          },
+          {
+            "app": "err-host",
+            "prefix": "/"
+          }
+        ]
+      }
     },
     {
       "id": "jeecg",
@@ -344,7 +412,29 @@
           "framework": "react",
           "packageManager": "npm"
         }
-      ]
+      ],
+      "production": {
+        "port": 5391,
+        "entry": "/jeecg-a/",
+        "mounts": [
+          {
+            "app": "jeecg-a",
+            "prefix": "/jeecg-a/"
+          },
+          {
+            "app": "jeecg-b",
+            "prefix": "/jeecg-b/"
+          },
+          {
+            "app": "jeecg-react-c",
+            "prefix": "/react-c/"
+          },
+          {
+            "app": "jeecg-react-host",
+            "prefix": "/jeecg-react-host/"
+          }
+        ]
+      }
     },
     {
       "id": "lifecycle",

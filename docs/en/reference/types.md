@@ -217,6 +217,8 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 | `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | See the owning API for lifecycle and runtime defaults. |
 | `globalComponents` | yes | `Record<string, unknown>` | Static components retain their identity. Zero-argument functions with displayName/props/emits metadata are components; unmarked zero-argument functions are lazy loaders. See the setup API for installation and retry semantics. |
 
+| `pageProviders` | yes | `unknown[]` | Ancestor Providers required by remote components; each item is a component or zero-argument loader. Adapters wrap the actual consumer tree without copying the provider application. |
+
 ## AppContext
 
 Application and session context supplied by the host.
@@ -613,3 +615,20 @@ Return value of `createReactBridgeRouter`.
 | `element` | `ReactElement` | Return as the child application's root from the bridge factory. |
 | `routerReady` | `Promise<Router>` | Resolves when the memory router is wired; rejects if dependencies cannot load. Await this promise instead of assuming `element.props.router` exists synchronously. |
 | `dispose` | `() => void` | Release routing subscriptions and wiring during bridge cleanup. |
+
+## Application / ApplicationHandle
+
+入口 / Entry: `@fulgurjs/federation/vue`, `@fulgurjs/federation/react`.
+
+| 类型 / Type | 字段 / Fields |
+|---|---|
+| Application<P extends object> | BridgeApp + `__fgBridgeProps?: P` + `start(target: string \| HTMLElement, ...props: {} extends P ? [props?: P] : [props: P]): Promise<ApplicationHandle>` |
+| ApplicationHandle | `element: HTMLElement`, `unmount(): void` |
+| VueApplicationContext | `mode: 'standalone' \| 'bridge'`, `signal: AbortSignal`, `routing?: BridgeChildRoute` |
+| VueApplicationSetup | `app: VueApp`, `router: VueRouterLike & { install(app: VueApp): void; isReady(): Promise<void> }` |
+| VueApplicationFactory<P> | `(props: P, context: VueApplicationContext) => VueApp \| VueApplicationSetup \| Promise<VueApp \| VueApplicationSetup>` |
+| ReactApplicationContext | `mode: 'standalone' \| 'bridge'`, `signal: AbortSignal`, `routing?: BridgeChildRoute` |
+| ReactApplicationSetup | `element: ReactElement`, `dispose?: () => void` |
+| ReactApplicationFactory<P> | `(props: P, context: ReactApplicationContext) => ReactElement \| ReactApplicationSetup` |
+
+These types describe the unpublished 6.9.0 source candidate. See the [API reference](api.md#one-application-for-standalone-and-bridge-startup-defineapplication) for lifecycle and defaults.

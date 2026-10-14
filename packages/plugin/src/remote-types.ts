@@ -52,8 +52,8 @@ export type FgBridgeEntry<S extends string> = [keyof FgRemoteTypes] extends [nev
       ? FgRemoteTypes[S] extends { default: infer D }
         ? D extends BridgeApp
           ? S
-          : `非桥接入口 ${S}：桥接工厂只接受远程 defineBridgeApp 的默认导出（普通组件用 remoteComponent）`
-        : `非桥接入口 ${S}：桥接工厂只接受远程 defineBridgeApp 的默认导出（普通组件用 remoteComponent）`
+          : `非桥接入口 ${S}：需要 defineApplication 或 defineBridgeApp 的默认导出（普通组件用 remoteComponent）`
+        : `非桥接入口 ${S}：需要 defineApplication 或 defineBridgeApp 的默认导出（普通组件用 remoteComponent）`
       : `未知远程入口 ${S}：请核对该远程的 exposes，或运行 npx @fulgurjs/federation types 同步类型`
 
 /** 桥接提供方声明的 props（defineBridgeApp<P> 的 phantom 标记 → 宿主侧提取） */

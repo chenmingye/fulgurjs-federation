@@ -1,10 +1,10 @@
 /**
- * Vue 应用统一入口（/vue，6.0.0 入口统一合同）。
+ * Vue 应用统一入口（/vue）。
  *
  * 一个入口覆盖 Vue 应用代码需要的全部能力：
  * - 框架无关运行时（loadRemote/loadShare/上下文/页面表契约——与 /runtime 同一份单例）；
  * - Vue 组件与页面适配（remoteComponent/createHostPages）；
- * - Vue 子应用桥接契约（defineBridgeApp，远程 ./bridge 模块默认导出）；
+ * - Vue 统一装配与子应用桥接契约（defineApplication / defineBridgeApp，远程 ./bridge 模块默认导出）；
  * - Vue 宿主桥接工厂（createVueBridgeApp）；
  * - Vue 路由同步（createVueBridgeNavigation 宿主端口 + connectVueBridgeRouter 子应用接线）。
  *
@@ -55,6 +55,10 @@ export function createHostPages(options: Parameters<typeof createHostPagesWithLo
 }
 /** Vue 子应用桥接契约（远程 ./bridge 模块默认导出） */
 export const defineBridgeApp = defineVueBridgeApp
+export { defineApplication } from './bridge-app-vue'
+export type { VueApplicationFactory, VueApplicationContext, VueApplicationSetup, DefineVueBridgeAppOptions } from './bridge-app-vue'
+export type { Application, ApplicationHandle } from './application-core'
+export { bindStoreToApp } from './vue-store'
 /** Vue 宿主桥接工厂：返回 `{ appProps: P; sessionKey?: string | null }` 形态的包装组件 */
 export const createVueBridgeApp = createVueBridgeAppWithLoader(loadRemote)
 /** 宿主导航端口（URL 同步）：包住宿主 vue-router 实例，传给桥接组件的 routing prop */

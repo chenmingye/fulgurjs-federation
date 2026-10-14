@@ -83,3 +83,9 @@ node examples/scripts/stop-demo.mjs --scenario vue-basic
 5. **错误处理**：跑 demos/errors，对照[错误码总表](../reference/errors.md)与[排错目录](../troubleshooting/README.md)。
 
 npm 包仅附带 `examples/templates/` 五个模板；功能 Demo、Jeecg 集成与门户从 GitHub 仓库获取。
+
+## 统一生产启动（源码候选）
+
+五个模板在模板根执行 `pnpm build`，再执行 `pnpm prod`；后者直接服务 dist，无需另开远程 dev server。宿主沿用 scripts/dev.config.json 的端口，按真实构建 base 挂载远程。若 dev 占用端口，先在自己的 dev 终端停止服务。Ctrl+C 关闭本次生产服务器；未构建、base 冲突或端口占用会失败，不自动跳过。
+
+功能 Demo 的生产入口从仓库根执行 `node examples/scripts/serve-prod.mjs --scenario <id>`。支持 shared-runtime、errors、pages-cli、same-frame、jeecg；先按对应 README 构建全部应用。生产端口与路径以 examples/scenarios.json 的 production 为准。未登记生产形态的场景不因此自动获得生产支持。这些启动器是本轮未测试的源码改动，正式包模板仍以其发布内容为准。

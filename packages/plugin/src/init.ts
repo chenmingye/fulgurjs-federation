@@ -183,6 +183,10 @@ export function checklistFor(scenario: InitScenario): string[] {
     out.push('   完整子应用（自带 Router/store）用桥接 createVueBridgeApp/createReactBridgeApp——宿主只配挂载前缀与入口，')
     out.push('   子应用保留自己的 Router 与业务菜单，不逐页登记内部页面')
   }
+  if (provide) {
+    out.push('   完整子应用推荐 defineApplication：一份装配用于独立 application.start 与远程默认导出，')
+    out.push('   不再复制 main/bridge 两套初始化。已有 router/守卫继续复用；按 context.mode 选择 web/memory 路由。')
+  }
   out.push('4. shared 里只列「项目实际安装且跨应用共享」的库，跨应用同实例的（vue/react/react-dom/router/store）配 singleton: true；')
   out.push('   独立 Router/store 的完整子应用隔离设计是合法的——不是所有共享项都必须 singleton')
   if (consume) {
@@ -194,6 +198,7 @@ export function checklistFor(scenario: InitScenario): string[] {
   out.push(APP_ENTRY_NOTE[framework])
   out.push('6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言')
   out.push('7. 配置解释：fulgurjs explain；部署体检：fulgurjs doctor --base <URL> --apps <部署子目录...>')
+  out.push('   接入前先运行 fulgurjs doctor --config ./fulgurjs.config.ts（本地预检，不代表浏览器验收通过）')
   if (consume) {
     out.push('   （--apps 是站点根下的部署子目录，不是容器名）')
     out.push('8. 仅逐页接入的宿主：页面契约核对 fulgurjs check-pages（--manifest/--site 指定远程 manifest 来源）；')

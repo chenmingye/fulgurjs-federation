@@ -1,5 +1,5 @@
 /**
- * Vue 子应用桥接适配（/runtime 导出 defineBridgeApp；任务书 §3.3 D1/D2）。
+ * Vue 子应用桥接适配（/vue 导出 defineBridgeApp 与 defineApplication）。
  *
  * 工厂返回 VueApp，或已装配业务插件与守卫的 { app, router }；后者自动接线 memory
  * router、等待初始导航再安装。helper 管理挂载/卸载及每容器每代次的路由释放。
@@ -12,13 +12,14 @@
  * - unmount 未知容器为 no-op；mount/unmount 的原始错误**原样抛出**——MFU-016 包装
  *   （真实 spec + phase + cause）由宿主适配器在生命周期边界统一完成（见 bridgeHostError）。
  *
- * 本文件零 React：/runtime 导入图隔离由 tests/runtime-entry-graph.test.ts 守护。
+ * 本文件零 React：/vue 导入图隔离由 tests/runtime-entry-graph.test.ts 守护。
  */
 import type { App as VueApp } from 'vue'
 import { markBridgeMount } from './bridge-core'
 import type { BridgeApp } from './bridge-core'
 import type { BridgeChildRoute, VueRouterLike } from './bridge-router-core'
 import { installVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
+import { createApplication, type Application } from './application-core'
 
 export type { BridgeApp } from './bridge-core'
 
@@ -52,7 +53,7 @@ export type VueBridgeAppFactory<P = Record<string, unknown>> = (
  * 经注册表提取为包装组件的 appProps 类型；未声明具体 P 的远程保持
  * Record<string, unknown>（诚实通用面，绝不凭空推导业务字段）。
  */
-export type FgBridgePropsMarker<P extends Record<string, unknown>> = { __fgBridgeProps?: P }
+export type FgBridgePropsMarker<P extends object> = { __fgBridgeProps?: P }
 
 export interface DefineVueBridgeAppOptions {
   /**
@@ -68,6 +69,8 @@ interface VueBridgeInstance {
   mounted: boolean
   controller: AbortController
   connection?: VueBridgeRouterConnection
+  cleanupPending?: () => void
+  cleanupFailure?: { error: unknown }
   removeAbortListener(): void
 }
 // 每次挂载都有独立对象；不能用同一个 pending 标志，否则旧工厂可能覆盖新代次。
@@ -86,9 +89,43 @@ function isAppSetup(result: unknown): result is VueBridgeAppSetup {
  * export default defineBridgeApp((props) => { const app = createApp(App, props); app.use(router); return app })
  * ```
  */
-export function defineBridgeApp<P extends Record<string, unknown> = Record<string, unknown>>(
+export function defineBridgeApp<P extends object = Record<string, unknown>>(
   factory: VueBridgeAppFactory<P>,
   options: DefineVueBridgeAppOptions = {},
+): BridgeApp & FgBridgePropsMarker<P> {
+  return createVueAppContract(factory, options, 'bridge')
+}
+
+export interface VueApplicationContext extends VueBridgeAppContext {
+  mode: 'standalone' | 'bridge'
+  /** Always present; aborts when this application instance is stopped. */
+  signal: AbortSignal
+}
+
+export interface VueApplicationSetup extends VueBridgeAppSetup {
+  router: VueRouterLike & { install(app: VueApp): void; isReady(): Promise<void> }
+}
+
+export type VueApplicationFactory<P = Record<string, unknown>> = (
+  props: P, context: VueApplicationContext,
+) => VueApp | VueApplicationSetup | Promise<VueApp | VueApplicationSetup>
+
+/** One assembly function for the standalone entry and the exposed application. */
+export function defineApplication<P extends object = Record<string, unknown>>(
+  factory: VueApplicationFactory<P>,
+  options: DefineVueBridgeAppOptions = {},
+): Application<P> {
+  const contract = (mode: VueApplicationContext['mode']) => createVueAppContract<P>((props, ctx) => {
+    const context: VueApplicationContext = { ...ctx, mode, signal: ctx!.signal! }
+    if (mode === 'bridge') markBridgeMount(context)
+    return factory(props, context)
+  }, options, mode)
+  return createApplication<P>(contract('bridge'), contract('standalone'))
+}
+
+function createVueAppContract<P extends object>(
+  factory: VueBridgeAppFactory<P>, options: DefineVueBridgeAppOptions,
+  mode: 'standalone' | 'bridge',
 ): BridgeApp & FgBridgePropsMarker<P> {
   const attach = (el: HTMLElement, app: VueApp, instance: VueBridgeInstance): void => {
     if (!app || typeof app.mount !== 'function' || typeof app.unmount !== 'function') {
@@ -98,7 +135,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       )
     }
     instance.app = app
-    markBridgeMount(app)
+    if (mode === 'bridge') markBridgeMount(app)
     try {
       app.mount(el)
     } catch (e) {
@@ -112,7 +149,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
     instance.mounted = true
   }
   return {
-    ...(options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
+    ...(mode === 'bridge' && options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
     // 同步工厂保持同步语义（容器占用/工厂抛错同步抛，BN03/BN02 口径不变）；
     // Promise 工厂（URL 同步初始路由准备）走异步续体：挂起期间作废（signal aborted）
     // 则结果丢弃不落挂（迟到初始化不得复活，BN06 同源语义）。
@@ -122,9 +159,9 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       }
       // 浅拷贝顶层字段（挂载时快照；嵌套对象/函数保留原引用，任务书 §4.2）
       const snapshot = { ...(props ?? {}) }
-      const ctx: VueBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }
-      markBridgeMount(ctx)
       const controller = new AbortController()
+      const ctx: VueBridgeAppContext = { signal: controller.signal, routing: mountOptions?.routing }
+      if (mode === 'bridge') markBridgeMount(ctx)
       const abort = () => controller.abort()
       mountOptions?.signal?.addEventListener('abort', abort, { once: true })
       if (mountOptions?.signal?.aborted) controller.abort()
@@ -132,10 +169,15 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
         mounted: false, controller,
         removeAbortListener: () => mountOptions?.signal?.removeEventListener('abort', abort),
       }
+      controller.signal.addEventListener('abort', () => {
+        if (!instance.mounted) instance.cleanupPending?.()
+      }, { once: true })
       appsByEl.set(el, instance)
       const active = () => appsByEl.get(el) === instance && !controller.signal.aborted
       const fail = (error: unknown): void => {
         instance.connection?.dispose()
+        instance.cleanupPending?.()
+        instance.cleanupPending = undefined
         instance.removeAbortListener()
         controller.abort()
         if (appsByEl.get(el) === instance) appsByEl.delete(el)
@@ -145,15 +187,32 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
         if (!active()) return
         try {
           if (isAppSetup(result)) {
-            if (!options.routing) {
+            if (mode === 'bridge' && !options.routing) {
               throw new Error('defineBridgeApp 返回 { app, router } 时必须声明 { routing: true }；router 应使用 createMemoryHistory()，不要提前 app.use(router)。')
             }
-            markBridgeMount(result.app)
-            instance.connection = await installVueBridgeRouter(result.app, result.router, {
-              routing: ctx.routing, signal: controller.signal,
-            })
-            if (!active()) { instance.connection.dispose(); return }
+            if (mode === 'bridge') {
+              markBridgeMount(result.app)
+              instance.connection = await installVueBridgeRouter(result.app, result.router, {
+                routing: ctx.routing, signal: controller.signal,
+              })
+            } else {
+              const router = result.router as VueRouterLike & { install?: unknown; isReady?: () => Promise<void> }
+              if (typeof router.install !== 'function' || typeof router.isReady !== 'function') {
+                throw new Error('独立启动必须返回实际 vue-router 实例；不要返回导航端口或已安装到其他 app 的 router。')
+              }
+              result.app.use(result.router as Parameters<VueApp['use']>[0])
+              const history = (router as { options?: { history?: { destroy?: () => void } } }).options?.history
+              let cleaned = false
+              instance.cleanupPending = () => {
+                if (cleaned) return
+                cleaned = true
+                try { history?.destroy?.() } catch (error) { instance.cleanupFailure = { error } }
+              }
+              await router.isReady()
+            }
+            if (!active()) { instance.connection?.dispose(); instance.cleanupPending?.(); return }
             attach(el, result.app, instance)
+            instance.cleanupPending = undefined
           } else {
             attach(el, result as VueApp, instance)
           }
@@ -163,6 +222,11 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
         }
       }
       try {
+        if (controller.signal.aborted) {
+          instance.removeAbortListener()
+          if (appsByEl.get(el) === instance) appsByEl.delete(el)
+          return
+        }
         const produced = factory(snapshot as P, ctx)
         const thenable = (produced as { then?: unknown } | null)?.then
         if (typeof thenable === 'function') {
@@ -189,6 +253,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       instance.controller.abort()
       instance.removeAbortListener()
       instance.connection?.dispose()
+      if (instance.cleanupFailure) throw instance.cleanupFailure.error
       if (!instance.mounted) return
       try {
         instance.app!.unmount()

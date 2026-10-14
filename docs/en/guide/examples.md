@@ -83,3 +83,9 @@ node examples/scripts/stop-demo.mjs --scenario vue-basic
 5. **Error handling**: run demos/errors, compare with the [error code table](../reference/errors.md) and the [troubleshooting index](../troubleshooting/README.md).
 
 The npm package ships only the five templates in `examples/templates/`; feature demos, the Jeecg integration, and the portal come from the GitHub repository.
+
+## Consistent production startup (source candidate)
+
+For each of the five templates, run pnpm build followed by pnpm prod at the template root. The launcher serves dist directly without remote dev servers, uses host ports from scripts/dev.config.json and mounts remotes at their actual build base. Stop your own dev processes first when they occupy those ports. Ctrl+C closes this run's servers; missing builds, conflicting bases or occupied ports fail instead of being skipped.
+
+For feature demos, run node examples/scripts/serve-prod.mjs --scenario <id> at the repository root after building all apps according to their README. Supported IDs: shared-runtime, errors, pages-cli, same-frame, jeecg. Production ports/paths live in examples/scenarios.json. Other scenarios are not implicitly production-enabled. These launchers are untested source changes; published template content depends on its package release.

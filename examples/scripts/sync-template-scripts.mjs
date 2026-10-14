@@ -1,5 +1,5 @@
 /**
- * 把规范源 examples/scripts/dev-runner.mjs 同步到五个模板的 scripts/dev.mjs。
+ * 把规范源 dev-runner.mjs / prod-runner.mjs 同步到五个模板的 dev.mjs / prod.mjs。
  * 只在规范源或模板脚本变更后手动执行一次；check-catalog.mjs 会校验逐字节一致，
  * 单独改模板副本而不同步规范源（或反之）会在 `npm run test:examples` 失败。
  */
@@ -17,4 +17,7 @@ for (const name of templates) {
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.copyFileSync(source, target)
   console.log(`synced ${path.relative(examplesRoot, target)}`)
+  const production = path.join(templatesRoot, name, 'scripts', 'prod.mjs')
+  fs.copyFileSync(path.join(examplesRoot, 'prod-runner.mjs'), production)
+  console.log(`synced ${path.relative(examplesRoot, production)}`)
 }

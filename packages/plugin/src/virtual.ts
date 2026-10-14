@@ -769,8 +769,9 @@ export function genApiFacade(framework: 'runtime' | 'vue' | 'react'): string {
     "import { loadRemote as __fulgurjs_loadRemote } from 'virtual:fulgurjs-runtime-proxy';",
   ]
   const vueBody = [
+    "export { bindStoreToApp } from '@fulgurjs/federation/internal/vue-store.js';",
     "import { createRemoteComponent, createHostPages as __fulgurjs_chp } from '@fulgurjs/federation/internal/vue-adapter.js';",
-    "import { defineBridgeApp } from '@fulgurjs/federation/internal/bridge-app-vue.js';",
+    "import { defineBridgeApp, defineApplication } from '@fulgurjs/federation/internal/bridge-app-vue.js';",
     // internal/bridge-host-vue.js 导出的是工厂 createVueBridgeAppWithLoader（绑定发生在
     // dist 生成壳）——门面必须取 WithLoader 名并就地绑定 loadRemote；5.9.x 的旧桥接门面
     // 曾误写 { createVueBridgeApp } 具名导入（潜在缺陷，expose 目标不导宿主工厂所以未触发；
@@ -781,7 +782,7 @@ export function genApiFacade(framework: 'runtime' | 'vue' | 'react'): string {
     "import { hasBridgeMount } from '@fulgurjs/federation/internal/bridge-core.js';",
     'export const remoteComponent = createRemoteComponent(__fulgurjs_loadRemote);',
     'export const createHostPages = (options) => __fulgurjs_chp(options, __fulgurjs_loadRemote);',
-    'export { defineBridgeApp };',
+    'export { defineBridgeApp, defineApplication };',
     'export const createVueBridgeApp = __fulgurjs_cvb(__fulgurjs_loadRemote);',
     'export { createVueBridgeNavigation, connectVueBridgeRouter, installVueBridgeRouter };',
     'export { createBridgeSession };',
@@ -789,7 +790,7 @@ export function genApiFacade(framework: 'runtime' | 'vue' | 'react'): string {
   ]
   const reactBody = [
     "import { createRemoteComponent, createUseLoadRemote, RemoteErrorBoundary, createReactHostPages as __fulgurjs_rhp } from '@fulgurjs/federation/internal/react-adapter.js';",
-    "import { defineBridgeApp } from '@fulgurjs/federation/internal/bridge-app-react.js';",
+    "import { defineBridgeApp, defineApplication } from '@fulgurjs/federation/internal/bridge-app-react.js';",
     "import { createReactBridgeAppWithLoader as __fulgurjs_crb } from '@fulgurjs/federation/internal/bridge-host-react.js';",
     "import { createReactBridgeNavigation, createReactBridgeRouter } from '@fulgurjs/federation/internal/bridge-router-react.js';",
     "import { hasBridgeMount } from '@fulgurjs/federation/internal/bridge-core.js';",
@@ -797,7 +798,7 @@ export function genApiFacade(framework: 'runtime' | 'vue' | 'react'): string {
     'export const useLoadRemote = createUseLoadRemote(__fulgurjs_loadRemote);',
     'export { RemoteErrorBoundary };',
     'export const createReactHostPages = (options) => __fulgurjs_rhp(options, __fulgurjs_loadRemote);',
-    'export { defineBridgeApp };',
+    'export { defineBridgeApp, defineApplication };',
     'export const createReactBridgeApp = __fulgurjs_crb(__fulgurjs_loadRemote);',
     'export { createReactBridgeNavigation, createReactBridgeRouter };',
     'export { hasBridgeMount };',

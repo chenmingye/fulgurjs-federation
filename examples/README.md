@@ -16,6 +16,12 @@
 
 模板与门户共用同一份工程，基础示例不会再额外复制到另一个目录。场景位置、端口、启动顺序和包管理器统一登记在 [scenarios.json](scenarios.json)。
 
+## 构建后看生产效果
+
+五个模板均在自身根目录执行 `pnpm build` → `pnpm prod`；生产启动直接读 dist，不借用 dev server。生产脚本与 dev 脚本一样由 examples/scripts 的规范源统一同步。
+
+功能 Demo 在仓库根按 README 构建后运行 `node examples/scripts/serve-prod.mjs --scenario <id>`；生产场景、端口、挂载前缀只维护在 scenarios.json.production。支持 shared-runtime/errors/pages-cli/same-frame/jeecg，其余场景按自身说明运行。以上生产便利脚本为本轮未测试的源码改动，正式包复制出的模板以包内版本为准。
+
 ## 下载后直接运行
 
 **不需要 clone 仓库的最短路径**：`npx @fulgurjs/federation create`——从 npm 正式包交互选择模板并创建完整工程（含冻结安装与后续命令）。

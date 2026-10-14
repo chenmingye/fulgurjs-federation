@@ -1,5 +1,7 @@
 # Sub app bridge: embedding a full sub app (Vue ↔ React)
 
+For applications that need both standalone and bridge startup, see [the assembly guide](existing-apps.md), including the source candidate availability notice.
+
 > Scenario: mount a **full sub app** (with its own Router/store/menus) into a host of the other framework — a Vue 3 host embedding a React 18/19 child app, or the reverse. What is embedded is the child app: it creates its own component tree and the host only provides a DOM container; **no component type conversion happens** (Vue's `remoteComponent` cannot render React components directly).
 >
 > Import entries: the child app imports `defineBridgeApp` from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; the host factories `createVueBridgeApp`/`createReactBridgeApp` likewise come from `/vue` and `/react`.

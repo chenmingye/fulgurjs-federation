@@ -217,6 +217,8 @@ setup/onSession 收到的上下文.
 | `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 见对应 API 合同。 |
 | `globalComponents` | yes | `Record<string, unknown>` | 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象或零参 loader）： 组件联邦（remoteComponent）把远程组件渲染进消费方 app 上下文，模板里的 字符串标签（如 <a-divider>）按消费方 app 的全局注册表解析——消费方没注册就 渲染成死元素。提供方在此声明后，运行时在每次 loadRemote 时把它们幂等注册到 当次传入的 consumerApp 上；无 consumerApp（无组件上下文的手动加载）时静默跳过。 值推荐「零参 loader（() => import('./X.vue')）」：setup 模块保持零重依赖， 组件只在本框架消费方真实渲染时才加载——Vue 适配器注册时自动包 defineAsyncComponent； 静态组件值仍支持；带 displayName/props/emits 的零参函数保留组件身份，未标记零参函数作 loader。运行时对值原样透传。 |
 
+| `pageProviders` | yes | `unknown[]` | 远程组件所需的祖先 Provider；元素为组件或零参 loader。由组件适配器包裹实际消费树，不复制提供方整个 app。 |
+
 ## AppContext
 
 宿主提供给远程模块的应用与会话上下文.
@@ -599,3 +601,20 @@ import type { ReactBridgeRouterConnection } from '@fulgurjs/federation/react'
 | `element` | `ReactElement` | 返回给桥接工厂，作为子应用根节点。 |
 | `routerReady` | `Promise<Router>` | 等待 memory router 完成接线；依赖缺失会 reject。需要访问 router 时等待此 Promise，不假设 `element.props.router` 同步存在。 |
 | `dispose` | `() => void` | 卸载时解除路由订阅与接线。与桥接生命周期清理一起调用。 |
+
+## Application / ApplicationHandle
+
+入口 / Entry: `@fulgurjs/federation/vue`, `@fulgurjs/federation/react`.
+
+| 类型 / Type | 字段 / Fields |
+|---|---|
+| Application<P extends object> | BridgeApp + `__fgBridgeProps?: P` + `start(target: string \| HTMLElement, ...props: {} extends P ? [props?: P] : [props: P]): Promise<ApplicationHandle>` |
+| ApplicationHandle | `element: HTMLElement`, `unmount(): void` |
+| VueApplicationContext | `mode: 'standalone' \| 'bridge'`, `signal: AbortSignal`, `routing?: BridgeChildRoute` |
+| VueApplicationSetup | `app: VueApp`, `router: VueRouterLike & { install(app: VueApp): void; isReady(): Promise<void> }` |
+| VueApplicationFactory<P> | `(props: P, context: VueApplicationContext) => VueApp \| VueApplicationSetup \| Promise<VueApp \| VueApplicationSetup>` |
+| ReactApplicationContext | `mode: 'standalone' \| 'bridge'`, `signal: AbortSignal`, `routing?: BridgeChildRoute` |
+| ReactApplicationSetup | `element: ReactElement`, `dispose?: () => void` |
+| ReactApplicationFactory<P> | `(props: P, context: ReactApplicationContext) => ReactElement \| ReactApplicationSetup` |
+
+以上对应未发布的 6.9.0 源码候选；调用顺序和默认值见 [API 参考](api.md#同一应用独立启动与桥接defineapplication)。

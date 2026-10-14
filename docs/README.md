@@ -27,6 +27,7 @@ docs/
 |---|---|
 | 新建一个联邦工程 | [快速上手：安装与创建工程](zh/guide/getting-started.md) |
 | 已有 Vue/React/纯 TS 项目接入（提供方/消费方/双角色） | [快速上手：已有项目接入](zh/guide/getting-started.md#已有项目接入) |
+| 已有应用减少重复启动代码 | [统一装配、状态绑定与接入预检](zh/guide/existing-apps.md)（源码候选） |
 | 从 qiankun 类方案迁入（概念映射） | [快速上手 · 从其他微前端方案迁入](zh/guide/getting-started.md#从其他微前端方案迁入概念映射) |
 | 加载远程组件 / 普通模块（remoteComponent、loadRemote、useLoadRemote） | [组件与模块加载](zh/guide/components-and-modules.md) |
 | 一批宿主路由对应远程页面（逐页接入） | [远程页面接入](zh/guide/remote-pages.md) |
@@ -49,7 +50,7 @@ docs/
 ## 英文文档
 
 - English documentation center（与 [docs/zh/](zh/README.md) 逐文件镜像，目录与主题一一对应）：[docs/en/README.md](en/README.md)
-  - English guides: [Getting started](en/guide/getting-started.md) 起，共 8 篇（[en/guide/](en/README.md#directory)）
+  - English guides: [Getting started](en/guide/getting-started.md) 起（[en/guide/](en/README.md#directory)）
   - English reference: [Configuration](en/reference/configuration.md) / [API](en/reference/api.md) / [CLI](en/reference/cli.md) / [Error codes](en/reference/errors.md)
   - English troubleshooting: [by symptom](en/troubleshooting/README.md) / [compatibility](en/troubleshooting/compatibility.md)
 

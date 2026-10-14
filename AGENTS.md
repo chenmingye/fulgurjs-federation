@@ -43,9 +43,9 @@
 - 配置/构建/开发接入：`src/index.ts`、`options.ts`、`app-config.ts`、`transform.ts`、`virtual.ts`、`init.ts`、`manifest.ts`、`dts.ts`。
 - 共享协商与远程加载：`src/runtime/`、`semver.ts`；运行时代码生成链见 `scripts/gen-runtime*.mjs`。
 - Vue/React 组件与页面：`vue-adapter.ts`、`react-adapter.ts`、`host-pages-core.ts`、`pages.ts`。
-- 子应用与宿主生命周期：`bridge-core.ts`、`bridge-app-*.ts`、`bridge-host-*.ts`、`bridge-errors.ts`。
+- 子应用与宿主生命周期：`application-core.ts`（独立/桥接统一启动）、`vue-store.ts`（显式状态归属）、`bridge-core.ts`、`bridge-app-*.ts`、`bridge-host-*.ts`、`bridge-errors.ts`。
 - URL 同步：`bridge-router-core.ts`、`bridge-router-sync.ts`、`bridge-router-vue.ts`、`bridge-router-react.tsx`。
-- CLI/诊断：`cli.ts`、`init.ts`、`create.ts`（完整工程创建向导，模板取自包内 `examples/templates/`）、`commands.ts`、`doctor.ts`、`diagnostics.ts`、`runtime/errors.ts`。
+- CLI/诊断：`cli.ts`、`init.ts`、`create.ts`（完整工程创建向导，模板取自包内 `examples/templates/`）、`commands.ts`、`doctor.ts`（站点检查）、`doctor-source.ts`（离线接入预检）、`diagnostics.ts`、`runtime/errors.ts`。
 
 上表源码名均相对于 `packages/plugin/`。公开入口以 package.json 的 `exports` 为准，不根据文件名猜测 API。
 
@@ -91,6 +91,7 @@ npm run test:examples
 
 - 所有公开示例源码只在 `examples/` 下维护。不重新建根 `demo/`、根 `templates/`，或复制一套基础 Vue/React 工程给门户。
 - 五个模板是基础场景的唯一源码，门户直接引用。新增工程更新 `scenarios.json` 和相应指南，保留正确包管理器及 workspace 安装位置。
+- 模板生产启动器的规范源为 `examples/scripts/prod-runner.mjs`，同一同步脚本生成各模板 `scripts/prod.mjs`；模板根 `pnpm build` 后 `pnpm prod` 直接服务各 dist，按真实构建 base 挂载。功能 Demo 生产挂载信息在 `scenarios.json.production`，不另维护一份硬编码应用表。
 - 模板统一 dev 启动器的规范源是 `examples/scripts/dev-runner.mjs`，经 `examples/scripts/sync-template-scripts.mjs` 同步到各模板 `scripts/dev.mjs`；`check-catalog.mjs` 校验逐字节一致与端口三方一致（dev.config.json ↔ scenarios.json ↔ 子应用 package.json）。改启动器必须走规范源 + 同步，不直接改模板副本。
 - 对外示例用 npm registry 正式包，锁文件与 package.json 一致；不能依赖本机插件源码、旧 node_modules、父目录 workspace 或绝对路径。
 - 模板必须能整目录复制后独立安装、构建、启动。验收使用排除 node_modules/dist 的干净目录，检查安装退出码、workspace 实际成员和真实插件版本。

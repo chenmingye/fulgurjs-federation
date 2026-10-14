@@ -380,3 +380,18 @@ $ npx @fulgurjs/federation port vue-remote 6213 --write
 ## `fulgurjs --help`
 
 打印帮助（含全部命令、参数与示例）。`fulgurjs`（无子命令）、`-h`、`help` 同效。未知命令打印帮助并以退出码 2 结束。
+
+## 本地接入预检：`doctor --config`
+
+> 源码候选 6.9.0 的新增模式，尚未验收/发布。与部署模式分别执行。
+
+```bash
+npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts
+npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts --json
+```
+
+读取并执行你指定的可信配置（与 explain 相同），静态扫描最多 256 个应用源码文件；不执行业务模块，不主动请求站点，不修改源码。配置本身若有副作用，仍由配置作者负责。不能与 --base/--apps 混用。
+
+检查暴露/setup 文件、dev/prod 地址、桥接浏览器 history、异步状态归属和声明误入运行时 glob；输出必改、可选及需调整的原文件清单，并列出 Providers、全局组件等人工确认项。只对确定的源文件错误判 FAIL；风险判 WARN。自定义别名、动态导入、glob、目录外源码和扫描上限均可能导致扫描不完整；不执行远程地址函数。
+
+JSON 字段：`checks`（DoctorCheck[]）、`failed`、`complete`（仅静态扫描完整性）、`filesScanned`、`manualChecks`、`integrationFiles: { required, optional, existing }`。退出 0 表示未发现确定 FAIL，**不是 TS、构建、业务接入或浏览器验收通过**；确定 FAIL 退出 1；缺参/配置异常退出 2。后续仍按真实项目配置验证接入文件。

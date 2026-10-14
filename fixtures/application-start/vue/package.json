@@ -1,0 +1,23 @@
+{
+  "name": "fulgurjs-fixture-application-vue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5481 --strictPort",
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@fulgurjs/federation": "link:../../../packages/plugin",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.4",
+    "pinia": "^3.0.4"
+  },
+  "devDependencies": {
+    "vite": "^6.4.3",
+    "typescript": "^5.8.0",
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-vue": "^5.2.0",
+    "vue-tsc": "^3.3.12"
+  }
+}

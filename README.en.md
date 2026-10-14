@@ -6,6 +6,9 @@ For example: a main system loads an independently deployed approval page, a Vue 
 
 [简体中文](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.md) ｜ **[Documentation center](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)** (Chinese [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md))
 
+
+To reduce duplicated standalone/bridge startup code, see [application assembly and preflight](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/existing-apps.md). New APIs describe the unaccepted, unpublished 6.9.0 source candidate; they are not available in older registry packages.
+
 ## Quick start
 
 **New project** (recommended): scaffold a fully runnable federation workspace from a template:

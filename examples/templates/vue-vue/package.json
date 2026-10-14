@@ -6,6 +6,7 @@
     "dev:remote": "pnpm --dir remote dev",
     "dev:host": "pnpm --dir host dev",
     "dev": "node scripts/dev.mjs",
-    "build": "pnpm --dir remote build && pnpm --dir host build"
+    "build": "pnpm --dir remote build && pnpm --dir host build",
+    "prod": "node scripts/prod.mjs"
   }
 }

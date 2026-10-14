@@ -7,8 +7,8 @@
 | 入口 | 用途 | 导出面 |
 |---|---|---|
 | `@fulgurjs/federation`（包根） | Vite 配置 | `federation(options)` 插件 + `FederationOptions` 类型（字段全集见[配置参考](configuration.md)） |
-| `@fulgurjs/federation/vue` | **Vue 应用唯一入口** | 运行时全量 + `provideAppContext`/`getAppContext`/`requireAppContext`/`clearAppContext` + `definePages`/`validatePages` + `remoteComponent` + `createHostPages` + `defineBridgeApp` + `createVueBridgeApp` + `createVueBridgeNavigation` + `connectVueBridgeRouter` + `remoteSchema` |
-| `@fulgurjs/federation/react` | **React 应用唯一入口** | 同一运行时全量 + context + pages（`createReactHostPages`）+ `remoteComponent`/`useLoadRemote`/`RemoteErrorBoundary` + `defineBridgeApp` + `createReactBridgeApp` + `createReactBridgeNavigation` + `createReactBridgeRouter` + `remoteSchema` |
+| `@fulgurjs/federation/vue` | **Vue 应用唯一入口** | 运行时全量 + `provideAppContext`/`getAppContext`/`requireAppContext`/`clearAppContext` + `definePages`/`validatePages` + `remoteComponent` + `bindStoreToApp` + `createHostPages` + `defineApplication` + `defineBridgeApp` + `createVueBridgeApp` + `createVueBridgeNavigation` + `connectVueBridgeRouter` + `remoteSchema` |
+| `@fulgurjs/federation/react` | **React 应用唯一入口** | 同一运行时全量 + context + pages（`createReactHostPages`）+ `remoteComponent`/`useLoadRemote`/`RemoteErrorBoundary` + `defineApplication` + `defineBridgeApp` + `createReactBridgeApp` + `createReactBridgeNavigation` + `createReactBridgeRouter` + `remoteSchema` |
 | `@fulgurjs/federation/runtime` | **框架无关** | 运行时全量（loadRemote/loadShare/initSharing/registerRemotes/registerShare/registerRemote/registerPlugins/preloadRemote/getContainer/getLoadedShare/pinLoadedShare/parseSpec/getRuntime/shareScopeMap/unwrapDefault/version/clearSessionState）+ context + pages（`definePages`/`validatePages`）+ `remoteSchema`；零 Vue/React/router 依赖 |
 
 <a id="runtime-api"></a>
@@ -640,3 +640,48 @@ const PREFETCH_REMOTES: string[] = []
 ## 完整公共类型
 
 [公共类型参考](types.md) 按当前入口列出全部公开类型及字段。
+
+## 同一应用独立启动与桥接：`defineApplication`
+
+> 本节对应源码候选 6.9.0，尚未完成验收或发布；已发布包的能力以安装版本为准。
+
+Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入；不新增子路径。完整例子见[已有应用统一装配](../guide/existing-apps.md)。只需要桥接、不需要独立启动时，仍可使用 `defineBridgeApp`。
+
+```ts
+// Vue；React 使用同名入口，工厂返回 ReactElement 或 { element, dispose? }
+import { defineApplication } from '@fulgurjs/federation/vue'
+// application.ts 默认导出这个返回值；exposes 指向 application.ts。
+// 独立 main.ts 导入该默认导出，只调用 application.start('#app', props)。
+```
+
+| 项目 | 合同 |
+|---|---|
+| 签名 | `defineApplication<P extends object>(factory, options?) => Application<P>`；普通 interface 可用，不需要索引签名 |
+| options | 对应框架的 `DefineVueBridgeAppOptions` / `DefineReactBridgeAppOptions`；`routing` 默认 false，启用宿主 URL 同步时设 true |
+| 工厂调用 | 每个容器、每次挂载新调用；Vue 可返回 Promise，React 工厂必须同步返回 |
+| context.mode | 必有；`standalone` 为独立启动，`bridge` 为宿主挂载 |
+| context.signal | 必有；仅属于这次实例，卸载或外部挂载取消时 abort；异步任务必须自行遵守 signal |
+| context.routing | 桥接启用路由时由宿主提供；独立启动不提供，不能对它调用桥接连接器 |
+| Vue 返回值 | `app` 或 `{ app, router }`。推荐后者；工厂装配 Pinia、组件、Providers、守卫后返回尚未安装 router 的 app。独立模式传真实 web/hash router，插件安装并等待 isReady；桥接模式传 memory router，并声明 routing:true |
+| React 返回值 | `ReactElement` 或 `{ element: ReactElement, dispose?: () => void }`；dispose 同步释放这次创建的 router/资源。桥接 createReactBridgeRouter 的 element/dispose 可直接返回；独立模式返回 RouterProvider 与 router.dispose |
+| `start(target, props)` | target 为选择器或 HTMLElement；P 有必填字段时 props 必填，否则可省略。Promise 成功得到 `{ element, unmount() }`；Vue 已等待初始路由、挂载，React 已完成首次根提交，不表示接口/页面所有异步内容完成 |
+| 启动途中取消 | 调用 `application.unmount(element)`；start 拒绝 AbortError。迟到工厂结果不得重挂载，调用方应处理拒绝 |
+| 卸载 | handle.unmount 只停止自己的启动代次；旧 handle 不停止同容器新实例。卸载失败后该定义会封锁容器，整页刷新后再用，不伪装成可重试成功 |
+| 重复挂载 | 同容器未卸载不得再次 start 或 mount；多容器必须各自创建 app/router/状态实例 |
+| 宿主使用 | 返回值也实现 BridgeApp（mount/unmount/routing），由 createVueBridgeApp/createReactBridgeApp 加载；宿主不会调用 start |
+
+### 显式绑定业务状态：`bindStoreToApp`（仅 Vue）
+
+```ts
+import { bindStoreToApp } from '@fulgurjs/federation/vue'
+import { createPinia } from 'pinia'
+import { useCounterStore } from './stores/counter'
+const pinia = createPinia()
+const useCounter = bindStoreToApp(useCounterStore, pinia)
+// 在这次 app 的装配中 provide useCounter；异步回调里无需依赖全局 activePinia。
+const counter = useCounter()
+```
+
+签名 `bindStoreToApp<T extends (...args: never[]) => unknown>(useStore: T, pinia: Parameters<T>[0] | (() => Parameters<T>[0])): T`。返回代理保持原函数的参数/返回类型和 `$id` 等属性；只有首参数省略或 null 时补绑定实例，显式传其他实例时尊重调用参数。不导入 Pinia、不调用 setActivePinia、不建立全局业务 store。
+
+getter 仅适合本模块明确只有一个默认实例且初始化较晚的情形；未就绪时抛可读错误。多容器并发请每次工厂绑定实际实例并向自身组件注入，不能用一个会被下一次挂载覆盖的模块变量。组件内正常 Pinia 注入继续使用原生 useStore。

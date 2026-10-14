@@ -11,6 +11,20 @@ const ports = new Set()
 const errors = []
 let applications = 0
 for (const scenario of loadScenarios()) {
+  if (scenario.production) {
+    const prod = scenario.production
+    const prefixes = new Set()
+    if (!Number.isInteger(prod.port) || prod.port < 1 || prod.port > 65535) errors.push(`${scenario.id}: 无效生产端口`)
+    if (!Array.isArray(prod.mounts) || !prod.mounts.length) errors.push(`${scenario.id}: 缺少生产挂载表`)
+    for (const mount of Array.isArray(prod.mounts) ? prod.mounts : []) {
+      if (!mount || typeof mount !== 'object') { errors.push(`${scenario.id}: 无效生产挂载项`); continue }
+      if (!scenario.apps.some(app => app.name === mount.app && app.role !== 'service')) errors.push(`${scenario.id}: 生产挂载引用未知应用 ${mount.app}`)
+      if (typeof mount.prefix !== 'string' || !mount.prefix.startsWith('/') || !mount.prefix.endsWith('/') || /[?#]|\.\./.test(mount.prefix)) errors.push(`${scenario.id}: 无效生产前缀 ${mount.prefix}`)
+      if (prefixes.has(mount.prefix)) errors.push(`${scenario.id}: 重复生产前缀 ${mount.prefix}`)
+      prefixes.add(mount.prefix)
+    }
+    if (!prefixes.has(prod.entry)) errors.push(`${scenario.id}: 生产入口未登记在挂载表`)
+  }
   if (!fs.existsSync(path.join(root, scenario.source))) errors.push(`${scenario.id}: 来源目录不存在 ${scenario.source}`)
   for (const app of scenario.apps) {
     applications++
@@ -54,6 +68,11 @@ if (!fs.existsSync(devRunnerSource)) templateErrors.push('缺少规范源 exampl
 for (const template of ['vue-vue', 'react-react', 'vue-host-react-remote', 'react-host-vue-remote', 'showcase']) {
   const templateDir = path.join(root, 'examples/templates', template)
   const runnerCopy = path.join(templateDir, 'scripts/dev.mjs')
+  const productionSource = path.join(root, 'examples/scripts/prod-runner.mjs')
+  const productionCopy = path.join(templateDir, 'scripts/prod.mjs')
+  if (!fs.existsSync(productionCopy) || !fs.existsSync(productionSource) || fs.readFileSync(productionCopy, 'utf8') !== fs.readFileSync(productionSource, 'utf8')) {
+    templateErrors.push(`${template}: scripts/prod.mjs 未从规范源同步`)
+  }
   if (fs.existsSync(devRunnerSource)) {
     if (!fs.existsSync(runnerCopy)) {
       templateErrors.push(`${template}: 缺少 scripts/dev.mjs（执行 node examples/scripts/sync-template-scripts.mjs 同步）`)

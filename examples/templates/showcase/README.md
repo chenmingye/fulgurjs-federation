@@ -128,3 +128,12 @@ pnpm run build
 ## 查看应用运行模式
 
 子应用显示“当前应用被桥接：true”；Vue 宿主观测台显示“当前宿主被桥接：false”。两者同页并存也不会串模式。Vue 在组件 setup 中调用 `hasBridgeMount(getCurrentInstance()?.appContext.app)`；React 在桥接工厂中查询 `hasBridgeMount(ctx)`，通过 props 传给布局。独立 createApp 实例的查询结果为 false；本模板的子应用独立入口只提供健康检查壳，不展示业务布局。该值描述实例的运行方式，不是当前挂载数量。
+
+## 一键运行生产产物
+
+```bash
+pnpm build
+pnpm prod
+```
+
+`prod` 只服务本次 dist，不启动远程开发服务器。它复用 scripts/dev.config.json 的宿主端口，从实际构建入口推导 base，并把远程静态产物挂在同源子路径。无需为本地复现手写 Nginx；部署真实服务器时仍按部署指南配置。多宿主模板分别启动各宿主地址，不把两个宿主的根资源混在一起。先停止 dev，端口占用会失败并停止本次已起服务；不会关闭已有占用进程。Ctrl+C 关闭本次生产服务。

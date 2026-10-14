@@ -105,3 +105,12 @@ server {
 - 改remote（默认 5213）：① `remote/package.json` 的 `dev` 与 `preview` 两个脚本的 `--port 5213`；② `host/fulgurjs.config.ts` 里 `remotes['vue-remote'].dev` 的 `http://localhost:5213`；③ 根 `scripts/dev.config.json` 里 remote 的 `port`（**必改**：启动器预检/探活都读它）；④ 本 README 顶部端口表。
 - 改host（默认 5214）：① `host/package.json` 的 `dev`/`preview` `--port 5214`；② `scripts/dev.config.json`；③ 本 README 端口表。
 - 生产部署地址（`prod`，如 `/remote`）是站点路径，与 dev 端口无关，改端口不要动它。改名（容器名）不建议：还需同步 spec 前缀与页面表。
+
+## 一键运行生产产物
+
+```bash
+pnpm build
+pnpm prod
+```
+
+`prod` 只服务本次 dist，不启动远程开发服务器。它复用 scripts/dev.config.json 的宿主端口，从实际构建入口推导 base，并把远程静态产物挂在同源子路径。无需为本地复现手写 Nginx；部署真实服务器时仍按部署指南配置。多宿主模板分别启动各宿主地址，不把两个宿主的根资源混在一起。先停止 dev，端口占用会失败并停止本次已起服务；不会关闭已有占用进程。Ctrl+C 关闭本次生产服务。

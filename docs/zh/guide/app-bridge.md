@@ -1,5 +1,7 @@
 # 子应用桥接：完整子应用嵌入（Vue ↔ React）
 
+已有应用同时需要独立启动与桥接时，先读[统一装配指南](existing-apps.md)；源码候选新 API 的可用性说明见该页。
+
 > 场景：把一个**完整子应用**（自带 Router/store/菜单）挂进另一框架的宿主——Vue 3 宿主嵌 React 18/19 子应用，或反向。嵌入的是子应用：子应用创建自己的组件树，宿主只提供 DOM 容器；**不做组件类型转换**（Vue 的 `remoteComponent` 不能直接渲染 React 组件）。
 >
 > 导入入口：子应用 `defineBridgeApp` 从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 导入；宿主工厂 `createVueBridgeApp`/`createReactBridgeApp` 同样从 `/vue`、`/react` 导入。

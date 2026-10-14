@@ -20,6 +20,7 @@ import { Component, createElement, useEffect, type ReactElement, type ReactNode 
 import { markBridgeMount } from './bridge-core'
 import type { BridgeApp } from './bridge-core'
 import type { BridgeChildRoute } from './bridge-router-core'
+import { createApplication, type Application } from './application-core'
 
 export type { BridgeApp } from './bridge-core'
 
@@ -35,7 +36,7 @@ export interface ReactBridgeAppContext {
 export type ReactBridgeAppFactory<P = Record<string, unknown>> = (props: P, ctx?: ReactBridgeAppContext) => ReactElement
 
 /** 桥接 props 的类型标记（phantom，与 Vue 侧同构；见 bridge-app-vue 的说明） */
-export type FgBridgePropsMarker<P extends Record<string, unknown>> = { __fgBridgeProps?: P }
+export type FgBridgePropsMarker<P extends object> = { __fgBridgeProps?: P }
 
 export interface DefineReactBridgeAppOptions {
   /** 声明路由协议（URL 同步）：契约写入 routing: { protocol: 1 }（缺失时宿主启用同步即 MFU-031） */
@@ -46,6 +47,18 @@ interface RootEntry {
   /** pending：react-dom/client 动态取得前（尚未创建 root；可被 unmount 直接作废） */
   status: 'pending' | 'live' | 'abort'
   root?: { render(node: ReactNode): void; unmount(): void }
+  controller: AbortController
+  removeAbortListener(): void
+  cancelCommit?: () => void
+  dispose?: () => void
+}
+
+const appDisposers = new WeakMap<AbortSignal, () => void>()
+function disposeResources(entry: RootEntry): void {
+  const dispose = entry.dispose
+  entry.dispose = undefined
+  appDisposers.delete(entry.controller.signal)
+  dispose?.()
 }
 
 /** 按容器 el 的实例跟踪（同一契约对象被页面多处挂载时各实例互不干扰） */
@@ -101,27 +114,92 @@ function CommitProbe({ children, onCommit }: { children?: ReactNode; onCommit: (
  * export default defineBridgeApp((props) => <MemoryRouter><App {...props} /></MemoryRouter>)
  * ```
  */
-export function defineBridgeApp<P extends Record<string, unknown> = Record<string, unknown>>(
+export function defineBridgeApp<P extends object = Record<string, unknown>>(
   factory: ReactBridgeAppFactory<P>,
   options: DefineReactBridgeAppOptions = {},
 ): BridgeApp & FgBridgePropsMarker<P> {
+  return createReactAppContract(factory, options, 'bridge')
+}
+
+export interface ReactApplicationContext extends ReactBridgeAppContext {
+  mode: 'standalone' | 'bridge'
+  signal: AbortSignal
+}
+
+export interface ReactApplicationSetup {
+  element: ReactElement
+  /** Dispose a standalone data router or other instance-owned resources. */
+  dispose?: () => void
+}
+
+export type ReactApplicationFactory<P = Record<string, unknown>> = (
+  props: P, context: ReactApplicationContext,
+) => ReactElement | ReactApplicationSetup
+
+export function defineApplication<P extends object = Record<string, unknown>>(
+  factory: ReactApplicationFactory<P>, options: DefineReactBridgeAppOptions = {},
+): Application<P> {
+  const contract = (mode: ReactApplicationContext['mode']) => createReactAppContract<P>((props, ctx) => {
+    const context: ReactApplicationContext = { ...ctx, mode, signal: ctx!.signal! }
+    if (mode === 'bridge') markBridgeMount(context)
+    const result = factory(props, context)
+    if (!result || typeof result !== 'object') throw new Error('defineApplication 工厂必须返回 ReactElement 或 { element, dispose? }。')
+    if ('element' in result) {
+      if (result.dispose) appDisposers.set(context.signal, result.dispose)
+      return result.element
+    }
+    return result
+  }, options, mode)
+  return createApplication<P>(contract('bridge'), contract('standalone'))
+}
+
+function createReactAppContract<P extends object>(
+  factory: ReactBridgeAppFactory<P>, options: DefineReactBridgeAppOptions,
+  mode: 'standalone' | 'bridge',
+): BridgeApp & FgBridgePropsMarker<P> {
   return {
-    ...(options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
+    ...(mode === 'bridge' && options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
     mount(el: HTMLElement, props?: Record<string, unknown>, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): Promise<void> {
       if (entriesByEl.has(el)) {
         throw new Error('同一容器 el 已挂载本桥接应用（容器已被占用）。同一容器未卸载前重复 mount 是契约违例——先 unmount 再 mount。')
       }
       // 浅拷贝顶层字段（挂载时快照；嵌套对象/函数保留原引用，任务书 §4.2）
       const snapshot = { ...(props ?? {}) }
-      const ctx: ReactBridgeAppContext = { signal: mountOptions?.signal, routing: mountOptions?.routing }
-      markBridgeMount(ctx)
+      const controller = new AbortController()
+      const ctx: ReactBridgeAppContext = { signal: controller.signal, routing: mountOptions?.routing }
+      if (mode === 'bridge') markBridgeMount(ctx)
+      const entry: RootEntry = {
+        status: 'pending', controller,
+        removeAbortListener: () => mountOptions?.signal?.removeEventListener('abort', abort),
+      }
+      const abort = () => {
+        controller.abort()
+        entry.cancelCommit?.()
+      }
+      mountOptions?.signal?.addEventListener('abort', abort, { once: true })
+      entriesByEl.set(el, entry)
+      if (mountOptions?.signal?.aborted) {
+        abort()
+        entriesByEl.delete(el)
+        entry.removeAbortListener()
+        return Promise.resolve()
+      }
       let element: ReactElement
       try {
-        element = (factory as (props: Record<string, unknown>, ctx?: ReactBridgeAppContext) => ReactElement)(snapshot, ctx)
+        element = factory(snapshot as P, ctx)
+        entry.dispose = appDisposers.get(controller.signal)
       } catch (e) {
+        entriesByEl.delete(el)
+        entry.removeAbortListener()
+        controller.abort()
+        try { disposeResources(entry) } catch { /* preserve the factory error */ }
         throw e instanceof Error ? e : new Error(String(e))
       }
       if (element === null || typeof element !== 'object') {
+        entriesByEl.delete(el)
+        entry.removeAbortListener()
+        controller.abort()
+        try { disposeResources(entry) } catch { /* preserve invalid element diagnosis */ }
         throw new Error(
           `defineBridgeApp 工厂返回值不是 ReactElement（当前 ${element === null ? 'null' : typeof element}）。` +
             '工厂必须返回 ReactElement（JSX/ createElement 的返回值）。',
@@ -129,9 +207,6 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       }
 
       // 同步占位：dynamic import 的 await 间隙内到达的 unmount 也能立即作废本轮代次
-      const entry: RootEntry = { status: 'pending' }
-      entriesByEl.set(el, entry)
-
       const promise = (async (): Promise<void> => {
         // react-dom/client 实际 mount 时按需取得（共享子路径 singleton 由 shared 配置协商）
         // Vite 6 + React 18 的 CJS 子路径可能只提供 default 命名空间；
@@ -142,7 +217,7 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
         }
         const createRoot = reactDomClient.createRoot ?? reactDomClient.default?.createRoot
         // dynamic import 期间已被作废：不创建 root（迟到的挂载不得复活，BN06）
-        if (entry.status === 'abort' || entriesByEl.get(el) !== entry) return
+        if (entry.status === 'abort' || controller.signal.aborted || entriesByEl.get(el) !== entry) return
         if (typeof createRoot !== 'function') throw new Error(
           'react-dom/client 未导出 createRoot。请核对 React 与 renderer 版本及共享子路径配置。',
         )
@@ -164,6 +239,12 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
             phaseRef.current = 'committed'
             resolve()
           }
+          entry.cancelCommit = () => {
+            if (settled) return
+            settled = true
+            resolve()
+          }
+          if (controller.signal.aborted) { entry.cancelCommit(); return }
           root.render(
             createElement(
               FirstCommitGate,
@@ -186,6 +267,9 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
             }
           }
           if (entriesByEl.get(el) === entry) entriesByEl.delete(el)
+          entry.removeAbortListener()
+          controller.abort()
+          try { disposeResources(entry) } catch { /* preserve the first render error */ }
           throw e
         },
       ).then(() => undefined)
@@ -197,17 +281,21 @@ export function defineBridgeApp<P extends Record<string, unknown> = Record<strin
       const entry = entriesByEl.get(el)
       if (!entry) return
       entriesByEl.delete(el)
+      entry.removeAbortListener()
+      entry.controller.abort()
+      entry.cancelCommit?.()
       // react-dom/client 尚未取得：直接作废，本轮代次不再创建 root
       if (entry.status === 'pending' || !entry.root) {
         entry.status = 'abort'
+        disposeResources(entry)
         return
       }
       entry.status = 'abort'
-      try {
-        entry.root.unmount()
-      } catch (e) {
-        throw e instanceof Error ? e : new Error(String(e))
-      }
+      let failure: unknown
+      let failed = false
+      try { entry.root.unmount() } catch (error) { failed = true; failure = error }
+      try { disposeResources(entry) } catch (error) { if (!failed) { failed = true; failure = error } }
+      if (failed) throw failure instanceof Error ? failure : new Error(String(failure))
     },
   }
 }
