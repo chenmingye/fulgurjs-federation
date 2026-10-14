@@ -383,7 +383,6 @@ $ npx @fulgurjs/federation port vue-remote 6213 --write
 
 ## 本地接入预检：`doctor --config`
 
-> 源码候选 6.9.0 的新增模式，尚未验收/发布。与部署模式分别执行。
 
 ```bash
 npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts

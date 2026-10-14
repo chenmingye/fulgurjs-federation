@@ -1,6 +1,6 @@
 # fulgurjs-federation 模板（examples/templates/）
 
-> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
+> 五个模板统一使用 6.9.0 的 defineApplication 装配。按各模板 README 的冻结安装命令安装 registry 正式包。
 
 
 五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation`（精确版本 + pnpm 锁文件，钉定版本见各模板 package.json；统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。

@@ -381,7 +381,6 @@ Prints help (all commands, flags, and examples). `fulgurjs` (no subcommand), `-h
 
 ## Local integration preflight: `doctor --config`
 
-> New mode in the unaccepted/unpublished source candidate 6.9.0. Run separately from deployment checks.
 
 ```bash
 npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts

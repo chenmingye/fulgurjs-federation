@@ -1,7 +1,5 @@
 # Existing applications: required files first, optional capabilities second
 
-`defineApplication`, `bindStoreToApp`, and `doctor --config` belong to the current 6.9.0 implementation pending acceptance and publication. They are not available in the previously published package. Update this availability notice after release.
-
 ## Choose the integration scope
 
 | Need | Required integration | Do not add by default |
@@ -114,4 +112,4 @@ remoteComponent remains the component API. defineBridgeApp remains a current API
 
 Source demos: [Vue](../../../fixtures/application-start/vue/src/application.ts), [React](../../../fixtures/application-start/react/src/application.tsx), [README](../../../fixtures/application-start/README.md). These are maintainer fixtures using local link dependencies; public templates must use a published registry package.
 
-The five public templates and the same-frame demo now use application factories and thin main entries. They depend on the unaccepted 6.9.0 source candidate; use a candidate tarball for pre-release validation and the exact registry version after publication. No template implementation migration remains for the validation agent.
+The five public templates and the same-frame demo now use application factories and thin main entries. They depend on the exact registry version. Install published packages as described in each README.

@@ -84,7 +84,7 @@ node examples/scripts/stop-demo.mjs --scenario vue-basic
 
 npm 包仅附带 `examples/templates/` 五个模板；功能 Demo、Jeecg 集成与门户从 GitHub 仓库获取。
 
-## 统一生产启动（源码候选）
+## 统一生产启动
 
 五个模板在模板根执行 `pnpm build`，再执行 `pnpm prod`；后者直接服务 dist，无需另开远程 dev server。宿主沿用 scripts/dev.config.json 的端口，按真实构建 base 挂载远程。若 dev 占用端口，先在自己的 dev 终端停止服务。Ctrl+C 关闭本次生产服务器；未构建、base 冲突或端口占用会失败，不自动跳过。
 

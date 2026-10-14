@@ -617,7 +617,7 @@ import type { ReactBridgeRouterConnection } from '@fulgurjs/federation/react'
 | ReactApplicationSetup | `element: ReactElement`, `dispose?: () => void` |
 | ReactApplicationFactory<P> | `(props: P, context: ReactApplicationContext) => ReactElement \| ReactApplicationSetup` |
 
-以上对应未发布的 6.9.0 源码候选；调用顺序和默认值见 [API 参考](api.md#同一应用独立启动与桥接defineapplication)。
+调用顺序和默认值见 [API 参考](api.md#同一应用独立启动与桥接defineapplication)。
 
 ## DefineVueBridgeAppOptions / DefineReactBridgeAppOptions
 

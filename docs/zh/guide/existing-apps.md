@@ -1,7 +1,5 @@
 # 已有应用接入：先看必改文件，再选需要的能力
 
-`defineApplication`、`bindStoreToApp` 和 `doctor --config` 对应当前源码的 6.9.0 待验收实现。尚未正式发布；不要把已发布旧包当作包含这些 API。验收与发布完成后更新这一状态说明。
-
 ## 先确定场景
 
 | 需求 | 必需接入 | 不需要默认增加 |
@@ -137,4 +135,4 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 
 普通组件仍用 remoteComponent；只需要一个自定义桥接入口时 defineBridgeApp 仍是有效当前 API。统一装配用于有独立启动与桥接两种形态的应用。
 
-源码演示：[Vue](../../../fixtures/application-start/vue/src/application.ts)、[React](../../../fixtures/application-start/react/src/application.tsx)、[目录说明](../../../fixtures/application-start/README.md)。这是维护者本地源码演示；五个公开模板与 same-frame 已改用相同的统一装配写法，依赖精确 6.9.0；本轮仍待验收/发布。内部 link 工程不作为给用户的安装方式，公开组合发布后使用 registry 包。
+源码演示：[Vue](../../../fixtures/application-start/vue/src/application.ts)、[React](../../../fixtures/application-start/react/src/application.tsx)、[目录说明](../../../fixtures/application-start/README.md)。这是维护者本地源码演示；五个公开模板与 same-frame 使用相同的统一装配写法。内部 link 工程不作为给用户的安装方式，请安装 registry 正式包。

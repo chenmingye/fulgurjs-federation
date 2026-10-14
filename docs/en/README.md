@@ -28,7 +28,7 @@
 
 | Document | Content |
 |---|---|
-| [Existing application assembly](guide/existing-apps.md) | One factory for standalone/bridge startup, store ownership, preflight and required/optional files (6.9.0 source candidate) |
+| [Existing application assembly](guide/existing-apps.md) | One factory for standalone/bridge startup, store ownership, preflight and required/optional files |
 | [Getting started](guide/getting-started.md) | Install, scaffold a new project with `create`, integrate existing projects with `init`/manual wiring (Vue/React/pure TS; consumer/provider/dual), concept mapping from qiankun-style frameworks |
 | [Loading components and modules](guide/components-and-modules.md) | remoteComponent (Vue/React), useLoadRemote, RemoteErrorBoundary, loadRemote, dev-time type passthrough |
 | [Remote page integration](guide/remote-pages.md) | definePages / createHostPages / createReactHostPages, the `hostPages` named export, check-pages, and the boundary that business menus stay app-owned |

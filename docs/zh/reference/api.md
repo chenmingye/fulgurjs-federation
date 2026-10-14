@@ -643,7 +643,6 @@ const PREFETCH_REMOTES: string[] = []
 
 ## 同一应用独立启动与桥接：`defineApplication`
 
-> 本节对应源码候选 6.9.0，尚未完成验收或发布；已发布包的能力以安装版本为准。
 
 Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入；不新增子路径。完整例子见[已有应用统一装配](../guide/existing-apps.md)。只需要桥接、不需要独立启动时，仍可使用 `defineBridgeApp`。
 

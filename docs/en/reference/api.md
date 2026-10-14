@@ -647,7 +647,6 @@ The [public type reference](types.md) lists every exported type and its fields b
 
 ## One application for standalone and bridge startup: `defineApplication`
 
-> This section describes the source candidate 6.9.0, not yet accepted or published. Installed package capabilities depend on its version.
 
 Import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; no additional subpath. See [existing application assembly](../guide/existing-apps.md) for complete examples. `defineBridgeApp` remains available for bridge-only applications.
 

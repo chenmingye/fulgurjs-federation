@@ -1,6 +1,6 @@
 # Sub app bridge: embedding a full sub app (Vue ↔ React)
 
-For applications that need both standalone and bridge startup, see [the assembly guide](existing-apps.md), including the source candidate availability notice.
+For applications that need both standalone and bridge startup, start with [the assembly guide](existing-apps.md).
 
 > Scenario: mount a **full sub app** (with its own Router/store/menus) into a host of the other framework — a Vue 3 host embedding a React 18/19 child app, or the reverse. What is embedded is the child app: it creates its own component tree and the host only provides a DOM container; **no component type conversion happens** (Vue's `remoteComponent` cannot render React components directly).
 >

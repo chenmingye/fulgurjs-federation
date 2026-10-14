@@ -631,7 +631,7 @@ Return value of `createReactBridgeRouter`.
 | ReactApplicationSetup | `element: ReactElement`, `dispose?: () => void` |
 | ReactApplicationFactory<P> | `(props: P, context: ReactApplicationContext) => ReactElement \| ReactApplicationSetup` |
 
-These types describe the unpublished 6.9.0 source candidate. See the [API reference](api.md#one-application-for-standalone-and-bridge-startup-defineapplication) for lifecycle and defaults.
+See the [API reference](api.md#one-application-for-standalone-and-bridge-startup-defineapplication) for lifecycle and defaults.
 
 ## DefineVueBridgeAppOptions / DefineReactBridgeAppOptions
 

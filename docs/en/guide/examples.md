@@ -84,7 +84,7 @@ node examples/scripts/stop-demo.mjs --scenario vue-basic
 
 The npm package ships only the five templates in `examples/templates/`; feature demos, the Jeecg integration, and the portal come from the GitHub repository.
 
-## Consistent production startup (source candidate)
+## Consistent production startup
 
 For each of the five templates, run pnpm build followed by pnpm prod at the template root. The launcher serves dist directly without remote dev servers, uses host ports from scripts/dev.config.json and mounts remotes at their actual build base. Stop your own dev processes first when they occupy those ports. Ctrl+C closes this run's servers; missing builds, conflicting bases or occupied ports fail instead of being skipped.
 

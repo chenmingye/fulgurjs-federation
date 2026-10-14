@@ -1,7 +1,5 @@
 # 同框架完整子应用桥接（examples/demos/same-frame）
 
-> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
-
 
 Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（Vue/React 统一入口的同框架形态）。
 每个子应用是一个**自带路由与状态、可整站挂载/卸载**的完整业务系统（工单中心），
@@ -140,7 +138,7 @@ npm run typecheck   # Vue 工程：vue-tsc --noEmit --skipLibCheck；React 工�
 - 子应用工单数据为本地内存数据（模块级单例）：页面会话内跨卸载/重挂持久，整页刷新后重置；
 - 子应用 main 仅独立启动时执行 start；远程 expose 直接指向同一 application 工厂，加载时不应执行 main 或创建第二套浏览器历史。
 
-## 统一生产启动（本轮源码新增，待验收）
+## 统一生产启动
 
 在仓库根按场景构建并启动：
 

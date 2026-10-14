@@ -28,7 +28,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| [已有应用统一装配](guide/existing-apps.md) | 一份装配同时服务独立启动/桥接、状态绑定、接入预检、必改/可选文件清单（6.9.0 源码候选） |
+| [已有应用统一装配](guide/existing-apps.md) | 一份装配同时服务独立启动/桥接、状态绑定、接入预检、必改/可选文件清单 |
 | [快速上手](guide/getting-started.md) | 安装、`create` 新建工程、已有项目 `init`/手工接入（Vue/React/纯 TS；consumer/provider/dual）、从 qiankun 类方案迁入的概念映射 |
 | [组件与模块加载](guide/components-and-modules.md) | remoteComponent（Vue/React）、useLoadRemote、RemoteErrorBoundary、loadRemote、开发类型直连 |
 | [远程页面接入](guide/remote-pages.md) | definePages / createHostPages / createReactHostPages、hostPages 导出、check-pages、业务菜单归应用自管的边界 |
