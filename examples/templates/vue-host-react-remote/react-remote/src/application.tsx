@@ -1,12 +1,6 @@
-/**
- * React 子应用桥接契约（./bridge expose 的默认导出，任务书 §3.3）。
- *
- * defineBridgeApp 工厂接收 props 快照、返回 ReactElement；
- * createRoot/首次提交探测/unmount 由契约实现负责（react-dom/client 在实际 mount 时按需加载）。
- */
 import { useEffect, useState } from 'react'
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { defineBridgeApp } from '@fulgurjs/federation/react'
+import { BrowserRouter, MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { defineApplication } from '@fulgurjs/federation/react'
 
 /** 挂载即回调（宿主验证函数引用跨 root 传递） */
 function OnReady({ onReady }: { onReady?: () => void }) {
@@ -27,14 +21,16 @@ function Counter() {
   )
 }
 
-function Shell(props: Record<string, unknown>) {
+export interface BridgeReactProps { label?: string; onReady?: () => void }
+
+function Shell(props: BridgeReactProps) {
   const location = useLocation()
   const navigate = useNavigate()
   return (
     <div style={{ border: '1px solid #61dafb', borderRadius: 8, padding: 12, fontFamily: 'sans-serif' }}>
       <p style={{ margin: '0 0 6px', fontWeight: 600, color: '#0b7285' }}>React 子应用</p>
       <p data-testid="demo-react-props" style={{ margin: '0 0 6px' }}>
-        {`appProps.label = ${(props as any).label || '（未传）'}`}
+        {`appProps.label = ${props.label || '（未传）'}`}
       </p>
       <p data-testid="demo-react-route" style={{ margin: '0 0 8px' }}>{`memory 路由：${location.pathname}`}</p>
       <nav style={{ marginBottom: 8 }}>
@@ -50,17 +46,10 @@ function Shell(props: Record<string, unknown>) {
   )
 }
 
-export function App() {
-  return (
-    <MemoryRouter>
-      <Shell />
-    </MemoryRouter>
-  )
-}
-
-export default defineBridgeApp((props) => (
-  <MemoryRouter>
-    <OnReady onReady={(props as any).onReady} />
-    <Shell {...props} />
-  </MemoryRouter>
-))
+// 独立入口与桥接共享同一套页面、状态和 onReady。
+export default defineApplication<BridgeReactProps>((props, { mode }) => {
+  const content = <><OnReady onReady={props.onReady} /><Shell {...props} /></>
+  return mode === 'bridge'
+    ? <MemoryRouter>{content}</MemoryRouter>
+    : <BrowserRouter basename={import.meta.env.BASE_URL}>{content}</BrowserRouter>
+})

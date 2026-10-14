@@ -44,6 +44,7 @@ export interface DefineReactBridgeAppOptions {
 }
 
 interface RootEntry {
+  owner: symbol
   /** pending：react-dom/client 动态取得前（尚未创建 root；可被 unmount 直接作废） */
   status: 'pending' | 'live' | 'abort'
   root?: { render(node: ReactNode): void; unmount(): void }
@@ -157,6 +158,7 @@ function createReactAppContract<P extends object>(
   factory: ReactBridgeAppFactory<P>, options: DefineReactBridgeAppOptions,
   mode: 'standalone' | 'bridge',
 ): BridgeApp & FgBridgePropsMarker<P> {
+  const owner = Symbol('react-application')
   return {
     ...(mode === 'bridge' && options.routing ? ({ routing: { protocol: 1 } } as const) : {}),
     mount(el: HTMLElement, props?: Record<string, unknown>, mountOptions?: { signal?: AbortSignal; routing?: BridgeChildRoute }): Promise<void> {
@@ -169,7 +171,7 @@ function createReactAppContract<P extends object>(
       const ctx: ReactBridgeAppContext = { signal: controller.signal, routing: mountOptions?.routing }
       if (mode === 'bridge') markBridgeMount(ctx)
       const entry: RootEntry = {
-        status: 'pending', controller,
+        owner, status: 'pending', controller,
         removeAbortListener: () => mountOptions?.signal?.removeEventListener('abort', abort),
       }
       const abort = () => {
@@ -279,7 +281,7 @@ function createReactAppContract<P extends object>(
     },
     unmount(el: HTMLElement): void {
       const entry = entriesByEl.get(el)
-      if (!entry) return
+      if (!entry || entry.owner !== owner) return
       entriesByEl.delete(el)
       entry.removeAbortListener()
       entry.controller.abort()

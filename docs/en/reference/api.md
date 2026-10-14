@@ -659,7 +659,7 @@ Import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; no addit
 | context.mode | Required: standalone or bridge |
 | context.signal | Required, owned by this instance; aborted on unmount/external mount cancellation. Asynchronous tasks must observe it |
 | context.routing | Provided by a routing-enabled bridge host, absent during standalone startup |
-| Vue result | app or { app, router }; prefer the latter. Assemble stores, components, Providers and guards before returning an app whose router is not yet installed. Standalone uses a real web/hash router, installed and awaited by the plugin; bridge uses memory history with routing:true |
+| Vue result | app or { app, router }; prefer the latter. Assemble stores, components, Providers and guards before returning an app whose router is not yet installed. Standalone uses a real web/hash router, installed and awaited by the plugin; bridge uses memory history: routing:true for host URL sync, or an automatically installed/awaited local memory router when sync is omitted |
 | React result | ReactElement or { element: ReactElement, dispose?: () => void }. Dispose synchronously releases instance-owned resources. Return createReactBridgeRouter's element/dispose for bridge mode or RouterProvider plus router.dispose for standalone mode |
 | start(target, props) | Selector or HTMLElement; props is required when P contains required fields. Resolves { element, unmount() } after Vue initial navigation/mount or React first root commit; does not await every page loader/request |
 | Pending cancellation | application.unmount(element) cancels a pending start with AbortError; callers handle rejection and late factory results do not remount |

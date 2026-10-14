@@ -1,10 +1,13 @@
 # 同框架完整子应用桥接（examples/demos/same-frame）
 
+> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
+
+
 Vue 套 Vue、React 套 React 的「应用级桥接」完整演示（Vue/React 统一入口的同框架形态）。
 每个子应用是一个**自带路由与状态、可整站挂载/卸载**的完整业务系统（工单中心），
 每个宿主以三页对照呈现「组件级联邦 vs 应用级桥接」的差异与各自适用场景。
 
-四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.8.5` + lockfile），
+四个工程互相独立：依赖从 npm registry 安装正式包（`@fulgurjs/federation` 精确 `6.9.0` + lockfile），
 不使用 workspace / file: / link: 引用。
 
 | 工程 | 角色 | 端口 | 容器名 |
@@ -78,7 +81,7 @@ Vue 对额外演示「三层嵌套」的样式正确性：子应用内部菜单�
    `sessionKey / user / getToken（函数引用）/ hostLabel`。计数变为 mount 2 · unmount 1 · 会话切换 1。
 6. **卸载再挂载**：点「卸载再挂载」→ 容器清空后按同一 sessionKey 重挂（模块缓存复用，不重新下载）。
    mount/unmount 计数各 +1；重挂后列表里第 3 步编辑过的数据**仍在**——应用级桥接的子应用
-   状态属于模块级单例，不随容器销毁（这是与组件级的关键差异之一）。
+   状态属于模块级单例，不随容器销毁（这是本演示的业务数据策略，组件级也可以使用模块状态，并非插件强制行为）。
 7. **页面1 · 组件级联邦（对照）**：`remoteComponent` 直渲染远程 `TicketSummary` 组件——
    只有统计卡片（数据同样来自子应用模块），没有子应用路由、没有身份栏、没有 AppContext 协议；
    点「远程组件内交互」按钮可正常计数，证明是活的远程组件而非静态快照。
@@ -89,18 +92,18 @@ Vue 对额外演示「三层嵌套」的样式正确性：子应用内部菜单�
 
 React 宿主（5326）差异说明：react-host 未启用 `StrictMode`——为让 mount/unmount 计数与
 Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各多一次；桥接契约对两种模式都安全）。
-其余行为逐条一致（实测：session-2-Carol、mount 3 · unmount 2、子应用身份栏同步）。
+其余行为逐条一致（验收应检查会话、挂载计数与子应用身份栏）。
 
 ## API ↔ 源码对照表
 
-| API（README 锚点） | 导出入口 | 本 demo 使用位置 | 插件源码（packages/plugin/src） |
+| API | 导出入口 | 本 demo 使用位置 | 插件源码（packages/plugin/src） |
 |---|---|---|---|
-| `defineBridgeApp(factory)` | `@fulgurjs/federation/runtime` | [vue-remote/src/bridge.ts](vue-remote/src/bridge.ts) | `bridge-app-vue.ts` |
-| `defineBridgeApp(factory)` | `@fulgurjs/federation/react` | [react-remote/src/bridge.tsx](react-remote/src/bridge.tsx) | `bridge-app-react.ts` |
+| `defineApplication(factory)` | `@fulgurjs/federation/vue` | [vue-remote/src/application.ts](vue-remote/src/application.ts) | `bridge-app-vue.ts` |
+| `defineApplication(factory)` | `@fulgurjs/federation/react` | [react-remote/src/application.tsx](react-remote/src/application.tsx) | `bridge-app-react.ts` |
 | `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | [vue-host/src/pages/AppBridgePage.vue](vue-host/src/pages/AppBridgePage.vue) | `bridge-host-vue.ts` |
 | `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | [react-host/src/pages/AppBridgePage.tsx](react-host/src/pages/AppBridgePage.tsx) | `bridge-host-react.ts` |
 | `remoteComponent(spec, options)` | `@fulgurjs/federation/vue` / `@fulgurjs/federation/react` | vue-host / react-host 的 `pages/ComponentLevelPage.*` | `vue-adapter.ts` / `react-adapter.ts` |
-| `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/runtime`（React 侧 `/react`） | 宿主 `host-session.ts` + 桥接层内部写入；子应用 `App.vue` / `ChildLayout.tsx` 读取 | `context.ts` |
+| `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/vue` / `@fulgurjs/federation/react` | 宿主 `host-session.ts` + 桥接层内部写入；子应用 `App.vue` / `ChildLayout.tsx` 读取 | `context.ts` |
 | 受控 `sessionKey`（undefined/null/非空串） | 桥接组件 prop | 两宿主 `AppBridgePage` 的 `handleSwitchSession` / `handleRemount` | `bridge-core.ts`（`assertControlledSessionKey`、`resolveBridgeContext`） |
 | `getContext`（同步纯 getter 快照） | 工厂选项 | 两宿主 `host-session.ts` 的 `getLatestHostContext` | `bridge-core.ts` |
 | `exposes: { './bridge' }` 契约约定 | fulgurjs.config.ts | 四工程的 `fulgurjs.config.ts` | 插件容器/manifest 逻辑 |
@@ -122,7 +125,7 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 
 ```bash
 # 每工程独立执行
-npm run build       # vite build（四工程全部通过）
+npm run build       # vite build（本轮未执行，交由验收）
 npm run typecheck   # Vue 工程：vue-tsc --noEmit --skipLibCheck；React 工程：tsc --noEmit
 ```
 
@@ -135,8 +138,7 @@ npm run typecheck   # Vue 工程：vue-tsc --noEmit --skipLibCheck；React 工�
 - 子应用 memory 路由不与宿主 URL 同步（URL 同步使用 `/vue`、`/react` 的宿主导航端口，本场景未启用）；
 - 无 JS 沙箱 / CSS 隔离：双方样式用 `.sfh-`（宿主）/ `.sfc-`（子应用）类名命名空间治理；
 - 子应用工单数据为本地内存数据（模块级单例）：页面会话内跨卸载/重挂持久，整页刷新后重置；
-- vue-remote / react-remote 的 `index.html` + `main.ts(x)` 只是独立开发态入口，被宿主桥接消费时走
-  `./bridge` 契约，与独立入口无关。
+- 子应用 main 仅独立启动时执行 start；远程 expose 直接指向同一 application 工厂，加载时不应执行 main 或创建第二套浏览器历史。
 
 ## 统一生产启动（本轮源码新增，待验收）
 
@@ -148,3 +150,5 @@ node examples/scripts/serve-prod.mjs --scenario same-frame
 ```
 
 入口为 `http://localhost:6394/sf-vue-host/`，React 宿主为同端口 `/sf-react-host/`。四应用的 dist 按 scenarios.json.production 挂载；无需保留 dev server。构建前按本文各工程说明安装依赖，Ctrl+C 停本次生产服务。
+
+四个应用均从各自 src/application 启动；子应用独立运行与桥接使用同一套工单组件和路由。src/main 只调用 start，exposes 直接指向 application，不另保留 bridge 转发文件。

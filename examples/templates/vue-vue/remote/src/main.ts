@@ -1,6 +1,4 @@
-import { createApp } from 'vue'
-import App from './App.vue'
+import application from './application'
 
-// 独立运行入口：单独开发/调试远程自身时使用。
-// 被宿主消费时走的是 fulgurjs-remoteEntry.js 容器入口，与本文件无关。
-createApp(App).mount('#app')
+// 独立入口只负责启动；初始化写在 application 中。
+void application.start('#app').catch(console.error)

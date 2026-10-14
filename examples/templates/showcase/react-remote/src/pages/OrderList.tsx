@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent, ReactElement } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { reportNav } from '../child-bus'
+import { useChildReporter } from '../child-bus'
 
 interface OrderItem {
   id: number
@@ -26,6 +26,7 @@ const ORDERS: OrderItem[] = [
 const PAGE_SIZE = 3
 
 export default function OrderList(): ReactElement {
+  const { reportNav } = useChildReporter()
   const location = useLocation()
   const navigate = useNavigate()
   const search = new URLSearchParams(location.search)

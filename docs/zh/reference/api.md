@@ -662,7 +662,7 @@ import { defineApplication } from '@fulgurjs/federation/vue'
 | context.mode | 必有；`standalone` 为独立启动，`bridge` 为宿主挂载 |
 | context.signal | 必有；仅属于这次实例，卸载或外部挂载取消时 abort；异步任务必须自行遵守 signal |
 | context.routing | 桥接启用路由时由宿主提供；独立启动不提供，不能对它调用桥接连接器 |
-| Vue 返回值 | `app` 或 `{ app, router }`。推荐后者；工厂装配 Pinia、组件、Providers、守卫后返回尚未安装 router 的 app。独立模式传真实 web/hash router，插件安装并等待 isReady；桥接模式传 memory router，并声明 routing:true |
+| Vue 返回值 | `app` 或 `{ app, router }`。推荐后者；工厂装配 Pinia、组件、Providers、守卫后返回尚未安装 router 的 app。独立模式传真实 web/hash router，插件安装并等待 isReady；桥接模式传 memory router；需要宿主 URL 同步时声明 routing:true，不同步时也可返回本地 router 自动安装/等待 |
 | React 返回值 | `ReactElement` 或 `{ element: ReactElement, dispose?: () => void }`；dispose 同步释放这次创建的 router/资源。桥接 createReactBridgeRouter 的 element/dispose 可直接返回；独立模式返回 RouterProvider 与 router.dispose |
 | `start(target, props)` | target 为选择器或 HTMLElement；P 有必填字段时 props 必填，否则可省略。Promise 成功得到 `{ element, unmount() }`；Vue 已等待初始路由、挂载，React 已完成首次根提交，不表示接口/页面所有异步内容完成 |
 | 启动途中取消 | 调用 `application.unmount(element)`；start 拒绝 AbortError。迟到工厂结果不得重挂载，调用方应处理拒绝 |

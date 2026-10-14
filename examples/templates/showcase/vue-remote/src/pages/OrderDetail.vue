@@ -5,7 +5,8 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { reportNav } from '../child-bus'
+import { useChildReporter } from '../child-bus'
+const { reportNav } = useChildReporter()
 
 const route = useRoute()
 const router = useRouter()

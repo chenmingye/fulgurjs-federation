@@ -4,7 +4,8 @@
  * 前往本页的导航会被宿主守卫（Vue：异步 beforeEach；React：useBlocker）拦截，等待「继续/取消」。
  */
 import { useRouter } from 'vue-router'
-import { reportNav } from '../child-bus'
+import { useChildReporter } from '../child-bus'
+const { reportNav } = useChildReporter()
 
 const router = useRouter()
 

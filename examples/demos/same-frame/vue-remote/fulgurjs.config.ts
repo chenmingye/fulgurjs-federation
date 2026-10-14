@@ -2,7 +2,7 @@ import type { FederationOptions } from '@fulgurjs/federation'
 
 /**
  * 同框架 Vue 子应用联邦配置（examples/demos/same-frame）。
- * - './bridge'：defineBridgeApp 完整子应用契约（宿主经 createVueBridgeApp 整站挂载）。
+ * - './bridge'：defineApplication 完整子应用契约（宿主经 createVueBridgeApp 整站挂载）。
  * - './components/TicketSummary'：单个远程组件（宿主经 remoteComponent 直渲染，组件级对比项）。
  * 子应用只装并共享自己的框架（vue singleton）；自带的 vue-router 不进 shared
  * （memory 路由自包含，宿主侧另有自己的 vue-router 实例，互不干扰）。
@@ -18,7 +18,7 @@ export default {
     },
   },
   exposes: {
-    './bridge': './src/bridge.ts',
+    './bridge': './src/application.ts',
     './components/TicketSummary': './src/exposes/TicketSummary.vue',
   },
   shared: {

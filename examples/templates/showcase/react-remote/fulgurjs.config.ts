@@ -9,7 +9,7 @@ export default {
   name: 'react-remote',
   filename: 'fulgurjs-remoteEntry.js',
   exposes: {
-    './bridge': './src/bridge.tsx',
+    './bridge': './src/application.tsx',
   },
   shared: {
     react: { singleton: true },

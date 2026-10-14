@@ -4,9 +4,10 @@
  */
 import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
-import { reportNav } from '../child-bus'
+import { useChildReporter } from '../child-bus'
 
 export default function Locked(): ReactElement {
+  const { reportNav } = useChildReporter()
   const handleBack = (): void => {
     reportNav('子应用 Link', 'push', '/orders')
   }

@@ -54,7 +54,7 @@ void application.start('#app').catch(console.error)
 exposes: { './bridge': './src/application.ts' }
 ```
 
-独立模式安装 web router 并等待 isReady；桥接模式安装同步通道并等待初始深链。宿主开启 URL 同步时仍需 `{ routing: true }`，没有通道会明确失败，不能自动退回一个看似正常的首页。
+独立模式安装 web router 并等待 isReady；桥接开启 routing 时安装同步通道并等待初始深链；不开启 routing 时，返回的本地 memory router 也由插件安装并等待，不需要手动 app.use(router)。宿主开启 URL 同步时仍需 `{ routing: true }`，没有通道会明确失败，不能自动退回一个看似正常的首页。
 
 工厂需要在路由就绪后继续装配时，沿用 installVueBridgeRouter 的显式用法；不要同时返回已安装的 router 让插件重复安装。仅返回 app 时，路由安装/就绪仍由工厂自己负责。
 
@@ -137,4 +137,4 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 
 普通组件仍用 remoteComponent；只需要一个自定义桥接入口时 defineBridgeApp 仍是有效当前 API。统一装配用于有独立启动与桥接两种形态的应用。
 
-源码演示：[Vue](../../../fixtures/application-start/vue/src/application.ts)、[React](../../../fixtures/application-start/react/src/application.tsx)、[目录说明](../../../fixtures/application-start/README.md)。这是维护者本地源码演示；公开模板继续使用正式发布包，不能把 link 依赖当作给用户的安装方式。
+源码演示：[Vue](../../../fixtures/application-start/vue/src/application.ts)、[React](../../../fixtures/application-start/react/src/application.tsx)、[目录说明](../../../fixtures/application-start/README.md)。这是维护者本地源码演示；五个公开模板与 same-frame 已改用相同的统一装配写法，依赖精确 6.9.0；本轮仍待验收/发布。内部 link 工程不作为给用户的安装方式，公开组合发布后使用 registry 包。

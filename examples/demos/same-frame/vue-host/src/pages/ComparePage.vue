@@ -10,7 +10,7 @@ const rows: Array<{ dim: string; component: string; app: string }> = [
   {
     dim: '交付单元',
     component: '单个组件 / 模块（exposes 键 → defineAsyncComponent）',
-    app: '完整子应用（自带路由 + 状态 + 页面栈，defineBridgeApp 契约）',
+    app: '完整子应用（自带路由 + 状态 + 页面栈，defineApplication 契约）',
   },
   {
     dim: '路由',

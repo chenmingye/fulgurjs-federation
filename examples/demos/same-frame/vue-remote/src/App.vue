@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 子应用根组件：身份栏 + 宿主 appProps 提示 + 内部 RouterView。
- * 独立运行（main.ts，web history）与桥接态（bridge.ts，memory history）共用本组件。
+ * 独立运行（main.ts，web history）与桥接态（application.ts 根据 mode 选择 memory history）共用本组件。
  * onReady/onGone 只在桥接态由宿主传入——供宿主推进真实的挂载/卸载计数。
  */
 import { onMounted, onUnmounted } from 'vue'

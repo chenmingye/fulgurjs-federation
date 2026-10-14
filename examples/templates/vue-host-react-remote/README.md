@@ -1,5 +1,8 @@
 # vue-host-react-remote：完整子应用桥接模板
 
+> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
+
+
 `vue-host/` 是宿主，`react-remote/` 是子应用。复制整个模板目录，在根目录运行：
 
 ```bash
@@ -31,3 +34,15 @@ pnpm prod
 ```
 
 `prod` 只服务本次 dist，不启动远程开发服务器。它复用 scripts/dev.config.json 的宿主端口，从实际构建入口推导 base，并把远程静态产物挂在同源子路径。无需为本地复现手写 Nginx；部署真实服务器时仍按部署指南配置。多宿主模板分别启动各宿主地址，不把两个宿主的根资源混在一起。先停止 dev，端口占用会失败并停止本次已起服务；不会关闭已有占用进程。Ctrl+C 关闭本次生产服务。
+
+## 插件代码阅读地图
+
+| 文件 | 职责 |
+|---|---|
+| `react-remote/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `vue-host/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `react-remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
+| `vue-host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
+| `scripts/dev.mjs` / `scripts/prod.mjs` | 统一开发/生产启动器；业务接入不复制它们到应用源码 |
+
+`application` 是新增的插件装配文件，`main` 是已有入口接线；页面组件、业务路由、权限和数据不是每个项目都必写的联邦配置。跨框架基础组合不逐页登记子应用菜单；逐页远程页面模板的页面表仅服务它所展示的逐页场景。`src/fulgurjs/types/` 是插件生成目录，按远程实际版本同步，不维护人工伪造的声明或旧缓存。

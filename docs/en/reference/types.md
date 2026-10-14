@@ -632,3 +632,11 @@ Return value of `createReactBridgeRouter`.
 | ReactApplicationFactory<P> | `(props: P, context: ReactApplicationContext) => ReactElement \| ReactApplicationSetup` |
 
 These types describe the unpublished 6.9.0 source candidate. See the [API reference](api.md#one-application-for-standalone-and-bridge-startup-defineapplication) for lifecycle and defaults.
+
+## DefineVueBridgeAppOptions / DefineReactBridgeAppOptions
+
+Import Vue options from /vue and React options from /react. defineApplication and defineBridgeApp share their framework options type.
+
+| Field | Optional | Type | Default and purpose |
+|---|---|---|---|
+| routing | yes | boolean | false; true declares host URL synchronization. defineApplication can also install a local memory router without synchronization. |

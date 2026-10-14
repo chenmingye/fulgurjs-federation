@@ -1,24 +1,25 @@
-# bridge-vue-remote — Vue 桥接子应用示例
+# vue-remote — Vue 子应用
 
-`@fulgurjs/federation` 跨框架桥接的 **Vue 3 子应用**侧示例：以 `defineBridgeApp`（`@fulgurjs/federation/runtime`）导出 `mount/unmount` 契约，可被 **React 宿主**（配合 `examples/templates/react-host-vue-remote/react-host-vue-remote/react-host`）整站挂载。
+本模板对应未验收的 6.9.0 源码候选，状态与安装方法见[组合说明](../README.md)。复制整个组合目录，在组合根启动。
+
+## 按顺序读源码
+
+1. `fulgurjs.config.ts`：`./bridge` 直接 expose `src/application.ts`，公开模块名称不受文件名称约束。
+2. `src/application.ts`：`defineApplication` 唯一装配；独立模式用浏览器路由，桥接模式用本地 memory 路由，两者显示同一套真实页面、计数与 props。
+3. `src/main.ts`：只调用 application.start，不再复制初始化或新增转发文件。
+4. `react-host/`：宿主的挂载、会话与回调，见[组合说明](../README.md)。
+
+应用代码只从 `@fulgurjs/federation/vue` 导入插件 API；子应用不因跨框架嵌入而安装另一框架。这个基础组合不启用宿主 URL 同步；需要地址双向同步时使用 showcase 模板。
+
+独立启动可以切换首页/关于页，桥接也使用相同页面；卸载与首次挂载由插件管理。Vue 返回未安装的 app/router，React 返回 BrowserRouter/MemoryRouter 内的同一组件树。
 
 ## 运行
 
-复制整个 `react-host-vue-remote/` 模板，在模板根执行：
-
 ```bash
 pnpm install --frozen-lockfile
-pnpm dev                         # 同时启动宿主和子应用
-pnpm build                       # 构建完整组合
-# 单独启动本应用：pnpm --dir vue-remote dev
+pnpm dev
+pnpm build
+pnpm prod
 ```
 
-端口、复制范围与部署路径见[组合说明](../README.md)。
-
-## 关键点
-
-- `src/bridge.ts`：`defineBridgeApp((props) => VueApp)` 工厂——自行装配 memory 路由（vue-router），作为 `./bridge` expose 的默认导出。
-- 子应用只安装并共享 `vue`（+ `vue-router` 为直接依赖），**不安装 React**。
-- `sessionKey`/`getContext` 等会话语义由宿主侧控制，见 `examples/templates/react-host-vue-remote/react-host-vue-remote/react-host`。
-
-配套阅读：根目录 README §8.2「跨框架桥接 API — /bridge」。
+以上正式安装命令须在 6.9.0 发布后执行；候选验收先按组合根的候选说明使用本轮 tarball。

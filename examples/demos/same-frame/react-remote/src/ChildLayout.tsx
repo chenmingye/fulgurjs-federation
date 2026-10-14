@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { getAppContext } from '@fulgurjs/federation/react'
 import type { AppContext } from '@fulgurjs/federation/react'
-import { useBridgeProps } from './bridge'
+import { useBridgeProps } from './bridge-props'
 
 /**
  * 读取宿主会话信息（AppContext 快照；仅在被宿主桥接挂载时存在）。
