@@ -199,11 +199,11 @@ function createVueAppContract<P extends object>(
                 routing: ctx.routing, signal: controller.signal,
               })
             } else {
-              const router = result.router as VueRouterLike & { install?: unknown; isReady?: () => Promise<void> }
+              const router = result.router as VueRouterLike & { install(app: VueApp): void; isReady(): Promise<void> }
               if (typeof router.install !== 'function' || typeof router.isReady !== 'function') {
                 throw new Error('本地路由装配必须返回实际 vue-router 实例；不要返回导航端口或已安装到其他 app 的 router。')
               }
-              result.app.use(result.router as Parameters<VueApp['use']>[0])
+              result.app.use(router)
               const history = (router as { options?: { history?: { destroy?: () => void } } }).options?.history
               let cleaned = false
               instance.cleanupPending = () => {

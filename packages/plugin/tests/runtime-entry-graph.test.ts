@@ -68,7 +68,8 @@ describe('/vue 发布物（6.0.0 统一入口）', () => {
       'clearSessionState',
       'provideAppContext', 'getAppContext', 'requireAppContext', 'clearAppContext',
       'definePages', 'validatePages',
-      'remoteComponent', 'createHostPages', 'defineBridgeApp', 'remoteSchema',
+      'remoteComponent', 'createHostPages', 'defineBridgeApp', 'defineApplication', 'remoteSchema',
+      'bindStoreToApp',
       'createVueBridgeApp', 'createVueBridgeNavigation', 'connectVueBridgeRouter',
       'installVueBridgeRouter', 'createBridgeSession', 'hasBridgeMount',
     ].sort())
@@ -107,7 +108,7 @@ describe('/react 发布物（6.0.0 统一入口）', () => {
       'clearSessionState',
       'provideAppContext', 'getAppContext', 'requireAppContext', 'clearAppContext',
       'definePages', 'validatePages', 'remoteComponent', 'useLoadRemote',
-      'RemoteErrorBoundary', 'createReactHostPages', 'defineBridgeApp', 'remoteSchema',
+      'RemoteErrorBoundary', 'createReactHostPages', 'defineBridgeApp', 'defineApplication', 'remoteSchema',
       'createReactBridgeApp', 'createReactBridgeNavigation', 'createReactBridgeRouter', 'hasBridgeMount',
     ].sort())
     expect(mod.remoteSchema).toEqual({})
