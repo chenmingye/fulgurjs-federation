@@ -7,7 +7,8 @@
 import { getCurrentInstance } from 'vue'
 import { hasBridgeMount } from '@fulgurjs/federation/vue'
 import { RouterView, useRouter } from 'vue-router'
-import { getMountCount, reportNav } from './child-bus'
+import { useChildReporter } from './child-bus'
+const { getMountCount, reportNav } = useChildReporter()
 
 // 查询当前 app，而不是页面是否存在其他桥接实例。
 const bridged = hasBridgeMount(getCurrentInstance()?.appContext.app)
@@ -39,7 +40,7 @@ const handleGoForward = (): void => {
   <section class="demo-child">
     <p data-demo-bridge-mode>当前应用被桥接：{{ String(bridged) }}</p>
     <p class="demo-child-title">
-      <strong>Vue 子应用</strong>（受控 memory 路由）· 本会话挂载次数：{{ getMountCount() }}
+      <strong>Vue 子应用</strong>（{{ bridged ? '受控 memory' : '独立 web' }} 路由）· 本会话挂载次数：{{ getMountCount() }}
     </p>
     <div class="demo-row">
       <button @click="handlePushDemo">子应用 push /orders?q=演示&amp;page=2</button>

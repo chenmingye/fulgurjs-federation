@@ -58,11 +58,13 @@ describe('/react 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostRouting',
+      'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostRouting',
+      'DefineReactBridgeAppOptions',
       'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
       'FgReactRemoteProps', 'FgRuntime',
       'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',
+      'ReactApplicationContext', 'ReactApplicationFactory', 'ReactApplicationSetup',
       'ReactBridgeAppFactory', 'ReactBridgeAppContext', 'ReactBridgeAppOptions', 'ReactBridgeCancelPolicy', 'ReactBridgeRouterConnection',
       'ReactHostPages', 'ReactHostPagesOptions', 'ReactRemoteComponentOptions',
       'RemoteConfig', 'RemoteDebugInfo', 'RemoteErrorBoundaryProps', 'RemoteErrorFallback',
@@ -130,7 +132,8 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'BridgeApp', 'BridgeHostRouting', 'BridgeSession',
+      'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeHostRouting', 'BridgeSession',
+      'DefineVueBridgeAppOptions',
       'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
       'FgRemoteVueComponent', 'FgRuntime', 'FgVueBridgeWrapper',
       'HostPages', 'HostPagesOptions',
@@ -139,7 +142,9 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'RemoteComponentOptions', 'RemoteConfig', 'RemoteDebugInfo',
       'RemoteSchema', 'RemoteSchemaEntry', 'RemoteSetupContext', 'RemoteSetupModule',
       'ResolvedHostPage', 'RuntimeHooks', 'RuntimePlugin',
-      'ShareEntry', 'ShareScope', 'ShareScopeMap', 'VueBridgeAppFactory', 'VueBridgeAppContext', 'VueBridgeAppSetup', 'VueBridgeAppOptions',
+      'ShareEntry', 'ShareScope', 'ShareScopeMap',
+      'VueApplicationContext', 'VueApplicationFactory', 'VueApplicationSetup',
+      'VueBridgeAppFactory', 'VueBridgeAppContext', 'VueBridgeAppSetup', 'VueBridgeAppOptions',
       'VueBridgeRouterConnection',
     ].sort())
     // 注册表三类型经包内共享子路径再导出（与 /runtime、/react 同一声明）

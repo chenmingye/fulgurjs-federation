@@ -1,17 +1,13 @@
-/**
- * examples/templates/showcase/vue-remote/src/bridge.ts — Vue 子应用桥接契约（exposes './bridge'）。
- * defineBridgeApp(factory, { routing: true }) 声明路由协议（缺失时宿主启用同步即 MFU-031 占位）。
- * 返回 { app, router }，插件等待初始位置、安装路由、挂载并在卸载时释放连接。
- */
+// 独立与桥接装配唯一入口；返回未安装的 app/router，交给插件等待与挂载。
 import { createApp } from 'vue'
-import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
-import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { createMemoryHistory, createWebHistory, createRouter, type RouteRecordRaw } from 'vue-router'
+import { defineApplication } from '@fulgurjs/federation/vue'
 import ChildLayout from './ChildLayout.vue'
 import OrderList from './pages/OrderList.vue'
 import OrderDetail from './pages/OrderDetail.vue'
 import Settings from './pages/Settings.vue'
 import Locked from './pages/Locked.vue'
-import { bindReporter, reportNav } from './child-bus'
+import { createChildReporter, childReporterKey, type ChildProps } from './child-bus'
 
 const routes: RouteRecordRaw[] = [
   // 根路径以 replace 规范化到 /orders（不产生额外历史条目）
@@ -22,19 +18,20 @@ const routes: RouteRecordRaw[] = [
   { path: '/locked', component: Locked },
 ]
 
-export default defineBridgeApp((props, ctx) => {
-  bindReporter(props)
+export default defineApplication<ChildProps>((props, ctx) => {
+  const reporter = createChildReporter(props, ctx.signal)
   // 初始位置先读快照（规范化 replace 后对比上报）
   const init = ctx?.routing?.getLocation()
   const initPath = init ? init.pathname + init.search + init.hash : ''
-  const router = createRouter({ history: createMemoryHistory(), routes })
-  const app = createApp(ChildLayout, props)
+  const router = createRouter({ history: ctx.mode === 'bridge' ? createMemoryHistory() : createWebHistory(import.meta.env.BASE_URL), routes })
+  const app = createApp(ChildLayout)
+  app.provide(childReporterKey, reporter)
   // afterEach 记录初始导航结果；路由安装与连接清理由插件负责。
   let reported = false
   router.afterEach((to, _from, failure) => {
     if (reported || failure) return
     reported = true
-    reportNav(
+    reporter.reportNav(
       '子应用初始化',
       'init',
       to.fullPath !== initPath

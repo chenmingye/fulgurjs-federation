@@ -62,13 +62,10 @@ export function handleChildEvent(event: DemoChildEvent): void {
   log(event.source, `${event.action} ${event.detail}`)
 }
 
-let popInstalled = false
-
-/** 浏览器前进后退（POP）在 main.tsx 安装一次；push/replace 由各自来源显式标注 */
-export function installPopStateLogger(): void {
-  if (popInstalled) return
-  popInstalled = true
+/** POP 观测属于本应用实例；卸载后由 signal 移除，不遗留窗口监听。 */
+export function installPopStateLogger(signal: AbortSignal): void {
+  if (signal.aborted) return
   window.addEventListener('popstate', () => {
-    log('浏览器前进后退', window.location.pathname + window.location.search)
-  })
+    logNav('浏览器前进后退', window.location.pathname + window.location.search)
+  }, { signal })
 }

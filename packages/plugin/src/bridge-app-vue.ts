@@ -65,6 +65,7 @@ export interface DefineVueBridgeAppOptions {
 
 /** 按容器 el 的实例跟踪（同一契约对象被页面多处挂载时各实例互不干扰） */
 interface VueBridgeInstance {
+  owner: symbol
   app?: VueApp
   mounted: boolean
   controller: AbortController
@@ -119,14 +120,16 @@ export function defineApplication<P extends object = Record<string, unknown>>(
     const context: VueApplicationContext = { ...ctx, mode, signal: ctx!.signal! }
     if (mode === 'bridge') markBridgeMount(context)
     return factory(props, context)
-  }, options, mode)
+  }, options, mode, true)
   return createApplication<P>(contract('bridge'), contract('standalone'))
 }
 
 function createVueAppContract<P extends object>(
   factory: VueBridgeAppFactory<P>, options: DefineVueBridgeAppOptions,
   mode: 'standalone' | 'bridge',
+  localRouter = false,
 ): BridgeApp & FgBridgePropsMarker<P> {
+  const owner = Symbol('vue-application')
   const attach = (el: HTMLElement, app: VueApp, instance: VueBridgeInstance): void => {
     if (!app || typeof app.mount !== 'function' || typeof app.unmount !== 'function') {
       throw new Error(
@@ -166,7 +169,7 @@ function createVueAppContract<P extends object>(
       mountOptions?.signal?.addEventListener('abort', abort, { once: true })
       if (mountOptions?.signal?.aborted) controller.abort()
       const instance: VueBridgeInstance = {
-        mounted: false, controller,
+        owner, mounted: false, controller,
         removeAbortListener: () => mountOptions?.signal?.removeEventListener('abort', abort),
       }
       controller.signal.addEventListener('abort', () => {
@@ -187,20 +190,20 @@ function createVueAppContract<P extends object>(
         if (!active()) return
         try {
           if (isAppSetup(result)) {
-            if (mode === 'bridge' && !options.routing) {
+            if (mode === 'bridge' && !options.routing && !localRouter) {
               throw new Error('defineBridgeApp 返回 { app, router } 时必须声明 { routing: true }；router 应使用 createMemoryHistory()，不要提前 app.use(router)。')
             }
-            if (mode === 'bridge') {
+            if (mode === 'bridge' && options.routing) {
               markBridgeMount(result.app)
               instance.connection = await installVueBridgeRouter(result.app, result.router, {
                 routing: ctx.routing, signal: controller.signal,
               })
             } else {
-              const router = result.router as VueRouterLike & { install?: unknown; isReady?: () => Promise<void> }
+              const router = result.router as VueRouterLike & { install(app: VueApp): void; isReady(): Promise<void> }
               if (typeof router.install !== 'function' || typeof router.isReady !== 'function') {
-                throw new Error('独立启动必须返回实际 vue-router 实例；不要返回导航端口或已安装到其他 app 的 router。')
+                throw new Error('本地路由装配必须返回实际 vue-router 实例；不要返回导航端口或已安装到其他 app 的 router。')
               }
-              result.app.use(result.router as Parameters<VueApp['use']>[0])
+              result.app.use(router)
               const history = (router as { options?: { history?: { destroy?: () => void } } }).options?.history
               let cleaned = false
               instance.cleanupPending = () => {
@@ -248,7 +251,7 @@ function createVueAppContract<P extends object>(
     },
     unmount(el: HTMLElement): void {
       const instance = appsByEl.get(el)
-      if (!instance) return
+      if (!instance || instance.owner !== owner) return
       appsByEl.delete(el)
       instance.controller.abort()
       instance.removeAbortListener()

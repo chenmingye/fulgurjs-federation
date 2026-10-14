@@ -1,10 +1,22 @@
 /** Offline integration checks. Executes the configuration, never business modules or HTTP requests. */
 import fs from 'node:fs'
 import path from 'node:path'
-import { transform } from 'esbuild'
+import { createRequire } from 'node:module'
 import { init, parse } from 'es-module-lexer'
 import { loadAppConfig } from './app-config'
 import type { DoctorCheck } from './doctor'
+
+// esbuild 是 CJS 包且内部动态 require node 内置模块：静态 import 进 ESM 的 cli bundle
+// 会在运行时报 "Dynamic require of fs"。与 app-config.resolveEsbuild 同模式：运行时解析。
+const requireFromHere = createRequire(import.meta.url)
+let cachedTransform: ((input: string, options: { loader: 'ts' | 'tsx'; target: string }) => Promise<{ code: string }>) | undefined
+const esbuildTransform = () => {
+  if (!cachedTransform) {
+    const esb = requireFromHere('esbuild') as typeof import('esbuild')
+    cachedTransform = esb.transform.bind(esb)
+  }
+  return cachedTransform
+}
 
 export interface SourceDoctorReport {
   checks: DoctorCheck[]
@@ -19,7 +31,25 @@ export interface SourceDoctorReport {
 const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.vue', '/index.ts', '/index.tsx', '/index.js', '/index.vue']
 
 export async function runSourceDoctor(configPath: string): Promise<SourceDoctorReport> {
-  const loaded = await loadAppConfig(configPath)
+  let loaded: Awaited<ReturnType<typeof loadAppConfig>>
+  try {
+    loaded = await loadAppConfig(configPath)
+  } catch (error) {
+    // 预检的职责就是发现确定的配置错误：缺 expose/setup 文件等加载失败按 FAIL 报告
+    // （CLI 退出 1），不是用法错误（退出 2）。三段式信息从 appConfigError 原文提取。
+    const message = error instanceof Error ? error.message : String(error)
+    const sections = message.split('\n')
+    return {
+      checks: [{
+        app: '(config)', item: '配置加载', level: 'FAIL',
+        symptom: sections[0]?.replace(/^\[fulgurjs:[^\]]+\]\s*/, '') ?? message,
+        cause: message.match(/根因：(.+)/)?.[1],
+        fix: message.match(/修法：(.+)/)?.[1],
+      }],
+      failed: true, complete: false, filesScanned: 0, manualChecks: [],
+      integrationFiles: { required: [], optional: [], existing: [] },
+    }
+  }
   const root = fs.realpathSync(loaded.appRoot)
   const options = loaded.options
   const app = options.name
@@ -88,16 +118,20 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
       ? [...raw.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(match => match[1]).join('\n')
       : raw
     try {
-      const { code } = await transform(script, { loader: file.endsWith('.tsx') || file.endsWith('.jsx') ? 'tsx' : 'ts', target: 'esnext' })
+      const { code } = await esbuildTransform()(script, { loader: file.endsWith('.tsx') || file.endsWith('.jsx') ? 'tsx' : 'ts', target: 'esnext' })
       sources.set(relative(file), code)
       if (/import\.meta\.glob/.test(code)) complete = false // Do not claim expansion of a runtime/module glob.
       for (const item of parse(code)[0]) {
         if (!item.n) { if (item.d >= 0) complete = false; continue }
         imports.add(item.n)
         if (item.n.startsWith('.') || /^(?:\/?@\/|~\/)/.test(item.n)) {
-          const next = resolveSource(item.n, path.dirname(file))
-          if (next) pending.push(next)
-          else { complete = false; add(relative(file), 'WARN', '有本地导入无法跟随，源码检查不是完整依赖闭包。', '可能使用自定义别名、虚拟模块、资源或目录外源码。', '按项目 tsconfig/Vite 配置完成解析与类型检查；本命令不猜自定义别名。') }
+          // 构建资源（图片/字体/媒体/样式/数据）不是可静态检查的源码依赖：跳过跟随，
+          // 不 WARN、不降低 complete（与下方"资源不是应用代码"同一口径）。
+          if (/\.(?:[cm]?js|jsx|ts|tsx|vue)$/.test(item.n.split(/[?#]/)[0]) || !/\.[a-z0-9]+$/i.test(item.n.split(/[?#]/)[0])) {
+            const next = resolveSource(item.n, path.dirname(file))
+            if (next) pending.push(next)
+            else { complete = false; add(relative(file), 'WARN', '有本地导入无法跟随，源码检查不是完整依赖闭包。', '可能使用自定义别名、虚拟模块、资源或目录外源码。', '按项目 tsconfig/Vite 配置完成解析与类型检查；本命令不猜自定义别名。') }
+          }
         }
       }
     } catch {

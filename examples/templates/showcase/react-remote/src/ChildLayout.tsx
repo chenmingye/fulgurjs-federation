@@ -5,9 +5,10 @@
  */
 import { Outlet, useNavigate } from 'react-router-dom'
 import type { ReactElement } from 'react'
-import { getMountCount, reportNav } from './child-bus'
+import { useChildReporter } from './child-bus'
 
 export default function ChildLayout({ bridged = false }: { bridged?: boolean }): ReactElement {
+  const { getMountCount, reportNav } = useChildReporter()
   const navigate = useNavigate()
 
   const handlePushDemo = (): void => {
@@ -35,7 +36,7 @@ export default function ChildLayout({ bridged = false }: { bridged?: boolean }):
     <div style={{ borderTop: '1px dashed #ccc', marginTop: 8, paddingTop: 8 }}>
       <p data-demo-bridge-mode>当前应用被桥接：{String(bridged)}</p>
       <p style={{ margin: '4px 0' }}>
-        <strong>React 子应用</strong>（受控 memory 路由）· 本会话挂载次数：{getMountCount()}
+        <strong>React 子应用</strong>（{bridged ? '受控 memory' : '独立 web'} 路由）· 本会话挂载次数：{getMountCount()}
       </p>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0' }}>
         <button onClick={handlePushDemo}>子应用 push /orders?q=演示&amp;page=2</button>

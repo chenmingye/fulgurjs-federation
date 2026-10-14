@@ -6,7 +6,8 @@
  */
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { reportNav } from '../child-bus'
+import { useChildReporter } from '../child-bus'
+const { reportNav } = useChildReporter()
 
 interface OrderItem {
   id: number

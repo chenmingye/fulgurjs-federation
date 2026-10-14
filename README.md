@@ -7,7 +7,7 @@
 [English](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.en.md) ｜ **[完整文档中心](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)**（中文 [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md)）
 
 
-已有应用希望减少独立启动/桥接重复代码，参阅[统一装配与接入预检](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)。新增 API 对应未验收、未发布的 6.9.0 源码候选；不要直接按它调用旧正式包。
+已有应用希望减少独立启动/桥接重复代码，参阅[统一装配与接入预检](https://github.com/chenmingye/fulgurjs-federation/blob/codex%2Fusability-completion/docs/zh/guide/existing-apps.md)。新增 API 对应未验收、未发布的 6.9.0 源码候选；不要直接按它调用旧正式包。
 
 ## 快速开始
 

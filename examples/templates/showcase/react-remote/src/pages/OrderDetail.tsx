@@ -4,9 +4,10 @@
  */
 import type { ReactElement } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { reportNav } from '../child-bus'
+import { useChildReporter } from '../child-bus'
 
 export default function OrderDetail(): ReactElement {
+  const { reportNav } = useChildReporter()
   const params = useParams()
   const location = useLocation()
   const navigate = useNavigate()

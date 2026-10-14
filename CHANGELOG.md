@@ -6,6 +6,7 @@
 - Vue bindStoreToApp 显式绑定实际 Pinia 实例，保留 StoreDefinition 类型、$id 和热更新属性，不切换全局 activePinia。桥接 props 接受普通 interface，不要求额外索引签名。
 - doctor --config 离线接入预检：源文件、开发/生产地址、状态归属、声明 glob 与必改/可选文件清单；扫描不完整和人工核查明确标记，不把源码检查当浏览器验收。
 - 公开示例生产挂载、默认端口、入口统一登记 scenarios.json；same-frame 有正式生产启动命令；启动时核对构建入口前缀，固定环境配置不长期缓存。
+- 五个公开模板与同框架 Demo 统一使用 application 装配；独立入口显示相同业务页面，删除多余 bridge 转发与旧生成声明缓存。Vue 本地 memory 路由也可自动安装/等待。公开依赖精确到源码候选版本，未伪造新包 integrity。
 - 新增双语已有应用指南和内部 Vue/React 装配演示。本轮按要求仅实现，未运行测试、构建或发布，待独立验收。
 
 ## 6.8.7

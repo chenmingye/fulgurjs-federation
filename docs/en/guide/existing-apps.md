@@ -36,7 +36,7 @@ export default defineApplication<AppProps>((props, { mode, signal }) => {
 }, { routing: true })
 ```
 
-App/routes are existing business code. main.ts imports the factory and calls `void application.start('#app').catch(console.error)`. Expose `./bridge` directly from `./src/application.ts`; no forwarding bridge file is needed. Standalone starts a web router and waits for isReady. Bridge starts its controlled memory router and waits for the initial deep link. A missing routing channel fails explicitly.
+App/routes are existing business code. main.ts imports the factory and calls `void application.start('#app').catch(console.error)`. Expose `./bridge` directly from `./src/application.ts`; no forwarding bridge file is needed. Standalone starts a web router and waits for isReady. Routing-enabled bridge mode connects its controlled memory router and waits for the initial deep link. Without routing enabled, a returned local memory router is also installed and awaited automatically. A missing routing channel fails explicitly.
 
 If initialization must continue after routing becomes ready, use the explicit installVueBridgeRouter flow and return only app; do not return an already installed router for a second installation. When returning app alone, the factory owns router installation/readiness.
 
@@ -113,3 +113,5 @@ Source mode executes the config only; it does not execute business modules, requ
 remoteComponent remains the component API. defineBridgeApp remains a current API for a custom bridge-only entry. defineApplication shares assembly when both entry modes are needed.
 
 Source demos: [Vue](../../../fixtures/application-start/vue/src/application.ts), [React](../../../fixtures/application-start/react/src/application.tsx), [README](../../../fixtures/application-start/README.md). These are maintainer fixtures using local link dependencies; public templates must use a published registry package.
+
+The five public templates and the same-frame demo now use application factories and thin main entries. They depend on the unaccepted 6.9.0 source candidate; use a candidate tarball for pre-release validation and the exact registry version after publication. No template implementation migration remains for the validation agent.

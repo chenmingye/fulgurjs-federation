@@ -1,5 +1,8 @@
 # 双向桥接 URL 同步（examples/templates/showcase）
 
+> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
+
+
 `@fulgurjs/federation` 桥接 URL 同步的双向旗舰演示（API 见[文档中心](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)）：
 两个方向的宿主 × 子应用各一套——
 
@@ -82,12 +85,12 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 | 插件公开 API | 入口 | 本演示接线位置 |
 |---|---|---|
 | `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | `vue-host/src/pages/BridgeReactPage.vue`（`<RemoteReactBridge :routing="routing" :app-props="appProps" />`） |
-| `createVueBridgeNavigation(router)` | `@fulgurjs/federation/vue` | `vue-host/src/routing.ts`（模块级单例端口，main.ts 组装后 `initBridgeRouting(router)`） |
-| `connectVueBridgeRouter(routing, router, { signal })` → `await conn.ready` 后 `app.use(router)` | `@fulgurjs/federation/vue` | `vue-remote/src/bridge.ts`（异步工厂：初始 push 落定后再 install，顺序不能反） |
+| `createVueBridgeNavigation(router)` | `@fulgurjs/federation/vue` | `vue-host/src/routing.ts`（宿主导航端口，application.ts 组装后 `initBridgeRouting(router)`） |
+| `defineApplication(factory, { routing: true })` → 返回 `{ app, router }` | `@fulgurjs/federation/vue` | `vue-remote/src/application.ts`（根据 mode 选择 web/memory history；插件等待初始路由并安装） |
 | `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | `react-host/src/pages/BridgeVuePage.tsx`（`<RemoteVueBridge routing={routing} appProps={appProps} />`） |
 | `createReactBridgeNavigation(router, { canNavigate?, basename? })`（仅 data router） | `@fulgurjs/federation/react` | `react-host/src/routing.ts`（`createBrowserRouter` 实例组装后初始化） |
-| `createReactBridgeRouter(routing, routes, { signal })` → `{ element }` 直接作为工厂返回值 | `@fulgurjs/federation/react` | `react-remote/src/bridge.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
-| `defineBridgeApp(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/vue`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/bridge.ts`、`react-remote/src/bridge.tsx`（工厂内校验 `ctx?.routing`，`ctx.signal` 传入接线自动 dispose） |
+| `createReactBridgeRouter(routing, routes, { signal })` → `{ element, dispose }` 作为工厂返回值 | `@fulgurjs/federation/react` | `react-remote/src/application.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
+| `defineApplication(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/vue`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/application.ts`、`react-remote/src/application.tsx`（实例 mode/signal；独立与桥接复用同一套路由） |
 | `BridgeHostRouting`（`{ basePath, navigation }` 组件 prop，独立控制通道不进 appProps） | 类型面见 [API 参考](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/api.md) | `vue-host/src/routing.ts`、`react-host/src/routing.ts`（basePath 常量 `BRIDGE_BASE_PATH`） |
 | `BridgeChildRoute` / `BridgeLocation`（通道与位置契约） | `@fulgurjs/federation/vue`、`@fulgurjs/federation/react` | 由插件随 mount 第三参数注入子应用；两端仓库源码 `packages/plugin/src/bridge-router-core.ts` |
 
@@ -103,7 +106,7 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 ## 构建 / 类型检查
 
 ```bash
-# 4 个工程均独立通过（在各自目录执行）
+# 在各应用目录执行；这是验收命令，不代表本轮已经通过
 pnpm run types       # 远程类型同步/验证（宿主同步远程声明；提供方验证生成）
 pnpm run typecheck   # React 工程 tsc --noEmit；Vue 工程 vue-tsc --noEmit
 pnpm run build
@@ -117,7 +120,7 @@ pnpm run build
 2. 宿主 `fulgurjs.config.ts` 里 `remotes` 的 dev 地址（`vue-host` 指向 react-remote 的 5333；`react-host` 指向 vue-remote 的 5335）；
 3. 根 `scripts/dev.config.json` 里该应用的 `port`（**必改**：启动器预检/探活都读它）。
 
-生产部署形态（重要）：两个宿主的路由都没有配置 base，**不能部署到同一站点的根**（两份 `index.html` 会互相覆盖）。按两个站点部署——
+生产部署形态（重要）：两个宿主的默认构建 base 都是根，**不能部署到同一站点的根**（两份 `index.html` 会互相覆盖）。按两个站点部署——
 
 - 站点 A：`vue-host/dist` 部署在根，`react-remote/dist` 部署在同站 `/react-remote/` 子路径（vue-host 的 prod 地址）；
 - 站点 B：`react-host/dist` 部署在另一个站点的根，`vue-remote/dist` 部署在该站 `/vue-remote/` 子路径（react-host 的 prod 地址）；
@@ -127,7 +130,7 @@ pnpm run build
 
 ## 查看应用运行模式
 
-子应用显示“当前应用被桥接：true”；Vue 宿主观测台显示“当前宿主被桥接：false”。两者同页并存也不会串模式。Vue 在组件 setup 中调用 `hasBridgeMount(getCurrentInstance()?.appContext.app)`；React 在桥接工厂中查询 `hasBridgeMount(ctx)`，通过 props 传给布局。独立 createApp 实例的查询结果为 false；本模板的子应用独立入口只提供健康检查壳，不展示业务布局。该值描述实例的运行方式，不是当前挂载数量。
+子应用显示“当前应用被桥接：true”；Vue 宿主观测台显示“当前宿主被桥接：false”。两者同页并存也不会串模式。Vue 在组件 setup 中调用 `hasBridgeMount(getCurrentInstance()?.appContext.app)`；React 在桥接工厂中查询 `hasBridgeMount(ctx)`，通过 props 传给布局。独立启动的查询结果为 false；独立子应用也显示同一套工单列表、详情、设置和导航，不使用健康检查壳。该值描述实例的运行方式，不是当前挂载数量。
 
 ## 一键运行生产产物
 
@@ -137,3 +140,19 @@ pnpm prod
 ```
 
 `prod` 只服务本次 dist，不启动远程开发服务器。它复用 scripts/dev.config.json 的宿主端口，从实际构建入口推导 base，并把远程静态产物挂在同源子路径。无需为本地复现手写 Nginx；部署真实服务器时仍按部署指南配置。多宿主模板分别启动各宿主地址，不把两个宿主的根资源混在一起。先停止 dev，端口占用会失败并停止本次已起服务；不会关闭已有占用进程。Ctrl+C 关闭本次生产服务。
+
+## 插件代码阅读地图
+
+| 文件 | 职责 |
+|---|---|
+| `react-host/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `react-remote/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `vue-host/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `vue-remote/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `react-host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
+| `react-remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
+| `vue-host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
+| `vue-remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
+| `scripts/dev.mjs` / `scripts/prod.mjs` | 统一开发/生产启动器；业务接入不复制它们到应用源码 |
+
+`application` 是新增的插件装配文件，`main` 是已有入口接线；页面组件、业务路由、权限和数据不是每个项目都必写的联邦配置。跨框架基础组合不逐页登记子应用菜单；逐页远程页面模板的页面表仅服务它所展示的逐页场景。`src/fulgurjs/types/` 是插件生成目录，按远程实际版本同步，不维护人工伪造的声明或旧缓存。

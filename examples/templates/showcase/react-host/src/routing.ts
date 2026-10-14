@@ -11,10 +11,10 @@ export const BRIDGE_BASE_PATH = '/br-vue'
 let routing: BridgeHostRouting | undefined
 
 export function initBridgeRouting(router: Parameters<typeof createReactBridgeNavigation>[0]): void {
-  routing = { basePath: BRIDGE_BASE_PATH, navigation: createReactBridgeNavigation(router) }
+  routing = { basePath: BRIDGE_BASE_PATH, navigation: createReactBridgeNavigation(router, { basename: import.meta.env.BASE_URL }) }
 }
 
 export function getBridgeRouting(): BridgeHostRouting {
-  if (!routing) throw new Error('桥接路由端口未初始化：请先在 main.tsx 调用 initBridgeRouting(router)')
+  if (!routing) throw new Error('桥接路由端口未初始化：请先在 application.tsx 调用 initBridgeRouting(router)')
   return routing
 }

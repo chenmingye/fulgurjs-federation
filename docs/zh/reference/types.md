@@ -618,3 +618,11 @@ import type { ReactBridgeRouterConnection } from '@fulgurjs/federation/react'
 | ReactApplicationFactory<P> | `(props: P, context: ReactApplicationContext) => ReactElement \| ReactApplicationSetup` |
 
 以上对应未发布的 6.9.0 源码候选；调用顺序和默认值见 [API 参考](api.md#同一应用独立启动与桥接defineapplication)。
+
+## DefineVueBridgeAppOptions / DefineReactBridgeAppOptions
+
+Vue 从 `/vue` 导入，React 从 `/react` 导入；defineApplication 与 defineBridgeApp 共用对应框架的选项类型。
+
+| 字段 | 可省略 | 类型 | 默认与用途 |
+|---|---|---|---|
+| `routing` | 是 | `boolean` | false；true 声明宿主 URL 同步协议。defineApplication 不启用同步时也能安装本地 memory router。 |
