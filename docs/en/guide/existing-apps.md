@@ -34,6 +34,27 @@ export default defineApplication<AppProps>((props, { mode, signal }) => {
 }, { routing: true })
 ```
 
+### Load large application implementations at startup
+
+When existing business code has TS diagnostics unrelated to the exposed contract, import components, routes and business plugins inside the asynchronous factory. Keep one `application.ts`; no forwarding file or whole-project TS cleanup is required:
+
+```ts
+export default defineApplication<AppProps>(async (props, { mode }) => {
+  const { default: App } = await import('./App.vue')
+  const { routes } = await import('./router/routes')
+  const router = createRouter({
+    history: mode === 'bridge'
+      ? createMemoryHistory()
+      : createWebHistory(import.meta.env.BASE_URL),
+    routes,
+  })
+  const app = createApp(App, { ...props })
+  return { app, router }
+}, { routing: true })
+```
+
+Reuse the public imports and `AppProps` above, removing the top-level static App/routes imports. Load runtime-only business plugins and icon registration in the factory as well. The plugin still checks the application entry and static public declaration dependencies; runtime implementation trees are not treated as public type contracts. Browsers cache modules, but each factory invocation must create fresh app/router/store instances. Use `fulgurjs types` to verify declaration generation.
+
 App/routes are existing business code. main.ts imports the factory and calls `void application.start('#app').catch(console.error)`. Expose `./bridge` directly from `./src/application.ts`; no forwarding bridge file is needed. Standalone starts a web router and waits for isReady. Routing-enabled bridge mode connects its controlled memory router and waits for the initial deep link. Without routing enabled, a returned local memory router is also installed and awaited automatically. A missing routing channel fails explicitly.
 
 If initialization must continue after routing becomes ready, use the explicit installVueBridgeRouter flow and return only app; do not return an already installed router for a second installation. When returning app alone, the factory owns router installation/readiness.

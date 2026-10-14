@@ -39,6 +39,27 @@ export default defineApplication<AppProps>((props, { mode, signal }) => {
 }, { routing: true })
 ```
 
+### 大型应用的业务代码按启动时加载
+
+如果已有应用存在与公开接口无关的业务 TS 诊断，可以把业务组件、路由和装配插件的导入放进异步工厂。仍然只有一个 `application.ts`，不增加转发文件，也不需要先整改整个业务项目：
+
+```ts
+export default defineApplication<AppProps>(async (props, { mode }) => {
+  const { default: App } = await import('./App.vue')
+  const { routes } = await import('./router/routes')
+  const router = createRouter({
+    history: mode === 'bridge'
+      ? createMemoryHistory()
+      : createWebHistory(import.meta.env.BASE_URL),
+    routes,
+  })
+  const app = createApp(App, { ...props })
+  return { app, router }
+}, { routing: true })
+```
+
+这里沿用上例的公开导入和 `AppProps`，移除顶部的静态 App/routes 导入。业务插件与只在运行期需要的图标注册，也在本工厂中加载和安装。插件仍检查应用入口和公开声明的静态依赖；不会将只在启动时使用的整棵业务树当成必须先通过的公开类型接口。模块会被浏览器缓存，但每次工厂执行仍应创建新的 app/router/store。对外声明能否完整生成，可用 `fulgurjs types` 核验。
+
 已有 `main.ts` 的联邦相关部分变为：
 
 ```ts
