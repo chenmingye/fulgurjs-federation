@@ -7,7 +7,7 @@ allowBuilds:
   esbuild: true
   vue-demi: true
 minimumReleaseAgeExclude:
-  - '@fulgurjs/federation@6.8.5'
+  - '@fulgurjs/federation@6.8.5 || 6.9.0'
 
 patchedDependencies:
   tinymce@6.6.2: ../patches/tinymce-6.6.2.patch
