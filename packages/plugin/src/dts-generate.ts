@@ -14,6 +14,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { formatDeclarationDiagnostics } from './dts-diagnostics'
 import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
@@ -470,7 +471,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       await new Promise<void>((resolve, reject) => {
         const child = execFile(
           process.execPath,
-          [binPath, '-p', tmpCfg, '--noErrorTruncation'],
+          [binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'],
           { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60 * 1000 },
           (err, stdout, stderr) => {
             if (err) {
@@ -485,11 +486,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
               const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
               const globalError = /(?:^|\n)(?:error )?TS\d+:/.test(String(stdout ?? '') + '\n' + String(stderr ?? ''))
               if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
-                const tail = `${String(stdout ?? '')}\n${String(stderr ?? '')}\n${err.message}`
-                  .split('\n').filter((line) => {
-                    const m = line.match(/^([^)(]+)\(\d+,\d+\): error TS/)
-                    return !m || closureErrs.has(path.resolve(root, m[1]!.trim()))
-                  }).slice(-40).join('\n')
+                const tail = formatDeclarationDiagnostics(String(stdout ?? ''), String(stderr ?? ''), err.message, root, closure)
                 diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
                 reject(err)
               } else {
