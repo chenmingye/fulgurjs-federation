@@ -141,6 +141,8 @@ Pass this bound function through instance-owned provide/business assembly. Types
 
 A single default app can pass a getter when Pinia does not exist at module evaluation; missing ownership throws. Parallel instances must bind actual instances or use native injection, not one mutable module variable overwritten by later factories. A React host that does not use Pinia should not register a Pinia provider merely because its child uses it.
 
+A module-level `const state = useCounter()` keeps the first store object. Creating a new Pinia in a later application factory does not replace that variable. Resolve stores in the current factory, component setup, or callbacks bound to that instance. Review ownership when adapting business utilities designed as permanent singletons; the plugin does not silently rewrite the business tree. Before asynchronous initialization writes authentication state, creates a store, or installs plugins, check the current `signal.aborted`.
+
 ## Preflight and deployment checks
 
 ```bash

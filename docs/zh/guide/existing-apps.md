@@ -174,6 +174,8 @@ async function increment() { await Promise.resolve(); useCounter().count++ }
 
 单默认应用在模块导入时还没创建 Pinia，可以传 `() => pinia`，在实际调用时解析；未就绪会明确报错。**并行实例不要用一个会被后续工厂覆盖的模块变量 getter**，应像上例绑定实际实例或使用 Vue 原生注入。
 
+模块顶层的 `const state = useCounter()` 会一直保存第一次取得的 store 对象；后续工厂创建新 Pinia，并不会自动替换这个变量。把取 store 的操作放到本次工厂、组件 setup 或绑定本实例的回调中。原本设计为常驻单例的业务工具，需要逐项确认其状态归属；插件不会静默改写整棵业务树。旧代次的异步装配在写登录态、创建状态树或安装插件前，还应检查本次 `signal.aborted`。
+
 React 宿主没有使用 Pinia 时，不因子应用用了 Pinia 就给宿主添加 Pinia provider。共享依赖按真实用途声明，不能按 package.json 安装清单照抄。
 
 ## 接入前预检，部署后体检
