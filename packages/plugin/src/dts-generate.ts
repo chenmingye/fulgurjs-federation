@@ -44,6 +44,8 @@ export interface DtsGenerateOk {
   tool: 'typescript' | 'vue-tsc'
   /** 闭包内文件数（不含 index.json） */
   fileCount: number
+  /** 非阻断提示（如默认堆 OOM 后提堆重试成功的过程说明）；无提示为空数组 */
+  notices: string[]
 }
 
 export interface DtsGenerateFail {
@@ -467,39 +469,58 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       ],
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
+    /** 子进程形态的 OOM 识别：v8 崩溃横幅固定行首（FATAL ERROR: …heap…）。
+     * 不能裸匹配子串——语法错误的回显会把含这些词的「源码文本」带进 stderr。 */
+    const isOom = (text: string): boolean =>
+      /(^|\n)\s*FATAL ERROR:.*(heap out of memory|Ineffective mark-compacts|Allocation failed)/i.test(text)
     try {
-      await new Promise<void>((resolve, reject) => {
-        const child = execFile(
-          process.execPath,
-          [binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'],
-          { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60 * 1000 },
-          (err, stdout, stderr) => {
-            if (err) {
-              if (signal?.aborted) {
-                diagnostics.push('vue-tsc 声明生成被中止（dev server 关闭）。')
-                reject(err)
-                return
-              }
-              // 门禁 = 入口静态闭包内的错误（file(line,col): error TSxxxx 形态解析）；
-              // 闭包外（动态导入类型边/无关业务文件）的错误如实丢弃，不偷换成生成失败
-              const errFiles = parseErrorFiles(String(stdout ?? ''), root)
-              const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
-              const globalError = /(?:^|\n)(?:error )?TS\d+:/.test(String(stdout ?? '') + '\n' + String(stderr ?? ''))
-              if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
-                const tail = formatDeclarationDiagnostics(String(stdout ?? ''), String(stderr ?? ''), err.message, root, closure)
-                diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
-                reject(err)
-              } else {
-                // 仅闭包外错误：声明 emit 已产出（noEmitOnError:false），继续
-                resolve()
-              }
-            } else {
-              resolve()
-            }
-          },
-        )
-        signal?.addEventListener('abort', () => child.kill('SIGKILL'), { once: true })
-      })
+      /** 运行一次 vue-tsc；extraNodeArgs 为 node 与脚本间的 V8 参数（提堆重试用） */
+      const attempt = (extraNodeArgs: string[]): Promise<{ err: import('node:child_process').ExecFileException | null; stdout: string; stderr: string }> =>
+        new Promise((resolve) => {
+          const child = execFile(
+            process.execPath,
+            [...extraNodeArgs, binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'],
+            { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60 * 1000 },
+            (err, stdout, stderr) =>
+              resolve({ err: err ?? null, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }),
+          )
+          signal?.addEventListener('abort', () => child.kill('SIGKILL'), { once: true })
+        })
+      let { err, stdout, stderr } = await attempt([])
+      // 默认堆 OOM：提堆重试一次（大型真实应用的闭包可达数 GB）。OOM 必须与
+      // 「闭包内编译错误」区分诊断——OOM 的 stdout 没有可修的 TS 错误。
+      if (err && isOom(stderr)) {
+        const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
+        diagnostics.push(`vue-tsc 声明生成在默认堆下内存不足（V8 OOM），以 --max-old-space-size=${raised}MB 重试。`)
+        ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
+        if (err && isOom(stderr)) {
+          fs.rmSync(outDir, { recursive: true, force: true })
+          diagnostics.push(
+            'vue-tsc 声明生成内存不足（提高堆后仍 OOM）——类型资源未产出。',
+            '修法：用环境变量 FG_DTS_MAX_OLD_SPACE 提高生成器堆（如 16384），或缩小暴露模块的静态依赖面后重试。',
+          )
+          return { ok: false, diagnostics }
+        }
+      }
+      if (err) {
+        if (signal?.aborted) {
+          diagnostics.push('vue-tsc 声明生成被中止（dev server 关闭）。')
+          fs.rmSync(outDir, { recursive: true, force: true })
+          return { ok: false, diagnostics }
+        }
+        // 门禁 = 入口静态闭包内的错误（file(line,col): error TSxxxx 形态解析）；
+        // 闭包外（动态导入类型边/无关业务文件）的错误如实丢弃，不偷换成生成失败
+        const errFiles = parseErrorFiles(stdout, root)
+        const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
+        const globalError = /(?:^|\n)(?:error )?TS\d+:/.test(stdout + '\n' + stderr)
+        if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
+          const tail = formatDeclarationDiagnostics(stdout, stderr, err.message, root, closure)
+          diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
+          fs.rmSync(outDir, { recursive: true, force: true })
+          return { ok: false, diagnostics }
+        }
+        // 仅闭包外错误：声明 emit 已产出（noEmitOnError:false），继续
+      }
     } catch {
       fs.rmSync(outDir, { recursive: true, force: true })
       fs.rmSync(tmpCfg, { force: true })
@@ -616,7 +637,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   const revision = crypto.createHash('sha256').update(JSON.stringify(index)).digest('hex').slice(0, 16)
   const fullIndex: DtsBundleIndex = { ...index, revision }
   files.set('index.json', `${JSON.stringify(fullIndex, null, 2)}\n`)
-  return { ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0 }
+  return { ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0, notices: diagnostics }
 }
 
 /** 收集 emit 产物 → { 绝对源文件 → 声明文本 }（.vue → .vue.d.ts；.ts/.tsx → .d.ts）。

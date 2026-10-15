@@ -280,3 +280,71 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     expect(r.diagnostics.join('\n')).toMatch(/typescript/)
   })
 })
+
+describe('generateTypesBundle（vue-tsc 子进程 OOM 提堆重试）', () => {
+  /** 桩 vue-tsc：默认堆形态下打印 V8 OOM 并非零退出；带 --max-old-space-size 参数的
+   * 重试轮次按真实 emit 语义产出声明（把 entry.d.ts 写入 tsconfig 的 outDir）。 */
+  function makeOomStubVueTsc(root: string, mode: 'retry-ok' | 'always-oom'): void {
+    // SFC 闭包解析需要真实 vue（compiler-sfc）；vue-tsc 用桩替换
+    try { fs.symlinkSync(path.join(pluginRoot, 'node_modules', 'vue'), path.join(root, 'node_modules', 'vue'), 'dir') } catch { /* 已存在 */ }
+    const binDir = path.join(root, 'node_modules', 'vue-tsc', 'bin')
+    fs.mkdirSync(binDir, { recursive: true })
+    fs.writeFileSync(path.join(root, 'node_modules', 'vue-tsc', 'package.json'), JSON.stringify({
+      name: 'vue-tsc', version: '0.0.0-stub', bin: { 'vue-tsc': 'bin/vue-tsc.js' },
+    }))
+    const script = [
+      "const fs = require('node:fs')",
+      "const path = require('node:path')",
+      "fs.appendFileSync(path.join(__dirname, 'argv.log'), JSON.stringify({ argv: process.argv, execArgv: process.execArgv }) + '\\n')",
+      // 提堆参数由 node 自身消费，不出现在 process.argv——用 execArgv 判定重试轮次
+      "const raised = process.execArgv.some((a) => a.startsWith('--max-old-space-size='))",
+      `if (!raised) {`,
+      "  console.error('FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory')",
+      "  process.exit(3)",
+      "}",
+      mode === 'always-oom' ? "console.error('FATAL ERROR: heap out of memory'); process.exit(3)" : [
+        "const cfgIdx = process.argv.indexOf('-p')",
+        "const cfg = JSON.parse(fs.readFileSync(process.argv[cfgIdx + 1], 'utf8'))",
+        "const outDir = cfg.compilerOptions.outDir",
+        "fs.mkdirSync(outDir, { recursive: true })",
+        // entry.vue → entry.vue.d.ts 形态（collectEmitted 按相对 rootDir 归位）
+        "fs.writeFileSync(path.join(outDir, 'entry.vue.d.ts'), 'export default { props: { user: { type: Object as () => { id: string } } } }\\n')",
+        "process.exit(0)",
+      ].join('\n'),
+    ].join('\n')
+    fs.writeFileSync(path.join(binDir, 'vue-tsc.js'), script)
+  }
+
+  it('默认堆 OOM 后以提堆参数重试并采纳成功结果', async () => {
+    const root = makeProject('oom-retry', {
+      'src/entry.vue': '<script setup lang="ts">defineProps<{ user: { id: string } }>();</script><template>{{ user.id }}</template>',
+      // 纯 .vue 工程会被 tsconfig include 判为「无输入」，补一个类型文件避免该解析错误
+      "src/env.d.ts": "declare module '*.vue' { const component: object; export default component }",
+    })
+    makeOomStubVueTsc(root, 'retry-ok')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test' })
+    const argvLog = fs.readFileSync(path.join(root, 'node_modules', 'vue-tsc', 'bin', 'argv.log'), 'utf8')
+    const attempts = argvLog.trim().split('\n').map((line) => JSON.parse(line) as { argv: string[]; execArgv: string[] })
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0].execArgv).toEqual([])
+    // 提堆参数由 node 自身消费（不进 argv），经 execArgv 验证已传给重试子进程
+    expect(attempts[1].execArgv).toContain('--max-old-space-size=8192')
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.notices.join('\\n')).toContain('--max-old-space-size=8192MB 重试')
+  }, 30000)
+
+  it('提堆后仍 OOM 时给出明确内存修法而非「编译错误」误报', async () => {
+    const root = makeProject('oom-forever', {
+      'src/entry.vue': '<script setup lang="ts">defineProps<{ user: { id: string } }>();</script><template>{{ user.id }}</template>',
+      "src/env.d.ts": "declare module '*.vue' { const component: object; export default component }",
+    })
+    makeOomStubVueTsc(root, 'always-oom')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      const text = result.diagnostics.join('\\n')
+      expect(text).toContain('FG_DTS_MAX_OLD_SPACE')
+      expect(text).not.toContain('暴露闭包内存在编译错误')
+    }
+  }, 30000)
+})
