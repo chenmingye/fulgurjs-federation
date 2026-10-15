@@ -47,7 +47,7 @@ const SECONDARY_BUTTON_STYLE = {
  *   保留 pathname/query/hash，不追加随机参数，绝不自动触发（无刷新循环）。
  * 自定义 errorComponent 完全接管展示（契约不变：只接收 error prop），不注入按钮。
  */
-const RemoteErrorPlaceholder = defineComponent({
+const RemoteErrorPlaceholder = /*#__PURE__*/ defineComponent({
   name: 'FulgurjsRemoteError',
   props: {
     error: { type: Object as PropType<unknown>, default: undefined },

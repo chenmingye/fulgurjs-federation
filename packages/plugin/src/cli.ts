@@ -10,8 +10,8 @@
  * - fulgurjs doctor --config <path> [--json]                      本地接入预检
  * - fulgurjs doctor --base <URL> --apps a,b,c [--dev] [--json]     部署/配置层体检
  *
- * 插件保持项目无关：init 不改写任何项目文件，只输出模板与可粘贴接入块；
- * 项目各自的集成细节由各项目按通用核对清单自行落地。
+ * init 默认起步配置；--plan 预览已有工程接线，--write 才应用安全子集。
+ * 复杂业务装配保留明确待办，不执行业务模块或猜测权限、登录态。
  */
 import { resolve } from 'node:path'
 import { runDoctor, formatDoctorReport } from './doctor'
@@ -30,6 +30,13 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
                                                    保留你的版本（绝不改写）；--json 时 stdout 仅输出结果
                                                    JSON，进度与安装日志走 stderr
 已有项目（单项目 fulgurjs.config.ts 在应用根目录；命令默认读 ./fulgurjs.config.ts）：
+  fulgurjs init --plan [--kind component|app] [--role consumer|provider|dual]
+                [--remote 名称=http://开发地址] [--expose ./键=./源文件]
+                [--name 容器名] [--entry src/main.ts] [--framework vue|react] [--json]
+                                                 只扫描并预览完整差异与人工待办；可重复 remote/expose。
+                                                 --kind 默认 component；app 支持简单入口提取与宿主视图。
+                                                 --write 显式应用；阻断项存在时整批不写，不覆盖已有配置。
+  fulgurjs init --rollback                         恢复被中断的计划写入；有后续人工编辑时拒绝覆盖。
   fulgurjs init [--out <路径>] [--framework vue|react] [--role consumer|provider|dual] [--force]
                                                    生成单项目 fulgurjs.config.ts 起步模板（最小有效配置）：
                                                    框架默认从 package.json 依赖判断（判断不了要求显式 --framework）；
@@ -105,6 +112,60 @@ async function main(): Promise<number> {
   }
 
   if (cmd === 'init') {
+    if (has('--rollback')) {
+      try {
+        if (argv.length !== 2) throw new Error('--rollback 必须独立使用，不与写入或预览参数混用。')
+        const { rollbackIntegration } = await import('./init-plan')
+        rollbackIntegration(process.cwd())
+        console.log('[fulgurjs:init] 已恢复被中断的写入；请重新生成接入预览。')
+        return 0
+      } catch (error) { console.error(String((error as Error).message ?? error)); return 1 }
+    }
+    if (has('--plan') || has('--write')) {
+      try {
+        if (has('--config') || has('--out') || has('--force')) throw new Error('接入计划不能同时使用 --config/--out/--force；已有配置请单独运行 doctor --config 检查。')
+        const values = ['--kind', '--role', '--framework', '--name', '--entry', '--remote', '--expose']
+        for (let i = 1; i < argv.length; i++) {
+          if (['--plan', '--write', '--json'].includes(argv[i])) continue
+          if (!values.includes(argv[i])) throw new Error(`未知接入计划参数：${argv[i]}`)
+          if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`${argv[i]} 缺少值`)
+          i++
+        }
+        const kind = argOf('--kind') ?? 'component'
+        const role = argOf('--role') ?? 'dual'
+        const framework = argOf('--framework')
+        if (!['component', 'app'].includes(kind) || !['consumer', 'provider', 'dual'].includes(role) || (framework && !['vue', 'react'].includes(framework))) throw new Error('请使用 --kind component|app、--role consumer|provider|dual、--framework vue|react。')
+        const pairs = (flag: string) => {
+          const result: Record<string, string> = {}
+          argv.forEach((value, i) => {
+            if (value !== flag) return
+            const pair = argv[i + 1], eq = pair?.indexOf('=') ?? -1
+            if (eq < 1 || !pair.slice(eq + 1) || pair.startsWith('--')) throw new Error(`${flag} 需要 键=值；不会猜远程地址或业务文件。`)
+            const key = pair.slice(0, eq)
+            if (Object.hasOwn(result, key)) throw new Error(`${flag} 重复键：${key}`)
+            Object.defineProperty(result, key, { value: pair.slice(eq + 1), enumerable: true, configurable: true })
+          })
+          return result
+        }
+        const { planIntegration, formatIntegrationPlan, applyIntegration } = await import('./init-plan')
+        const plan = await planIntegration({ cwd: process.cwd(), kind: kind as 'component' | 'app', role: role as 'consumer' | 'provider' | 'dual', framework: framework as 'vue' | 'react' | undefined, name: argOf('--name'), entry: argOf('--entry'), remotes: pairs('--remote'), exposes: pairs('--expose') })
+        const blocked = plan.tasks.some(task => task.blocking)
+        if (has('--write') && !blocked) applyIntegration(plan)
+        const written = has('--write') && !blocked
+        if (has('--json')) console.log(JSON.stringify({ ...plan, written }, null, 2))
+        else console.log(formatIntegrationPlan(plan) + (blocked ? '\n存在阻断项，整批未写入；先处理所列事项再预览。' : written ? '\n已应用计划；人工接线与真实浏览器验证仍需完成。' : '\n确认以上差异后，使用相同参数追加 --write 应用；工具不自动安装依赖。'))
+        return blocked ? 1 : 0
+      } catch (error) {
+        const message = String((error as Error).message ?? error)
+        if (has('--json')) console.log(JSON.stringify({ written: false, error: message }))
+        else console.error(`[fulgurjs:init] ${message}`)
+        return 1
+      }
+    }
+    if (['--kind', '--remote', '--expose', '--entry', '--name'].some(has)) {
+      console.error('[fulgurjs:init] 接入计划参数需要 --plan（预览）或 --write（显式写入）。')
+      return 2
+    }
     const { writeConfigTemplate, inspectConfig, detectFrameworkFromPackageJson } = await import('./init')
     const configPath = argOf('--config')
     if (configPath) {

@@ -5,6 +5,12 @@
 
 五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation`（精确版本 + pnpm 锁文件，钉定版本见各模板 package.json；统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。
 
+## 已有工程怎么参考这些样板
+
+这些模板展示接入完成后的代码，不要求你把已有应用换成模板。已有工程先按[接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)使用 `init --plan` 预览需要改动的位置，确认后 `--write`。
+
+普通组件/模块参考 vue-vue 或 react-react 的 config 和消费视图；完整子应用参考跨框架模板的 application 与宿主挂载视图；需要 URL 同步时参考 showcase。不需要的会话、路由和 Provider 不要一起复制。自动工具遇到复杂业务装配会保留人工待办，不能把生成文件视为已验收。
+
 ## 获取模板的两种方式
 
 ```bash

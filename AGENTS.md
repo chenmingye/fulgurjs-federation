@@ -45,7 +45,7 @@
 - Vue/React 组件与页面：`vue-adapter.ts`、`react-adapter.ts`、`host-pages-core.ts`、`pages.ts`。
 - 子应用与宿主生命周期：`application-core.ts`（独立/桥接统一启动）、`vue-store.ts`（显式状态归属）、`bridge-core.ts`、`bridge-app-*.ts`、`bridge-host-*.ts`、`bridge-errors.ts`。
 - URL 同步：`bridge-router-core.ts`、`bridge-router-sync.ts`、`bridge-router-vue.ts`、`bridge-router-react.tsx`。
-- CLI/诊断：`cli.ts`、`init.ts`、`create.ts`（完整工程创建向导，模板取自包内 `examples/templates/`）、`commands.ts`、`doctor.ts`（站点检查）、`doctor-source.ts`（离线接入预检）、`diagnostics.ts`、`runtime/errors.ts`。
+- CLI/诊断：`cli.ts`、`init.ts`、`init-plan.ts`（已有工程接线预览、显式写入和中断恢复）、`create.ts`（完整工程创建向导，模板取自包内 `examples/templates/`）、`commands.ts`、`doctor.ts`（站点检查）、`doctor-source.ts`（离线接入预检）、`diagnostics.ts`、`runtime/errors.ts`。
 
 上表源码名均相对于 `packages/plugin/`。公开入口以 package.json 的 `exports` 为准，不根据文件名猜测 API。
 
@@ -65,6 +65,7 @@ npm run test:examples
 ```
 
 - `build` 包含代码生成、声明生成、体积门禁和错误码一致性门禁；不能删掉或调高门禁来掩盖回归。
+- `scripts/check-tree-shaking.mjs` 用实际 dist 检查统一入口的按需裁剪、字节预算和完整桥接正向保留；改顶层工厂绑定时同时检查源码、生成入口和 dev 门面，不给整个包盲设 sideEffects:false。
 - 单测只在 `packages/plugin/tests/` 内发现。示例脚本用 Node test runner，Jeecg 自带其他测试框架，不混入插件 Vitest。
 - fixture/e2e 安装顺序和链接依赖见 CONTRIBUTING 与 `e2e/scripts/ci-install-fixtures.sh`；本地修改插件后先构建，再启动消费工程。
 - dev/prod、Vue/React、桥接及路由项目列表以当前 Playwright 配置和 CI 为准。根 `test:dev` / `test:prod` 的简写不能当作整个 CI 矩阵已跑完。
@@ -84,8 +85,17 @@ npm run test:examples
 - Vue 桥接工厂优先返回 `{ app, router }` 并声明 `{ routing: true }`，由插件等待初始路由、安装和释放连接；返回前装配业务插件及权限守卫，不提前 app.use(router)。必须在路由就绪后继续初始化时，手动 installVueBridgeRouter 并只返回 app。独立入口正常使用 web history。
 - history 模式不应自行添加 `#/`，但业务合法的 hash、query、中文编码、深链刷新和前进后退必须保留。不能把“修掉意外 hash”写成“清除所有 hash”。
 - 新增/修改错误码同步源码、`diagnostics.ts` 中的 `CODE_REGISTRY`、中英文 API 错误码表。错误说明包含现象、原因和具体修法。
+- `init --plan` 默认只读；`--write` 才应用可证明安全的接线，存在阻断项整批拒绝。不猜业务路由、权限或登录来源；保留已有配置和人工修改。修改自动接线时覆盖幂等、文件冲突、写入失败与中断恢复，不能用一串正则盲改任意项目。
 - 确认不用的旧导出、无效配置与旧文档可清理；先查实现和引用，说明迁移影响，不凭名称删除当前能力或生成链。
 - **公开使用文档只描述当前推荐用法**：不维护历史 API 教程、旧入口迁移对照、"从旧版本升级"说明或历次任务流水账；版本变更事实记入 CHANGELOG，面向过去的说明随版本发布即清理。当前真实的兼容条件与限制必须保留并用普通语言解释。中英文文档描述同一套当前合同，不允许出现"英文过时，以中文为准"类声明。
+
+### 注释技能与接入代码可读性
+
+- 开始新增或修改接入适配代码前，主动检查当前会话可用技能；涉及 Jeecg/Vue 项目时必须读取并遵循 `comment-convention`，无需用户重复提醒或新开窗口。技能未提供时查找其 `SKILL.md`；仍不可用则明确说明，并落实本节要求。其他技术栈遵循自身约定，不机械套用 Jeecg 文件头或业务格式。
+- 新增接入文件须说明文件职责、在接入流程中的位置及与其他文件的关系；保留已有作者和创建时间，新文件按项目作者约定填写。公开模板中的说明保持通用，不写私有业务信息。
+- 关键装配函数、公开配置和非直观分支须解释业务目的、参数来源与含义、返回值及生命周期归属。重点讲清独立/桥接模式区别、初始化顺序及原因、路由和状态由谁管理、会话切换与卸载如何处理，以及哪些步骤不能随意调整。
+- 修改已有业务文件时，在实际接入或适配位置标明用途与原因，让读者能区分原有业务逻辑与本次插件接线；不要求读者依赖验收报告才能理解代码。不逐行翻译代码，不堆无信息样板，不为补注释重构无关代码。
+- 行为、签名、默认值或初始化顺序改变时，同步更新相关注释和受影响使用文档。交付前逐项检查本轮新增/修改的接入文件：说明是否准确、关键约束是否齐全、是否残留过时描述；仅“已读取技能”不算完成，必须在实际代码中落实。
 
 ## 6. 公开 Demo 与模板统一管理
 

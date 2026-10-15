@@ -73,7 +73,7 @@ const SECONDARY_BUTTON_STYLE = {
 } as const
 
 /** 默认错误占位：错误码 + 诊断 + 「重试加载 / 刷新页面重试」（与 remoteComponent 占位同口径） */
-const BridgeErrorPlaceholder = defineComponent({
+const BridgeErrorPlaceholder = /*#__PURE__*/ defineComponent({
   name: 'FulgurjsBridgeError',
   props: {
     error: { type: Object as PropType<unknown>, default: undefined },

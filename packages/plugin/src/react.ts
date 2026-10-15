@@ -45,15 +45,16 @@ import { createReactBridgeNavigation, createReactBridgeRouter, type ReactBridgeC
 import { hasBridgeMount } from './bridge-core'
 
 export { RemoteErrorBoundary }
-export const remoteComponent = createRemoteComponent(loadRemote)
-export const useLoadRemote = createUseLoadRemote(loadRemote)
+// 这些工厂仅返回绑定 loader 的闭包；不访问 DOM、不加载远程。未使用的绑定可安全裁剪。
+export const remoteComponent = /*#__PURE__*/ createRemoteComponent(loadRemote)
+export const useLoadRemote = /*#__PURE__*/ createUseLoadRemote(loadRemote)
 /** React 子应用桥接契约（远程 ./bridge 模块默认导出） */
 export const defineBridgeApp = defineReactBridgeApp
 export { defineApplication } from './bridge-app-react'
 export type { ReactApplicationContext, ReactApplicationFactory, ReactApplicationSetup, DefineReactBridgeAppOptions } from './bridge-app-react'
 export type { Application, ApplicationHandle } from './application-core'
 /** React 宿主桥接工厂：返回 `ComponentType<{ appProps: P; sessionKey?: string | null }>` */
-export const createReactBridgeApp = createReactBridgeAppWithLoader(loadRemote)
+export const createReactBridgeApp = /*#__PURE__*/ createReactBridgeAppWithLoader(loadRemote)
 /** 宿主导航端口（URL 同步）：包住宿主 data router，传给桥接组件的 routing prop */
 export { createReactBridgeNavigation }
 /** 子应用侧受控 memory data router（返回 { element, dispose }，element 直接作为工厂返回值） */

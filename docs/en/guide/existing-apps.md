@@ -12,6 +12,39 @@
 
 Directory names are optional. A small host can keep mounting and context in its existing view. Examples of different APIs are not instructions to create several directory trees.
 
+## Preview integration before writing
+
+Install `@fulgurjs/federation` in the existing application first. Run from its root, replacing files and addresses with real ones. The command does not install dependencies, start servers or guess ports.
+
+```bash
+# Provider: expose an existing component or module; review the full before/after text first.
+npx fulgurjs init --plan --role provider --expose ./Button=./src/components/Button.vue
+npx fulgurjs init --plan --role provider --expose ./Button=./src/components/Button.vue --write
+
+# Consumer: declare the real development address.
+npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174/remote-a
+npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174/remote-a --write
+
+# Whole applications: inspect these plans, then append --write when satisfied.
+npx fulgurjs init --plan --kind app --role provider
+npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://localhost:5174/remote-a
+```
+
+The default component/module mode generates configuration and connects Vite without application, menu, Provider or session files. Consume using `loadRemote('remote-a/math')` or same-framework `remoteComponent('remote-a/Button')` in an existing view, supplying required props. Start remote development servers separately. The suggested production path is `/remote-a`; check it against actual deployment/base before building.
+
+Application mode extracts supported minimal `src/main.ts(x)` entries into one `application` and exposes `./bridge`. A consumer gets `src/fulgurjs/RemoteApplication.vue` or `.tsx` to include in an existing page/route. It does not automatically enable sessions or URL synchronization: wire the real session source and one mounting prefix/navigation port when needed, following the [URL guide](url-sync.md). Child menus remain owned by the child. Cross-framework application dependency requirements are described in the [bridge guide](app-bridge.md).
+
+### Safe automation boundaries
+
+- Supported Vite forms: direct objects, `defineConfig` objects and recognizable single-return arrow factories. Existing plugins, ports and comments remain; a plugin factory value can be preserved as a nested PluginOption.
+- Supported minimal entries use named `createApp` for Vue or named `createRoot` with JSX for React. Existing Router/store, guards, asynchronous initialization and custom entry layouts require the factory organization below; the tool never guesses business semantics.
+- Ambiguous control flow, interpolated templates, top-level spreads, duplicate plugins and existing manual wiring become blocking tasks. **No files in that plan are written.** File locations and manual integration snippets are reported.
+- Existing config files and manually changed mounting views are preserved. Repeating the same plan does not insert duplicate wiring. Preview does not execute business modules or Vite configuration. `--force` does not apply to integration plans.
+- Writes recheck file snapshots and roll back on failure. After interruption, `.fulgurjs-init-pending.json` records recovery: run `npx fulgurjs init --rollback`. Subsequent manual edits are protected; reconcile them using the record if automatic recovery refuses. Successful recovery deletes the record; do not commit it.
+- Follow successful writes with `npx fulgurjs doctor --config ./fulgurjs.config.ts`, project typechecking/build and real interaction checks. Writing files is not browser acceptance or a completed business migration.
+
+Plain `init` generates only a starter configuration; `init --config` validates an existing declaration. Do not combine plan/write with `--config/--out/--force`. See [CLI reference](../reference/cli.md#fulgurjs-init) for all flags, JSON and exit codes.
+
 ## Vue: share one factory between two entry modes
 
 ```ts

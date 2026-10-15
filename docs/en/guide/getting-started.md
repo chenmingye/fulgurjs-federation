@@ -67,7 +67,7 @@ pnpm dev        # Unified launcher: starts the remote first and probes it, then 
 
 ## Integrating an existing project
 
-An existing project does not need to be rebuilt. Only three things to do: install the plugin → write `fulgurjs.config.ts` → register the plugin in `vite.config.ts`. You can generate a starter config with `fulgurjs init` (recommended) or write it by hand. The CLI is invoked uniformly as `npx @fulgurjs/federation <command>` (this also works before the project has installed its dependencies; once installed, `npx fulgurjs` works too).
+An existing project does not need to be rebuilt. Only three things to do: install the plugin → write `fulgurjs.config.ts` → register the plugin in `vite.config.ts`. Start with the [integration preview guide](existing-apps.md#preview-integration-before-writing): `fulgurjs init --plan` previews wiring and `--write` explicitly applies it. Plain `init` only generates a starter config; manual wiring also works. The CLI is invoked uniformly as `npx @fulgurjs/federation <command>` (this also works before the project has installed its dependencies; once installed, `npx fulgurjs` works too).
 
 ### Starter config with `fulgurjs init`
 
@@ -88,7 +88,7 @@ npx @fulgurjs/federation init --out config/fulgurjs.config.ts
 npx @fulgurjs/federation init --force
 ```
 
-- `init` generates only a **minimal valid** starter template: shared contains just the framework itself (pinia/vue-router/business pages are not forced in); the role decides whether `remotes`/`exposes` examples are included; pure consumers get a commented example of the `hostPages` named export (delete it if you don't use per-page pages).
+- Plain `init` without `--plan/--write` generates only a **minimal valid** starter template: shared contains just the framework itself (pinia/vue-router/business pages are not forced in); the role decides whether `remotes`/`exposes` examples are included; pure consumers get a commented example of the `hostPages` named export (delete it if you don't use per-page pages).
 - An existing file with the same name is refused (`--force` lifts this).
 - After generation it prints four follow-up steps (edit the config → two lines in vite.config.ts → verify with `explain` → `doctor` after deployment).
 

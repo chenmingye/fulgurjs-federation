@@ -81,13 +81,18 @@ $ npx @fulgurjs/federation create vue-vue --dir existing
 
 ## `fulgurjs init`
 
-Existing project: generates a **single-project** `fulgurjs.config.ts` starter template in the application root (a minimal valid config), or validates an existing config and prints the integration snippet. **Only generates a config starter template** — not a full project (use `create` for new projects), no bridge/router/launcher/NGINX files, and it never rewrites any project file.
+Existing projects: plain init generates a single-project starter config; --config validates a declaration. --plan scans and previews wiring; --write explicitly applies the plan. New projects use create. See the [integration guide](../guide/existing-apps.md#preview-integration-before-writing).
 
 ### Syntax
 
 ```bash
 fulgurjs init [--out <path>] [--framework vue|react] [--role consumer|provider|dual] [--force]
 fulgurjs init --config <path>
+fulgurjs init --plan [--kind component|app] [--role consumer|provider|dual]
+              [--framework vue|react] [--name container] [--entry src/main.ts]
+              [--remote name=http://dev-address]... [--expose ./key=./source-file]... [--json]
+fulgurjs init --plan <same-options> --write
+fulgurjs init --rollback
 ```
 
 ### Flags
@@ -99,15 +104,29 @@ fulgurjs init --config <path>
 | `--role` | `dual` | `consumer` pure consumer (remotes example + hostPages comment) / `provider` pure provider (exposes example) / `dual` both roles (generates both) |
 | `--force` | Existing files are refused | Overwrite an existing template |
 | `--config <path>` | — | Validation mode: load and validate the config (three-part CFG errors) + print the `federation(fulgurjsConfig)` integration snippet and a role-specific integration checklist (print only; no files written) |
+| `--plan` | Off | Scan and print full file before/after and blocking/manual tasks; no writes or Vite/business execution |
+| `--write` | Off | Explicitly apply a supported plan; may accompany --plan; blocking tasks prevent all writes |
+| `--kind component\|app` | `component` | Plan mode: configuration/Vite only for modules/components; minimal application extraction or host mounting view for app mode |
+| `--name <container>` | Normalized package.json name | Unique on the page; letters, numbers, underscores and hyphens |
+| `--remote <name=URL>` | None | Repeatable http(s) development URL; suggested prod path /name needs deployment review; incompatible with provider-only role |
+| `--expose <./key=./file>` | None | Repeatable existing source inside this application; incompatible with consumer-only role |
+| `--entry <path>` | src/main.ts(x) or .js(x) | App provider entry; automatic extraction only supports explicit minimal startup in the src root |
+| `--json` | Off | Structured root/framework/role/kind/edits/tasks/evidence/commands/written; each edit has file/before/after/reason |
+| `--rollback` | Off | Use alone to recover an interrupted write; refuses to overwrite subsequent manual edits |
+
+Plan mode cannot combine with --config/--out/--force. An ambiguous framework is a blocking task requiring an explicit selection. No dependency installation or lockfile edits occur. Unsupported configuration/entry forms require manual organization as listed in the plan. Existing configs and manually changed files are preserved.
 
 ### Side effects
 
 - Template mode: writes one file (the target path); refuses if it exists without `--force` (exit code 2);
 - `--config` mode: zero writes, print only.
+- Plan mode: preview has zero writes; --write changes the listed files. A temporary recovery record is removed on success; after interruption use --rollback and do not commit the record. Manual routing, session and deployment checks are not executed.
 
 ### Exit codes
 
 `0` success; `2` usage error (unknown framework/role, non-TTY framework detection impossible, target exists, config validation failed).
+
+Plan mode exits 1 for blocking tasks and parse/read/write/recovery failures, or 0 for a plan/write without blockers. Manual tasks and browser acceptance remain necessary. JSON mode also returns JSON on failure; thrown write failures include written:false and error.
 
 ### Examples
 
@@ -392,3 +411,5 @@ Loads and executes the specified trusted configuration, like explain, and static
 Checks expose/setup paths, dev/prod addresses, browser history in bridge assembly, asynchronous store ownership and declaration files entering runtime globs. Reports required/optional/existing integration files and manual Provider/global-component checks. Definite source-file errors are FAIL; potential risks are WARN. Custom aliases, dynamic imports, globs, external source directories and the scan limit can make scanning incomplete. Remote address callbacks are not executed.
 
 JSON: checks (DoctorCheck[]), failed, complete (static scan completeness only), filesScanned, manualChecks, integrationFiles { required, optional, existing }. Exit 0 means no definite FAIL, **not successful typechecking/build/integration/browser acceptance**; FAIL exits 1, invalid arguments/configuration errors exit 2. Validate integration files using the project's real configuration afterwards.
+
+Preflight also reports Vite wiring/base review, interrupted init writes, missing local HTML entries, runtime declaration imports, non-recommended SDK entry points and remote type verification tasks. Unprovable conditions remain WARN rather than browser acceptance.

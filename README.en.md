@@ -9,6 +9,8 @@ For example: a main system loads an independently deployed approval page, a Vue 
 
 To reduce duplicated standalone/bridge startup code, see [application assembly and preflight](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/existing-apps.md).
 
+For existing projects, `fulgurjs init --plan` previews wiring and `--write` explicitly applies it. Complex business assembly remains an explicit manual task. Unified `/vue` and `/react` imports support tree shaking without internal import paths.
+
 ## Quick start
 
 **New project** (recommended): scaffold a fully runnable federation workspace from a template:

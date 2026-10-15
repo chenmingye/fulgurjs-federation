@@ -59,13 +59,13 @@ describe('门面导出面与统一入口合同一致', () => {
   it('vue 门面导出 createVueBridgeApp（绑定后导出，而非 WithLoader 名）', () => {
     const code = genApiFacade('vue')
     expect(code).toContain('createVueBridgeAppWithLoader as __fulgurjs_cvb')
-    expect(code).toContain('export const createVueBridgeApp = __fulgurjs_cvb(__fulgurjs_loadRemote);')
+    expect(code).toContain('export const createVueBridgeApp = /*#__PURE__*/ __fulgurjs_cvb(__fulgurjs_loadRemote);')
     expect(code).not.toMatch(/import\s*\{\s*createVueBridgeApp[\s,}]/)
   })
   it('react 门面导出 createReactBridgeApp（绑定后导出）', () => {
     const code = genApiFacade('react')
     expect(code).toContain('createReactBridgeAppWithLoader as __fulgurjs_crb')
-    expect(code).toContain('export const createReactBridgeApp = __fulgurjs_crb(__fulgurjs_loadRemote);')
+    expect(code).toContain('export const createReactBridgeApp = /*#__PURE__*/ __fulgurjs_crb(__fulgurjs_loadRemote);')
     expect(code).not.toMatch(/import\s*\{\s*createReactBridgeApp[\s,}]/)
   })
 })

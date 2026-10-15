@@ -81,13 +81,18 @@ $ npx @fulgurjs/federation create vue-vue --dir existing
 
 ## `fulgurjs init`
 
-已有项目：在应用根生成**单项目** `fulgurjs.config.ts` 起步模板（最小有效配置），或校验已有配置并输出接入块。**只生成配置起步模板**——不生成完整工程（新项目用 `create`）、不生成桥/路由/启动器/NGINX 文件、不改写任何项目文件。
+已有项目：默认生成单项目 `fulgurjs.config.ts` 起步模板，`--config` 校验已有声明；`--plan` 扫描并预览接线，`--write` 才应用计划。新项目用 `create`。已有项目的完整操作见[接入指南](../guide/existing-apps.md#先预览接入再明确写入)。
 
 ### 语法
 
 ```bash
 fulgurjs init [--out <路径>] [--framework vue|react] [--role consumer|provider|dual] [--force]
 fulgurjs init --config <path>
+fulgurjs init --plan [--kind component|app] [--role consumer|provider|dual]
+              [--framework vue|react] [--name 容器名] [--entry src/main.ts]
+              [--remote 名称=http://开发地址]... [--expose ./键=./源文件]... [--json]
+fulgurjs init --plan <相同参数> --write
+fulgurjs init --rollback
 ```
 
 ### 参数
@@ -99,15 +104,29 @@ fulgurjs init --config <path>
 | `--role` | `dual` | `consumer` 纯消费方（生成 remotes 示例 + hostPages 注释）/ `provider` 纯提供方（生成 exposes 示例）/ `dual` 双角色（两者都生成） |
 | `--force` | 已存在拒绝覆盖 | 覆盖已存在的模板 |
 | `--config <path>` | — | 校验模式：加载并校验配置（CFG 三段式报错）+ 输出 `federation(fulgurjsConfig)` 接入块与按角色的接入核对清单（纯打印，不改写文件） |
+| `--plan` | 关闭 | 扫描已有工程并输出逐文件 before/after 与阻断/人工待办；零写入，不执行 Vite/业务模块 |
+| `--write` | 关闭 | 显式应用受支持计划；可与 --plan 同用；阻断项存在时整批拒绝，不用 --force 绕过 |
+| `--kind component\|app` | `component` | 计划模式：模块/组件仅接配置与 Vite；app 按角色提取最小装配或生成宿主挂载视图 |
+| `--name <容器名>` | package.json name 规范化 | 计划模式的容器名，同页唯一；字母、数字、下划线、连字符 |
+| `--remote <名称=URL>` | 无 | 可重复；开发 URL 必须 http(s)；prod 初始建议为 /名称，部署前核对；provider 角色不能同时传 remote |
+| `--expose <./键=./源文件>` | 无 | 可重复；必须存在的当前应用内源文件；consumer 角色不能同时传 expose |
+| `--entry <路径>` | src/main.ts(x) 或 .js(x) | app 提供方启动入口；自动提取只支持 src 根下明确的最小启动代码，不移动复杂相对依赖 |
+| `--json` | 关闭 | 计划模式输出结构化 root/framework/role/kind/edits/tasks/evidence/commands/written；edits 包含 file/before/after/reason |
+| `--rollback` | 关闭 | 独立使用，恢复被中断的计划写入；后续人工编辑冲突时拒绝覆盖 |
+
+计划模式不能与 `--config/--out/--force` 混用。框架不明确时产生阻断项，要求显式选择。工具不安装包、不改锁文件；不支持安全改写的配置/入口需按待办手动整理后重跑。已有配置、手改文件不会被重新生成覆盖。
 
 ### 副作用
 
 - 模板模式：写出一个文件（目标路径）；已存在且未 `--force` 时拒绝（退出码 2）；
 - `--config` 模式：零写入，纯打印。
+- 计划模式：预览零写入；--write 写入实际列出的文件。写入过程保留临时恢复记录，成功即清除；中断后用 --rollback 恢复，勿提交恢复记录。人工路由、会话和部署核查不自动执行。
 
 ### 退出码
 
 `0` 成功；`2` 用法错误（未知框架/角色、非 TTY 无法判断框架、目标已存在、配置校验失败）。
+
+计划模式的阻断项、解析/读写/恢复失败退出 `1`；预览或写入无阻断项退出 `0`，但人工待办与浏览器验收仍需完成。JSON 模式即使失败也输出 JSON；写入抛错时包含 `written:false` 和 `error`，不冒充成功。
 
 ### 示例
 
@@ -394,3 +413,5 @@ npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts --json
 检查暴露/setup 文件、dev/prod 地址、桥接浏览器 history、异步状态归属和声明误入运行时 glob；输出必改、可选及需调整的原文件清单，并列出 Providers、全局组件等人工确认项。只对确定的源文件错误判 FAIL；风险判 WARN。自定义别名、动态导入、glob、目录外源码和扫描上限均可能导致扫描不完整；不执行远程地址函数。
 
 JSON 字段：`checks`（DoctorCheck[]）、`failed`、`complete`（仅静态扫描完整性）、`filesScanned`、`manualChecks`、`integrationFiles: { required, optional, existing }`。退出 0 表示未发现确定 FAIL，**不是 TS、构建、业务接入或浏览器验收通过**；确定 FAIL 退出 1；缺参/配置异常退出 2。后续仍按真实项目配置验证接入文件。
+
+预检也会报告 Vite 配置接线/生产 base 的核查项、未恢复的 init 写入、丢失的 index.html 本地入口、运行时误导入声明、非推荐应用入口及远程类型正负验证步骤。无法静态确认的项目保持 WARN，不用预检 PASS 代替运行验收。

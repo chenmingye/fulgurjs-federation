@@ -1,18 +1,8 @@
 /**
- * W1 `fulgurjs init` —— 通用脚手架（项目无关）。
- *
- * 原则（2026-09-19 定调；6.0.0 起按 UX-02/UX-03 场景化）：插件为所有项目服务，
- * 不内置任何具体项目的模板、锚点或文件改写。init 只做三件通用的事：
- * 1) 按框架与角色写出**最小有效**的 fulgurjs.config.ts 起步模板——默认导出直接是
- *    federation() 选项；逐页接入的宿主可选具名导出 hostPages；
- * 2) 加载并校验 --config 指定的配置（CFG 三段式报错；旧聚合形态报迁移错误）；
- * 3) 打印可直接粘贴的 `federation(fulgurjsConfig)` 接入块与**按场景**的接入核对清单
- *    （纯打印，不改写任何项目文件）。
- *
- * 场景来源：框架从项目 package.json 依赖判断（vue/react 依赖可明确时据此生成；
- * 两框架并存或都没有时不猜，要求 --framework 显式选择）；角色由 --role 给出
- * （consumer 消费方 / provider 提供方 / dual 双角色，默认 dual）。shared 只包含
- * 项目实际安装且被共享的库，不默认塞 pinia/vue-router。
+ * 已有工程起步配置与接入说明。
+ * 默认 init 生成最小配置，--config 校验已有声明；--plan/--write 的扫描与安全接线
+ * 在 init-plan 实现。两条路径共用框架/角色定义，不内置私有工程结构。
+ * 普通组件不强制桥接、路由或会话文件；只有用户明确选择的能力才进入接入步骤。
  */
 import fs from 'node:fs'
 import path from 'node:path'

@@ -9,6 +9,8 @@
 
 已有应用希望减少独立启动/桥接重复代码，参阅[统一装配与接入预检](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)。
 
+已有工程可先用 `fulgurjs init --plan` 预览接线，审查后再用 `--write`；复杂业务装配会明确列出人工待办。统一 `/vue`、`/react` 入口支持按使用裁剪，不需要改用内部路径。
+
 ## 快速开始
 
 **新建工程**（推荐）：用 CLI 从完整模板创建可独立运行的联邦工程：

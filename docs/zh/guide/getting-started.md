@@ -67,7 +67,7 @@ pnpm dev        # 统一启动器：远程先启动并探活，再启动宿主�
 
 ## 已有项目接入
 
-已有项目不需要重搭工程，只做三件事：装插件 → 写 `fulgurjs.config.ts` → `vite.config.ts` 注册插件。可以先用 `fulgurjs init` 生成起步配置（推荐），也可以直接手写。CLI 统一用 `npx @fulgurjs/federation <命令>` 调用（工程尚未安装依赖时也有效；已安装后 `npx fulgurjs` 亦可）。
+已有项目不需要重搭工程，只做三件事：装插件 → 写 `fulgurjs.config.ts` → `vite.config.ts` 注册插件。推荐先按[已有工程接入指南](existing-apps.md#先预览接入再明确写入)运行 `fulgurjs init --plan` 预览接线，确认后 `--write`；也可用不带计划参数的 `init` 只生成配置或直接手写。CLI 统一用 `npx @fulgurjs/federation <命令>` 调用（工程尚未安装依赖时也有效；已安装后 `npx fulgurjs` 亦可）。
 
 ### 用 `fulgurjs init` 生成起步配置
 
@@ -88,7 +88,7 @@ npx @fulgurjs/federation init --out config/fulgurjs.config.ts
 npx @fulgurjs/federation init --force
 ```
 
-- `init` 只生成**最小有效**配置起步模板：shared 只含框架本体（不硬塞 pinia/vue-router/业务页）；按角色决定是否含 `remotes`/`exposes` 示例；纯消费方附 `hostPages` 具名导出的注释示例（不用逐页接入就删掉）。
+- 不带 `--plan/--write` 的 `init` 只生成**最小有效**配置起步模板：shared 只含框架本体（不硬塞 pinia/vue-router/业务页）；按角色决定是否含 `remotes`/`exposes` 示例；纯消费方附 `hostPages` 具名导出的注释示例（不用逐页接入就删掉）。
 - 已存在的同名文件拒绝覆盖（`--force` 放开）。
 - 生成后打印四步后续动作（编辑配置 → vite.config.ts 两行接入 → `explain` 核对 → 部署后 `doctor`）。
 

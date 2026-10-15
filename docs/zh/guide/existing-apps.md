@@ -12,6 +12,49 @@
 
 目录名没有强制要求。小项目可以把宿主挂载与上下文写在已有视图中；不要因为看了多篇 API 示例就创建多套目录。
 
+## 先预览接入，再明确写入
+
+在已有应用根安装 `@fulgurjs/federation` 后运行。以下文件和远程地址是示例，换成项目真实值；命令不会替你安装依赖、启动服务或猜端口。
+
+**提供组件或模块**：
+
+```bash
+npx fulgurjs init --plan --role provider --expose ./Button=./src/components/Button.vue
+# 审查打印的完整前后文本、保留项和待办后，再使用相同参数追加 --write
+npx fulgurjs init --plan --role provider --expose ./Button=./src/components/Button.vue --write
+```
+
+**消费方**：
+
+```bash
+npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174/remote-a
+npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174/remote-a --write
+```
+
+普通模块/组件模式默认只生成联邦配置并接入 Vite，不增加应用工厂、菜单、Provider 或登录文件。在已有页面中使用 `loadRemote('remote-a/math')` 或同框架 `remoteComponent('remote-a/Button')`；普通组件的必填 props 由消费方传入。远程开发服务需自行启动，生产 `prod` 默认建议路径为 `/remote-a`，部署前按实际 base 核对。
+
+**完整子应用**：提供方使用 `--kind app --role provider`；宿主使用 `--kind app --role consumer --remote ...`。例如：
+
+```bash
+# 子应用：从可识别的最小 src/main.ts(x) 提取一份 application，并 expose ./bridge
+npx fulgurjs init --plan --kind app --role provider
+# 宿主：生成 src/fulgurjs/RemoteApplication.vue 或 .tsx，放入现有页面/路由
+npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://localhost:5174/remote-a
+```
+
+预览满意后同样追加 `--write`。宿主挂载视图不自动增加登录态或 URL 同步：需要时按下文和 [URL 同步指南](url-sync.md)接入宿主导航端口、一个挂载前缀和真实会话来源。子应用不重复登记内部菜单。跨框架完整桥接的依赖要求见[桥接指南](app-bridge.md)，不能把普通组件的安装要求直接套到它。
+
+### 自动接线的边界
+
+- Vite 支持直接对象、`defineConfig` 对象以及可识别的单返回箭头配置工厂，保留原插件、端口和注释；原插件返回值可作为嵌套 PluginOption 保留。
+- 最小应用入口支持具名 `createApp` 的 Vue 启动、具名 `createRoot` 的 React JSX 启动。已有 Router/store、权限、异步初始化或自定义入口布局需按下文先整理工厂，工具不会盲改业务。
+- 无法证明的配置控制流、插值模板、顶层 spread、重复 plugins 或已有人工接线会列为阻断项，**整批不写**，同时给出文件和手动接入块。
+- 已有配置和手改挂载视图不覆盖；重复运行相同计划不会重复插入。预览函数不执行业务模块/Vite 配置。`--force` 不适用于接入计划。
+- `--write` 写入前再次核对文件；失败回退。进程中断留下 `.fulgurjs-init-pending.json` 时，先运行 `npx fulgurjs init --rollback`。有后续人工编辑则拒绝覆盖，按记录人工合并；恢复成功记录会删除，不应提交它。
+- 写入成功后运行 `npx fulgurjs doctor --config ./fulgurjs.config.ts`，再做项目有效类型检查、构建和真实交互。命令成功不等于业务迁移或浏览器验收完成。
+
+仅想生成配置时仍可直接 `npx fulgurjs init`；想校验已有配置用 `init --config`，不要混用 `--plan/--write` 与 `--config/--out/--force`。完整参数、JSON 与退出码见 [CLI 参考](../reference/cli.md#fulgurjs-init)。
+
 ## Vue：两种入口复用一份装配
 
 `src/application.ts` 默认导出就是远程桥接契约，同时带独立 `start` 方法。下面的 App 和 routes 是项目原有组件与路由；守卫、状态库、i18n、指令等原装配放在同一工厂内。

@@ -8,11 +8,8 @@ if (!fs.existsSync(path.join(dist, 'runtime.js'))) throw new Error('runtime.js m
 // 导出名必须与 src/runtime-entry.ts / src/vue.ts / src/react.ts 的公开导出面一致——
 // 漂移由 tests/client-types.test.ts（d.ts 批准清单）、tests/runtime-entry-graph.test.ts
 // （导入图）与 e2e（浏览器真实导入）双向守护。
-//
-// 6.0.0 入口统一：公共入口收敛为四类——包根（Vite 配置）/ /vue / /react / /runtime。
-// 旧 /bridge、/bridge/vue、/bridge/react、/bridge/router/vue、/bridge/router/react
-// 已移除（迁移指南见 docs/迁移指南.md）；桥接宿主与路由同步实现继续以 /internal/* 提供，
-// 由 /vue、/react 统一入口（及 dev 门面）绑定。
+// 顶层绑定工厂仅返回闭包：保留 PURE 注解，让使用统一入口的构建器自动移除未用能力。
+// 不对整个包声明 sideEffects:false；runtime.js 的全局单例初始化仍必须执行。
 
 /** 框架无关运行时 + 上下文 + 页面契约（/runtime；导入图零 Vue/React/router，graph 测试守护） */
 fs.writeFileSync(path.join(dist, 'runtime-entry.js'), [
@@ -36,12 +33,12 @@ fs.writeFileSync(path.join(dist, 'vue.js'), [
   'import { createVueBridgeNavigation, connectVueBridgeRouter, installVueBridgeRouter } from "./bridge-router-vue.js";',
   'import { createBridgeSession } from "./bridge-session.js";',
   'import { hasBridgeMount } from "./bridge-core.js";',
-  'export const remoteComponent = createRemoteComponent(loadRemote);',
+  'export const remoteComponent = /*#__PURE__*/ createRemoteComponent(loadRemote);',
   'export const createHostPages = (options) => createHostPagesWithLoader(options, loadRemote);',
   'export const defineBridgeApp = defineVueBridgeApp;',
   'export { defineApplication } from "./bridge-app-vue.js";',
   'export { bindStoreToApp } from "./vue-store.js";',
-  'export const createVueBridgeApp = createVueBridgeAppWithLoader(loadRemote);',
+  'export const createVueBridgeApp = /*#__PURE__*/ createVueBridgeAppWithLoader(loadRemote);',
   'export { createVueBridgeNavigation, connectVueBridgeRouter, installVueBridgeRouter };',
   'export { createBridgeSession };',
   'export { hasBridgeMount };',
@@ -62,13 +59,13 @@ fs.writeFileSync(path.join(dist, 'react.js'), [
   'import { createReactBridgeAppWithLoader } from "./bridge-host-react.js";',
   'import { createReactBridgeNavigation, createReactBridgeRouter } from "./bridge-router-react.js";',
   'import { hasBridgeMount } from "./bridge-core.js";',
-  'export const remoteComponent = createRemoteComponent(loadRemote);',
-  'export const useLoadRemote = createUseLoadRemote(loadRemote);',
+  'export const remoteComponent = /*#__PURE__*/ createRemoteComponent(loadRemote);',
+  'export const useLoadRemote = /*#__PURE__*/ createUseLoadRemote(loadRemote);',
   'export { RemoteErrorBoundary };',
   'export const createReactHostPages = (options) => createReactHostPagesWithLoader(options, loadRemote);',
   'export const defineBridgeApp = defineReactBridgeApp;',
   'export { defineApplication } from "./bridge-app-react.js";',
-  'export const createReactBridgeApp = createReactBridgeAppWithLoader(loadRemote);',
+  'export const createReactBridgeApp = /*#__PURE__*/ createReactBridgeAppWithLoader(loadRemote);',
   'export { createReactBridgeNavigation, createReactBridgeRouter };',
   'export { hasBridgeMount };',
   'export const remoteSchema = {};',

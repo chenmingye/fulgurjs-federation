@@ -181,3 +181,23 @@ describe('doctor --config：执行边界与扫描范围', () => {
     expect(r.complete).toBe(true)
   })
 })
+
+describe('接入前一次暴露接线问题', () => {
+  it('HTML 确定缺失入口与中断记录是 FAIL', async () => {
+    write('index.html', '<script type="module" src="/src/no-entry.ts"></script>')
+    let r = await doctorFor('')
+    expect(r.checks.some(c => c.item === 'index.html 入口' && c.level === 'FAIL')).toBe(true)
+    write('index.html', '')
+    write('.fulgurjs-init-pending.json', '{}')
+    r = await doctorFor('')
+    expect(r.checks.some(c => c.item === '接入写入恢复' && c.level === 'FAIL')).toBe(true)
+    rmSync(join(root, '.fulgurjs-init-pending.json'))
+  })
+  it('运行时声明导入不能冒充普通业务源码，类型提示需正负验证', async () => {
+    write('src/runtime-types.ts', "import './bad.d.ts'\nexport const x=1")
+    write('src/bad.d.ts', 'export {}')
+    const r = await doctorFor("  exposes: {'./types': './src/runtime-types.ts'}, remotes: {a: {dev:'http://localhost:5174',prod:'/a'}}")
+    expect(r.checks.some(c => c.level === 'FAIL' && c.symptom.includes('运行时代码导入了类型声明'))).toBe(true)
+    expect(r.checks.some(c => c.item === '远程类型接线' && c.level === 'WARN')).toBe(true)
+  })
+})

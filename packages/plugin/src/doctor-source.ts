@@ -1,4 +1,4 @@
-/** Offline integration checks. Executes the configuration, never business modules or HTTP requests. */
+/** 离线接入预检：只加载声明配置，业务入口/Vite 配置仅读取，不运行应用或发 HTTP 请求。 */
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -78,6 +78,16 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
     return undefined
   }
   const required: string[] = [relative(loaded.configPath)]
+  // Vite 配置可能通过辅助函数注册插件：静态信息不足只 WARN，不把未知当缺陷或通过。
+  const viteFiles = ['vite.config.ts', 'vite.config.mts', 'vite.config.js', 'vite.config.mjs'].filter(file => fs.existsSync(path.join(root, file)))
+  if (viteFiles.length !== 1) add('Vite 插件接线', 'WARN', '未找到唯一常规 Vite 配置，无法确认插件注册。', '可能使用自定义 --config 或多份环境配置。', '在实际 Vite plugins 中注册 federation(fulgurjsConfig)；init --plan 可预览受支持配置的接线。')
+  else {
+    const code = fs.readFileSync(path.join(root, viteFiles[0]), 'utf8')
+    add(viteFiles[0], 'WARN', 'Vite 配置存在；插件调用、动态 base 与部署对应关系仍需核对。',
+      '本地预检不执行 Vite 配置；导入插件或写了注释并不能证明 plugins 实际启用。',
+      code.includes('@fulgurjs/federation') ? '运行真实 dev/build；确认当前配置调用 federation，生产 base/远程 prod 前缀与服务器映射一致。' : '检查插件是否由辅助函数注册；否则用 init --plan 预览接线，不要仅创建 fulgurjs.config.ts。')
+  }
+  if (fs.existsSync(path.join(root, '.fulgurjs-init-pending.json'))) add('接入写入恢复', 'FAIL', '存在被中断的 init 写入记录。', '此前写入尚未完成或回退遇到手工编辑。', '运行 fulgurjs init --rollback；若提示文件被编辑，按恢复记录人工合并后再执行。')
   for (const [key, expose] of Object.entries(options.exposes ?? {})) {
     const file = resolveSource(typeof expose === 'string' ? expose : expose.import)
     if (file) { pending.push(file); required.push(relative(file)); add(`expose ${key}`, 'PASS', `源文件存在：${relative(file)}`) }
@@ -99,6 +109,10 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
     if (!entry || !/\btype=["']module["']/i.test(tag[0]) || /^(?:https?:)?\/\//.test(entry)) continue
     const file = resolveSource(entry.replace(/^\//, ''))
     if (file) { pending.push(file); hasEntry = true }
+    else {
+      complete = false
+      add('index.html 入口', 'FAIL', `本地 module 入口不存在：${entry}`, '入口引用无法解析，不能只检查 expose 路径。', '修正 index.html script src，或恢复实际入口；自定义虚拟入口使用其插件构建检查核实。')
+    }
   }
   if (Object.keys(options.remotes ?? {}).length && !hasEntry) complete = false
   await init
@@ -124,6 +138,12 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
       for (const item of parse(code)[0]) {
         if (!item.n) { if (item.d >= 0) complete = false; continue }
         imports.add(item.n)
+        if (/\.d\.[cm]?ts(?:[?#]|$)/.test(item.n)) {
+          add(relative(file), 'FAIL', `运行时代码导入了类型声明：${item.n}`, '生成声明不是可执行模块，不能作为组件/工具运行时注册。', '只使用 import type，或引用真正的远程模块；检查 glob 是否排除 **/*.d.ts。')
+        }
+        if (item.n.startsWith('@fulgurjs/federation/') && !['@fulgurjs/federation/vue', '@fulgurjs/federation/react', '@fulgurjs/federation/runtime'].includes(item.n)) {
+          add(relative(file), 'WARN', `应用代码使用非推荐入口：${item.n}`, '内部模块不是应用接入路径；静态预检不判断该路径是否仍被 exports 允许。', 'Vue 用 /vue，React 用 /react，框架无关模块用 /runtime；类型注册表的 import type 不应成为运行时代码。')
+        }
         if (item.n.startsWith('.') || /^(?:\/?@\/|~\/)/.test(item.n)) {
           // 构建资源（图片/字体/媒体/样式/数据）不是可静态检查的源码依赖：跳过跟随，
           // 不 WARN、不降低 complete（与下方"资源不是应用代码"同一口径）。
@@ -146,7 +166,7 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
         '等待期间另一个应用可能改变全局 activePinia；静态扫描不能证明当前回调一定取错实例。',
         '在回调中传入本应用 pinia，或用 /vue 的 bindStoreToApp 绑定实际实例；组件内保留原生注入，不把库单例当成业务 store 实例。')
     }
-    if (/defineBridgeApp\s*\(/.test(code) && /createWeb(?:Hash)?History\s*\(/.test(code) && !/createMemoryHistory|defineApplication/.test(code)) {
+    if (/define(?:BridgeApp|Application)\s*\(/.test(code) && /createWeb(?:Hash)?History\s*\(/.test(code) && !/createMemoryHistory/.test(code)) {
       add(file, 'WARN', '桥接装配中出现浏览器 history，需确认它只在独立启动时执行。',
         '子应用直接写浏览器历史可能重复前缀或添加意外 hash；此项是人工核查，不是已复现缺陷。',
         '统一装配用 defineApplication；按 context.mode 选择 web/memory history，桥接返回 { app, router }。')
@@ -160,6 +180,11 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
     }
   }
   const shared = Array.isArray(options.shared) ? options.shared : Object.keys(options.shared ?? {})
+  if (Object.keys(options.remotes ?? {}).length && options.dts !== false) {
+    add('远程类型接线', 'WARN', '远程类型启用；本地扫描不能证明声明已同步且被 IDE 的有效 tsconfig 包含。',
+      '首次生成、远程未启动、自定义 include/references 或 IDE 项目选择都会影响提示。',
+      '启动提供方后运行 fulgurjs types；在实际消费文件验证正确 props 和错误 props 的正负类型样例。勿用 any 消除诊断，也无需清空全部业务存量错误。')
+  }
   const isImported = (key: string) => [...imports].some(value => value === key || value.startsWith(key + '/'))
   for (const key of shared) {
     const hint = Array.isArray(options.shared) ? undefined : options.shared?.[key]

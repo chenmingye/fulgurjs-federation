@@ -48,7 +48,8 @@ export type { VueBridgeAppOptions, FgVueBridgeWrapper } from './bridge-host-vue'
 export type { VueBridgeRouterConnection, BridgeHostRouting }
 export type { BridgeSession }
 
-export const remoteComponent = createRemoteComponent(loadRemote)
+// 这些工厂仅返回绑定 loader 的闭包；不访问 DOM、不加载远程。未使用的绑定可安全裁剪。
+export const remoteComponent = /*#__PURE__*/ createRemoteComponent(loadRemote)
 /** 宿主页面适配器（绑定本包运行时的 loadRemote；选项与返回值类型见 vue-adapter） */
 export function createHostPages(options: Parameters<typeof createHostPagesWithLoader>[0]) {
   return createHostPagesWithLoader(options, loadRemote)
@@ -60,7 +61,7 @@ export type { VueApplicationFactory, VueApplicationContext, VueApplicationSetup,
 export type { Application, ApplicationHandle } from './application-core'
 export { bindStoreToApp } from './vue-store'
 /** Vue 宿主桥接工厂：返回 `{ appProps: P; sessionKey?: string | null }` 形态的包装组件 */
-export const createVueBridgeApp = createVueBridgeAppWithLoader(loadRemote)
+export const createVueBridgeApp = /*#__PURE__*/ createVueBridgeAppWithLoader(loadRemote)
 /** 宿主导航端口（URL 同步）：包住宿主 vue-router 实例，传给桥接组件的 routing prop */
 export { createVueBridgeNavigation }
 /** 子应用侧 memory router 接线（await connection.ready 后再 app.use(router)） */
