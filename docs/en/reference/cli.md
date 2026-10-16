@@ -175,7 +175,7 @@ fulgurjs types [--config <path>] [--mode dev|prod] [--base <URL>] [--check]
 
 `--check`: only verifies the local cache against its recorded generation (offline; **does not** attest the remote's latest).
 
-**Large apps and generator memory**: providers with `.vue` exposes generate declarations in a vue-tsc child process; very large real-world closure graphs (several GB, e.g. a full business form registry) can exhaust the default Node heap (V8 OOM). The generator detects OOM, retries once with `--max-old-space-size=8192` (MB) and records a notice on success; if that is still not enough, raise the limit via the `FG_DTS_MAX_OLD_SPACE` environment variable (e.g. `16384`) and rerun. OOM and closure compile errors are diagnosed separately — running out of memory is never misreported as a code error.
+**Large apps and generator memory**: providers with `.vue` exposes generate declarations in a vue-tsc child process; very large real-world closure graphs (several GB, e.g. a full business form registry) can exhaust the default Node heap (V8 OOM). The generator detects OOM, retries once with `--max-old-space-size=8192` (MB) and records a notice on success; if that is still not enough, raise the limit via the `FG_DTS_MAX_OLD_SPACE` environment variable (e.g. `16384`) and rerun. OOM and closure compile errors are diagnosed separately — running out of memory is never misreported as a code error. If the generator subprocess is killed at the system level (e.g. the OS SIGKILLs it under memory pressure, with no V8 banner and no TS diagnostics), the failure is reported as a system-level termination, retried once, and followed by environment-level guidance (free memory and dev re-runs on source changes).
 
 ### Examples
 

@@ -315,6 +315,35 @@ describe('generateTypesBundle（vue-tsc 子进程 OOM 提堆重试）', () => {
     fs.writeFileSync(path.join(binDir, 'vue-tsc.js'), script)
   }
 
+  it('系统级终止（SIGKILL/无诊断输出）与编译错误区分，重试后给出环境修法', async () => {
+    const root = makeProject('sigkill', {
+      'src/entry.vue': '<script setup lang="ts">defineProps<{ user: { id: string } }>();</script><template>{{ user.id }}</template>',
+      "src/env.d.ts": "declare module '*.vue' { const component: object; export default component }",
+    })
+    // 桩：直接自我 SIGKILL（模拟 OS 内存压力终止；stderr 无 V8 横幅与 TS 诊断）
+    try { fs.symlinkSync(path.join(pluginRoot, 'node_modules', 'vue'), path.join(root, 'node_modules', 'vue'), 'dir') } catch { /* 已存在 */ }
+    const binDir = path.join(root, 'node_modules', 'vue-tsc', 'bin')
+    fs.mkdirSync(binDir, { recursive: true })
+    fs.writeFileSync(path.join(root, 'node_modules', 'vue-tsc', 'package.json'), JSON.stringify({
+      name: 'vue-tsc', version: '0.0.0-stub', bin: { 'vue-tsc': 'bin/vue-tsc.js' },
+    }))
+    fs.writeFileSync(path.join(binDir, 'vue-tsc.js'), [
+      "const fs = require('node:fs')",
+      "const path = require('node:path')",
+      "fs.appendFileSync(path.join(__dirname, 'attempts.log'), '1')",
+      "process.kill(process.pid, 'SIGKILL')",
+    ].join('\n'))
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test' })
+    const attempts = fs.readFileSync(path.join(binDir, 'attempts.log'), 'utf8')
+    expect(attempts.length).toBe(2) // 被终止 → 重试一次
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      const text = result.diagnostics.join('\n')
+      expect(text).toContain('被系统终止')
+      expect(text).not.toContain('暴露闭包内存在编译错误')
+    }
+  }, 30000)
+
   it('默认堆 OOM 后以提堆参数重试并采纳成功结果', async () => {
     const root = makeProject('oom-retry', {
       'src/entry.vue': '<script setup lang="ts">defineProps<{ user: { id: string } }>();</script><template>{{ user.id }}</template>',

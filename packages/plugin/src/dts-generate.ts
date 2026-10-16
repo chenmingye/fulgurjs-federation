@@ -473,6 +473,13 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
      * 不能裸匹配子串——语法错误的回显会把含这些词的「源码文本」带进 stderr。 */
     const isOom = (text: string): boolean =>
       /(^|\n)\s*FATAL ERROR:.*(heap out of memory|Ineffective mark-compacts|Allocation failed)/i.test(text)
+    /**
+     * 系统级终止识别：进程被 OS/外部 SIGKILL（如 macOS 内存压力 jetsam）时
+     * stderr 没有任何 V8 横幅与 TS 诊断，只表现为「Command failed」。
+     * 这类失败不是代码错误，诊断必须另立，否则会再次误导成「闭包内编译错误」。
+     */
+    const isSystemKilled = (e: import('node:child_process').ExecFileException | null, out: string, errText: string): boolean =>
+      !!e && (e.signal != null || /(^|\n)\s*(Killed|-9)\s*(:9)?\s*$/i.test(errText)) && !isOom(errText) && !/error TS\d+/i.test(out + '\n' + errText)
     try {
       /** 运行一次 vue-tsc；extraNodeArgs 为 node 与脚本间的 V8 参数（提堆重试用） */
       const attempt = (extraNodeArgs: string[]): Promise<{ err: import('node:child_process').ExecFileException | null; stdout: string; stderr: string }> =>
@@ -498,6 +505,20 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           diagnostics.push(
             'vue-tsc 声明生成内存不足（提高堆后仍 OOM）——类型资源未产出。',
             '修法：用环境变量 FG_DTS_MAX_OLD_SPACE 提高生成器堆（如 16384），或缩小暴露模块的静态依赖面后重试。',
+          )
+          return { ok: false, diagnostics }
+        }
+      }
+      // 系统级终止（无 V8 横幅、无 TS 诊断）：重试一次；仍被终止则给出环境修法
+      if (err && isSystemKilled(err, stdout, stderr)) {
+        diagnostics.push(`vue-tsc 声明生成进程被系统终止（signal=${err.signal ?? 'Killed'}，无 TypeScript 诊断输出），重试一次。`)
+        ;({ err, stdout, stderr } = await attempt([]))
+        if (err && isSystemKilled(err, stdout, stderr)) {
+          fs.rmSync(outDir, { recursive: true, force: true })
+          diagnostics.push(
+            'vue-tsc 声明生成进程再次被系统终止——类型资源未产出。',
+            '常见原因：机器内存压力下被 OS 终止（如同时运行多个大型声明生成/构建），或进程被外部 kill。',
+            '修法：释放内存后重试（dev 会按源码变化自动重跑；也可 `fulgurjs types` 手动触发），或缩小暴露闭包。',
           )
           return { ok: false, diagnostics }
         }
