@@ -181,6 +181,9 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 - 远程未提供类型（旧版本/`dts: false`）：页面正常运行，入口按动态边界放行（`unknown`）；严格类型检查在 CI 运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](../reference/cli.md#fulgurjs-types)）；
 - `dts: false` 完全关闭（不生成、不下载）；细节与已知限制见 [API 参考 · 远程类型](../reference/api.md#远程类型自动生成与同步)。
 
+首次生成会沿暴露入口的依赖分析真实类型；两个入口也可能关联很多文件，所以耗时不能只按入口数量判断。生成器使用工具链支持的方式检查公开声明：支持按文件检查的工具只检查暴露闭包；使用 CLI 的工具在 dev 中复用该服务的增量缓存。修改 props 仍会重新检查；日志、截图、Markdown 不触发生成。缓存放在 `node_modules` 内并在 dev 服务关闭后清理，不需要配置或提交。一次性 build/CLI 使用独立输出。
+
+
 ## 远程页面里的运行时导入
 
 exposes 目标文件（被宿主跨源加载的远程页面/组件）可以**直接静态导入**运行时 API——插件自动把该导入改写为惰性单例代理，宿主与远程写法完全一致：

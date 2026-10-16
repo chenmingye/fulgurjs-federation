@@ -184,7 +184,8 @@ function facadeChunkOf(id: string): string | null {
  * 它们静态 import 协商门面（TLA），若被用户组捕获、而该组又包含 shared 物理包
  * （vendor 全量 node_modules 是常见形态），即构成「门面(TLA) →[动态] provider →
  * [静态] vendor →[静态] 门面」的混合环，页面零报错死锁（20261001 mc-fn 场景实测）。
- * 豁免后交给 rollup 自动分块（与无用户分组时的基线形态一致：随最大消费方合并）。
+ * 显式归入内部组，不与用户 application 等业务模块合并。仅跳过用户分组仍可能被
+ * 自动分包合进消费方；消费方再动态 import 统一入口时，TLA 转换会等待自身 chunk。
  */
 function isOwnPackageModule(id: string): boolean {
   return id.includes('/node_modules/@fulgurjs/federation/')
@@ -526,7 +527,7 @@ export function federation(options: FederationOptions): Plugin[] {
               const wrapped = (id: string, meta: unknown) => {
                 const facade = facadeChunkOf(id)
                 if (facade) return facade
-                if (isOwnPackageModule(id)) return undefined
+                if (isOwnPackageModule(id)) return 'fulgurjs-internal'
                 // MC-FIX-2：shared 本体闭包优先于用户分组（与 5.2.1 函数形式一致）——
                 // 用户把共享包与它的消费方（如 vue + vue-router）分进同组时，fallback
                 // 动态边落回消费方所在 chunk，与「消费方 →静态→ TLA 门面」构成自等待环
@@ -543,7 +544,7 @@ export function federation(options: FederationOptions): Plugin[] {
               const wrapped = (id: string, meta?: unknown): string | undefined => {
                 const facade = facadeChunkOf(id)
                 if (facade) return facade
-                if (isOwnPackageModule(id)) return undefined
+                if (isOwnPackageModule(id)) return 'fulgurjs-internal'
                 // MC-FIX-2：同函数形式——shared 本体闭包优先于用户分组（防自等待环）
                 return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds)
                   ?? state.manualChunkGroups.get(id.split('?')[0])
@@ -573,7 +574,7 @@ export function federation(options: FederationOptions): Plugin[] {
           (id: string, meta: unknown) => {
             const facade = facadeChunkOf(id)
             if (facade) return facade
-            if (isOwnPackageModule(id)) return undefined
+            if (isOwnPackageModule(id)) return 'fulgurjs-internal'
             return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds) ?? userFn?.(id, meta)
           }
         const extraBuild = ((extra as any).build ??= {})
@@ -612,7 +613,7 @@ export function federation(options: FederationOptions): Plugin[] {
                 manualChunks: (id: string, meta: unknown) => {
                   const facade = facadeChunkOf(id)
                   if (facade) return facade
-                  if (isOwnPackageModule(id)) return undefined
+                  if (isOwnPackageModule(id)) return 'fulgurjs-internal'
                   // MC-FIX-2（2026-10-04）：对象形式此前漏掉 providerChunkOf（函数形式有）——
                   // MES admin 的 vue-vendor 组同时吃进真实 vue 与被改写的 vue-router，
                   // 与协商门面的 fallback 动态边互为等待，页面零报错死锁。shared 本体
@@ -661,7 +662,7 @@ export function federation(options: FederationOptions): Plugin[] {
               ? (userManualChunks3 as (id: string, meta: unknown) => string | undefined)
               : undefined
           const combined = (id: string, meta: unknown): string | undefined => {
-            if (isOwnPackageModule(id)) return facadeChunkOf(id) ?? reactDomChunkOf(id) ?? undefined
+            if (isOwnPackageModule(id)) return facadeChunkOf(id) ?? reactDomChunkOf(id) ?? 'fulgurjs-internal'
             const prev = previousMc?.(id, meta)
             if (prev !== undefined) return prev
             // MC-FIX-2：shared 本体闭包先于用户分组（纯 remote 的 previousMc 不含 5.2.1

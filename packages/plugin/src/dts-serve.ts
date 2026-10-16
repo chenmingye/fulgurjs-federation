@@ -12,16 +12,23 @@
  */
 import type { NormalizedOptions } from './options'
 import path from 'node:path'
+import fs from 'node:fs'
 import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
 
-/** 类型输出不是输入：避免临时配置和宿主同步声明触发自循环生成。 */
+/**
+ * 只响应可能改变声明的源码和配置。Vite watcher 同时观察日志、截图和文档；
+ * 把这些事件排进 vue-tsc 会让一次耗时生成结束后立即再跑一轮。
+ * JSON 仍是输入（resolveJsonModule 可从数据推导类型），不能一并过滤。
+ * 类型输出不是输入：临时配置和宿主同步声明必须排除，避免生成自循环。
+ */
 export function isTypesInputChange(root: string, id: string, outputDir: string): boolean {
   const relative = path.relative(root, id)
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return false
   if (relative.split(path.sep).some(part => part === 'node_modules' || part === '.vite')) return false
   if (path.basename(id).startsWith('.fulgurjs-types-tsconfig-')) return false
   const outputRelative = path.relative(outputDir, id)
-  return outputRelative.startsWith(`..${path.sep}`) || path.isAbsolute(outputRelative)
+  if (!(outputRelative.startsWith(`..${path.sep}`) || path.isAbsolute(outputRelative))) return false
+  return /\.(?:[cm]?[jt]sx?|vue|json)$/i.test(id)
 }
 
 export interface ServedTypesFile {
@@ -55,6 +62,12 @@ export function createDevTypesServer(
   let pendingInvalidate = false
   let disposed = false
   let lastErrorKey: string | null = null
+  let incrementalDir: string | undefined
+
+  const clearCache = (): void => {
+    if (incrementalDir) fs.rmSync(incrementalDir, { recursive: true, force: true })
+    incrementalDir = undefined
+  }
 
   const publicExposes = options.exposes
     .filter((e) => !e.internal)
@@ -64,11 +77,19 @@ export function createDevTypesServer(
     if (disposed) return
     let result: DtsGenerateResult
     try {
+      // 一个服务拥有一个缓存；ensure 保证串行。复用编译状态，避免每次保存都从零
+      // 分析整棵 Vue 依赖图；关闭时等子进程退出再清理，不与进行中的 emit 竞争。
+      if (!incrementalDir) {
+        const cacheRoot = path.join(options.root, 'node_modules')
+        fs.mkdirSync(cacheRoot, { recursive: true })
+        incrementalDir = fs.mkdtempSync(path.join(cacheRoot, '.fulgurjs-types-cache-'))
+      }
       result = await generateTypesBundle({
         root: options.root,
         exposes: publicExposes,
         pluginVersion: options.pluginVersion,
         signal: controller.signal,
+        incrementalDir,
       })
     } catch (e) {
       result = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截）：${(e as Error).stack ?? (e as Error).message}`] }
@@ -107,6 +128,7 @@ export function createDevTypesServer(
         await generating
       } finally {
         generating = null
+        if (disposed) clearCache()
       }
       if (!pendingInvalidate || disposed) return
     }
@@ -138,6 +160,7 @@ export function createDevTypesServer(
     dispose(): void {
       disposed = true
       controller.abort()
+      if (!generating) clearCache()
     },
   }
 }

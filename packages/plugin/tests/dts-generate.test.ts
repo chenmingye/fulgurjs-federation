@@ -228,6 +228,74 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toContain('MissingName')
   }, 30000)
 
+  it('Vue 增量生成保留未变化的声明，更新 props 后重新检查且错误不能沿用旧成功', async () => {
+    const root = makeProject('vue-incremental', {
+      'src/entry.vue': '<script setup lang="ts">defineProps<{ title: string }>();</script><template>{{ title }}</template>',
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const incrementalDir = path.join(root, 'node_modules', '.fulgurjs-types-cache-test')
+    const input = { root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test', incrementalDir }
+    const first = await generateTypesBundle(input)
+    const unchanged = await generateTypesBundle(input)
+    expect(first.ok, first.ok ? "" : first.diagnostics.join("\n")).toBe(true)
+    expect(unchanged.ok, unchanged.ok ? "" : unchanged.diagnostics.join("\n")).toBe(true)
+    if (first.ok && unchanged.ok) expect(unchanged.index.revision).toBe(first.index.revision)
+    expect(fs.existsSync(path.join(incrementalDir, 'state.tsbuildinfo'))).toBe(true)
+    fs.writeFileSync(path.join(root, 'src/entry.vue'), '<script setup lang="ts">defineProps<{ title: number }>();</script><template>{{ title }}</template>')
+    const changed = await generateTypesBundle(input)
+    expect(changed.ok).toBe(true)
+    if (first.ok && changed.ok) {
+      expect(changed.index.revision).not.toBe(first.index.revision)
+      expect([...changed.files.values()].join('\n')).toContain('title: number')
+    }
+    fs.writeFileSync(path.join(root, 'src/entry.vue'), '<script setup lang="ts">defineProps<{ title: MissingType }>();</script><template />')
+    const invalid = await generateTypesBundle(input)
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toContain('MissingType')
+    fs.writeFileSync(path.join(root, 'src/entry.vue'), '<script setup lang="ts">defineProps<{ title: boolean }>();</script><template />')
+    const recovered = await generateTypesBundle(input)
+    expect(recovered.ok).toBe(true)
+    if (recovered.ok) expect([...recovered.files.values()].join('\n')).toContain('title: boolean')
+    expect(fs.readdirSync(root).some(name => name.startsWith('.fulgurjs-types-tsconfig-'))).toBe(false)
+  }, 60000)
+
+  it('Vue 增量重跑不会把动态业务模块的既有错误变成无位置的全局错误', async () => {
+    const root = makeProject('vue-incremental-business-errors', {
+      'src/entry.vue': '<script setup lang="ts">defineProps<{ title: string }>(); void import("./runtime");</script><template>{{ title }}</template>',
+      'src/runtime.ts': 'export const unrelated: string = 123;',
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const input = { root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test', incrementalDir: path.join(root, 'node_modules', '.fulgurjs-types-cache-test') }
+    for (let run = 0; run < 2; run++) {
+      const result = await generateTypesBundle(input)
+      expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    }
+  }, 30000)
+
+  it('createProgram 工具路径只检查暴露闭包，保留真实推导和重复检查的错误定位', async () => {
+    const root = makeProject('vue-program-scope', {
+      'src/entry.ts': 'export const value = 42; void import("./runtime")',
+      'src/runtime.ts': 'export const bad: string = 123;',
+      'src/marker.vue': '<template />',
+    })
+    const tool = path.join(root, 'node_modules/vue-tsc')
+    fs.mkdirSync(path.join(tool, 'bin'), { recursive: true })
+    fs.writeFileSync(path.join(tool, 'package.json'), JSON.stringify({ version: '1.8.27', main: 'index.cjs', bin: { 'vue-tsc': 'bin/vue-tsc.cjs' } }))
+    // 真实 TS Program 验证按文件诊断/emit 协议；SFC 映射另由真实提供方工具验收。
+    fs.writeFileSync(path.join(tool, 'index.cjs'), 'exports.createProgram = require("typescript").createProgram')
+    fs.writeFileSync(path.join(tool, 'bin/vue-tsc.cjs'), 'throw Error("不应调用全程序 CLI")')
+    const input = { root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test', incrementalDir: path.join(root, 'node_modules', '.fulgurjs-types-cache-test') }
+    for (let run = 0; run < 2; run++) {
+      const result = await generateTypesBundle(input)
+      expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+      if (result.ok) expect([...result.files.values()].join('\n')).toContain('value = 42')
+    }
+    fs.writeFileSync(path.join(root, 'src/entry.ts'), 'export const value: string = 42;')
+    const invalid = await generateTypesBundle(input)
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toMatch(/entry\.ts.*TS2322/s)
+  }, 30000)
+
   it('同进程并发 Vue 声明生成各自使用独立配置且清理不互相干扰', async () => {
     const root = makeProject('vue-concurrent', {
       'src/anchor.ts': 'export {}',

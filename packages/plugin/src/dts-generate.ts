@@ -15,6 +15,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { formatDeclarationDiagnostics } from './dts-diagnostics'
+import { genVueDeclarationProgram } from './dts-vue-program'
 import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
@@ -34,6 +35,8 @@ export interface DtsGenerateInput {
   pluginVersion: string
   /** 中止信号：vue-tsc 子进程立即 kill（TS API 路径为进程内同步段，仅边界检查） */
   signal?: AbortSignal
+  /** dev 服务独占的临时缓存目录；同一服务串行复用，关闭后由服务删除，不进入类型包。 */
+  incrementalDir?: string
 }
 
 export interface DtsGenerateOk {
@@ -311,7 +314,11 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
     diagnostics.push(`tsconfig 解析失败（${tsconfigFile}）：${ts.flattenDiagnosticMessageText(raw.error.messageText, ' ')}`)
     return null
   }
-  const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, path.dirname(tsconfigFile))
+  // 原生 TS 的目录扫描不认识 .vue。纯 SFC 工程不能被误判为 TS18003「没有输入」；
+  // 这里只登记扩展名，具体 SFC 解析和声明检查仍由提供方 vue-tsc 完成。
+  const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, path.dirname(tsconfigFile), undefined, undefined, undefined, [
+    { extension: '.vue', isMixedContent: true, scriptKind: ts.ScriptKind.Deferred },
+  ])
   const co: Record<string, unknown> = { ...parsed.options }
   if (typeof co.baseUrl === 'string' && !path.isAbsolute(co.baseUrl)) {
     co.baseUrl = path.resolve(path.dirname(tsconfigFile), co.baseUrl)
@@ -427,14 +434,22 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     }
     const binRel = vueTscPkg.bin?.['vue-tsc'] ?? vueTscPkg.bin?.['vue-tsc.js'] ?? 'bin/vue-tsc.js'
     const binPath = path.resolve(vueTscDir, binRel)
+    // vue-tsc 1.x 公开 createProgram；直接向官方程序请求闭包诊断/emit，避免其 CLI
+    // 检查所有动态导入页面。其余工具版本继续使用各自 CLI，不依赖未公开的内部路径。
+    const scopedVueProgram = /^1\./.test(vueTscPkg.version)
     if (!fs.existsSync(binPath)) {
       return { ok: false, diagnostics: [`vue-tsc 入口不存在（${binPath}）。请重新安装 vue-tsc。`] }
     }
     // 临时 tsconfig 写在提供方根（include 相对路径语义正确；用完即删）
     // 同一进程内重启/重建可与上一轮取消后的清理重叠，PID不能作为唯一文件名。
     // 每次生成拥有独立配置，避免旧任务finally删除新任务仍在读取的配置。
-    const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${process.pid}-${crypto.randomUUID()}.json`)
-    const outDir = fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
+    // dev 服务为自己的串行生成保留编译状态和 emit；不能让不同服务共享此目录，
+    // 否则取消旧服务或同时构建会删除另一轮仍在使用的输出。一次性构建仍用独立临时目录。
+    const cacheDir = input.incrementalDir
+    if (cacheDir) fs.mkdirSync(cacheDir, { recursive: true })
+    const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${cacheDir ? path.basename(cacheDir) : `${process.pid}-${crypto.randomUUID()}`}.json`)
+    const outDir = cacheDir ? path.join(cacheDir, 'emit') : fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
+    const clearOutput = (): void => { if (!cacheDir) fs.rmSync(outDir, { recursive: true, force: true }) }
     const baseCo: Record<string, unknown> = { ...rawOptionsWithInherited(ctx) }
     delete baseCo.noEmit
     delete baseCo.incremental
@@ -449,6 +464,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     const resolvedTypeFiles = resolveTypesEntries(root, baseCo, diagnostics)
 
     fs.writeFileSync(tmpCfg, JSON.stringify({
+      ...(ctx.tsconfigFile ? { extends: ctx.tsconfigFile } : {}),
       compilerOptions: {
         ...baseCo,
         noEmit: false,
@@ -461,6 +477,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         sourceMap: false,
         outDir,
         rootDir,
+        ...(cacheDir && !scopedVueProgram ? { incremental: true, tsBuildInfoFile: path.join(cacheDir, 'state.tsbuildinfo') } : {}),
       },
       include: [
         ...entryFiles.map((f) => path.relative(root, f)),
@@ -498,24 +515,47 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       /** 运行一次 vue-tsc；extraNodeArgs 为 node 与脚本间的 V8 参数（提堆重试用） */
       const attempt = (extraNodeArgs: string[]): Promise<{ err: import('node:child_process').ExecFileException | null; stdout: string; stderr: string }> =>
         new Promise((resolve) => {
+          if (signal?.aborted) {
+            resolve({ err: Object.assign(new Error('声明生成已取消'), { code: 'ABORT_ERR' }), stdout: '', stderr: '' })
+            return
+          }
           const child = execFile(
             process.execPath,
-            [...extraNodeArgs, binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'],
+            [...extraNodeArgs, ...(scopedVueProgram
+              ? ['--eval', genVueDeclarationProgram(), tmpCfg, JSON.stringify([...closure])]
+              : [binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'])],
             { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutFor(extraNodeArgs.length > 0) },
-            (err, stdout, stderr) =>
-              resolve({ err: err ?? null, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }),
+            (err, stdout, stderr) => {
+              signal?.removeEventListener('abort', abort)
+              resolve({ err: err ?? null, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') })
+            },
           )
-          signal?.addEventListener('abort', () => child.kill('SIGKILL'), { once: true })
+          const abort = (): void => { child.kill('SIGKILL') }
+          signal?.addEventListener('abort', abort, { once: true })
+          if (signal?.aborted) abort()
         })
-      let { err, stdout, stderr } = await attempt([])
+      // 已确认需要大堆的同一 dev 服务不再每轮先 OOM 一次。记录仅存在于独占缓存，
+      // 不改变其他工程/一次性构建的内存设置，也不把机器相关信息写入公开类型资源。
+      const heapMarker = cacheDir ? path.join(cacheDir, 'raised-heap') : undefined
+      const raisedArgs = [`--max-old-space-size=${process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'}`]
+      const initialArgs = heapMarker && fs.existsSync(heapMarker) ? raisedArgs : []
+      let { err, stdout, stderr } = await attempt(initialArgs)
+      // 服务关闭是主动取消，不能误走「系统强杀」重试，重新启动无人使用的编译器。
+      if (signal?.aborted) {
+        clearOutput()
+        return { ok: false, diagnostics: ['vue-tsc 声明生成被中止（dev server 关闭）。'] }
+      }
       // 默认堆 OOM：提堆重试一次（大型真实应用的闭包可达数 GB）。OOM 必须与
       // 「闭包内编译错误」区分诊断——OOM 的 stdout 没有可修的 TS 错误。
       if (err && isOom(stderr)) {
         const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
-        diagnostics.push(`vue-tsc 声明生成在默认堆下内存不足（V8 OOM），以 --max-old-space-size=${raised}MB 重试。`)
-        ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
+        if (initialArgs.length === 0) {
+          diagnostics.push(`vue-tsc 声明生成在默认堆下内存不足（V8 OOM），以 --max-old-space-size=${raised}MB 重试。`)
+          if (heapMarker) fs.writeFileSync(heapMarker, '')
+          ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
+        }
         if (err && isOom(stderr)) {
-          fs.rmSync(outDir, { recursive: true, force: true })
+          clearOutput()
           diagnostics.push(
             'vue-tsc 声明生成内存不足（提高堆后仍 OOM）——类型资源未产出。',
             '修法：用环境变量 FG_DTS_MAX_OLD_SPACE 提高生成器堆（如 16384），或缩小暴露模块的静态依赖面后重试。',
@@ -529,7 +569,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         diagnostics.push(`vue-tsc 声明生成超过单次上限（${Math.round(timeoutFor(false) / 60000)} 分钟）被强杀，以提堆 + 更长上限重试。`)
         ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
         if (err && isTimeoutKill(err) && !isOom(stderr) && !/error TS\d+/i.test(stdout + '\n' + stderr)) {
-          fs.rmSync(outDir, { recursive: true, force: true })
+          clearOutput()
           diagnostics.push(
             `vue-tsc 声明生成再次超时（单次上限 ${Math.round(timeoutFor(true) / 60000)} 分钟）——类型资源未产出。`,
             '修法：用环境变量 FG_DTS_TIMEOUT_MS 提高上限（毫秒，如 3600000），或缩小暴露模块的静态依赖面。',
@@ -542,7 +582,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         diagnostics.push(`vue-tsc 声明生成进程被系统终止（signal=${err.signal ?? 'Killed'}，无 TypeScript 诊断输出），重试一次。`)
         ;({ err, stdout, stderr } = await attempt([]))
         if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
-          fs.rmSync(outDir, { recursive: true, force: true })
+          clearOutput()
           diagnostics.push(
             'vue-tsc 声明生成进程再次被系统终止——类型资源未产出。',
             '常见原因：机器内存压力下被 OS 终止（如同时运行多个大型声明生成/构建），或进程被外部 kill。',
@@ -554,7 +594,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       if (err) {
         if (signal?.aborted) {
           diagnostics.push('vue-tsc 声明生成被中止（dev server 关闭）。')
-          fs.rmSync(outDir, { recursive: true, force: true })
+          clearOutput()
           return { ok: false, diagnostics }
         }
         // 门禁 = 入口静态闭包内的错误（file(line,col): error TSxxxx 形态解析）；
@@ -565,20 +605,20 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
           const tail = formatDeclarationDiagnostics(stdout, stderr, err.message, root, closure)
           diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
-          fs.rmSync(outDir, { recursive: true, force: true })
+          clearOutput()
           return { ok: false, diagnostics }
         }
         // 仅闭包外错误：声明 emit 已产出（noEmitOnError:false），继续
       }
     } catch {
-      fs.rmSync(outDir, { recursive: true, force: true })
+      clearOutput()
       fs.rmSync(tmpCfg, { force: true })
       return { ok: false, diagnostics }
     } finally {
       fs.rmSync(tmpCfg, { force: true })
     }
     collectEmitted(ts, outDir, rootDir, emitted, closure)
-    fs.rmSync(outDir, { recursive: true, force: true })
+    clearOutput()
   } else {
     const outDir = fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
     const program = ts.createProgram([...entryFiles, ...ctx.ambientInputs, ...resolveTypesEntries(root, ctx.rawOptions, [])], {
