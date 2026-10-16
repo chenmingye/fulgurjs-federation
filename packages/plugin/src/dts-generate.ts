@@ -474,12 +474,26 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     const isOom = (text: string): boolean =>
       /(^|\n)\s*FATAL ERROR:.*(heap out of memory|Ineffective mark-compacts|Allocation failed)/i.test(text)
     /**
-     * 系统级终止识别：进程被 OS/外部 SIGKILL（如 macOS 内存压力 jetsam）时
-     * stderr 没有任何 V8 横幅与 TS 诊断，只表现为「Command failed」。
-     * 这类失败不是代码错误，诊断必须另立，否则会再次误导成「闭包内编译错误」。
+     * 系统级终止识别：进程被 OS/外部终止或 execFile 超时强杀时，stderr 没有
+     * V8 横幅与 TS 诊断，只表现为「Command failed」。这类失败不是代码错误，
+     * 诊断必须另立，否则会再次误导成「闭包内编译错误」。
+     * 超时强杀（killed && SIGTERM）单独走超时分支（下）。
      */
     const isSystemKilled = (e: import('node:child_process').ExecFileException | null, out: string, errText: string): boolean =>
       !!e && (e.signal != null || /(^|\n)\s*(Killed|-9)\s*(:9)?\s*$/i.test(errText)) && !isOom(errText) && !/error TS\d+/i.test(out + '\n' + errText)
+    /** execFile 超时强杀判定（t.killed 由 node 置位且 signal 为终止信号） */
+    const isTimeoutKill = (e: import('node:child_process').ExecFileException | null): boolean =>
+      !!e && e.killed === true && !/error TS\d+/i.test(String(e.message ?? ''))
+    /**
+     * 单次生成超时上限：默认 10 分钟；提堆重试（大堆需要更久）默认 30 分钟；
+     * FG_DTS_TIMEOUT_MS 可覆盖两者。大型真实闭包在 8GB 堆下可运行 10 分钟以上，
+     * 旧实现固定 10 分钟会在提堆重试阶段被超时强杀，被误判为编译错误/系统终止。
+     */
+    const timeoutFor = (raisedHeap: boolean): number => {
+      const env = Number(process.env.FG_DTS_TIMEOUT_MS)
+      if (Number.isFinite(env) && env > 0) return env
+      return raisedHeap ? 30 * 60 * 1000 : 10 * 60 * 1000
+    }
     try {
       /** 运行一次 vue-tsc；extraNodeArgs 为 node 与脚本间的 V8 参数（提堆重试用） */
       const attempt = (extraNodeArgs: string[]): Promise<{ err: import('node:child_process').ExecFileException | null; stdout: string; stderr: string }> =>
@@ -487,7 +501,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           const child = execFile(
             process.execPath,
             [...extraNodeArgs, binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'],
-            { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 10 * 60 * 1000 },
+            { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutFor(extraNodeArgs.length > 0) },
             (err, stdout, stderr) =>
               resolve({ err: err ?? null, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }),
           )
@@ -509,11 +523,25 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           return { ok: false, diagnostics }
         }
       }
-      // 系统级终止（无 V8 横幅、无 TS 诊断）：重试一次；仍被终止则给出环境修法
-      if (err && isSystemKilled(err, stdout, stderr)) {
+      // 超时强杀：首次超时 → 提堆+更长上限重试；重试再超时 → 明确超时诊断
+      if (err && isTimeoutKill(err) && !isOom(stderr)) {
+        const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
+        diagnostics.push(`vue-tsc 声明生成超过单次上限（${Math.round(timeoutFor(false) / 60000)} 分钟）被强杀，以提堆 + 更长上限重试。`)
+        ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
+        if (err && isTimeoutKill(err) && !isOom(stderr) && !/error TS\d+/i.test(stdout + '\n' + stderr)) {
+          fs.rmSync(outDir, { recursive: true, force: true })
+          diagnostics.push(
+            `vue-tsc 声明生成再次超时（单次上限 ${Math.round(timeoutFor(true) / 60000)} 分钟）——类型资源未产出。`,
+            '修法：用环境变量 FG_DTS_TIMEOUT_MS 提高上限（毫秒，如 3600000），或缩小暴露模块的静态依赖面。',
+          )
+          return { ok: false, diagnostics }
+        }
+      }
+      // 系统级终止（无 V8 横幅、无 TS 诊断、非超时）：重试一次；仍被终止则给出环境修法
+      if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
         diagnostics.push(`vue-tsc 声明生成进程被系统终止（signal=${err.signal ?? 'Killed'}，无 TypeScript 诊断输出），重试一次。`)
         ;({ err, stdout, stderr } = await attempt([]))
-        if (err && isSystemKilled(err, stdout, stderr)) {
+        if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
           fs.rmSync(outDir, { recursive: true, force: true })
           diagnostics.push(
             'vue-tsc 声明生成进程再次被系统终止——类型资源未产出。',

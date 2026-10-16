@@ -344,6 +344,40 @@ describe('generateTypesBundle（vue-tsc 子进程 OOM 提堆重试）', () => {
     }
   }, 30000)
 
+  it('单次生成超时强杀与编译错误区分：给出 FG_DTS_TIMEOUT_MS 修法并重试', async () => {
+    const root = makeProject('timeout-kill', {
+      'src/entry.vue': '<script setup lang="ts">defineProps<{ user: { id: string } }>();</script><template>{{ user.id }}</template>',
+      "src/env.d.ts": "declare module '*.vue' { const component: object; export default component }",
+    })
+    try { fs.symlinkSync(path.join(pluginRoot, 'node_modules', 'vue'), path.join(root, 'node_modules', 'vue'), 'dir') } catch { /* 已存在 */ }
+    const binDir = path.join(root, 'node_modules', 'vue-tsc', 'bin')
+    fs.mkdirSync(binDir, { recursive: true })
+    fs.writeFileSync(path.join(root, 'node_modules', 'vue-tsc', 'package.json'), JSON.stringify({
+      name: 'vue-tsc', version: '0.0.0-stub', bin: { 'vue-tsc': 'bin/vue-tsc.js' },
+    }))
+    // 桩：睡眠远大于测试设定的超时上限（FG_DTS_TIMEOUT_MS=400）→ 被 execFile 强杀两次
+    fs.writeFileSync(path.join(binDir, 'vue-tsc.js'), [
+      "const fs = require('node:fs')",
+      "const path = require('node:path')",
+      "fs.appendFileSync(path.join(__dirname, 'attempts.log'), '1')",
+      "setTimeout(() => {}, 5000)",
+    ].join('\n'))
+    const prev = process.env.FG_DTS_TIMEOUT_MS
+    process.env.FG_DTS_TIMEOUT_MS = '400'
+    try {
+      const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test' })
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        const text = result.diagnostics.join('\n')
+        expect(text).toContain('FG_DTS_TIMEOUT_MS')
+        expect(text).not.toContain('暴露闭包内存在编译错误')
+      }
+    } finally {
+      if (prev === undefined) delete process.env.FG_DTS_TIMEOUT_MS
+      else process.env.FG_DTS_TIMEOUT_MS = prev
+    }
+  }, 30000)
+
   it('默认堆 OOM 后以提堆参数重试并采纳成功结果', async () => {
     const root = makeProject('oom-retry', {
       'src/entry.vue': '<script setup lang="ts">defineProps<{ user: { id: string } }>();</script><template>{{ user.id }}</template>',
