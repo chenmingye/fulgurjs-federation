@@ -167,7 +167,8 @@ search/hash are **preserved verbatim**: repeated query keys, encoding, non-ASCII
 - Vue Router 4: push/replace settling with a `NavigationFailure` is a real cancellation;
 - React Router data router: wait on the real blocker's cancel/proceed; `canNavigate` is only an optional early rejection;
 - After cancellation, URL, history, and the sub app location stay at the last confirmed state, and **there is never an automatic retry** (a function return from `router.push` never poses as a committed success);
-- Guard/loader/port execution errors reject the Promise (`MFU-033`, with cause preserved) and are never disguised as cancelled.
+- Guard/loader/port execution errors reject the Promise (`MFU-033`, with cause preserved) and are never disguised as cancelled;
+- **Initial-navigation exception**: when the sub app's guard redirects the initial location (including same-path normalization such as `next({ ...to, replace: true })`), the host is synced to the sub app's final location and the navigation is not treated as cancelled; `MFU-033` is only raised when the guard explicitly rejects and the location is unchanged.
 
 ### Navigation and errors
 

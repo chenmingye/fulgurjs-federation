@@ -112,6 +112,50 @@ describe('URL 同步回归', () => {
     await expect(createVueBridgeNavigation(hostRouter).navigate(loc('/two'), 'push')).rejects.toBe(cause)
   })
 
+  // 回归：Jeecg/芋道系守卫首轮导航先加载用户与动态路由，再 next({ ...to, replace: true })
+  // 做同路径规范化；vue-router 返回 duplicated 失败，旧实现把它当“初始路由被守卫取消”误杀。
+  it('Vue 初始导航守卫同路径 replace 规范化（duplicated）不误报 MFU-033', async () => {
+    const h = host()
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }] })
+    let first = true
+    router.beforeEach((to) => {
+      if (first) { first = false; return { ...to, replace: true } }
+    })
+    const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose)
+    await expect(conn.ready).resolves.toBeUndefined()
+    expect(router.currentRoute.value.fullPath).toBe('/list')
+  })
+
+  // 回归：初始导航守卫重定向到其他位置时，以子应用最终位置为准同步宿主（与 React 初始 loader redirect 同语义），
+  // 不能把真实重定向误报成取消。
+  it('Vue 初始守卫重定向到其他路径：同步宿主 replace 而不是 MFU-033', async () => {
+    const h = host()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/home', component: { template: '<div />' } },
+        { path: '/:pathMatch(.*)*', component: { template: '<div />' } }
+      ]
+    })
+    let first = true
+    router.beforeEach((to) => {
+      if (first && to.path === '/list') { first = false; return '/home' }
+    })
+    const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose)
+    await expect(conn.ready).resolves.toBeUndefined()
+    expect(router.currentRoute.value.fullPath).toBe('/home')
+    expect(h.requests).toEqual([{ pathname: '/approval/home', action: 'replace' }])
+  })
+
+  // 回归：守卫明确拒绝（aborted 且位置未变）仍须报 MFU-033，不能为了降噪吞掉真取消。
+  it('Vue 初始守卫明确拒绝仍报 MFU-033', async () => {
+    const h = host()
+    const router = vue()
+    router.beforeEach(() => false)
+    const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose)
+    await expect(conn.ready).rejects.toMatchObject({ code: 'MFU-033' })
+  })
+
   it('Vue 取消返回真实 NavigationFailure，后续 replace 可恢复', async () => {
     const h = host(); const router = vue(); const conn = connectVueBridgeRouter(h.channel, router); cleanups.push(conn.dispose); await conn.ready
     const native = h.port.navigate

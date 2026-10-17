@@ -168,7 +168,8 @@ search/hash **原样保留**：重复 query 键、编码、中文、片段不二
 - Vue Router 4：push/replace 落定 `NavigationFailure` 即真实取消；
 - React Router data router：等待真实 blocker 的取消/放行；`canNavigate` 仅为可选提前拒绝；
 - 取消后 URL、历史、子应用位置保持最后确认状态，**绝不自动重试**（`router.push` 的函数返回不冒充提交成功）；
-- 守卫/加载器/端口执行异常拒绝 Promise（`MFU-033`，保留 cause），不会伪装 cancelled。
+- 守卫/加载器/端口执行异常拒绝 Promise（`MFU-033`，保留 cause），不会伪装 cancelled；
+- **初始导航例外**：子应用守卫对初始位置做重定向（包括 `next({ ...to, replace: true })` 这类同路径规范化）时，按子应用最终位置同步宿主，不算取消；只有守卫明确拒绝且位置未变化才报 `MFU-033`。
 
 ### 导航与错误
 

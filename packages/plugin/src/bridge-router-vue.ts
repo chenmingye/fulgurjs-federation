@@ -84,16 +84,32 @@ export function connectVueBridgeRouter(routing: BridgeChildRoute, router: VueRou
   }
   const sync = connectChildNavigation(routing, (loc) => ready.then(() => apply(loc)), collapseConsecutiveReports(report))
   const init = routing.getLocation()
-  const ready: Promise<void> = push.call(router, init.pathname + init.search + init.hash).then(async (failure) => {
+  const initPath = init.pathname + init.search + init.hash
+  const ready: Promise<void> = push.call(router, initPath).then(async (failure) => {
     if (disposed) return
-    if (routing.getLocation().pathname + routing.getLocation().search + routing.getLocation().hash !== init.pathname + init.search + init.hash) {
-      await apply(routing.getLocation())
+    const hostNow = routing.getLocation()
+    if (hostNow.pathname + hostNow.search + hostNow.hash !== initPath) {
+      await apply(hostNow)
       return
     }
-    if (failure) throw routingSyncError(spec, '子应用初始路由被守卫取消。', [])
-    const target = locationFromPath(router.currentRoute.value.fullPath)
-    if (router.currentRoute.value.fullPath !== init.pathname + init.search + init.hash) {
-      await routing.navigate(target, 'replace')
+    const childNow = router.currentRoute.value.fullPath
+    if (failure) {
+      // 已到达初始目标：同路径 replace 规范化（duplicated），或宿主同目标广播取代了本次初始导航——
+      // 位置一致即初始化成功，不是“被取消”。
+      if (childNow === initPath) return
+      // 子应用已解析出真实路由（守卫重定向/子应用新导航取代）：以子应用最终位置为准同步宿主，
+      // 与 React 初始 loader redirect 同语义。守卫明确拒绝时 matched 为空，仍按取消报 MFU-033。
+      const matched = (router.currentRoute.value as { matched?: unknown[] }).matched
+      const childResolved = !Array.isArray(matched) || matched.length > 0
+      if (childResolved) {
+        await routing.navigate(locationFromPath(childNow), 'replace')
+        await apply(routing.getLocation())
+        return
+      }
+      throw routingSyncError(spec, '子应用初始路由被守卫取消。', [])
+    }
+    if (childNow !== initPath) {
+      await routing.navigate(locationFromPath(childNow), 'replace')
       await apply(routing.getLocation())
     }
   }).catch((cause) => {
