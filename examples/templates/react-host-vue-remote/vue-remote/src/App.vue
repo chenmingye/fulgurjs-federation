@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import type { BridgeVueProps } from './application'
+import type { BridgeVueProps } from './fulgurjs/exposes/application'
 const props = defineProps<BridgeVueProps>()
 const route = useRoute()
 const router = useRouter()

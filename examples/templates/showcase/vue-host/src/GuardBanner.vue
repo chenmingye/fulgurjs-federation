@@ -3,7 +3,7 @@
  * examples/templates/showcase/vue-host/src/GuardBanner.vue — 宿主守卫确认横幅（异步 beforeEach 等待用户选择）。
  * 「取消」= Vue Router 导航失败 → 通道收到 cancelled，URL/子应用位置保持不变。
  */
-import { guardPending, resolveGuard } from './guard'
+import { guardPending, resolveGuard } from './fulgurjs/host/guard'
 </script>
 
 <template>

@@ -13,5 +13,5 @@ export default async function setup(_context: RemoteSetupContext): Promise<void>
 
 // 零参 loader 形态：组件只在真实渲染时加载（Vue 适配器注册时自动包 defineAsyncComponent）
 export const globalComponents: RemoteSetupModule['globalComponents'] = {
-  SfFormSection: () => import('../exposes/form/FormSection.vue'),
+  SfFormSection: () => import('./exposes/form/FormSection.vue'),
 }

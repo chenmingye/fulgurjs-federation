@@ -6,7 +6,7 @@
 import { ref } from 'vue'
 import { clearAppContext } from '@fulgurjs/federation/runtime'
 import { createVueBridgeApp } from '@fulgurjs/federation/vue'
-import { getLatestHostContext, login, logout } from './host-session'
+import { getLatestHostContext, login, logout } from './fulgurjs/host/session'
 
 // 工厂选项：retries 透传 loadRemote；getContext 在每次实际加载前同步取最新快照
 const RemoteReactApp = createVueBridgeApp('bridge-react-remote/bridge', {

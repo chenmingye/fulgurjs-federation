@@ -1,4 +1,4 @@
-import ClickButton from './exposes/ClickButton'
+import ClickButton from './fulgurjs/exposes/ClickButton'
 
 /** 独立运行壳：联邦消费方按 exposes 加载下列模块 */
 export default function App() {

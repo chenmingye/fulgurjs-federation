@@ -19,7 +19,7 @@ pnpm --dir host dev
 | --- | --- |
 | `fulgurjs.config.ts` | **联邦唯一声明**：remotes 地址（dev/prod）、页面表 `pages`、前缀归属 `remotePrefixes` |
 | `vite.config.ts` | 标准 Vite 配置，`federation(fulgurjsConfig)` 挂载插件 |
-| `src/remotePages.tsx` | `createReactHostPages({ pages, remotePrefixes })`（模块顶层一次）；`component(spec)` 取远程页面组件 |
+| `src/fulgurjs/host/remotePages.tsx` | `createReactHostPages({ pages, remotePrefixes })`（模块顶层一次）；`component(spec)` 取远程页面组件 |
 | `src/App.tsx` | `remoteComponent('react-remote/ClickButton')` 消费单个远程组件 |
 | `src/pages/UtilsDemo.tsx` | `useLoadRemote('react-remote/utils')` 调用普通 TS 模块 |
 | `src/main.tsx` | react-router 路由；参数页把 `params`/`query` 透传给远程组件 |

@@ -96,14 +96,14 @@ Vue 宿主一一对应（StrictMode 双 effect 语义下首次挂载计数会各
 
 | API | 导出入口 | 本 demo 使用位置 | 插件源码（packages/plugin/src） |
 |---|---|---|---|
-| `defineApplication(factory)` | `@fulgurjs/federation/vue` | [vue-remote/src/application.ts](vue-remote/src/application.ts) | `bridge-app-vue.ts` |
-| `defineApplication(factory)` | `@fulgurjs/federation/react` | [react-remote/src/application.tsx](react-remote/src/application.tsx) | `bridge-app-react.ts` |
-| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | [vue-host/src/pages/AppBridgePage.vue](vue-host/src/pages/AppBridgePage.vue) | `bridge-host-vue.ts` |
-| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | [react-host/src/pages/AppBridgePage.tsx](react-host/src/pages/AppBridgePage.tsx) | `bridge-host-react.ts` |
+| `defineApplication(factory)` | `@fulgurjs/federation/vue` | [vue-remote/src/fulgurjs/exposes/application.ts](vue-remote/src/fulgurjs/exposes/application.ts) | `bridge-app-vue.ts` |
+| `defineApplication(factory)` | `@fulgurjs/federation/react` | [react-remote/src/fulgurjs/exposes/application.tsx](react-remote/src/fulgurjs/exposes/application.tsx) | `bridge-app-react.ts` |
+| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | [vue-host/src/fulgurjs/host/RemoteApplication.vue](vue-host/src/fulgurjs/host/RemoteApplication.vue) | `bridge-host-vue.ts` |
+| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | [react-host/src/fulgurjs/host/RemoteApplication.tsx](react-host/src/fulgurjs/host/RemoteApplication.tsx) | `bridge-host-react.ts` |
 | `remoteComponent(spec, options)` | `@fulgurjs/federation/vue` / `@fulgurjs/federation/react` | vue-host / react-host 的 `pages/ComponentLevelPage.*` | `vue-adapter.ts` / `react-adapter.ts` |
-| `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/vue` / `@fulgurjs/federation/react` | 宿主 `host-session.ts` + 桥接层内部写入；子应用 `App.vue` / `ChildLayout.tsx` 读取 | `context.ts` |
+| `provideAppContext` / `clearAppContext` / `getAppContext` | `@fulgurjs/federation/vue` / `@fulgurjs/federation/react` | 宿主 `src/fulgurjs/host/session.ts` + 桥接层内部写入；子应用 `App.vue` / `ChildLayout.tsx` 读取 | `context.ts` |
 | 受控 `sessionKey`（undefined/null/非空串） | 桥接组件 prop | 两宿主 `AppBridgePage` 的 `handleSwitchSession` / `handleRemount` | `bridge-core.ts`（`assertControlledSessionKey`、`resolveBridgeContext`） |
-| `getContext`（同步纯 getter 快照） | 工厂选项 | 两宿主 `host-session.ts` 的 `getLatestHostContext` | `bridge-core.ts` |
+| `getContext`（同步纯 getter 快照） | 工厂选项 | 两宿主 `src/fulgurjs/host/session.ts` 的 `getLatestHostContext` | `bridge-core.ts` |
 | `exposes: { './bridge' }` 契约约定 | fulgurjs.config.ts | 四工程的 `fulgurjs.config.ts` | 插件容器/manifest 逻辑 |
 | shared singleton（同框架单键） | fulgurjs.config.ts | vue 对：`vue`；react 对：`react` + `react-dom` | 插件 shared 协商 |
 
@@ -149,4 +149,4 @@ node examples/scripts/serve-prod.mjs --scenario same-frame
 
 入口为 `http://localhost:6394/sf-vue-host/`，React 宿主为同端口 `/sf-react-host/`。四应用的 dist 按 scenarios.json.production 挂载；无需保留 dev server。构建前按本文各工程说明安装依赖，Ctrl+C 停本次生产服务。
 
-四个应用均从各自 src/application 启动；子应用独立运行与桥接使用同一套工单组件和路由。src/main 只调用 start，exposes 直接指向 application，不另保留 bridge 转发文件。
+四个应用均从各自 src/fulgurjs/host/application 或 src/fulgurjs/exposes/application 启动；子应用独立运行与桥接使用同一套工单组件和路由。src/main 只调用 start，exposes 直接指向 application，不另保留 bridge 转发文件。

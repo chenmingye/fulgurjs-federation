@@ -84,14 +84,14 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 
 | 插件公开 API | 入口 | 本演示接线位置 |
 |---|---|---|
-| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | `vue-host/src/pages/BridgeReactPage.vue`（`<RemoteReactBridge :routing="routing" :app-props="appProps" />`） |
-| `createVueBridgeNavigation(router)` | `@fulgurjs/federation/vue` | `vue-host/src/routing.ts`（宿主导航端口，application.ts 组装后 `initBridgeRouting(router)`） |
-| `defineApplication(factory, { routing: true })` → 返回 `{ app, router }` | `@fulgurjs/federation/vue` | `vue-remote/src/application.ts`（根据 mode 选择 web/memory history；插件等待初始路由并安装） |
-| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | `react-host/src/pages/BridgeVuePage.tsx`（`<RemoteVueBridge routing={routing} appProps={appProps} />`） |
-| `createReactBridgeNavigation(router, { canNavigate?, basename? })`（仅 data router） | `@fulgurjs/federation/react` | `react-host/src/routing.ts`（`createBrowserRouter` 实例组装后初始化） |
-| `createReactBridgeRouter(routing, routes, { signal })` → `{ element, dispose }` 作为工厂返回值 | `@fulgurjs/federation/react` | `react-remote/src/application.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
-| `defineApplication(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/vue`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/application.ts`、`react-remote/src/application.tsx`（实例 mode/signal；独立与桥接复用同一套路由） |
-| `BridgeHostRouting`（`{ basePath, navigation }` 组件 prop，独立控制通道不进 appProps） | 类型面见 [API 参考](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/api.md) | `vue-host/src/routing.ts`、`react-host/src/routing.ts`（basePath 常量 `BRIDGE_BASE_PATH`） |
+| `createVueBridgeApp(spec, options)` | `@fulgurjs/federation/vue` | `vue-host/src/fulgurjs/host/BridgeReactPage.vue`（`<RemoteReactBridge :routing="routing" :app-props="appProps" />`） |
+| `createVueBridgeNavigation(router)` | `@fulgurjs/federation/vue` | `vue-host/src/fulgurjs/host/routing.ts`（宿主导航端口，application.ts 组装后 `initBridgeRouting(router)`） |
+| `defineApplication(factory, { routing: true })` → 返回 `{ app, router }` | `@fulgurjs/federation/vue` | `vue-remote/src/fulgurjs/exposes/application.ts`（根据 mode 选择 web/memory history；插件等待初始路由并安装） |
+| `createReactBridgeApp(spec, options)` | `@fulgurjs/federation/react` | `react-host/src/fulgurjs/host/BridgeVuePage.tsx`（`<RemoteVueBridge routing={routing} appProps={appProps} />`） |
+| `createReactBridgeNavigation(router, { canNavigate?, basename? })`（仅 data router） | `@fulgurjs/federation/react` | `react-host/src/fulgurjs/host/routing.ts`（`createBrowserRouter` 实例组装后初始化） |
+| `createReactBridgeRouter(routing, routes, { signal })` → `{ element, dispose }` 作为工厂返回值 | `@fulgurjs/federation/react` | `react-remote/src/fulgurjs/exposes/application.tsx`（`/` 经 loader `redirect('/orders')` 以 replace 规范化） |
+| `defineApplication(factory, { routing: true })`（协议声明，缺失即 MFU-031） | `@fulgurjs/federation/vue`（Vue）/ `@fulgurjs/federation/react`（React） | `vue-remote/src/fulgurjs/exposes/application.ts`、`react-remote/src/fulgurjs/exposes/application.tsx`（实例 mode/signal；独立与桥接复用同一套路由） |
+| `BridgeHostRouting`（`{ basePath, navigation }` 组件 prop，独立控制通道不进 appProps） | 类型面见 [API 参考](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/reference/api.md) | `vue-host/src/fulgurjs/host/routing.ts`、`react-host/src/fulgurjs/host/routing.ts`（basePath 常量 `BRIDGE_BASE_PATH`） |
 | `BridgeChildRoute` / `BridgeLocation`（通道与位置契约） | `@fulgurjs/federation/vue`、`@fulgurjs/federation/react` | 由插件随 mount 第三参数注入子应用；两端仓库源码 `packages/plugin/src/bridge-router-core.ts` |
 
 ## 配置要点（复刻到其他工程时必读）
@@ -101,7 +101,7 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' http://localhost:5335/@fu
 - **vue-remote 的 vue-router 双实例防护**：`resolve.dedupe: ['vue', 'vue-router']` + `optimizeDeps.exclude: ['vue-router']`（vue-router 纯 ESM，exclude 后其 vue 导入被插件 dev 改写到 shared 门面；同 `fixtures/remote-a`）。
 - **react-remote 的 react-router-dom 必须正常进预构建**（同 e2e 实测的 `fixtures/remote-react`：不 exclude、不 alias）：其传递依赖 cookie 是 CJS-only 包，exclude 后浏览器报 `does not provide an export named 'parse'`；预构建内的 react 导入不会双实例——插件 dev 会向预构建注入 shared 键外部化 resolver（`fulgurjs:optimize-shared-external`）。
 - **远程类型自动同步**：宿主 dev 启动时插件自动同步远程声明闭包到 `src/fulgurjs/types/<远程名>/`（ambient 声明 + 类型注册表），普通 import 与字符串 API 共用同一套类型；跨框架（React 宿主消费 Vue 远程）同样工作，无需 tsconfig paths 或 exclude。CI 在 typecheck 前运行 `pnpm run types`（= `fulgurjs types`）。
-- **守卫与 go 的交互**：守卫按目标路径拦截（不区分会话内触发方式），子应用 `go(-1)` 回到受守卫页面同样会弹确认；Vue 宿主守卫在任何新导航开始时自动作废旧待确认（`vue-host/src/guard.ts` 的 `invalidatePending`），避免确认横幅悬挂。两宿主守卫都**不拦截本会话的首跳**：整页刷新的深链恢复直接渲染（操作 15），Vue 宿主以 `router.isReady()` 解除首跳武装，与 React 宿主 `useBlocker` 随组件挂载生效的语义对齐。
+- **守卫与 go 的交互**：守卫按目标路径拦截（不区分会话内触发方式），子应用 `go(-1)` 回到受守卫页面同样会弹确认；Vue 宿主守卫在任何新导航开始时自动作废旧待确认（`vue-host/src/fulgurjs/host/guard.ts` 的 `invalidatePending`），避免确认横幅悬挂。两宿主守卫都**不拦截本会话的首跳**：整页刷新的深链恢复直接渲染（操作 15），Vue 宿主以 `router.isReady()` 解除首跳武装，与 React 宿主 `useBlocker` 随组件挂载生效的语义对齐。
 
 ## 构建 / 类型检查
 
@@ -145,10 +145,10 @@ pnpm prod
 
 | 文件 | 职责 |
 |---|---|
-| `react-host/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
-| `react-remote/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
-| `vue-host/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
-| `vue-remote/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `react-host/src/fulgurjs/host/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `react-remote/src/fulgurjs/exposes/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `vue-host/src/fulgurjs/host/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `vue-remote/src/fulgurjs/exposes/application.ts` | 本应用唯一装配；main 只负责调用 start |
 | `react-host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `react-remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `vue-host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |

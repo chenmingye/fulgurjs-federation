@@ -11,8 +11,8 @@ export default {
   name: 'sf-react-remote',
   filename: 'fulgurjs-remoteEntry.js',
   exposes: {
-    './bridge': './src/application.tsx',
-    './components/TicketSummary': './src/exposes/TicketSummary.tsx',
+    './bridge': './src/fulgurjs/exposes/application.tsx',
+    './components/TicketSummary': './src/fulgurjs/exposes/TicketSummary.tsx',
   },
   shared: {
     react: { singleton: true },

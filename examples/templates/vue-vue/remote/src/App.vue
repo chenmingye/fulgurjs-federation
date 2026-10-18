@@ -12,5 +12,5 @@
 </template>
 
 <script setup lang="ts">
-import ClickButton from './exposes/ClickButton.vue'
+import ClickButton from './fulgurjs/exposes/ClickButton.vue'
 </script>

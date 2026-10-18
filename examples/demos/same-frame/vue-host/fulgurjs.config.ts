@@ -17,7 +17,7 @@ export default {
     },
   },
   exposes: {
-    './form/ApprovalForm': './src/exposes/form/ApprovalForm.vue',
+    './form/ApprovalForm': './src/fulgurjs/exposes/form/ApprovalForm.vue',
   },
   setup: './src/fulgurjs/setup.ts',
   shared: {

@@ -34,9 +34,9 @@ pnpm dev                       # 同时启动远程和宿主
 
 | 功能 | 位置 |
 | --- | --- |
-| 远程可点击组件（Hooks 计数） | `remote/src/exposes/ClickButton.tsx`，宿主首页消费 |
-| 普通 TS 模块调用（useLoadRemote） | `remote/src/exposes/utils.ts`，`host/src/pages/UtilsDemo.tsx` |
-| 联邦页面（远程首页 / 带参数详情页） | `remote/src/exposes/pages/`，页面表见 `host/fulgurjs.config.ts` |
+| 远程可点击组件（Hooks 计数） | `remote/src/fulgurjs/exposes/ClickButton.tsx`，宿主首页消费 |
+| 普通 TS 模块调用（useLoadRemote） | `remote/src/fulgurjs/exposes/utils.ts`，`host/src/pages/UtilsDemo.tsx` |
+| 联邦页面（远程首页 / 带参数详情页） | `remote/src/fulgurjs/exposes/pages/`，页面表见 `host/fulgurjs.config.ts` |
 | 宿主导航 + 懒加载（不批量预取） | `host/src/main.tsx`（路由级按需加载） |
 | 默认加载/错误/恢复占位 | 插件内置（`remoteComponent` / `createReactHostPages`），示例不自建错误组件 |
 
@@ -100,8 +100,8 @@ pnpm prod
 
 | 文件 | 职责 |
 |---|---|
-| `host/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
-| `remote/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `host/src/fulgurjs/host/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `remote/src/fulgurjs/exposes/application.tsx` | 本应用唯一装配；main 只负责调用 start |
 | `host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `scripts/dev.mjs` / `scripts/prod.mjs` | 统一开发/生产启动器；业务接入不复制它们到应用源码 |

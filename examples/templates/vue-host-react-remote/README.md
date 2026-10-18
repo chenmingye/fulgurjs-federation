@@ -39,8 +39,8 @@ pnpm prod
 
 | 文件 | 职责 |
 |---|---|
-| `react-remote/src/application.tsx` | 本应用唯一装配；main 只负责调用 start |
-| `vue-host/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `react-remote/src/fulgurjs/exposes/application.tsx` | 本应用唯一装配；main 只负责调用 start |
+| `vue-host/src/fulgurjs/host/application.ts` | 本应用唯一装配；main 只负责调用 start |
 | `react-remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `vue-host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `scripts/dev.mjs` / `scripts/prod.mjs` | 统一开发/生产启动器；业务接入不复制它们到应用源码 |

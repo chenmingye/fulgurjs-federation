@@ -17,10 +17,10 @@ pnpm --dir remote dev
 
 | expose 键 | 源文件 | 说明 |
 | --- | --- | --- |
-| `./ClickButton` | `src/exposes/ClickButton.tsx` | 可点击计数按钮（useState 本地状态） |
-| `./utils` | `src/exposes/utils.ts` | 普通 TS 模块：`sumNumbers` / `DEMO_ANSWER` / `formatPrice` |
-| `./pages/HomePage` | `src/exposes/pages/HomePage.tsx` | 联邦页面：远程首页 |
-| `./pages/DetailPage` | `src/exposes/pages/DetailPage.tsx` | 联邦页面：详情页（接收宿主路由的 `id` / `tab` props） |
+| `./ClickButton` | `src/fulgurjs/exposes/ClickButton.tsx` | 可点击计数按钮（useState 本地状态） |
+| `./utils` | `src/fulgurjs/exposes/utils.ts` | 普通 TS 模块：`sumNumbers` / `DEMO_ANSWER` / `formatPrice` |
+| `./pages/HomePage` | `src/fulgurjs/exposes/pages/HomePage.tsx` | 联邦页面：远程首页 |
+| `./pages/DetailPage` | `src/fulgurjs/exposes/pages/DetailPage.tsx` | 联邦页面：详情页（接收宿主路由的 `id` / `tab` props） |
 
 宿主如何调用 `./utils`（宿主侧代码）：
 

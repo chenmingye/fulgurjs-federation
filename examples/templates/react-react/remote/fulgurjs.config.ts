@@ -8,10 +8,10 @@ export default {
   name: 'react-remote',
   filename: 'fulgurjs-remoteEntry.js',
   exposes: {
-    './ClickButton': './src/exposes/ClickButton.tsx',
-    './utils': './src/exposes/utils.ts',
-    './pages/HomePage': './src/exposes/pages/HomePage.tsx',
-    './pages/DetailPage': './src/exposes/pages/DetailPage.tsx',
+    './ClickButton': './src/fulgurjs/exposes/ClickButton.tsx',
+    './utils': './src/fulgurjs/exposes/utils.ts',
+    './pages/HomePage': './src/fulgurjs/exposes/pages/HomePage.tsx',
+    './pages/DetailPage': './src/fulgurjs/exposes/pages/DetailPage.tsx',
   },
   shared: {
     react: { singleton: true },

@@ -1,5 +1,11 @@
 # 当前发布说明
 
+## 6.11.7
+
+- 新增接入代码统一集中在 src/fulgurjs：host/ 管宿主挂载与上下文，exposes/ 管远程装配与对外内容，types/ 管自动声明；根部只按需保留 setup.ts。
+- init 接入计划默认生成 exposes/application 和 host/RemoteApplication，迁移最小入口时同步重定位 App、样式等相对导入，支持自定义嵌套入口，保留冲突保护和重复执行语义。
+- 五个可复制模板及同框架演示同步目录、导入与配置，模板目录门禁防止接线重新散落；中英文接入指南和 AI 接手规则同步。
+
 ## 6.11.6
 
 - types 命令识别应用实际 tsconfig 纳入的 Vite 虚拟模块环境声明及 project references，不再把已有 client 声明的虚拟 ID 误报为缺失 npm 包；缺失或不在配置输入内的声明仍严格报错，支持声明的单星号模块模式。

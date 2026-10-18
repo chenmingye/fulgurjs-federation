@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import IdentityBadges from './components/IdentityBadges'
 import ComponentLevelPage from './pages/ComponentLevelPage'
-import AppBridgePage from './pages/AppBridgePage'
+import AppBridgePage from './fulgurjs/host/RemoteApplication'
 import ComparePage from './pages/ComparePage'
 
 /**

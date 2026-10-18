@@ -9,7 +9,7 @@ export default {
   name: 'vue-remote',
   filename: 'fulgurjs-remoteEntry.js',
   exposes: {
-    './bridge': './src/application.ts',
+    './bridge': './src/fulgurjs/exposes/application.ts',
   },
   shared: {
     vue: { singleton: true },

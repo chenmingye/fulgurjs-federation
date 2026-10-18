@@ -91,9 +91,15 @@ npm run test:examples
 
 ### 接入目录与术语
 
-- 已有工程的完整接入实现默认集中在 `src/fulgurjs/`：`host/` 放宿主挂载、会话与上下文；`exposes/` 放对外组件和其 Provider/共享配置；`types/` 放自动声明。外围只留 `setup.ts`，只创建用得到的目录。项目配置、原有业务文件和统一启动入口保留原项目位置，不复制业务页面或启动流程。CLI 最小输出及扩展方式以已有应用接入指南为准。
 - 新 Vue 组件推荐 `.vue` + `<script setup lang="ts">`；无模板逻辑使用 `.ts`，React JSX 使用 `.tsx`；生成声明不手写。模块级共享状态可以保留普通 script，不机械改写原 defineComponent。
 - 文件按职责命名，如 `host/RemoteApplication.vue`、`exposes/FormProviders.vue`；说明中区分宿主/远程/消费方与独立启动/嵌入运行，不用“应用一/应用二”代替实际角色。目录、格式与术语详见 `docs/zh/guide/existing-apps.md`。
+
+### 新增接入文件的统一目录（宿主与远程都适用）
+
+- 新增插件接线集中在 `src/fulgurjs/`：`host/` 管消费、挂载和宿主上下文；`exposes/` 管对外入口及所需装配；`types/` 由插件自动同步。根部只按需保留 `setup.ts`，不散放辅助文件，不创建无用的空目录或空 setup。
+- 仅宿主的统一装配用 `host/application.ts(x)`；完整远程应用（包括装配本身也被远程加载的宿主）用 `exposes/application.ts(x)`。运行模式、接收宿主会话等辅助代码与提供方装配放在 `exposes/`，不在 src 根部新建 application/mode/session 或转发壳。
+- 框架既有入口、业务页面及根配置保留原位置；main 只调用统一装配，配置引用实际文件。不要为集中目录复制业务树。移动时同步静态/动态 import、别名、exposes、setup、声明生成路径与文档。
+- CLI、模板、公开示例和后续私有验收的新增代码采用同一约定；不能只更新目录图，生成结果仍沿用散落路径。新增 Vue 组件优先 `.vue` + `<script setup lang="ts">`，React 组件 `.tsx`，无 JSX 的逻辑 `.ts`。
 
 ### 注释技能与接入代码可读性
 

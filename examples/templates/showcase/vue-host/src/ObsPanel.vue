@@ -7,8 +7,8 @@
 import { computed, getCurrentInstance, onMounted, onUnmounted, ref, watch } from 'vue'
 import { hasBridgeMount } from '@fulgurjs/federation/vue'
 import { useRoute } from 'vue-router'
-import { navLog, mountCount } from './demo-log'
-import { BRIDGE_BASE_PATH } from './routing'
+import { navLog, mountCount } from './fulgurjs/host/demo-log'
+import { BRIDGE_BASE_PATH } from './fulgurjs/host/routing'
 
 // 宿主自己是独立 app；子应用挂载不会改变宿主的模式。
 const bridged = hasBridgeMount(getCurrentInstance()?.appContext.app)

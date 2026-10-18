@@ -10,7 +10,7 @@
 | Authentication/session | Explicit host context/sessionKey | No mandatory session/context files for apps without this need |
 | Global components/ancestor injection | Declare required setup.globalComponents/pageProviders | Do not wrap every component in the whole business app |
 
-Directory names are optional. A small host can keep mounting and context in its existing view. Examples of different APIs are not instructions to create several directory trees.
+Use the layout below for new integration code. Existing business views may call the API directly; keep new wiring and helpers together instead of creating separate trees for each API example.
 
 ## Keep integration files together
 
@@ -20,19 +20,25 @@ When an existing project needs several integration files, place them under `src/
 src/fulgurjs/
 ├── setup.ts                    # Provider environment declaration
 ├── host/                       # How the host mounts remote applications
+│   ├── application.ts          # Host-only bootstrap (.tsx for React)
 │   ├── RemoteApplication.vue   # Mount view, session and navigation wiring
 │   ├── context.ts              # Optional remote context
 │   └── session.ts              # Optional host login generation
 ├── exposes/                    # What this project provides to consumers
+│   ├── application.ts          # Remote application factory, standalone and embedded
+│   ├── mode.ts                 # Only if existing modules need the execution mode
+│   ├── session.ts              # Optional incoming host session
 │   ├── OrderForm.vue           # Example business component entry
 │   ├── FormProviders.vue       # Optional ancestor environment
 │   └── theme.ts                # Optional theme shared with standalone entry
 └── types/                      # Automatically synchronized remote declarations
 ```
 
-The `exposes/` name corresponds to the configuration's `exposes` field. Host mounting components belong in `host/`; keep only `setup.ts` at the integration directory root. Do not scatter Providers, bridge views or integration helpers elsewhere. These are organizational conventions, not automatic discovery rules: moving files requires updating actual imports and configured `setup`/`exposes` paths. The minimal CLI output locations are documented by the commands below. When expanding that output into this structure, move the references too; do not keep forwarding shells at old locations.
+The `exposes/` name corresponds to the configuration's `exposes` field. Host mounting components belong in `host/`; keep only `setup.ts` at the integration directory root. Do not scatter Providers, bridge views or integration helpers elsewhere. These are organizational conventions, not automatic discovery rules: moving files requires updating actual imports and configured `setup`/`exposes` paths. Both `init --kind app --plan` and `create` templates follow this layout. Do not add application, mode or session wiring at the src root, or leave forwarding shells at former locations.
 
-Keep root `vite.config.ts`/`fulgurjs.config.ts`, existing `src/main.ts`, business pages, and the unified application bootstrap at their project-defined locations. Those files call the integration implementation; organizing files does not require copying pages or introducing a second bootstrap.
+Keep root `vite.config.ts`/`fulgurjs.config.ts`, existing `src/main.ts` and business pages at their project-defined locations. Those files call the integration implementation; organizing files does not require copying pages or introducing a second bootstrap.
+
+Host-only factories belong in `host/application.ts(x)`. Remotely loaded factories belong in `exposes/application.ts(x)`. When the host application factory is also exposed as a complete remote application, use one factory in `exposes/`, without a second host bootstrap. Create directories and `setup.ts` only when needed.
 
 ### File formats and names
 
@@ -72,7 +78,7 @@ npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://loc
 
 The default component/module mode generates configuration and connects Vite without application, menu, Provider or session files. Consume using `loadRemote('remote-a/math')` or same-framework `remoteComponent('remote-a/Button')` in an existing view, supplying required props. Start remote development servers separately. The suggested production path is `/remote-a`; check it against actual deployment/base before building.
 
-Application mode extracts supported minimal `src/main.ts(x)` entries into one `application` and exposes `./bridge`. A consumer gets `src/fulgurjs/RemoteApplication.vue` or `.tsx` to include in an existing page/route. It does not automatically enable sessions or URL synchronization: wire the real session source and one mounting prefix/navigation port when needed, following the [URL guide](url-sync.md). Child menus remain owned by the child. Cross-framework application dependency requirements are described in the [bridge guide](app-bridge.md).
+Application mode extracts supported minimal `src/main.ts(x)` entries into `src/fulgurjs/exposes/application.ts(x)` and exposes `./bridge`. A consumer gets `src/fulgurjs/host/RemoteApplication.vue` or `.tsx` to include in an existing page/route. It does not automatically enable sessions or URL synchronization: wire the real session source and one mounting prefix/navigation port when needed, following the [URL guide](url-sync.md). Child menus remain owned by the child. Cross-framework application dependency requirements are described in the [bridge guide](app-bridge.md).
 
 ### Safe automation boundaries
 
@@ -87,12 +93,14 @@ Plain `init` generates only a starter configuration; `init --config` validates a
 
 ## Vue: share one factory between two entry modes
 
+Save this factory in `src/fulgurjs/exposes/application.ts`.
+
 ```ts
 import { createApp } from 'vue'
 import { createRouter, createMemoryHistory, createWebHistory } from 'vue-router'
 import { defineApplication } from '@fulgurjs/federation/vue'
-import App from './App.vue'
-import { routes } from './router/routes'
+import App from '../../App.vue'
+import { routes } from '../../router/routes'
 
 interface AppProps { label?: string }
 export default defineApplication<AppProps>((props, { mode, signal }) => {
@@ -113,8 +121,8 @@ When existing business code has TS diagnostics unrelated to the exposed contract
 
 ```ts
 export default defineApplication<AppProps>(async (props, { mode }) => {
-  const { default: App } = await import('./App.vue')
-  const { routes } = await import('./router/routes')
+  const { default: App } = await import('../../App.vue')
+  const { routes } = await import('../../router/routes')
   const router = createRouter({
     history: mode === 'bridge'
       ? createMemoryHistory()
@@ -128,16 +136,18 @@ export default defineApplication<AppProps>(async (props, { mode }) => {
 
 Reuse the public imports and `AppProps` above, removing the top-level static App/routes imports. Load runtime-only business plugins and icon registration in the factory as well. The plugin still checks the application entry and static public declaration dependencies; runtime implementation trees are not treated as public type contracts. Browsers cache modules, but each factory invocation must create fresh app/router/store instances. Use `fulgurjs types` to verify declaration generation.
 
-App/routes are existing business code. main.ts imports the factory and calls `void application.start('#app').catch(console.error)`. Expose `./bridge` directly from `./src/application.ts`; no forwarding bridge file is needed. Standalone starts a web router and waits for isReady. Routing-enabled bridge mode connects its controlled memory router and waits for the initial deep link. Without routing enabled, a returned local memory router is also installed and awaited automatically. A missing routing channel fails explicitly.
+App/routes are existing business code. Save this factory in `src/fulgurjs/exposes/application.ts`; main.ts imports `./fulgurjs/exposes/application` and calls `void application.start('#app').catch(console.error)`. Expose `./bridge` directly from `./src/fulgurjs/exposes/application.ts`; no forwarding bridge file is needed. Standalone starts a web router and waits for isReady. Routing-enabled bridge mode connects its controlled memory router and waits for the initial deep link. Without routing enabled, a returned local memory router is also installed and awaited automatically. A missing routing channel fails explicitly.
 
 If initialization must continue after routing becomes ready, use the explicit installVueBridgeRouter flow and return only app; do not return an already installed router for a second installation. When returning app alone, the factory owns router installation/readiness.
 
 ## React: native and controlled routers in one factory
 
+Save this factory in `src/fulgurjs/exposes/application.tsx`.
+
 ```tsx
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { defineApplication, createReactBridgeRouter } from '@fulgurjs/federation/react'
-import { routes } from './routes'
+import { routes } from '../../routes'
 
 export default defineApplication((_props, { mode, routing, signal }) => {
   if (mode === 'bridge') {
@@ -206,6 +216,4 @@ Source mode executes the config only; it does not execute business modules, requ
 
 remoteComponent remains the component API. defineBridgeApp remains a current API for a custom bridge-only entry. defineApplication shares assembly when both entry modes are needed.
 
-Source demos: [Vue](../../../fixtures/application-start/vue/src/application.ts), [React](../../../fixtures/application-start/react/src/application.tsx), [README](../../../fixtures/application-start/README.md). These are maintainer fixtures using local link dependencies; public templates must use a published registry package.
-
-The five public templates and the same-frame demo now use application factories and thin main entries. They depend on the exact registry version. Install published packages as described in each README.
+Source examples: [Vue host factory](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts), [React remote factory](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx), [React host factory](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx), [template guide](../../../examples/templates/README.md). Copy whole templates and install their published registry dependencies independently.

@@ -4,8 +4,8 @@
 
 ## 按顺序读源码
 
-1. `fulgurjs.config.ts`：`./bridge` 直接 expose `src/application.tsx`，公开模块名称不受文件名称约束。
-2. `src/application.tsx`：`defineApplication` 唯一装配；独立模式用浏览器路由，桥接模式用本地 memory 路由，两者显示同一套真实页面、计数与 props。
+1. `fulgurjs.config.ts`：`./bridge` 直接 expose `src/fulgurjs/exposes/application.tsx`，公开模块名称不受文件名称约束。
+2. `src/fulgurjs/exposes/application.tsx`：`defineApplication` 唯一装配；独立模式用浏览器路由，桥接模式用本地 memory 路由，两者显示同一套真实页面、计数与 props。
 3. `src/main.tsx`：只调用 application.start，不再复制初始化或新增转发文件。
 4. `vue-host/`：宿主的挂载、会话与回调，见[组合说明](../README.md)。
 

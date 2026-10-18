@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter, isNavigationFailure } from 'vue-router'
-import { guardPending, installGuard, resolveGuard } from '../../../examples/templates/showcase/vue-host/src/guard'
+import { guardPending, installGuard, resolveGuard } from '../../../examples/templates/showcase/vue-host/src/fulgurjs/host/guard'
 it('首次 locked 深链直接恢复；后续导航的取消/放行仍是真实守卫', async () => {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/:pathMatch(.*)*', component: { render: () => null } },

@@ -34,9 +34,9 @@ pnpm dev                       # 同时启动远程和宿主
 
 | 功能 | 位置 |
 | --- | --- |
-| 远程可点击组件（计数、本地状态在远程组件内） | `remote/src/exposes/ClickButton.vue`，宿主首页消费 |
-| 普通 TS 模块调用 | `remote/src/exposes/utils.ts`，`host/src/pages/UtilsDemo.vue` |
-| 联邦页面（远程首页 / 带参数详情页） | `remote/src/exposes/pages/`，页面表见 `host/fulgurjs.config.ts` |
+| 远程可点击组件（计数、本地状态在远程组件内） | `remote/src/fulgurjs/exposes/ClickButton.vue`，宿主首页消费 |
+| 普通 TS 模块调用 | `remote/src/fulgurjs/exposes/utils.ts`，`host/src/pages/UtilsDemo.vue` |
+| 联邦页面（远程首页 / 带参数详情页） | `remote/src/fulgurjs/exposes/pages/`，页面表见 `host/fulgurjs.config.ts` |
 | 宿主导航 + 懒加载（不批量预取） | `host/src/App.vue` + `host/src/main.ts`（路由级按需加载） |
 | 默认加载/错误/恢复占位 | 插件内置（`remoteComponent` / `createHostPages`），示例不自建错误组件 |
 
@@ -45,7 +45,7 @@ pnpm dev                       # 同时启动远程和宿主
 启动后打开 <http://localhost:5214/utils-demo>（菜单「TS 模块调用」）。页面会显示真实计算结果：`sumNumbers(2, 3, 7) = 12`、`DEMO_ANSWER = 42`、`formatPrice(12.5)`，以及远程详情组件的 `id=7`、`tab=type-demo`。
 
 1. 用编辑器打开整个模板目录，启用 Vue 官方扩展 **Vue - Official**。
-2. 打开 [`host/src/type-demo.ts`](host/src/type-demo.ts)，在 `utils.` 后触发补全，或悬停 `sumNumbers`：应显示数字参数和数字返回值。类型直接来自远程，没有手写接口或显式泛型。
+2. 打开 [`host/src/fulgurjs/host/type-demo.ts`](host/src/fulgurjs/host/type-demo.ts)，在 `utils.` 后触发补全，或悬停 `sumNumbers`：应显示数字参数和数字返回值。类型直接来自远程，没有手写接口或显式泛型。
 3. 打开 [`host/src/pages/UtilsDemo.vue`](host/src/pages/UtilsDemo.vue)，在 `<RemoteDetail>` 上查看属性提示。把 `id="7"` 临时改成 `:id="7"`，应提示数字不能赋给字符串；检查后还原。
 4. 在模板根执行：
 
@@ -122,8 +122,8 @@ pnpm prod
 
 | 文件 | 职责 |
 |---|---|
-| `host/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
-| `remote/src/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `host/src/fulgurjs/host/application.ts` | 本应用唯一装配；main 只负责调用 start |
+| `remote/src/fulgurjs/exposes/application.ts` | 本应用唯一装配；main 只负责调用 start |
 | `host/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `remote/fulgurjs.config.ts` | 本应用的远程地址、exposes、实际共享依赖 |
 | `scripts/dev.mjs` / `scripts/prod.mjs` | 统一开发/生产启动器；业务接入不复制它们到应用源码 |

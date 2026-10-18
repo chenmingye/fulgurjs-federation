@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ComponentLevelPage from './pages/ComponentLevelPage.vue'
-import AppBridgePage from './pages/AppBridgePage.vue'
+import AppBridgePage from './fulgurjs/host/RemoteApplication.vue'
 import ComparePage from './pages/ComparePage.vue'
 
 /** 宿主自己的 vue-router（history 模式）：宿主 URL 是浏览器历史唯一写入方 */

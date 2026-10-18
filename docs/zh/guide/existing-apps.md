@@ -10,7 +10,7 @@
 | 登录态或会话 | 宿主明确提供 context/sessionKey | 无登录需求时不强制新建 session/context 文件 |
 | 组件依赖全局注册或祖先注入 | 按真实需要声明 setup.globalComponents/pageProviders | 普通组件不默认包装整个业务 app |
 
-目录名没有强制要求。小项目可以把宿主挂载与上下文写在已有视图中；不要因为看了多篇 API 示例就创建多套目录。
+后续接入统一推荐下面的目录结构。小项目仍可在已有业务视图调用 API；新增接线、装配和辅助组件集中管理，不因多个 API 示例再创建多套目录。
 
 ## 接入文件集中放在哪里
 
@@ -20,19 +20,25 @@
 src/fulgurjs/
 ├── setup.ts                    # 提供方环境声明，引用下方 Provider
 ├── host/                       # 宿主端：如何加载、显示远程应用
+│   ├── application.ts          # 仅作为宿主时的统一启动装配（React 用 .tsx）
 │   ├── RemoteApplication.vue   # 挂载视图，负责会话和 URL 同步接线
 │   ├── context.ts              # 传给远程的上下文（按需）
 │   └── session.ts              # 宿主登录代次（按需）
 ├── exposes/                    # 提供方：本工程对外导出的内容
+│   ├── application.ts          # 完整远程应用的统一装配（独立/嵌入共用）
+│   ├── mode.ts                 # 原业务模块需要读取运行模式时才增加
+│   ├── session.ts              # 接收宿主登录态（按需）
 │   ├── OrderForm.vue           # 对外组件入口（例名，按业务命名）
 │   ├── FormProviders.vue       # 这些组件需要的祖先环境（按需）
 │   └── theme.ts                # 独立入口和 Provider 共用的配置（按需）
 └── types/                      # 插件自动同步的远程声明，不手写、不复制 props
 ```
 
-`exposes/` 就是对外导出目录，名称对应联邦配置的 `exposes` 字段；宿主挂载组件放 `host/`。外层只保留环境声明 `setup.ts`，不要再散放 Provider、桥接组件或接入辅助文件。目录名是组织约定，不是插件自动识别规则：文件移动后必须同步真实 import、`setup`、`exposes` 路径，不能只改目录图。CLI 的最小接线输出位置以下文真实命令为准；将它扩展成上述完整结构时，同步移动引用，不保留只转发的旧文件。
+`exposes/` 就是对外导出目录，名称对应联邦配置的 `exposes` 字段；宿主挂载组件放 `host/`。外层只保留环境声明 `setup.ts`，不要再散放 Provider、桥接组件或接入辅助文件。目录名是组织约定，不是插件自动识别规则：文件移动后必须同步真实 import、`setup`、`exposes` 路径，不能只改目录图。CLI 的 `init --kind app --plan` 和 `create` 模板也采用这套分工，不在 `src/` 根部另建 application、mode、session 等接线文件，不保留旧位置的转发文件。
 
-项目根的 `vite.config.ts`、`fulgurjs.config.ts`，以及已有的 `src/main.ts`、业务页面、统一应用启动入口仍遵循原项目约定。这些原文件只调用接入目录中的实现；不用为了集中目录复制一份业务页面或两套启动流程。
+项目根的 `vite.config.ts`、`fulgurjs.config.ts`，以及已有的 `src/main.ts` 和业务页面仍遵循原项目约定。`main.ts` 只调用接入目录中的统一装配；不用为了集中目录复制一份业务页面或两套启动流程。
+
+仅作为宿主的装配放 `host/application.ts(x)`；被远程加载的装配放 `exposes/application.ts(x)`。同一份装配既启动宿主、又作为完整远程应用被加载时，共用 `exposes/application.ts(x)`，不再创建第二份 host 装配。所有目录和 `setup.ts` 都按需创建，不为目录图造空文件。
 
 ### 文件格式和名称
 
@@ -78,7 +84,7 @@ npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174
 ```bash
 # 子应用：从可识别的最小 src/main.ts(x) 提取一份 application，并 expose ./bridge
 npx fulgurjs init --plan --kind app --role provider
-# 宿主：生成 src/fulgurjs/RemoteApplication.vue 或 .tsx，放入现有页面/路由
+# 宿主：生成 src/fulgurjs/host/RemoteApplication.vue 或 .tsx，放入现有页面/路由
 npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://localhost:5174/remote-a
 ```
 
@@ -97,14 +103,14 @@ npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://loc
 
 ## Vue：两种入口复用一份装配
 
-`src/application.ts` 默认导出就是远程桥接契约，同时带独立 `start` 方法。下面的 App 和 routes 是项目原有组件与路由；守卫、状态库、i18n、指令等原装配放在同一工厂内。
+`src/fulgurjs/exposes/application.ts` 默认导出就是远程桥接契约，同时带独立 `start` 方法。下面的 App 和 routes 是项目原有组件与路由；守卫、状态库、i18n、指令等原装配放在同一工厂内。
 
 ```ts
 import { createApp } from 'vue'
 import { createRouter, createMemoryHistory, createWebHistory } from 'vue-router'
 import { defineApplication } from '@fulgurjs/federation/vue'
-import App from './App.vue'
-import { routes } from './router/routes'
+import App from '../../App.vue'
+import { routes } from '../../router/routes'
 
 interface AppProps { label?: string }
 
@@ -128,8 +134,8 @@ export default defineApplication<AppProps>((props, { mode, signal }) => {
 
 ```ts
 export default defineApplication<AppProps>(async (props, { mode }) => {
-  const { default: App } = await import('./App.vue')
-  const { routes } = await import('./router/routes')
+  const { default: App } = await import('../../App.vue')
+  const { routes } = await import('../../router/routes')
   const router = createRouter({
     history: mode === 'bridge'
       ? createMemoryHistory()
@@ -146,14 +152,14 @@ export default defineApplication<AppProps>(async (props, { mode }) => {
 已有 `main.ts` 的联邦相关部分变为：
 
 ```ts
-import application from './application'
+import application from './fulgurjs/exposes/application'
 void application.start('#app').catch(console.error)
 ```
 
 提供方配置直接指向它，不再增加 bridge.ts 转发文件：
 
 ```ts
-exposes: { './bridge': './src/application.ts' }
+exposes: { './bridge': './src/fulgurjs/exposes/application.ts' }
 ```
 
 独立模式安装 web router 并等待 isReady；桥接开启 routing 时安装同步通道并等待初始深链；不开启 routing 时，返回的本地 memory router 也由插件安装并等待，不需要手动 app.use(router)。宿主开启 URL 同步时仍需 `{ routing: true }`，没有通道会明确失败，不能自动退回一个看似正常的首页。
@@ -162,12 +168,12 @@ exposes: { './bridge': './src/application.ts' }
 
 ## React：同一工厂选择原生或受控 router
 
-React 的工厂同步返回 JSX，或 `{ element, dispose? }`。异步页面/loader 保留 React 原生行为；start 的 Promise 表示首次根提交，不表示所有请求都完成。
+下面的 React 工厂位于 `src/fulgurjs/exposes/application.tsx`。工厂同步返回 JSX，或 `{ element, dispose? }`。异步页面/loader 保留 React 原生行为；start 的 Promise 表示首次根提交，不表示所有请求都完成。
 
 ```tsx
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { defineApplication, createReactBridgeRouter } from '@fulgurjs/federation/react'
-import { routes } from './routes'
+import { routes } from '../../routes'
 
 export default defineApplication((_props, { mode, routing, signal }) => {
   if (mode === 'bridge') {
@@ -179,7 +185,7 @@ export default defineApplication((_props, { mode, routing, signal }) => {
 }, { routing: true })
 ```
 
-main.tsx 只调用 `application.start('#root')`，expose 指向 application.tsx。工厂没有 router 时直接返回 JSX 即可，不用声明 routing。
+main.tsx 从 `./fulgurjs/exposes/application` 导入，只调用 `application.start('#root')`，expose 指向 application.tsx。工厂没有 router 时直接返回 JSX 即可，不用声明 routing。
 
 ## 启动、取消和卸载
 
@@ -241,4 +247,4 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 
 普通组件仍用 remoteComponent；只需要一个自定义桥接入口时 defineBridgeApp 仍是有效当前 API。统一装配用于有独立启动与桥接两种形态的应用。
 
-源码演示：[Vue](../../../fixtures/application-start/vue/src/application.ts)、[React](../../../fixtures/application-start/react/src/application.tsx)、[目录说明](../../../fixtures/application-start/README.md)。这是维护者本地源码演示；五个公开模板与 same-frame 使用相同的统一装配写法。内部 link 工程不作为给用户的安装方式，请安装 registry 正式包。
+源码演示：[Vue 宿主装配](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts)、[React 远程装配](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx)、[React 宿主装配](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx)、[模板入口](../../../examples/templates/README.md)。模板使用 registry 正式包，可整目录复制后独立安装。

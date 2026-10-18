@@ -97,6 +97,19 @@ for (const template of ['vue-vue', 'react-react', 'vue-host-react-remote', 'reac
     if (ports.has(app.port)) templateErrors.push(`${template}: dev.config.json 端口重复 ${app.port}`)
     ports.add(app.port)
     const appDir = path.join(templateDir, app.dir)
+    // 接入代码的实际落点也受门禁约束，避免 README 推荐集中管理，模板却继续散放。
+    const src = path.join(appDir, 'src')
+    for (const scattered of ['application.ts', 'application.tsx', 'host-session.ts', 'bridge-mode.ts', 'bridge-session.ts', 'exposes']) {
+      if (fs.existsSync(path.join(src, scattered))) templateErrors.push(`${template}/${app.dir}: 接入文件 ${scattered} 应归入 src/fulgurjs/host 或 exposes`)
+    }
+    const integration = path.join(src, 'fulgurjs')
+    if (fs.existsSync(integration)) {
+      for (const entry of fs.readdirSync(integration, { withFileTypes: true })) {
+        if (!(entry.isDirectory() ? ['host', 'exposes', 'types'].includes(entry.name) : entry.name === 'setup.ts')) {
+          templateErrors.push(`${template}/${app.dir}: src/fulgurjs/${entry.name} 未按 host/exposes/types 与 setup.ts 归类`)
+        }
+      }
+    }
     if (!fs.existsSync(path.join(appDir, 'package.json'))) templateErrors.push(`${template}: dev.config.json 指向的 ${app.dir} 缺少 package.json`)
     const scenarioPort = scenarioPortByDir.get(appDir)
     if (scenarioPort !== undefined && scenarioPort !== app.port) {

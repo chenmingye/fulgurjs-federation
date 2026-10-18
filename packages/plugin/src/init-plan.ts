@@ -222,7 +222,7 @@ async function wireVite(file: string, source: string): Promise<string> {
 }
 
 /** 常规启动可自动提取；复杂 main 必须先由应用作者把装配收敛为工厂。 */
-async function applicationFromEntry(file: string, source: string, framework: InitFramework): Promise<{ application: string; main: string }> {
+async function applicationFromEntry(file: string, source: string, framework: InitFramework, appFile: string): Promise<{ application: string; main: string }> {
   await validateSource(file, source)
   // 限定为连续 import 前缀，避免 es-module-lexer 将 TSX 的 JSX 当作 JS 语法解析。
   // 每条 import 再由 lexer 校验；正文必须整体命中下方最小启动白名单。
@@ -242,7 +242,16 @@ async function applicationFromEntry(file: string, source: string, framework: Ini
     const spec = items[0].n!
     if (/router|pinia|vuex|redux|zustand/i.test(spec)) throw new Error('入口依赖业务路由或状态；按 existing-apps 指南将它们在工厂内按实例创建，不自动改写')
     importStatements.push({ spec, code: statement })
-    if (spec !== 'react-dom/client') declarations.push(statement)
+    if (spec !== 'react-dom/client') {
+      // 工厂集中到 exposes/ 后，原入口的 App、样式等相对导入仍须指向原文件。
+      // 只改 lexer 确认的 import 字面量，不改注释、别名或裸包名。
+      const edit = new MagicString(statement)
+      if (spec.startsWith('.')) {
+        const rebased = path.posix.relative(path.posix.dirname(appFile), path.posix.join(path.posix.dirname(file), spec))
+        edit.overwrite(items[0].s, items[0].e, rebased.startsWith('.') ? rebased : './' + rebased)
+      }
+      declarations.push(edit.toString())
+    }
     body = body.slice(match[0].length)
   }
   body = body.trim()
@@ -264,7 +273,8 @@ async function applicationFromEntry(file: string, source: string, framework: Ini
     if (!expression.startsWith('<') || !expression.endsWith('>')) throw new Error('React 根渲染不是明确 JSX 表达式，请人工合并')
   }
   const application = `${OWNER}\n/** 独立启动与桥接共用工厂；每次挂载创建自己的实例。业务插件在工厂内装配，不在模块顶层挂载。 */\n${declarations.join('\n')}\nimport { defineApplication } from '@fulgurjs/federation/${framework}'\n\nexport default defineApplication(() => ${expression})\n`
-  const main = `${OWNER}\n${header}// 独立入口使用同一份装配；宿主直接加载 application 的默认导出，不复制启动逻辑。\nimport application from './application'\nvoid application.start(${JSON.stringify(target)}).catch(console.error)\n`
+  const relativeApp = path.posix.relative(path.posix.dirname(file), appFile).replace(/\.tsx?$/, '')
+  const main = `${OWNER}\n${header}// 独立入口只负责启动；独立与嵌入运行共用 fulgurjs/exposes/ 中的同一份装配。\nimport application from '${relativeApp.startsWith('.') ? relativeApp : './' + relativeApp}'\nvoid application.start(${JSON.stringify(target)}).catch(console.error)\n`
   await validateSource(framework === 'react' ? 'application.tsx' : 'application.ts', application)
   return { application, main }
 }
@@ -316,7 +326,7 @@ export async function planIntegration(input: IntegrationOptions): Promise<Integr
   const appExt = framework === 'react' ? 'tsx' : 'ts'
   let exposes = input.exposes ?? {}
   if (plan.kind === 'app' && plan.role !== 'consumer') {
-    const appFile = `src/application.${appExt}`
+    const appFile = `src/fulgurjs/exposes/application.${appExt}`
     const existing = read(appFile)
     if (existing) {
       if (!existing.startsWith(OWNER) && !/export\s+default\s+defineApplication(?:<[^;]+?>)?\s*\(/.test(existing)) task(appFile, '已有应用装配文件，无法确认默认导出的 defineApplication；保留原代码，先按指南核实装配')
@@ -326,7 +336,7 @@ export async function planIntegration(input: IntegrationOptions): Promise<Integr
       if (candidates.length !== 1 || read(candidates[0]) === null) task('src/main', '无法定位唯一启动入口，请显式指定 --entry <当前应用内路径>')
       else {
         try {
-          const entry = candidates[0], result = await applicationFromEntry(entry, read(entry)!, framework)
+          const entry = candidates[0], result = await applicationFromEntry(entry, read(entry)!, framework, appFile)
           add(appFile, result.application, '将可证明的最小启动逻辑提取为独立/桥接共用工厂')
           add(entry, result.main, '独立入口改为 application.start；挂载责任交给插件', true)
           exposes = { ...exposes, './bridge': './' + appFile }
@@ -363,7 +373,7 @@ export async function planIntegration(input: IntegrationOptions): Promise<Integr
   }
   if (plan.kind === 'app' && plan.role !== 'provider') {
     const remote = remoteEntries[0]?.[0]
-    if (remote) add(`src/fulgurjs/RemoteApplication.${framework === 'react' ? 'tsx' : 'vue'}`, hostView(framework, remote), '生成可放进已有路由的挂载视图；路由和登录上下文由应用明确决定')
+    if (remote) add(`src/fulgurjs/host/RemoteApplication.${framework === 'react' ? 'tsx' : 'vue'}`, hostView(framework, remote), '在 host/ 集中生成挂载视图；路由和登录上下文由应用明确决定')
     task('宿主路由', '将 RemoteApplication 视图加入已有页面/路由。启用 URL 同步时，按指南绑定宿主导航端口与一个静态挂载前缀；不重复登记子应用菜单。', false)
     task('会话与业务上下文', '有登录需求时明确 token getter/sessionKey、权限与主题归属；没有需求不增加文件。工具不猜凭据，也不复制整个业务 app 的状态。', false)
   } else if (plan.role !== 'provider') {

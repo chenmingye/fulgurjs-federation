@@ -18,8 +18,8 @@ export default {
     },
   },
   exposes: {
-    './bridge': './src/application.ts',
-    './components/TicketSummary': './src/exposes/TicketSummary.vue',
+    './bridge': './src/fulgurjs/exposes/application.ts',
+    './components/TicketSummary': './src/fulgurjs/exposes/TicketSummary.vue',
   },
   shared: {
     vue: { singleton: true, requiredVersion: '^3.4.0' },

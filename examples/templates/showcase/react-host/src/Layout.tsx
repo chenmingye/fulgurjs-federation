@@ -5,7 +5,7 @@
 import { Outlet, useNavigate } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import GuardBanner from './GuardBanner'
-import { logNav } from './demo-log'
+import { logNav } from './fulgurjs/host/demo-log'
 
 interface MenuItem {
   label: string

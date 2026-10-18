@@ -5,7 +5,7 @@
  */
 import { RouterView, useRouter } from 'vue-router'
 import GuardBanner from './GuardBanner.vue'
-import { logNav } from './demo-log'
+import { logNav } from './fulgurjs/host/demo-log'
 
 interface MenuItem {
   label: string

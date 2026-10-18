@@ -5,8 +5,8 @@
  */
 import type { ReactElement } from 'react'
 import { useBlocker } from 'react-router-dom'
-import { logNav } from './demo-log'
-import { BRIDGE_BASE_PATH } from './routing'
+import { logNav } from './fulgurjs/host/demo-log'
+import { BRIDGE_BASE_PATH } from './fulgurjs/host/routing'
 
 export default function GuardBanner(): ReactElement | null {
   const blocker = useBlocker(({ nextLocation }) => nextLocation.pathname.startsWith(`${BRIDGE_BASE_PATH}/locked`))

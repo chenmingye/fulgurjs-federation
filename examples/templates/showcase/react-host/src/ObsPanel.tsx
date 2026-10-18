@@ -6,8 +6,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactElement } from 'react'
 import { useLocation } from 'react-router-dom'
-import { demoLog } from './demo-log'
-import { BRIDGE_BASE_PATH } from './routing'
+import { demoLog } from './fulgurjs/host/demo-log'
+import { BRIDGE_BASE_PATH } from './fulgurjs/host/routing'
 
 export default function ObsPanel(): ReactElement {
   const snapshot = useSyncExternalStore(demoLog.subscribe, demoLog.getSnapshot)
