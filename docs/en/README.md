@@ -2,6 +2,9 @@
 
 > Application code imports from exactly four public entries: the package root (Vite plugin), `@fulgurjs/federation/vue`, `@fulgurjs/federation/react`, and `@fulgurjs/federation/runtime`.
 
+
+**First complete application integration**：[One end-to-end workflow](guide/first-integration.md)。
+
 ## Recommended reading paths
 
 **First contact (build a project from scratch)**:

@@ -89,7 +89,7 @@ $ npx @fulgurjs/federation create vue-vue --dir existing
 fulgurjs init [--out <路径>] [--framework vue|react] [--role consumer|provider|dual] [--force]
 fulgurjs init --config <path>
 fulgurjs init --plan [--kind component|app] [--role consumer|provider|dual]
-              [--framework vue|react] [--name 容器名] [--entry src/main.ts]
+              [--framework vue|react] [--name 容器名] [--entry src/main.ts] [--application <工厂文件>]
               [--remote 名称=http://开发地址]... [--expose ./键=./源文件]... [--json]
 fulgurjs init --plan <相同参数> --write
 fulgurjs init --rollback
@@ -110,7 +110,8 @@ fulgurjs init --rollback
 | `--name <容器名>` | package.json name 规范化 | 计划模式的容器名，同页唯一；字母、数字、下划线、连字符 |
 | `--remote <名称=URL>` | 无 | 可重复；开发 URL 必须 http(s)；prod 初始建议为 /名称，部署前核对；provider 角色不能同时传 remote |
 | `--expose <./键=./源文件>` | 无 | 可重复；必须存在的当前应用内源文件；consumer 角色不能同时传 expose |
-| `--entry <路径>` | src/main.ts(x) 或 .js(x) | app 提供方启动入口；自动提取只支持 src 根下明确的最小启动代码，不移动复杂相对依赖 |
+| `--entry <路径>` | src/main.ts(x) 或 .js(x) | app 提供方真实启动入口；支持明确的最小启动代码及相对导入重定位；复杂装配输出startup整理清单，不盲改 |
+| `--application <路径>` | 不指定 | app提供方/双角色复用实际defineApplication默认导出；不覆盖工厂或原main。缺失/语法不合法/无法确认契约会阻断整批写入。 |
 | `--json` | 关闭 | 计划模式输出结构化 root/framework/role/kind/edits/tasks/evidence/commands/written；edits 包含 file/before/after/reason |
 | `--rollback` | 关闭 | 独立使用，恢复被中断的计划写入；后续人工编辑冲突时拒绝覆盖 |
 
@@ -417,3 +418,9 @@ npx @fulgurjs/federation doctor --config ./fulgurjs.config.ts --json
 JSON 字段：`checks`（DoctorCheck[]）、`failed`、`complete`（仅静态扫描完整性）、`filesScanned`、`manualChecks`、`integrationFiles: { required, optional, existing }`。退出 0 表示未发现确定 FAIL，**不是 TS、构建、业务接入或浏览器验收通过**；确定 FAIL 退出 1；缺参/配置异常退出 2。后续仍按真实项目配置验证接入文件。
 
 预检也会报告 Vite 配置接线/生产 base 的核查项、未恢复的 init 写入、丢失的 index.html 本地入口、运行时误导入声明、非推荐应用入口及远程类型正负验证步骤。无法静态确认的项目保持 WARN，不用预检 PASS 代替运行验收。
+
+### 复用已有完整应用装配
+
+`init --plan --kind app --role provider --application src/fulgurjs/exposes/application.ts` 复用实际存在且语法有效、明确默认导出defineApplication的文件；不覆盖工厂、不替换复杂main。仅app提供方/双角色可用，路径限当前应用且拒绝symlink；目标缺失或无法确认工厂会阻断整批写入。
+
+无法自动提取复杂入口时，JSON新增 `startup?: { entry: string; application: string; imports: string[]; steps: string[] }`；文本模式同样展示。imports来自入口语法分析，不代表整图已扫描或都应shared；steps给出本工程的目标路径和顺序。已有配置保留，使用者需核对exposes和main.start，不把复用声明当作已完成业务迁移。

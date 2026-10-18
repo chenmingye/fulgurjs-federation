@@ -2,6 +2,9 @@
 
 > 应用代码只从四个公开入口导入：包根（Vite 插件）、`@fulgurjs/federation/vue`、`@fulgurjs/federation/react`、`@fulgurjs/federation/runtime`。
 
+
+**已有完整应用首次接入**：[单一路径操作](guide/first-integration.md)。
+
 ## 推荐阅读路径
 
 **第一次接触（从零建工程）**：

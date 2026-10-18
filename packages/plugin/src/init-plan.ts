@@ -27,6 +27,8 @@ export interface IntegrationOptions {
   /** expose 键 → 已有文件；app 提供方自动生成时使用 ./bridge。 */
   exposes?: Record<string, string>
   entry?: string
+  /** 复用已有 defineApplication 默认导出；复杂工程不必为 CLI 再造一个转发入口。 */
+  application?: string
 }
 export interface IntegrationEdit { file: string; before: string | null; after: string; reason: string }
 export interface IntegrationPlan {
@@ -39,6 +41,8 @@ export interface IntegrationPlan {
   tasks: Array<{ file: string; message: string; blocking: boolean }>
   evidence: string[]
   commands: string[]
+  /** 复杂入口的可执行整理清单；只检查语法与 import，不推断业务装配是否正确。 */
+  startup?: { entry: string; application: string; imports: string[]; steps: string[] }
 }
 
 /** 只做语法校验；不运行配置或业务模块。esbuild 留在 Node 运行时解析，不能内联 CJS 到 CLI。 */
@@ -46,6 +50,29 @@ async function validateSource(file: string, source: string): Promise<void> {
   const { transform } = requireHere('esbuild') as typeof import('esbuild')
   const loader = /\.tsx$/.test(file) ? 'tsx' : /\.jsx$/.test(file) ? 'jsx' : /\.[cm]?ts$/.test(file) ? 'ts' : 'js'
   await transform(source, { loader, sourcefile: file, format: 'esm', target: 'es2022', logLevel: 'silent' })
+}
+
+/** 将“复杂入口不支持”具体到当前文件与已有依赖，避免新使用者重新搜索整棵工程。 */
+async function describeStartup(entry: string, application: string, source: string, framework: InitFramework): Promise<NonNullable<IntegrationPlan['startup']>> {
+  const { transform } = requireHere('esbuild') as typeof import('esbuild')
+  const loader = /\.[jt]sx$/.test(entry) ? 'tsx' : 'ts'
+  const output = await transform(source, { loader, sourcefile: entry, format: 'esm', target: 'es2022', logLevel: 'silent' })
+  await init
+  const [items] = parse(output.code)
+  return {
+    entry, application,
+    imports: [...new Set(items.flatMap(item => item.n ? [item.n] : []))],
+    steps: [
+      `只读取 ${entry} 与下列实际导入的装配模块，先保留原有调用顺序、样式、权限与插件；不整改全业务 TS。`,
+      `在 ${application} 默认导出 defineApplication 工厂；将原启动函数的装配搬入，App/router/store 按当前实例创建，不另建 bridge 转发壳。`,
+      framework === 'vue'
+        ? '按工厂 mode 选择 memory/web history，守卫在返回前安装，返回 { app, router }，移除工厂内 app.mount/app.use(router)；使用 URL 同步时声明 { routing: true }。'
+        : '工厂返回 JSX 或 { element, dispose }，保留原 Provider；独立运行使用 browser router，桥接使用受控 memory router。',
+      `将 ${entry} 精简为导入该工厂并调用 application.start(原挂载选择器)；先确认原装配完整迁入，再删除旧启动体。`,
+      `重新执行原计划并追加 --application ${application}；已有配置不覆盖，核对 ./bridge 是否直接指向这一个文件。`,
+      '按“已有完整应用首次接入”指南依次确认独立启动、桥接首屏、真实数据、导航、重进；首次接通与生产交付分开记录，不能把构建当页面通过。',
+    ],
+  }
 }
 
 /** lstat 同时识别失效链接；existsSync 会跟随链接而漏掉 dangling symlink。 */
@@ -325,12 +352,20 @@ export async function planIntegration(input: IntegrationOptions): Promise<Integr
   }
   const appExt = framework === 'react' ? 'tsx' : 'ts'
   let exposes = input.exposes ?? {}
+  if (input.application && (plan.kind !== 'app' || plan.role === 'consumer')) task('--application', '仅用于 --kind app 且角色为 provider/dual；纯宿主不需要暴露应用装配。')
   if (plan.kind === 'app' && plan.role !== 'consumer') {
-    const appFile = `src/fulgurjs/exposes/application.${appExt}`
+    const appFile = input.application ? safe(input.application) : `src/fulgurjs/exposes/application.${appExt}`
     const existing = read(appFile)
     if (existing) {
-      if (!existing.startsWith(OWNER) && !/export\s+default\s+defineApplication(?:<[^;]+?>)?\s*\(/.test(existing)) task(appFile, '已有应用装配文件，无法确认默认导出的 defineApplication；保留原代码，先按指南核实装配')
-      else { exposes = { ...exposes, './bridge': './' + appFile }; plan.evidence.push(`${appFile}：保留已生成装配`) }
+      try {
+        await validateSource(appFile, existing)
+        if (!/export\s+default\s+defineApplication(?:<[^;]+?>)?\s*\(/.test(existing)) throw new Error('无法确认默认导出的 defineApplication 工厂；不执行业务模块，不按文件名猜契约')
+        exposes = { ...exposes, './bridge': './' + appFile }
+        plan.evidence.push(`${appFile}：复用已有统一装配，保留原内容，不生成转发壳`)
+        task(input.entry ?? 'src/main.ts(x)', `核对独立入口只调用 ${appFile} 的 application.start；--application 不删除或覆盖原业务启动体。`, false)
+      } catch (error) { task(appFile, String((error as Error).message)) }
+    } else if (input.application) {
+      task(appFile, '--application 必须指向实际存在的装配文件；先按整理清单迁入原启动逻辑，不生成假业务工厂。')
     } else {
       const candidates = input.entry ? [safe(input.entry)] : [`src/main.${framework === 'react' ? 'tsx' : 'ts'}`, `src/main.${framework === 'react' ? 'jsx' : 'js'}`].filter(f => read(f) !== null)
       if (candidates.length !== 1 || read(candidates[0]) === null) task('src/main', '无法定位唯一启动入口，请显式指定 --entry <当前应用内路径>')
@@ -340,7 +375,11 @@ export async function planIntegration(input: IntegrationOptions): Promise<Integr
           add(appFile, result.application, '将可证明的最小启动逻辑提取为独立/桥接共用工厂')
           add(entry, result.main, '独立入口改为 application.start；挂载责任交给插件', true)
           exposes = { ...exposes, './bridge': './' + appFile }
-        } catch (error) { task(candidates[0], `${(error as Error).message}。参考 docs/zh/guide/existing-apps.md；桥接路由必须使用受控 memory，独立模式继续 web history。`) }
+        } catch (error) {
+          try { plan.startup = await describeStartup(candidates[0], appFile, read(candidates[0])!, framework) }
+          catch { /* 原语法诊断保留；无法解析时不编造导入清单。 */ }
+          task(candidates[0], `${(error as Error).message}。完整路径见 docs/zh/guide/first-integration.md；下方逐步整理清单只迁移接线，不要求全项目 TS 清零。`)
+        }
       }
     }
   }
@@ -481,6 +520,11 @@ export function rollbackIntegration(cwd: string): void {
 /** 逐文件前后文本是可直接审查的完整差异；JSON 模式保留结构化 before/after。 */
 export function formatIntegrationPlan(plan: IntegrationPlan): string {
   const lines = ['[fulgurjs:init] 接入预览（默认不写入、不安装依赖、不执行业务代码）', ...plan.evidence]
+  if (plan.startup) {
+    lines.push(`\n启动逻辑整理：${plan.startup.entry} → ${plan.startup.application}`,
+      '入口实际导入（不代表这些依赖都应 shared）：', ...plan.startup.imports.map(item => `  ${item}`),
+      ...plan.startup.steps.map((step, index) => `${index + 1}. ${step}`))
+  }
   for (const edit of plan.edits) {
     lines.push(`\n--- ${edit.before === null ? '/dev/null' : edit.file}\n+++ ${edit.file}\n原因：${edit.reason}`)
     if (edit.before !== null) lines.push(...edit.before.split('\n').map(line => '- ' + line))

@@ -1,5 +1,7 @@
 # 已有应用接入：先看必改文件，再选需要的能力
 
+第一次接入完整应用，请从[单一路径接入指南](first-integration.md)开始；本页提供装配与工具参考。
+
 ## 先确定场景
 
 | 需求 | 必需接入 | 不需要默认增加 |
@@ -23,11 +25,10 @@ src/fulgurjs/
 │   ├── application.ts          # 仅作为宿主时的统一启动装配（React 用 .tsx）
 │   ├── RemoteApplication.vue   # 挂载视图，负责会话和 URL 同步接线
 │   ├── context.ts              # 传给远程的上下文（按需）
-│   └── session.ts              # 宿主登录代次（按需）
+│   └── auth.ts                 # 仅有实际业务登录适配时需要；不存插件代次
 ├── exposes/                    # 提供方：本工程对外导出的内容
 │   ├── application.ts          # 完整远程应用的统一装配（独立/嵌入共用）
-│   ├── mode.ts                 # 原业务模块需要读取运行模式时才增加
-│   ├── session.ts              # 接收宿主登录态（按需）
+│   ├── context.ts              # 需要时接收宿主登录态，复用原业务模式/缓存适配
 │   ├── OrderForm.vue           # 对外组件入口（例名，按业务命名）
 │   ├── FormProviders.vue       # 这些组件需要的祖先环境（按需）
 │   └── theme.ts                # 独立入口和 Provider 共用的配置（按需）
@@ -248,3 +249,5 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 普通组件仍用 remoteComponent；只需要一个自定义桥接入口时 defineBridgeApp 仍是有效当前 API。统一装配用于有独立启动与桥接两种形态的应用。
 
 源码演示：[Vue 宿主装配](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts)、[React 远程装配](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx)、[React 宿主装配](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx)、[模板入口](../../../examples/templates/README.md)。模板使用 registry 正式包，可整目录复制后独立安装。
+
+复杂工程整理完工厂后可用 `--application <实际工厂文件>` 复用；不能自动提取时，计划中的 `startup` 会列出实际入口、导入模块和逐步整理清单。CLI 不生成假登录、假路由或只转发的 bridge 文件。

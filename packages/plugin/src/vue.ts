@@ -39,6 +39,7 @@ import { defineBridgeApp as defineVueBridgeApp } from './bridge-app-vue'
 import { createVueBridgeAppWithLoader } from './bridge-host-vue'
 import { createVueBridgeNavigation, connectVueBridgeRouter, installVueBridgeRouter, type VueBridgeRouterConnection } from './bridge-router-vue'
 import { createBridgeSession, type BridgeSession } from './bridge-session'
+import { createAutomaticBridgeSession } from './bridge-session-auto'
 import { hasBridgeMount } from './bridge-core'
 import type { BridgeHostRouting } from './bridge-router-core'
 
@@ -61,7 +62,7 @@ export type { VueApplicationFactory, VueApplicationContext, VueApplicationSetup,
 export type { Application, ApplicationHandle } from './application-core'
 export { bindStoreToApp } from './vue-store'
 /** Vue 宿主桥接工厂：返回 `{ appProps: P; sessionKey?: string | null }` 形态的包装组件 */
-export const createVueBridgeApp = /*#__PURE__*/ createVueBridgeAppWithLoader(loadRemote)
+export const createVueBridgeApp = /*#__PURE__*/ createVueBridgeAppWithLoader(loadRemote, createAutomaticBridgeSession)
 /** 宿主导航端口（URL 同步）：包住宿主 vue-router 实例，传给桥接组件的 routing prop */
 export { createVueBridgeNavigation }
 /** 子应用侧 memory router 接线（await connection.ready 后再 app.use(router)） */

@@ -213,10 +213,9 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 
 | Field | Optional | Type | Contract |
 |---|---|---|---|
-| `default` | no | `(ctx: RemoteSetupContext) => void \| Promise<void>` | See the owning API for lifecycle and runtime defaults. |
+| `default` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | See the owning API for lifecycle and runtime defaults. |
 | `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | See the owning API for lifecycle and runtime defaults. |
 | `globalComponents` | yes | `Record<string, unknown>` | Static components retain their identity. Zero-argument functions with displayName/props/emits metadata are components; unmarked zero-argument functions are lazy loaders. See the setup API for installation and retry semantics. |
-
 | `pageProviders` | yes | `unknown[]` | Ancestor Providers required by remote components; each item is a component or zero-argument loader. Adapters wrap the actual consumer tree without copying the provider application. |
 
 ## AppContext
@@ -433,6 +432,9 @@ Import from: `@fulgurjs/federation/vue`.
 | `retries` | yes | `number` | See the owning API for lifecycle and runtime defaults. |
 | `timeout` | yes | `number` | See the owning API for lifecycle and runtime defaults. |
 | `getContext` | yes | `() => Partial<AppContext> & Record<string, unknown>` | See the owning API for lifecycle and runtime defaults. |
+| `session` | yes | `() => string \| number \| null \| undefined` | Reactive non-sensitive identity; managed generations. null=logout, undefined=restoring; do not combine with sessionKey. |
+| `sessionStorageKey` | yes | `string` | Automatic session namespace; defaults to fulgurjs-bridge-session and is shared by one host. |
+
 
 ## VueBridgeRouterConnection
 

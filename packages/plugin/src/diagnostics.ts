@@ -68,7 +68,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-008', stage: 'MFU', title: '未知远程' },
   { code: 'MFU-009', stage: 'MFU', title: '加载到的模块没有任何导出' },
   { code: 'MFU-010', stage: 'MFU', title: 'singleton 共享版本漂移（使用作用域版本）' },
-  { code: 'MFU-011', stage: 'MFU', title: 'setup 生命周期入口导出形态非法（默认导出/具名 onSession 不是函数）' },
+  { code: 'MFU-011', stage: 'MFU', title: 'setup模块声明非法（空模块、非函数入口或组件/Provider形态不合法）' },
   { code: 'MFU-012', stage: 'MFU', title: 'setup/onSession 执行抛错（仅清失败阶段缓存，可重试）' },
   { code: 'MFU-013', stage: 'MFU', title: '远程声明 onSession 但宿主 AppContext 缺 sessionKey（登录代次）' },
   { code: 'MFU-014', stage: 'MFU', title: 'setup/onSession 同步段内递归 loadRemote 同一远程（自等待死锁防线）' },

@@ -111,6 +111,7 @@ fulgurjs init --rollback
 | `--remote <name=URL>` | None | Repeatable http(s) development URL; suggested prod path /name needs deployment review; incompatible with provider-only role |
 | `--expose <./key=./file>` | None | Repeatable existing source inside this application; incompatible with consumer-only role |
 | `--entry <path>` | src/main.ts(x) or .js(x) | App provider entry; automatic extraction only supports explicit minimal startup in the src root |
+| `--application <path>` | omitted | Reuse an actual default defineApplication export for app provider/dual roles. Preserve the factory/main; missing or unrecognized factories block writes. |
 | `--json` | Off | Structured root/framework/role/kind/edits/tasks/evidence/commands/written; each edit has file/before/after/reason |
 | `--rollback` | Off | Use alone to recover an interrupted write; refuses to overwrite subsequent manual edits |
 
@@ -415,3 +416,9 @@ Checks expose/setup paths, dev/prod addresses, browser history in bridge assembl
 JSON: checks (DoctorCheck[]), failed, complete (static scan completeness only), filesScanned, manualChecks, integrationFiles { required, optional, existing }. Exit 0 means no definite FAIL, **not successful typechecking/build/integration/browser acceptance**; FAIL exits 1, invalid arguments/configuration errors exit 2. Validate integration files using the project's real configuration afterwards.
 
 Preflight also reports Vite wiring/base review, interrupted init writes, missing local HTML entries, runtime declaration imports, non-recommended SDK entry points and remote type verification tasks. Unprovable conditions remain WARN rather than browser acceptance.
+
+### Reuse existing application assembly
+
+`init --plan --kind app --role provider --application src/fulgurjs/exposes/application.ts` reuses an existing syntax-valid explicit default defineApplication export without overwriting the factory or complex main. Only app provider/dual roles accept it; paths remain inside the project and symlinks are refused. Missing/unrecognized factories block the entire write.
+
+Complex-entry JSON includes optional `startup: { entry: string; application: string; imports: string[]; steps: string[] }`, also printed in text mode. Imports are entry-level evidence, not a whole-graph/shared list. Steps name actual destinations and ordering. Existing config remains unchanged; check exposes and main.start explicitly. Reusing a declaration is not completed business migration.

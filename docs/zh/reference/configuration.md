@@ -9,7 +9,7 @@
 | `name` | `string` **必填** | 无——缺省即报错 CFG-001 | 容器名。同页面宿主/远程必须唯一；须匹配 `/^[a-zA-Z][\w.-]*$/`（字母开头，无空格/斜杠） |
 | `filename` | `string` | `'fulgurjs-remoteEntry.js'` | prod 容器入口文件名（固定文件名便于引用与部署规则落位；入口内容每次构建变，**必须 no-cache**，长缓存只给带内容哈希的 chunk）。改了 filename 部署层与 doctor `--entry` 要同步 |
 | `exposes` | `Record<string, string \| { import: string; name?: string }>` | 不提供任何模块 | 对外暴露模块：键 `'./X'`（省略 `./` 会规范化并提醒），值源文件路径；对象形态的 `name` 为稳定 chunk 文件名。键不得占用内部保留键 `./__fulgurjs_setup__`（CFG-012） |
-| `setup` | `string` | **无初始化行为**（普通 exposes 语义完全不变） | 可选远程初始化入口：相对应用根的 TS/JS 模块路径。默认导出 `setup(context)` 应用级执行一次；可选具名导出 `onSession(context)` 按宿主 `sessionKey` 去重执行。其余导出不作为生命周期入口。路径空/非字符串报 CFG-012。详见 [API 参考 · setup/onSession](api.md#setuponsession-远程初始化生命周期) |
+| `setup` | `string` | **无初始化行为**（普通 exposes 语义完全不变） | 可选远程初始化入口：相对应用根的 TS/JS 模块路径。默认导出 `setup(context)` 应用级执行一次；可选具名导出 `onSession(context)` 按宿主 `sessionKey` 去重执行。无应用级副作用时可只声明onSession/globalComponents/pageProviders，无需空默认函数；空模块无效。路径空/非字符串报 CFG-012。详见 [API 参考 · setup/onSession](api.md#setuponsession-远程初始化生命周期) |
 | `remotes` | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | 不消费任何远程 | 消费的远程，四种形态见下节。键是 import 前缀，不得含 `@`、`/`、空白（CFG-003） |
 | `shared` | `string[] \| Record<string, string \| SharedHint>` | 不共享任何依赖 | 共享依赖。字符串简写 = `requiredVersion`；数组 = 每项按 package.json 推断。字段全集见[共享依赖指南](../guide/sharing.md#sharedhint-全部字段) |
 | `shareScope` | `string` | `'default'` | 默认共享作用域名；各项可用 `shared[*].shareScope` 覆盖 |

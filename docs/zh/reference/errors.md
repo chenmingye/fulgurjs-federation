@@ -65,7 +65,7 @@
 | `MFU-008` | 运行时报未知远程 | spec/调用里的远程名不在 `remotes`/运行时注册表里 | 核对远程名拼写；动态远程先 `registerRemote`/`registerRemotes` |
 | `MFU-009` | 运行时报加载到的模块没有任何导出 | expose 目标文件没有导出（空模块/只有副作用） | 给 expose 目标文件补导出；确认加载的是预期文件 |
 | `MFU-010` | 运行时警告选中的共享单例版本不满足某消费方要求（列出候选版本、提供方、影响与修法；同一组合只告警一次） | singleton 收敛到的版本不在某消费方 requiredVersion 内；或桥接宿主/子应用缺 singleton 导致双实例症状（Invalid hook call） | 统一依赖版本；确认告警可接受或调整 requiredVersion；跨框架宿主三键 singleton |
-| `MFU-011` | 运行时报 setup 生命周期入口导出形态非法（报实际类型/预期签名/修法） | setup 模块的默认导出或具名 `onSession` 不是函数（其他导出不作为入口） | setup 文件默认导出 `setup(context)` 函数；可选具名导出 `onSession(context)` 函数 |
+| `MFU-011` | 运行时报 setup 生命周期入口导出形态非法（报实际类型/预期签名/修法） | setup模块为空、已有默认导出/onSession不是函数，或组件/Provider声明形态非法 | 默认导出初始化函数，或声明有效onSession/globalComponents/pageProviders；无需空函数，不接受空模块 |
 | `MFU-012` | 该次 `loadRemote` 拒绝，报 setup/onSession 执行抛错（cause 含原始异常） | 初始化代码自身抛错 | 修复 setup/onSession 内部错误后直接重试——只清失败阶段缓存（setup 失败重试从 setup 开始；onSession 失败只重跑会话段），已成功阶段不重复 |
 | `MFU-013` | 运行时报远程声明 onSession 但宿主 AppContext 缺 sessionKey | 宿主未提供非敏感登录代次 ID（禁止用 token 充当） | 宿主登录流程 `provideAppContext({ sessionKey })`——每次成功登录/重登生成新值，token 刷新沿用 |
 | `MFU-014` | 运行时报 setup/onSession 同步段内递归 loadRemote 同一远程 | 初始化同步段内加载同远程模块——该调用会等待自身形成死锁 | 初始化内不要加载同远程模块；跨远程加载放异步段 |

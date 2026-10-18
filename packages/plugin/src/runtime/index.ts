@@ -124,9 +124,9 @@ export interface RemoteSetupContext {
   signal: AbortSignal
 }
 
-/** setup 模块的固定导出契约：默认导出必为函数；onSession 可选且必须是函数 */
+/** setup 模块至少声明一项能力；无应用级副作用时不要求手写空默认函数。 */
 export interface RemoteSetupModule {
-  default: (ctx: RemoteSetupContext) => void | Promise<void>
+  default?: (ctx: RemoteSetupContext) => void | Promise<void>
   onSession?: (ctx: RemoteSetupContext) => void | Promise<void>
   /**
    * 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象或零参 loader）：
@@ -292,12 +292,13 @@ function createRuntime() {
       }
       const mod = await container.get(setupKey)
       const setupFn = mod?.default
-      if (typeof setupFn !== 'function') {
+      const hasDeclaration = mod?.onSession !== undefined || mod?.globalComponents !== undefined || mod?.pageProviders !== undefined
+      if ((setupFn !== undefined && typeof setupFn !== 'function') || (!setupFn && !hasDeclaration)) {
         throw new FgError(
           ErrorCodes.SETUP_INVALID_EXPORT,
           `现象：远程应用 "${remote.name}" 的 setup 模块 "${setupKey}" 无法初始化。\n` +
-            `原因：默认导出类型为 ${mod == null ? String(mod) : typeof setupFn}，应为函数。\n` +
-            `修法：在 setup 指向的文件中默认导出函数，例如 export default async function setup(context) { ... }；具名 onSession 可选。`,
+            `原因：默认导出类型为 ${mod == null ? String(mod) : typeof setupFn}，且模块不满足初始化声明契约。\n` +
+            `修法：默认导出初始化函数，或只声明 onSession/globalComponents/pageProviders；空模块与非函数默认导出无效。`,
           { remote: remote.name, module: setupKey },
         )
       }
@@ -338,7 +339,7 @@ function createRuntime() {
         }
         st.pageProviders = mod.pageProviders
       }
-      await invokeLifecycleFn(
+      if (setupFn) await invokeLifecycleFn(
         remote.name,
         setupFn,
         { appContext: currentAppContext(), signal: (st.controller ??= new AbortController()).signal },
