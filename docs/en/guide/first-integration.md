@@ -160,3 +160,7 @@ Preserve the first error, URL and stack before diagnosing. Fix implementation/do
 ## 6. Handoff evidence
 
 Provide installed version/document commit, baseline, changed-file map with responsibilities, commands, first real connection time, blockers and durations, TS ownership, deployment manifest and actual per-case results. Mark unexecuted/external cases explicitly; never reuse earlier run totals as current evidence.
+
+### A dynamic tag renders as `[object Object]`
+
+Inspect the resolved component before attributing the problem to multiple framework instances based on chunk names. Do not register imperative services with `app.component(service.name, service)`: minification can rename a function to an HTML tag such as `b`, and `resolveDynamicComponent` may then select that service. Register actual view components under stable public component names; use services through their documented invocation or installation APIs. Do not work around the collision by changing business tags or disabling valid chunk configuration.

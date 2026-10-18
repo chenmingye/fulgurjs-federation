@@ -3,7 +3,8 @@
  *
  * 缺陷：build 下曾对纯宿主自身源码也做 shared 门面化，而 node_modules 闸门（allowNodeModules）
  * 只放行 devSharedSelf/纯 remote，于是宿主源码里的 vue 走 TLA 门面、依赖包里的 vue 走本地
- * 副本，生产出现两份 Vue（子应用文本槽渲染成 [object Object]）。修复后纯宿主自身源码
+ * 副本，会产生两条不同消费路径；本测试只锁定构建与提供方注册合同，
+ * 不用具体页面文本异常推断运行时实例身份。修复后纯宿主自身源码
  * 与 dev 一样保持本地 import，产物不应出现消费门面 chunk。
  */
 import { describe, expect, it } from 'vitest'

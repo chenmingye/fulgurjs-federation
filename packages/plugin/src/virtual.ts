@@ -351,7 +351,7 @@ export function genInitModule(
   })
   // 纯宿主 build：本地包静态引入并作为 provide 的同步 value。远程的同步门面
   // （loadShareSync）只有看到 value 才返回 ready；否则同版本会回落本地副本，
-  // 与宿主应用实例分裂（Element Plus 的 h/isVNode 与页面 VNode 分属两份 Vue）。
+  // 造成同步消费者与宿主本地消费路径不一致。
   const localProvide = (i: number) => `__fulgurjs_local_${i}`
   if (isLocalHostProvider) {
     provides.forEach((p, i) => {
@@ -366,7 +366,7 @@ export function genInitModule(
   const isDevHost = command === 'serve' && options.remotes.length > 0
   // 纯宿主（remotes>0、无 exposes）在 build 下自身源码不门面化（见 index.ts 的 rewriteShared），
   // 本地 Vue 就是应用正在用的实例。提供方必须直接返回这份本地模块并标记 loaded，
-  // 否则远程协商会懒加载门面 fallback，产生第二份 Vue（子应用文本槽渲染成 [object Object]）。
+  // 否则远程同步消费只能使用本地 fallback，不能立即复用宿主已就绪的模块。
   const loadedFlag = isDevHost || isLocalHostProvider ? 'true' : 'false'
 
   lines.push(`initSharing(${JSON.stringify(options.shareScope)});`)
