@@ -1,6 +1,6 @@
 # First integration into existing applications
 
-> This branch contains an unpublished, unverified source candidate: automatic Vue sessions, `--application`, and declaration-only setup modules. npm 6.11.7 does not include these additions. Validate with a package built from this branch; remove this notice after release and template lock synchronization.
+> Automatic Vue sessions, `--application`, and declaration-only setup modules ship in the official package starting with 6.12.0. Every example on this page works directly with the registry release.
 
 Follow one path: preserve the existing projects, share one application factory between standalone and embedded execution, then mount the complete remote application. For individual components/functions use [components and modules](components-and-modules.md).
 
