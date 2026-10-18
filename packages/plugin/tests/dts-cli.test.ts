@@ -2,11 +2,12 @@
  * `fulgurjs types` 命令测试：提供方生成验证退出码、旧配置拒绝、发现检查失败非零。
  * 宿主同步路径的核心逻辑由 dts-sync.test 覆盖，这里覆盖命令编排与退出码契约。
  */
-import { describe, expect, it, beforeAll, afterAll } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { runTypesCommand } from '../src/dts-cli'
+import * as sync from '../src/dts-sync'
 
 const pluginRoot = path.resolve(__dirname, '..')
 let tmp = ''
@@ -30,6 +31,32 @@ function makeProject(name: string, files: Record<string, string>): string {
 }
 
 describe('runTypesCommand（fulgurjs types）', () => {
+  it('缺少虚拟模块类型时提示插件环境声明，实体依赖仍提示安装且严格失败', async () => {
+    const root = makeProject('missing-externals', {
+      'fulgurjs.config.ts': "export default { name: 'host', remotes: { remote: 'http://localhost:9999/remote' } }\n",
+      'tsconfig.json': JSON.stringify({ include: ['src'] }),
+      'src/index.ts': 'export {}\n',
+      'package.json': JSON.stringify({ name: 'host', private: true, type: 'module' }),
+    })
+    const syncSpy = vi.spyOn(sync, 'syncRemoteTypes').mockResolvedValue({ status: 'synced', message: 'synced' })
+    const metadataSpy = vi.spyOn(sync, 'readMetadata').mockReturnValue({
+      externals: ['virtual:svg-icons-register', '\0virtual:internal', 'missing-component-library'],
+    } as ReturnType<typeof sync.readMetadata>)
+    try {
+      const r = await runTypesCommand({ cwd: root })
+      expect(r.exitCode).toBe(1)
+      const output = r.lines.join('\n')
+      expect(output).toContain('TYP-005')
+      expect(output).toContain('Vite 虚拟模块，不能作为 npm 包安装')
+      expect(output).toContain('client 类型声明')
+      expect(output).not.toContain('npm i -D virtual:')
+      expect(output).not.toContain('npm i -D \0')
+      expect(output).toContain('npm i -D missing-component-library')
+    } finally {
+      syncSpy.mockRestore()
+      metadataSpy.mockRestore()
+    }
+  })
   it('提供方生成成功 + 发现检查覆盖 → 退出码 0', async () => {
     const root = makeProject('ok', {
       'fulgurjs.config.ts': "export default { name: 'provider', exposes: { './a': './src/a.ts' } }\n",

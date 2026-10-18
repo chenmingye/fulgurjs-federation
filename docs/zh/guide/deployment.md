@@ -23,6 +23,14 @@ remotes: {
 
 单地址字符串 `'http://localhost:5101'` 形态下：dev 自动拼 `/@fulgurjs-entry.js`，prod 自动拼 filename；以 `.js` 结尾的地址 prod 原样使用。
 
+## 构建目标与已有 TLA 包装插件
+
+Rollup 构建链路中的异步共享门面可能保留顶层 `await`；按入门配置选择支持它的实际浏览器目标（通常 `build.target: 'es2022'`），不要仅修改 tsconfig 的 target。Vite 的构建目标由 Vite 配置决定，见 [Vite 构建指南](https://vite.dev/guide/build.html)。
+
+已有项目若另装 TLA 降级包装插件，先核实它与当前 Vite、联邦产物的组合。遇到包装器解析错误，保留首错，在相同依赖与配置下做仅启停包装器的对照；需要旧浏览器时必须验证完整降级链，不能以提高 target 冒充兼容。
+
+`build.sourcemap` 无须因接入联邦而关闭。大型工程遇到构建爆栈时，先保留报错插件、chunk 与堆栈，分别比较 `true`（独立 map）、`'inline'` 和 `false`，据结果定位问题；临时关闭只能记为规避及其调试影响，不能据此断言是业务问题或宣布插件根因已修复。
+
 ## base 对齐
 
 远程部署在 `/remote-a/` 时：

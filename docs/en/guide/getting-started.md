@@ -23,6 +23,8 @@ Package manager notes (pnpm users):
 - pnpm ≥ 11 enables `minimumReleaseAge: 1440` by default (a 24-hour supply-chain cooldown): a freshly published version is not resolvable within 24 hours, so `pnpm add` installs the newest version that satisfies the cooldown instead. If you need the newest version right after a release, add `minimumReleaseAgeExclude: ['@fulgurjs/federation@<version>']` to `pnpm-workspace.yaml` (this is what the five templates do), or temporarily run `pnpm config set minimum-release-age 0`.
 - When pnpm 12 hits unapproved build scripts (esbuild and friends), it writes the `allowBuilds: { esbuild: set this to true or false }` placeholder prompt into `pnpm-workspace.yaml` and finishes the install with a non-zero exit code. Change the value to `true` and rerun the install.
 
+Keep the exception in the current project and restrict it to the verified plugin version, rather than disabling the machine-wide cooldown. Since pnpm 11, `npm_config_*` is no longer the general configuration source: setting `npm_config_minimum_release_age=0` does not prove that the restriction is lifted. Check `pnpm config get minimumReleaseAgeExclude`, the lockfile, and the installed version. See the [pnpm 11 configuration notes](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/11.0.md).
+
 ## New project: `fulgurjs create`
 
 Without an existing project, use the CLI to scaffold a runnable federation project from a full template:

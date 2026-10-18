@@ -14,7 +14,7 @@ export default {
   shared: {
     // Full form (all SharedHint fields below)
     vue: {
-      singleton: true,            // single instance for the whole page (strongly recommended true for vue/react/react-dom/pinia/vue-router)
+      singleton: true,            // single instance for the whole page (use true for Vue/React libraries that require a shared runtime identity)
       requiredVersion: '^3.4.0',  // full semver syntax; false = accept anything; omitted = inferred from this app's package.json
       strictVersion: false,       // default rule: with a local copy and non-singleton → true (mismatch throws MFU-003)
     },
@@ -26,6 +26,10 @@ export default {
 ```
 
 Principle: **only list libraries the project actually installs and wants to share across apps**. Do not put business libraries (component libraries/dayjs etc.) into shared — the plugin handles their internal references to shared keys automatically during pre-bundling and build. A full sub app designed with its own isolated Router/store is legitimate — not every shared item must be singleton.
+
+### Should full sub-apps share vue-router?
+
+Independent Router instances do not require sharing the `vue-router` library. For initial integration, share only the framework runtimes that require a common identity; leaving the router library out of shared is valid. If you choose to share it, verify that every app supports the selected version: even minor updates can introduce stricter route validation. `singleton: true` does not guarantee API or behavioral compatibility. Declare accurate version ranges, use `strictVersion` when required, and never swallow version errors to make mounting succeed. For Pinia, distinguish sharing the library from isolating business store instances; application assembly owns the latter.
 
 ## All SharedHint fields
 

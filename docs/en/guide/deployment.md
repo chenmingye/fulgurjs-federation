@@ -23,6 +23,14 @@ remotes: {
 
 With the single-address-string form `'http://localhost:5101'`: dev appends `/@fulgurjs-entry.js` automatically, prod appends the filename automatically; addresses ending in `.js` are used verbatim in prod.
 
+## Build targets and existing TLA wrappers
+
+The Rollup build pipeline may retain top-level `await` in asynchronous shared facades. Select an actual supported browser target in Vite (usually `build.target: 'es2022'`), rather than changing only the tsconfig target. See the [Vite build guide](https://vite.dev/guide/build.html).
+
+If an existing project uses a TLA downlevel wrapper, verify its combination with the current Vite and federation output. Preserve parsing errors and compare the same dependency tree with only the wrapper toggled. Supporting older browsers requires testing the entire downlevel pipeline; raising the target does not establish that support.
+
+Federation does not require disabling `build.sourcemap`. For a stack overflow in a large build, retain the failing plugin, chunk and stack, then compare `true` (external maps), `'inline'`, and `false`. Disabling maps temporarily is a workaround with a debugging cost; it does not establish a business-code root cause or a plugin fix.
+
 ## base alignment
 
 When the remote is deployed at `/remote-a/`:

@@ -14,7 +14,7 @@ export default {
   shared: {
     // 完整写法（SharedHint 全项见下）
     vue: {
-      singleton: true,            // 全页单实例（vue/react/react-dom/pinia/vue-router 强烈建议 true）
+      singleton: true,            // 全页单实例（Vue/React 等需要同一运行时身份的库设 true）
       requiredVersion: '^3.4.0',  // semver 全语法；false = 接受任意；缺省从本应用 package.json 推断
       strictVersion: false,       // 缺省：有本地副本且非 singleton → true（不满足即抛 MFU-003）
     },
@@ -26,6 +26,10 @@ export default {
 ```
 
 原则：**只列「项目实际安装且跨应用共享」的库**。不要把业务库（组件库/dayjs 等）放 shared——插件会在预构建与构建期自动处理其内部对 shared 键的引用。独立 Router/store 的完整子应用隔离设计是合法的——不是所有共享项都必须 singleton。
+
+### 完整子应用是否共享 vue-router
+
+各子应用拥有独立 Router，并不表示必须共享 `vue-router` 库。首次接入建议只共享必须同实例的框架运行时；路由库不必加入 shared。确实需要共享时，先确认所有应用都能运行在最终选中的版本上；小版本升级也可能增加路由定义校验。`singleton: true` 不保证 API 与行为兼容，版本约束应准确，必要时启用 `strictVersion`，不能靠吞掉版本错误继续挂载。Pinia 也应区分库是否共享和业务 store 实例是否隔离，后者由应用装配管理。
 
 ## SharedHint 全部字段
 

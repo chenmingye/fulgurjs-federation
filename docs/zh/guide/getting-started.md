@@ -23,6 +23,8 @@ pnpm add -D @fulgurjs/federation
 - pnpm ≥ 11 默认开启 `minimumReleaseAge: 1440`（24 小时供应链冷却）：刚发布的版本在 24 小时内不会被解析，`pnpm add` 会装到上一个满足冷却期的版本。刚发版就要用最新版时，在 `pnpm-workspace.yaml` 加 `minimumReleaseAgeExclude: ['@fulgurjs/federation@<版本>']`（五模板即此做法），或临时 `pnpm config set minimum-release-age 0`。
 - pnpm 12 遇到未批准的构建脚本（esbuild 等）会把 `allowBuilds: { esbuild: set this to true or false }` 占位提示写进 `pnpm-workspace.yaml` 并以非零码结束安装。把值改成 `true` 后重跑安装即可。
 
+配置只写在当前工程：优先精确豁免已核验的插件版本，不关闭整个机器的冷却保护。pnpm 11 起不再把 `npm_config_*` 当作通用配置来源，不能靠 `npm_config_minimum_release_age=0` 判断限制已解除；配置后核对 `pnpm config get minimumReleaseAgeExclude`、锁文件与实际安装版本。详见 [pnpm 11 配置说明](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/11.0.md)。
+
 ## 新建工程：`fulgurjs create`
 
 没有存量项目时，用 CLI 从完整模板创建可独立运行的联邦工程：

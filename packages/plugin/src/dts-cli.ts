@@ -9,7 +9,8 @@
  * 3. 双角色：先生成（纯本地，不依赖远程在线——不存在互等死锁）再同步。
  *
  * 同步后校验宿主可解析声明的外部类型依赖（externals）——缺失列出具体包与
- * 安装命令（TYP-005），非零退出。`--check` 只核对本地缓存与目标 revision 的
+ * 修复指引（TYP-005），非零退出。实体包提示安装；虚拟模块由对应 Vite 插件
+ * 提供，不能当作 npm 包安装。`--check` 只核对本地缓存与目标 revision 的
  * 一致性——它不访问网络，不代表远程线上最新已核实（诚实边界，help 同口径）。
  */
 import fs from 'node:fs'
@@ -140,7 +141,14 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
       failed = true
       lines.push(`[consumer] TYP-005 宿主缺少远程声明的外部类型依赖（模板/组件类型会退化为该包不可解析）：`)
       for (const [pkg, remotes] of externalsMissing) {
-        lines.push(`  ${pkg}（被 ${remotes.join('、')} 的声明引用）——请安装：npm i -D ${pkg}（或对应包管理器等价命令）`)
+        // Vite 虚拟入口没有可安装的同名包；它的环境声明应由创建该入口的插件提供。
+        // 这里只诊断，不猜插件包名，也不注入 any 声明来掩盖消费方类型缺失。
+        const source = `${pkg}（被 ${remotes.join('、')} 的声明引用）`
+        if (pkg.startsWith('virtual:') || pkg.startsWith('\0')) {
+          lines.push(`  ${source}——这是 Vite 虚拟模块，不能作为 npm 包安装。请查创建该模块的 Vite 插件文档，在宿主 tsconfig 的 types 或环境 .d.ts 中引入该插件提供的 client 类型声明；若它仅用于运行时初始化，请在提供方将初始化与公开类型入口分离，再重新生成和同步类型。`)
+        } else {
+          lines.push(`  ${source}——请安装：npm i -D ${pkg}（或对应包管理器等价命令）`)
+        }
       }
     }
   }

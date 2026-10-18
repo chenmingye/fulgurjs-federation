@@ -68,6 +68,12 @@ Semantics:
 
 - **State injection belongs to the consumer too**: a remote component using injected Pinia may resolve a consumer store with the same ID. When provider-owned state is required, pass the provider Pinia instance explicitly. A complete application requiring its own router, stores and lifecycle should use [app bridging](app-bridge.md).
 
+### Reuse an existing component registration source
+
+If a project already has `registerComponents(app)`, do not copy a second component-library list into setup. Nested user pickers and uploaders may also use global tags, so scanning only the outer form misses dependencies. An ancestor Provider can obtain the actual consumer app through `getCurrentInstance()?.appContext.app` in setup and call the existing registration function. Use a module-level `WeakSet<App>` for idempotence and mark the app only after successful registration. A new bridge app needs its own installation; a one-time container flag is insufficient. Preserve project-specific components and resolve ownership before overwriting names.
+
+This explicitly registers components in the consumer; provide/inject does not copy the registry. Reusing the entire registration function also brings its dependencies. If a smaller expose is needed, extract the required public subset from the original source and share it between the standalone entry and Provider, rather than maintaining two lists.
+
 **React** (`@fulgurjs/federation/react`):
 
 ```tsx

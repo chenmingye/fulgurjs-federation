@@ -68,6 +68,12 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 - **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
+### 已有项目复用原组件注册源
+
+已有统一 `registerComponents(app)` 的工程，不要在 setup 模块再手抄一份组件库清单：表单内层的选人框、上传器也可能使用全局标签，扫描最外层模板容易漏。可以由上面的祖先 Provider 在 setup 中取得实际消费方 `getCurrentInstance()?.appContext.app`，调用原注册函数；用模块级 `WeakSet<App>` 对同一 app 幂等，注册成功后才加入集合。桥接创建新 app 时会重新安装，不能仅用容器级一次性标记。保留原项目定制组件，同名冲突先确定归属，不能盲覆盖。
+
+这仍然是在消费方注册组件，并非 provide/inject 自动复制注册表。复用整套注册函数会带入它的依赖；需要更小的暴露面时，从原注册源抽出表单真正需要的公共子集，独立入口与 Provider 共用该子集，而不是维护两份清单。
+
 **React**（`@fulgurjs/federation/react`）：
 
 ```tsx
