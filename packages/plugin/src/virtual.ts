@@ -312,7 +312,6 @@ interface ProvideRecord {
   version: string
   eager: boolean
   from: string
-  import: string
 }
 
 function providesRecords(options: NormalizedOptions): ProvideRecord[] {
@@ -324,7 +323,6 @@ function providesRecords(options: NormalizedOptions): ProvideRecord[] {
       version: s.version,
       eager: s.eager,
       from: options.name,
-      import: s.import as string,
     }))
 }
 
@@ -343,31 +341,18 @@ export function genInitModule(
   const lines: string[] = [INIT_MODULE_MARKER]
   lines.push(`import { initSharing, registerShare, registerRemotes, registerPlugins } from "virtual:fulgurjs-runtime";`)
 
-  const isLocalHostProvider = command === 'build' && options.remotes.length > 0 && options.exposes.length === 0 && !options.devSharedSelf
   const provides = providesRecords(options)
   const eagerShared: NormalizedShared[] = options.shared.filter((s) => s.eager && s.import !== false)
   eagerShared.forEach((s, i) => {
     lines.push(`import * as __fulgurjs_eager_${i} from "virtual:fulgurjs-shared:${s.shareKey}";`)
   })
-  // 纯宿主 build：本地包静态引入并作为 provide 的同步 value。远程的同步门面
-  // （loadShareSync）只有看到 value 才返回 ready；否则同版本会回落本地副本，
-  // 造成同步消费者与宿主本地消费路径不一致。
-  const localProvide = (i: number) => `__fulgurjs_local_${i}`
-  if (isLocalHostProvider) {
-    provides.forEach((p, i) => {
-      lines.push(`import * as ${localProvide(i)} from ${JSON.stringify(p.import)};`)
-    })
-  }
 
   // dev 宿主（有 remotes 即浏览器直接加载的主应用，是否同时 exposes 不影响）：
   // 自身应用实例已在用本地副本（pinia/router 等全局状态已初始化在本副本上），把 provide
   // 标记为已加载——singleton 协商"已加载优先"时远程必然命中宿主正在用的这份，避免双实例
   // 断链。纯 remote（无 remotes）不标记。
   const isDevHost = command === 'serve' && options.remotes.length > 0
-  // 纯宿主（remotes>0、无 exposes）在 build 下自身源码不门面化（见 index.ts 的 rewriteShared），
-  // 本地 Vue 就是应用正在用的实例。提供方必须直接返回这份本地模块并标记 loaded，
-  // 否则远程同步消费只能使用本地 fallback，不能立即复用宿主已就绪的模块。
-  const loadedFlag = isDevHost || isLocalHostProvider ? 'true' : 'false'
+  const loadedFlag = isDevHost ? 'true' : 'false'
 
   lines.push(`initSharing(${JSON.stringify(options.shareScope)});`)
 
@@ -391,13 +376,6 @@ export function genInitModule(
     if (p.eager && eagerIdx !== -1) {
       lines.push(
         `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => Promise.resolve(__fulgurjs_eager_${eagerIdx}), { from: ${JSON.stringify(p.from)}, eager: true, loaded: ${loadedFlag} });`,
-      )
-    } else if (isLocalHostProvider) {
-      // 本地提供包（vue 等）就是宿主应用实例；与入口的静态 import 解析到同一模块。
-      // value 让同步协商门面立即 ready，避免回落本地副本造成双实例。
-      const idx = provides.indexOf(p)
-      lines.push(
-        `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => Promise.resolve(${localProvide(idx)}), { from: ${JSON.stringify(p.from)}, eager: false, loaded: ${loadedFlag}, value: ${localProvide(idx)} });`,
       )
     } else {
       lines.push(

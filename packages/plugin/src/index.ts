@@ -991,12 +991,9 @@ export function federation(options: FederationOptions): Plugin[] {
           recordRewritten(id)
         },
         options: state.normalized,
-        // 纯宿主（remotes>0、无 exposes）自身 import 即自身 provide：build 与 dev 都不改写
-        // 自身源码，避免宿主 Vue 走门面、依赖包（node_modules 闸门）走本地副本造成双实例
-        // （生产表现：子应用文本槽渲染成 [object Object]）。双向宿主/纯 remote 继续全量改写。
-        rewriteShared: state.command === 'build'
-          ? !(state.normalized.remotes.length > 0 && state.normalized.exposes.length === 0 && !state.normalized.devSharedSelf)
-          : state.normalized.devSharedSelf,
+        // build：全量改写；dev：默认仅纯 remote 改写 shared（被宿主消费的组件需协商到宿主实例），
+        // 双角色宿主可显式 devSharedSelf: true 参与协商
+        rewriteShared: state.command === 'build' || state.normalized.devSharedSelf,
         allowNodeModules,
         cjsRequireRewrite: state.command === 'build',
         sharedClosureRoots: cjsClosureRoots,
@@ -1705,7 +1702,7 @@ export function federation(options: FederationOptions): Plugin[] {
         recordRewritten(id)
       },
       options: n,
-      rewriteShared: !(n.remotes.length > 0 && n.exposes.length === 0 && !n.devSharedSelf),
+      rewriteShared: true,
       allowNodeModules: isPureRemoteBuild || n.devSharedSelf,
       sharedClosureRoots: state.sharedClosureRoots,
     })

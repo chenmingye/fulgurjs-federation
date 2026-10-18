@@ -310,8 +310,7 @@ describe('D6: post 阶段 auto-import 兜底（源码契约）', () => {
     const fnBody = src.slice(fnStart, src.indexOf('\n  }', fnStart))
     expect(fnBody).toContain("clean.endsWith('.vue')")
     expect(fnBody).toContain('const quickCheck')
-    expect(fnBody).toContain('rewriteShared:')
-    expect(fnBody).toContain('n.exposes.length === 0')
+    expect(fnBody).toContain('rewriteShared: true')
   })
   // 最终导入的行为由 dev-auto-import / build-plugin-chain 真实 Vite 管线验证。
   it('兜底传入 sharedClosureRoots（与 pre 一致的闭包静态化）', () => {
