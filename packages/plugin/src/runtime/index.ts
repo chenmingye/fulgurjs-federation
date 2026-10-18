@@ -445,7 +445,7 @@ function createRuntime() {
     name: string,
     version: string,
     get: () => Promise<any>,
-    opts: { from?: string; eager?: boolean; loaded?: boolean } = {},
+    opts: { from?: string; eager?: boolean; loaded?: boolean; value?: any } = {},
   ): void {
     const scope = getScope(scopeName || 'default')
     // own-property 判定 + null 原型字典：'__proto__'/'constructor' 等键不误读/误写原型
@@ -459,7 +459,7 @@ function createRuntime() {
       // 已注册版本永不替换（webpack 语义：first-wins）
       return
     }
-    byName[version] = { version, get, from: opts.from ?? 'unknown', eager: !!opts.eager, loaded: !!opts.loaded }
+    byName[version] = { version, get, from: opts.from ?? 'unknown', eager: !!opts.eager, loaded: !!opts.loaded, value: opts.value }
   }
 
   /** WP6：运行时注册参数校验（配置期 CFG-009 之外的直连防线）——坏数值当场抛错 */

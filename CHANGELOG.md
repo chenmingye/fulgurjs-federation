@@ -1,5 +1,10 @@
 # 当前发布说明
 
+## 6.12.4
+
+- 修复纯宿主共享提供方的同步可见性：构建期把本地共享包（vue 等）作为 provide 的同步 value 注册，远程的同步协商门面立即命中宿主实例，不再回落本地副本。生产 Element Plus（h/isVNode）与页面 VNode 分属两份 Vue 导致的 `[object Object]` 标签消失。
+- 与 6.12.3 的纯宿主自身源码不改写、本地提供方选项合并为同一修复；保留用户合法 manualChunks。
+
 ## 6.12.3
 
 - 修复纯宿主（有 remotes、无 exposes）在生产构建中的共享实例分裂：宿主自身的 shared 引用不再被门面化，提供方直接返回宿主本地模块并标记 loaded，避免远程协商到 fallback 第二份 Vue；生产表现（子应用文本槽渲染成 `[object Object]`）随之消失。
