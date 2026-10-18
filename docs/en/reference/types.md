@@ -261,6 +261,8 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 
 ## FgRemoteTypes — remote type registry
 
+> How to check: the generated `registry.d.ts` must be part of the TypeScript program (the project `tsconfig.json` include must cover `src/fulgurjs/types/**/*.d.ts`), and the project must be checked with `vue-tsc -p tsconfig.json` or the IDE. Passing a single file to `tsc`/`vue-tsc` does not load ambient module augmentation, so a misspelled entry will not be reported — that is a checking-method problem, not a moduleResolution limitation; `node` (node10), `bundler` and `NodeNext` can all resolve this package's types.
+
 The **augmentable interface** shared by all three entries (`/runtime`, `/vue`, `/react`). Its single declaration lives in a static shared file inside the package (the `./internal/registry.js` subpath pointing at `types/registry.d.ts`) — the host-generated `src/fulgurjs/types/<remote>/registry.d.ts` augments it with `'<remote>/<expose>': typeof import('<remote>/<expose>')`. Never implement or extend this interface by hand: its members come entirely from the plugin's synced output.
 
 | Type | Meaning |
@@ -282,18 +284,6 @@ Import from: `@fulgurjs/federation/react`, `@fulgurjs/federation/runtime`, `@ful
 |---|---|---|---|
 | `exposes` | no | `string[]` | See the owning API for lifecycle and runtime defaults. |
 | `exists` | yes | `boolean` | See the owning API for lifecycle and runtime defaults. |
-
-## FgRemoteTypes — remote type registry
-
-The **augmentable interface** shared by all three entries (`/runtime`, `/vue`, `/react`). Its single declaration lives in a static shared file inside the package (the `./internal/registry.js` subpath pointing at `types/registry.d.ts`) — the host-generated `src/fulgurjs/types/<remote>/registry.d.ts` augments it with `'<remote>/<expose>': typeof import('<remote>/<expose>')`. Never implement or extend this interface by hand: its members come entirely from the plugin's synced output.
-
-| Type | Meaning |
-|---|---|
-| `FgRemoteTypes` | Entry string → module namespace type registry. Empty while no types are synced (all literals pass with `unknown` results) |
-| `FgStaticEntry<S>` | Static check on string-API parameters (empty-registry/dynamic pass; registered literals narrow to themselves; unregistered literals get an error type carrying the fix text, failing at the call site) |
-| `FgRemoteModule<S>` | The module type for an entry: registered → module namespace; unsynced/dynamic → `unknown` |
-
-Framework-entry check types (re-exported by `/vue` and `/react`): `FgComponentEntry<S>` (remoteComponent accepts only exposes whose default export is a component), `FgBridgeEntry<S>` (bridge factories accept only a `defineBridgeApp` default export), `FgBridgeAppProps<S>` (bridge props extracted from the provider's declaration), `FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>` (real remote component/props types), `FgVueBridgeWrapper<S>` (the Vue bridge wrapper component). Semantics and limits: [API reference · string-API entry checks](api.md#entry-checks-for-the-string-apis-type-registry).
 
 ## RemoteSchema
 

@@ -151,6 +151,18 @@ export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m
 
 普通组件不需要 Provider 时不建这个文件。现有 iframe 里的完整应用或业务表单不会自动变成联邦组件：找到实际 iframe 创建处后，按组件/桥接的真实能力替换，并核对只读、数据和样式。TinyMCE内部编辑iframe不属于业务跨应用iframe，不机械删除。
 
+## 4.1 替换旧微前端壳时必须一起处理的宿主设施
+
+远程能挂载不等于旧壳已经退出。逐项核对后再宣称接通：
+
+- **旧微前端注册点**：入口 bootstrap、布局 mounted、登录 setToken 回调等可能各自再注册一次旧壳。切换为联邦后全部关闭或按开关短路，并确认没有第二个容器抢占同一前缀。
+- **后台菜单生成的动态路由**：后台菜单常为子应用内部路径生成组件为空的记录。它们只用于菜单展示；注册进 vue-router 会以更具体的路径压过远程前缀的 catch-all，点击菜单后内容区空白。先构建菜单树，再把同前缀记录从路由表剔除。
+- **宿主页面容器 key**：不要按 `route.fullPath` 重建远程挂载视图。子应用内部导航会同步宿主 URL，fullPath 变化会卸载整个远程应用，正在初始化的异步页面会在已置空的 ref 上抛错。远程前缀路由使用每个远程稳定的 key。
+- **旧跨应用 iframe / 宿主页面**：替换为宿主提供真实组件与事件（getContext 返回组件装载器、全局组件安装、事件对象），在子应用内直接渲染；同源 iframe 只能作为旧环境兜底，不能作为联邦验收。TinyMCE 编辑 iframe 例外。
+- **会话身份读取**：登出动作可能先清 store 状态、后清持久缓存。身份 getter 若读取会被 Pinia 缓存的 getToken getter，会在中间态把旧缓存 token 缓存进计算属性，随后路由守卫把 `/login` 重定向回首页。按 state 优先：state.token 已赋值（含空串）就以它为准，只有未恢复（undefined）才读持久缓存。
+- **快速离开后重进**：子应用每次挂载是新 router，动态路由表只属于该 router。权限守卫不能只凭“用户资料已设置”跳过 `addRoute`；以 router 实例为粒度重新登记动态路由。
+- **业务组件的宿主依赖**：直接从宿主模块图取组件在子应用内渲染时，必须同时补齐它假设的全局组件、事件与存储归属；否则出现未解析标签、原始 username 或空下拉。异步回调里不要用 `getCurrentInstance` 取 app，应在 setup 期捕获。
+
 ## 5. 按这一顺序接通，卡在哪一步就处理哪一步
 
 1. 按原启动脚本先启动远程，核对实际 dev manifest/remoteEntry 与提供方类型生成日志。
@@ -159,6 +171,8 @@ export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m
 4. 打开自动同步的声明体验真实 props/方法提示；不手写消费方类型、不用 any/Record 占位掩盖接口。
 5. 仅检查新增及修改接入文件的 TS；错误落在原业务依赖内时登记归属，不顺手全项目整改。
 6. 接通后再执行生产构建、部署体检、深链刷新、query/hash、退出/换号、重进、故障恢复与视觉对照。
+
+构建目标：共享门面产物包含顶层 await。生产 `target` 必须支持 TLA（如 es2022），或使用能正确处理全部 chunk 的 TLA 转换；不要为了绕过构建错误停用合法的 `manualChunks`。`sourcemap: 'inline'` 在超大产物上可能触发 Vite import-analysis 栈溢出，可改为外部 sourcemap。首次给旧工程引入插件后清一次 `node_modules/.vite` 再验收。
 
 遇到问题先保留第一条错误、URL及调用栈，再按[错误码](../reference/errors.md)定位。发现源码或文档缺陷就修正；不得靠静默fallback、停用合法打包配置、伪造接口数据或改验收判据绕过。后端不可达单独记录具体接口，继续完成不依赖它的工作。
 

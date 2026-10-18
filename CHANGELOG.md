@@ -1,5 +1,11 @@
 # 当前发布说明
 
+## 6.12.2
+
+- 首次接入指南补齐替换旧微前端壳时必须同时处理的宿主设施：旧注册点、后台菜单动态路由遮蔽、远程页面容器 key、跨应用 iframe 替换、登出中间态的会话 getter 读取、快速离开后重进的动态路由登记、宿主组件依赖。
+- 类型参考明确检查方式：生成的 registry 声明必须纳入项目级 TypeScript program，单文件检查不会加载 ambient 增强；node10/bundler/NodeNext 均可解析。
+- 补充构建目标与 sourcemap 指引：共享门面产物含顶层 await，不能为绕过构建错误停用合法 manualChunks；超大产物优先外部 sourcemap；首次引入插件后清理 .vite。
+
 ## 6.12.1
 
 - 公开模板升级到自动会话接线：vue-host-react-remote 宿主改用 session 身份 getter（token 刷新不重挂演示），删除单句 session.ts；模板十二个工程依赖与 pnpm 锁精确钉 6.12.0 正式版（registry 真实 integrity）。

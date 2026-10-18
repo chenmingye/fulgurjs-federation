@@ -272,6 +272,8 @@ setup/onSession 收到的上下文.
 
 ## FgRemoteTypes — 远程类型注册表
 
+> 检查方式：生成的 `registry.d.ts` 必须被包含在 TypeScript program 内（工程 `tsconfig.json` 的 include 覆盖 `src/fulgurjs/types/**/*.d.ts`），再用项目级 `vue-tsc -p tsconfig.json` 或 IDE 检查。只把单个文件交给 `tsc`/`vue-tsc` 检查不会加载 ambient 模块增强，拼错入口不会报错——这是检查方式问题，不是 moduleResolution 限制；`node`（node10）、`bundler`、`NodeNext` 均可解析本包类型。
+
 三入口（`/runtime`、`/vue`、`/react`）共享的**可增强接口**，声明本体是包内静态共享文件（`./internal/registry.js` 子路径指向 `types/registry.d.ts`）——宿主生成的 `src/fulgurjs/types/<远程名>/registry.d.ts` 通过模块增强向它登记 `'<远程名>/<expose>': typeof import('<远程名>/<expose>')`。不要手工实现或扩展该接口：成员完全由插件的类型同步产物生成。
 
 | 类型 | 语义 |

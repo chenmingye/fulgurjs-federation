@@ -132,6 +132,18 @@ export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m
 
 Skip this file for ordinary components without Providers. Business iframes are not automatically migrated: replace their actual creation sites with the appropriate component/application bridge and verify data, readonly state and styles. TinyMCE's internal editing iframe is not a cross-application business iframe.
 
+## 4.1 Host facilities that must be handled together when replacing a legacy shell
+
+A mountable remote does not mean the legacy shell is gone. Check each item before calling the integration complete:
+
+- **Legacy micro-frontend registration points**: the entry bootstrap, a layout `onMounted`, a login `setToken` callback, or similar hooks can each register the old shell again. Disable or short-circuit all of them, and confirm no second container claims the same prefix.
+- **Dynamic routes generated from backend menus**: backend menus often generate component-less records for the child application's internal paths. They are for menu display only. Registering them in vue-router gives them a more specific path than the remote prefix catch-all and leaves the content area blank after a menu click. Build the menu tree first, then remove same-prefix records from the route table.
+- **Host page container key**: do not rebuild the remote mount view from `route.fullPath`. Child-internal navigation synchronizes the host URL; a changing fullPath unmounts the entire remote application, and an asynchronously initializing page then touches refs that have already been cleared. Use a stable per-remote key for the remote prefix route.
+- **Legacy cross-application iframes / host pages**: replace them with host-provided real components and events (a component loader, global component installation and event objects returned from getContext) and render inside the child application. A same-origin iframe is only a fallback for old environments, never evidence of federation. TinyMCE's internal editing iframe is the exception.
+- **Session identity reads**: a logout action may clear store state before clearing the persistent cache. If the identity getter reads a Pinia-cached getToken getter, it can cache the old cached token during that intermediate state; the router guard then redirects `/login` back to the home page. Read state first: use state.token whenever it is assigned (including the empty string) and read the persistent cache only while it is still undefined.
+- **Quick leave and re-entry**: every child mount creates a new router, and its dynamic route table belongs to that router only. A permission guard must not skip `addRoute` merely because user information was already loaded; register dynamic routes per router instance.
+- **Host dependencies of business components**: rendering a component from the host module graph inside the child application requires installing the global components, events and store ownership it assumes. Otherwise you see unresolved tags, raw usernames or empty selects. Do not call getCurrentInstance inside async callbacks to obtain the app; capture it during setup.
+
 ## 5. Connect and diagnose in order
 
 1. Start remotes using their existing scripts. Check the actual dev manifest/remoteEntry and provider declaration generation.
@@ -140,6 +152,8 @@ Skip this file for ordinary components without Providers. Business iframes are n
 4. Inspect synchronized declarations for actual props/methods. Do not copy consumer interfaces or hide errors with any/Record.
 5. Check new/modified integration TS only, recording inherited diagnostics separately.
 6. Then perform production build/deployment and verify deep links, refresh, query/hash, sessions, reentry, recovery and visuals.
+
+Build target: the shared facade output contains top-level await. The production `target` must support TLA (for example es2022), or use a TLA transform that correctly handles every emitted chunk; do not disable a legal `manualChunks` configuration just to make the build pass. `sourcemap: 'inline'` can trigger a Vite import-analysis stack overflow on very large outputs; external sourcemaps are a supported alternative. After introducing the plugin into an existing project for the first time, clear `node_modules/.vite` once before acceptance.
 
 Preserve the first error, URL and stack before diagnosing. Fix implementation/documentation defects; do not use silent fallbacks, disabled valid chunk settings, fabricated API responses or weakened acceptance. Record unreachable backends by actual endpoint and continue independent work.
 
