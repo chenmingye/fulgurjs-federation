@@ -79,8 +79,8 @@ This explicitly registers components in the consumer; provide/inject does not co
 ```tsx
 import { remoteComponent } from '@fulgurjs/federation/react'
 
-type PanelProps = { title: string }
-const RemotePanel = remoteComponent<PanelProps>('remote-a/Panel', {
+// Infer props from the synced provider declarations; do not duplicate their interface in the host.
+const RemotePanel = remoteComponent('remote-a/Panel', {
   fallback: <Spinner />,                     // pending placeholder (default null)
   error: (err, retry) => <ErrorBox error={err} onRetry={retry} />,  // or pass a ReactNode
   retries: 2,

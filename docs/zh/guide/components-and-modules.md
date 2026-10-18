@@ -79,8 +79,8 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 ```tsx
 import { remoteComponent } from '@fulgurjs/federation/react'
 
-type PanelProps = { title: string }
-const RemotePanel = remoteComponent<PanelProps>('remote-a/Panel', {
+// props 从提供方自动生成并同步的声明推导，不在宿主重写一份接口。
+const RemotePanel = remoteComponent('remote-a/Panel', {
   fallback: <Spinner />,                     // pending 占位（默认 null）
   error: (err, retry) => <ErrorBox error={err} onRetry={retry} />,  // 或传 ReactNode
   retries: 2,
