@@ -69,6 +69,8 @@ pnpm dev        # Unified launcher: starts the remote first and probes it, then 
 
 ## Integrating an existing project
 
+For complete applications with routing/authentication/guards, follow the [first-integration workflow](first-integration.md). The three-file summary below describes basic wiring, not a complete application migration.
+
 An existing project does not need to be rebuilt. Only three things to do: install the plugin → write `fulgurjs.config.ts` → register the plugin in `vite.config.ts`. Start with the [integration preview guide](existing-apps.md#preview-integration-before-writing): `fulgurjs init --plan` previews wiring and `--write` explicitly applies it. Plain `init` only generates a starter config; manual wiring also works. The CLI is invoked uniformly as `npx @fulgurjs/federation <command>` (this also works before the project has installed its dependencies; once installed, `npx fulgurjs` works too).
 
 ### Starter config with `fulgurjs init`

@@ -132,7 +132,7 @@ export default function BridgePage() {
 
 | 项 | `createVueBridgeApp`（Vue 宿主） | `createReactBridgeApp`（React 宿主） |
 |---|---|---|
-| 工厂选项 | `loadingComponent?` `errorComponent?`（收到 `error` prop，完全接管） `retries?`（0–10 整数） `timeout?`（正有限 ms） `getContext?` | `fallback?`（pending 占位） `error?`（节点或 `(error, retry) => ReactNode`） `retries?` `timeout?` `getContext?` |
+| 工厂选项 | `loadingComponent?` `errorComponent?`（收到 `error` prop，完全接管） `retries?`（0–10 整数） `timeout?`（正有限 ms） `getContext?` `session?` `sessionStorageKey?` | `fallback?`（pending 占位） `error?`（节点或 `(error, retry) => ReactNode`） `retries?` `timeout?` `getContext?` |
 | 返回组件 props | `appProps: P`（业务数据）+ `sessionKey?: string \| null`（控制参数，不混入业务 props） | 同左，`ComponentType<{ appProps: P; sessionKey?: string \| null }>` |
 | 泛型 | `createVueBridgeApp<P>(spec, options?)`，P 只约束 `appProps` | 同左 |
 | spec | 完整 `<remote>/<expose>`，与 `remoteComponent` 同一解析规则；无 remotePrefixes/schema/deriveSpec | 同左 |
@@ -164,17 +164,17 @@ export default function BridgePage() {
 
 空字符串、数字等非法值按 `MFU-017` 拒绝挂载。
 
-Vue 宿主可用 `createBridgeSession()`（`@fulgurjs/federation/vue`）管理代次——生成非敏感 ID、sessionStorage 持久化（刷新不变、关标签页作废）、renew/clear 一个模块级实例完成，替代每项目手写：
+### Vue 宿主推荐：自动会话
 
-```ts
-// src/fulgurjs/host/session.ts（模块级创建一次）
-import { createBridgeSession } from '@fulgurjs/federation/vue'
-export const bridgeSession = createBridgeSession()
-// 登录成功 → bridgeSession.renew()；退出 → bridgeSession.clear()
-// 组件内：<RemoteApp :session-key="bridgeSession.sessionKey.value" />
-```
+在 `createVueBridgeApp` 选项中配置 `session` 同步身份 getter，返回稳定非敏感用户标识。返回 `undefined` 表示用户资料恢复中（不加载、不删除恢复记录）；返回 `null` 表示明确退出。插件内部生成随机代次、持久化、补入 AppContext、换号重挂、登出清理，不需要额外 session.ts、sessionKey prop 或登录流程里的 renew/clear。
 
-`renew` 的调用时机（登录成功后）与 `clear`（退出时）由宿主登录流程决定；值形态与持久化语义由插件承担。嵌套宿主（B 同时是子应用与宿主）同页并存时给各会话传不同 `storageKey`。React 宿主自行管理代次值（如 `useState`），语义要求同上。
+`session` 必须读取响应式状态；仅更新 localStorage 不会通知 Vue。标识不能使用token/密码/敏感资料，sessionStorage保存的是非敏感身份及随机代次；同身份token轮换不重挂。缺省不启用自动会话，普通无登录远程按原方式加载。自定义缓存命名空间用 `sessionStorageKey`，同一宿主多个远程用相同键。显式 sessionKey prop 与自动模式同时配置会报错；getContext 若手填不同 sessionKey 仍报 MFU-017，不会被自动覆盖。
+
+完整接线见[首次接入](first-integration.md#4-有登录依赖才增加业务上下文)与[Vue 宿主模板](../../../examples/templates/vue-host-react-remote/vue-host/src/App.vue)。插件无法猜测未体现在响应式状态里的同账号重新认证事件；需要区分时把业务认证批次纳入身份，或使用显式受控模式。
+
+### 显式控制（Vue / React）
+
+需要自行指定代次的场景仍可使用 sessionKey prop。Vue 的 `createBridgeSession()` 提供非敏感随机ID和 renew/clear；将它放在已有认证/上下文模块，不为一行实例创建单独文件，不在token刷新时renew。React 宿主继续通过状态/hook显式提供代次，不能使用Vue自动session getter。
 
 `getContext` 是**无副作用的同步 getter**：在首次、重试及换会话的实际加载前调用；返回快照对象（拒绝 Promise/thenable 与非对象——`MFU-016`，`phase: 'getContext'`）。桥接层先校验快照 `sessionKey` 与受控值一致（不一致 `MFU-017` 且不写全局），**校验通过后由桥接层调用 `provideAppContext`**——getter 本身不写全局。未提供 getter 时校验现有 `AppContext.sessionKey` 必须与受控值一致。换代时桥接层先 `clearAppContext()` 清旧账号独有字段再写新快照，保证零旧账号残留。
 

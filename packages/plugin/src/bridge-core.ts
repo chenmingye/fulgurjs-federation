@@ -94,6 +94,7 @@ export interface BridgeContextResolution {
  * 挂载前校验会话与上下文快照（同步、无副作用；只在全部通过后由调用方 provide）。
  *
  * - getter 抛错/返回非对象/thenable → MFU-016（phase: getContext）；
+ * - 自动会话可补入缺省的快照sessionKey；显式矛盾仍拒绝；
  * - 受控 sessionKey 与快照或现有 AppContext 不一致 → MFU-017（不写任何全局状态）；
  * - 新会话（与全局当前 sessionKey 不同）先 clearAppContext 清旧账号残留，
  *   避免 provideAppContext 顶层 merge 留下旧账号独有字段（BR06）。
@@ -108,6 +109,7 @@ export function resolveBridgeContext(
   spec: string,
   controlled: string | undefined,
   getContext: (() => Partial<AppContext> & Record<string, unknown>) | undefined,
+  managedSession = false,
 ): BridgeContextResolution {
   if (getContext) {
     let snapshot: Partial<AppContext> & Record<string, unknown>
@@ -118,6 +120,10 @@ export function resolveBridgeContext(
     }
     if (snapshot === null || typeof snapshot !== 'object' || typeof (snapshot as { then?: unknown }).then === 'function') {
       throw bridgeLifecycleError('getContext', spec, describeContextValue(snapshot))
+    }
+    // 自动会话只补插件自己生成的代次；显式声明了不同代次仍按原合同拒绝，不能覆盖矛盾。
+    if (managedSession && controlled !== undefined && snapshot.sessionKey === undefined) {
+      snapshot = { ...snapshot, sessionKey: controlled }
     }
     if (controlled !== undefined && snapshot.sessionKey !== controlled) {
       throw bridgeSessionMismatchError(spec, controlled, snapshot.sessionKey, { reason: 'getter-snapshot' })

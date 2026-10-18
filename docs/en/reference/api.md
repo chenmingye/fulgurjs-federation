@@ -344,6 +344,8 @@ export const pageProviders: RemoteSetupModule['pageProviders'] = [
 
 `RemoteSetupContext`: `{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`. `appContext` is the snapshot taken from the page-level AppContext **at call time** (never a saved stale reference); `signal` is invalidated when the login generation changes or on logout cleanup.
 
+A module with only pageProviders/globalComponents/onSession can omit the default function. Empty modules and non-function defaults remain invalid.
+
 Fixed contract:
 
 | Dimension | Semantics |
@@ -355,7 +357,7 @@ Fixed contract:
 | Execution count (pageProviders) | Declaration is extracted once with setup; **wrapping applies on every component render** (the declared array is cached by reference, successful loader results are reused; rejected loaders evict the cache so same-page retries execute them again). Vue `remoteComponent`/`createHostPages` and React `remoteComponent`/`createReactHostPages` apply it automatically (outer→inner wrap; attrs/slots pass through to the innermost business component; providers receive no props); manual `loadRemote` and `useLoadRemote` (returning the module for self-rendering) do not — wrap yourself there |
 | Execution count (onSession) | Deduplicated by the non-sensitive `sessionKey`: once per login generation; a new generation first invalidates the old `signal`, then chains the old call and the new call **serially** per remote (preventing two accounts' async writes from interleaving); `clearAppContext()` invalidates the dedup state, forcing a rerun on the next login. App-level setup does not re-run on logout/generation switch |
 | sessionKey | The host login flow generates a new generation on every successful login/re-login (non-sensitive ID, never a token); kept when a token refreshes but the session does not. **onSession present but sessionKey missing → MFU-013**; identity is never guessed from a user object reference; remotes without onSession need no sessionKey |
-| Export validation | Must default-export a function; the named `onSession` is optional and must be a function; `globalComponents` is optional and must be an object (key = registered name, value = component); `pageProviders` is optional and must be an array (entries = component objects or zero-arg loaders; functions with parameters or `displayName`/`props`/`emits` metadata remain static components; wrap unmarked zero-argument components with `defineComponent`; entry contents are validated at consumer-side resolution). Violations → MFU-011 (reports actual type / expected signature / fix) |
+| Export validation | At least one of default/onSession/globalComponents/pageProviders must be declared; any provided default must be a function; the named `onSession` is optional and must be a function; `globalComponents` is optional and must be an object (key = registered name, value = component); `pageProviders` is optional and must be an array (entries = component objects or zero-arg loaders; functions with parameters or `displayName`/`props`/`emits` metadata remain static components; wrap unmarked zero-argument components with `defineComponent`; entry contents are validated at consumer-side resolution). Violations → MFU-011 (reports actual type / expected signature / fix) |
 | Failure and retry | setup/onSession throwing → that `loadRemote` rejects (MFU-012); **only the failed stage's cache is cleared** (after a setup failure the retry starts at setup; an onSession failure only reruns the session segment); already-successful stages are not repeated. `fallbackModule` never masks an initialization failure |
 | Self-recursion | `loadRemote(same remote/…)` inside setup/onSession's synchronous segment → MFU-014 (the call waits on itself, deadlocking). Same-remote recursion inside the async segment cannot be attributed precisely and shows up as a hang — never load same-remote modules inside initialization |
 | dev/prod parity | The dev container (middleware-served) and the prod container (build artifact) carry the same setup metadata (the container's `__fulgurjsSetup` field + the manifest's `setup` field); the internal expose key `./__fulgurjs_setup__` never appears in type artifacts or public exposes lists |
@@ -444,7 +446,7 @@ export default defineBridgeApp(async (props, ctx) => {
 // Vue host (/vue)
 import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 const RemoteReactApp = createVueBridgeApp<P>('react-remote/bridge', {
-  loadingComponent?, errorComponent?, retries?, timeout?, getContext?,
+  loadingComponent?, errorComponent?, retries?, timeout?, getContext?, session?, sessionStorageKey?,
 })
 // Template: <RemoteReactApp :session-key="loginKey" :app-props="{ userId, onReady }" />
 
@@ -471,12 +473,21 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 - **DOM ownership**: the wrapper component only creates and keeps a stable empty mount container; host re-renders never patch inside the child app's root. React host StrictMode double effects are safe. Vue `<KeepAlive>` deactivate is not unmount — a child app in a cached page keeps its root and state.
 - **Old requests never pretend to be cancelled**: work already inside `loadRemote` is not cancelled because the bridge layer invalidates it — late old results are discarded by generation; the remote's `onSession` must honor the `signal.aborted` contract.
 
+### Automatic Vue session options
+
+| Option | Type / default | Behavior |
+|---|---|---|
+| `session` | `() => string \| number \| null \| undefined` / disabled | Synchronous reactive identity getter in createVueBridgeApp: stable ID=ready, null=logout, undefined=restoring. The plugin owns generation/context; do not also pass sessionKey. |
+| `sessionStorageKey` | `string` / `fulgurjs-bridge-session` | Records use this namespace plus `:auto`. All remotes of one host share it. Only meaningful with session enabled. |
+
+The same identity restores its generation on reentry/reload; a changed identity generates a new one. Never use credentials or sensitive data. localStorage updates must be reflected in reactive state. Omit session to disable, provide a getter to enable, add sessionStorageKey to customize. getContext need not return sessionKey; explicit conflicts remain errors. Getter errors/illegal results appear as MFU-016 (getContext); invalid option types throw TypeError immediately. See [automatic sessions](../guide/app-bridge.md).
+
 ### Host-side helper: `createBridgeSession` (Vue)
 
-`createBridgeSession(options?)` (`/vue`) — moves the **contract semantics** of sessionKey (non-sensitive login generation, never the token itself, null = logged out, unchanged across reloads within one session) into the plugin; the host only decides when to call it:
+`createBridgeSession(options?)` (`/vue`) — moves the **contract semantics** of sessionKey (non-sensitive login generation, never the token itself, null = logged out, unchanged across reloads within one session) into the plugin; this is the explicit-control helper. Normal Vue bridges should use the factory session identity getter instead of manual calls:
 
 ```ts
-// src/fulgurjs/host/session.ts (create once at module level)
+// src/fulgurjs/host/context.ts (create once at module level)
 import { createBridgeSession } from '@fulgurjs/federation/vue'
 export const bridgeSession = createBridgeSession()
 // on successful login → bridgeSession.renew(); on logout → bridgeSession.clear()

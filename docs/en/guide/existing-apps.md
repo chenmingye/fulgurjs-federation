@@ -1,5 +1,7 @@
 # Existing applications: required files first, optional capabilities second
 
+For a first complete application integration, start with the [single-path guide](first-integration.md); this page is the assembly/tool reference.
+
 ## Choose the integration scope
 
 | Need | Required integration | Do not add by default |
@@ -23,11 +25,10 @@ src/fulgurjs/
 │   ├── application.ts          # Host-only bootstrap (.tsx for React)
 │   ├── RemoteApplication.vue   # Mount view, session and navigation wiring
 │   ├── context.ts              # Optional remote context
-│   └── session.ts              # Optional host login generation
+│   └── auth.ts                 # Only for real business auth adaptation; no plugin generation store
 ├── exposes/                    # What this project provides to consumers
 │   ├── application.ts          # Remote application factory, standalone and embedded
-│   ├── mode.ts                 # Only if existing modules need the execution mode
-│   ├── session.ts              # Optional incoming host session
+│   ├── context.ts              # Optional incoming host identity/business-cache mapping
 │   ├── OrderForm.vue           # Example business component entry
 │   ├── FormProviders.vue       # Optional ancestor environment
 │   └── theme.ts                # Optional theme shared with standalone entry
@@ -217,3 +218,5 @@ Source mode executes the config only; it does not execute business modules, requ
 remoteComponent remains the component API. defineBridgeApp remains a current API for a custom bridge-only entry. defineApplication shares assembly when both entry modes are needed.
 
 Source examples: [Vue host factory](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts), [React remote factory](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx), [React host factory](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx), [template guide](../../../examples/templates/README.md). Copy whole templates and install their published registry dependencies independently.
+
+Reuse an existing factory with `--application <actual factory file>`. For unsupported extraction, `startup` reports the actual entry/imports and an ordered checklist. The CLI does not invent authentication/routes or forwarding bridge files.

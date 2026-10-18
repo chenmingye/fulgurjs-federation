@@ -32,9 +32,12 @@ const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
 已有项目（单项目 fulgurjs.config.ts 在应用根目录；命令默认读 ./fulgurjs.config.ts）：
   fulgurjs init --plan [--kind component|app] [--role consumer|provider|dual]
                 [--remote 名称=http://开发地址] [--expose ./键=./源文件]
-                [--name 容器名] [--entry src/main.ts] [--framework vue|react] [--json]
+                [--name 容器名] [--entry src/main.ts] [--application src/fulgurjs/exposes/application.ts]
+                [--framework vue|react] [--json]
                                                  只扫描并预览完整差异与人工待办；可重复 remote/expose。
                                                  --kind 默认 component；app 支持简单入口提取与宿主视图。
+                                                 已有复杂装配用 --application 复用真实默认导出；
+                                                 无法自动提取时输出当前入口导入与逐步整理清单，不猜业务。
                                                  --write 显式应用；阻断项存在时整批不写，不覆盖已有配置。
   fulgurjs init --rollback                         恢复被中断的计划写入；有后续人工编辑时拒绝覆盖。
   fulgurjs init [--out <路径>] [--framework vue|react] [--role consumer|provider|dual] [--force]
@@ -124,7 +127,7 @@ async function main(): Promise<number> {
     if (has('--plan') || has('--write')) {
       try {
         if (has('--config') || has('--out') || has('--force')) throw new Error('接入计划不能同时使用 --config/--out/--force；已有配置请单独运行 doctor --config 检查。')
-        const values = ['--kind', '--role', '--framework', '--name', '--entry', '--remote', '--expose']
+        const values = ['--kind', '--role', '--framework', '--name', '--entry', '--application', '--remote', '--expose']
         for (let i = 1; i < argv.length; i++) {
           if (['--plan', '--write', '--json'].includes(argv[i])) continue
           if (!values.includes(argv[i])) throw new Error(`未知接入计划参数：${argv[i]}`)
@@ -148,7 +151,7 @@ async function main(): Promise<number> {
           return result
         }
         const { planIntegration, formatIntegrationPlan, applyIntegration } = await import('./init-plan')
-        const plan = await planIntegration({ cwd: process.cwd(), kind: kind as 'component' | 'app', role: role as 'consumer' | 'provider' | 'dual', framework: framework as 'vue' | 'react' | undefined, name: argOf('--name'), entry: argOf('--entry'), remotes: pairs('--remote'), exposes: pairs('--expose') })
+        const plan = await planIntegration({ cwd: process.cwd(), kind: kind as 'component' | 'app', role: role as 'consumer' | 'provider' | 'dual', framework: framework as 'vue' | 'react' | undefined, name: argOf('--name'), entry: argOf('--entry'), application: argOf('--application'), remotes: pairs('--remote'), exposes: pairs('--expose') })
         const blocked = plan.tasks.some(task => task.blocking)
         if (has('--write') && !blocked) applyIntegration(plan)
         const written = has('--write') && !blocked
@@ -162,7 +165,7 @@ async function main(): Promise<number> {
         return 1
       }
     }
-    if (['--kind', '--remote', '--expose', '--entry', '--name'].some(has)) {
+    if (['--kind', '--remote', '--expose', '--entry', '--application', '--name'].some(has)) {
       console.error('[fulgurjs:init] 接入计划参数需要 --plan（预览）或 --write（显式写入）。')
       return 2
     }

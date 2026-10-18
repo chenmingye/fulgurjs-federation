@@ -11,6 +11,8 @@ To reduce duplicated standalone/bridge startup code, see [application assembly a
 
 For existing projects, `fulgurjs init --plan` previews wiring and `--write` explicitly applies it. Complex business assembly remains an explicit manual task. Unified `/vue` and `/react` imports support tree shaking without internal import paths.
 
+For an existing complete application, follow [one end-to-end integration path](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/first-integration.md) before consulting individual APIs.
+
 ## Quick start
 
 **New project** (recommended): scaffold a fully runnable federation workspace from a template:

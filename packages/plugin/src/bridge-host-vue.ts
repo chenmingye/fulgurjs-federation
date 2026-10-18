@@ -1,5 +1,5 @@
 /**
- * Vue 宿主桥接工厂（/bridge、/bridge/vue 导出 createVueBridgeApp；任务书 §3.4）。
+ * Vue 宿主桥接工厂（公开入口 /vue 导出 createVueBridgeApp）。
  *
  * 定位：接收注入的 loadRemote（不静态引用运行时内核，dist 壳绑定），返回一个
  * 包装组件 `{ appProps: P; sessionKey?: string | null }`，负责：
@@ -14,7 +14,8 @@
  */
 import { defineComponent, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, toRaw, watch, type Component, type DefineComponent, type PropType } from 'vue'
 import type { AppContext } from './context'
-import { provideAppContext } from './context'
+import { clearAppContext, provideAppContext } from './context'
+import type { createAutomaticBridgeSession } from './bridge-session-auto'
 import {
   assertBridgeContract,
   assertBridgeOptions,
@@ -45,6 +46,13 @@ export interface VueBridgeAppOptions {
   timeout?: number
   /** 无副作用的同步 getter：首次、重试及换会话的实际加载前返回本次所需上下文快照 */
   getContext?: () => Partial<AppContext> & Record<string, unknown>
+  /**
+   * 自动会话：响应式地返回非敏感用户标识；null=已退出，undefined=用户资料恢复中。
+   * 同身份刷新/token轮换不换代，换身份自动重挂。不要再传 sessionKey prop 或在上下文里手填代次。
+   */
+  session?: () => string | number | null | undefined
+  /** 自动会话命名空间；同一宿主的多个远程应使用同一键，默认 fulgurjs-bridge-session。 */
+  sessionStorageKey?: string
 }
 
 /** routing prop 的绑定键：normalized basePath + navigation 引用（同键不重挂、不重复订阅） */
@@ -121,7 +129,7 @@ export type FgVueBridgeWrapperResolved<P0, S extends string> = DefineComponent<
 >
 export type FgVueBridgeWrapper<S extends string> = FgVueBridgeWrapperResolved<FgTypeAuto, S>
 
-export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
+export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn, automaticSession?: typeof createAutomaticBridgeSession) {
   return function createVueBridgeApp<P0 = FgTypeAuto, S extends string = string>(
     spec: S & FgBridgeEntry<S>,
     options: VueBridgeAppOptions = {},
@@ -131,6 +139,13 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
     type P = P0 extends FgTypeAuto ? FgBridgeAppProps<S> : P0
     type Wrapper = FgVueBridgeWrapperResolved<P0, S>
     assertBridgeOptions(`createVueBridgeApp("${spec}")`, options)
+    if (options.session !== undefined && typeof options.session !== 'function') {
+      throw new TypeError('createVueBridgeApp 的 session 必须是同步身份 getter，例如 session: () => auth.userId；已退出返回 null，身份恢复中返回 undefined。')
+    }
+    if (options.session && !automaticSession) throw new Error('Vue桥接入口未绑定自动会话实现；请从 @fulgurjs/federation/vue 导入，不直接调用内部工厂。')
+    if (options.sessionStorageKey !== undefined && (!options.session || typeof options.sessionStorageKey !== 'string' || !options.sessionStorageKey.trim())) {
+      throw new TypeError('sessionStorageKey 必须是非空字符串，并与 session 身份 getter 一起配置；同一宿主的远程使用相同键。')
+    }
     const componentName = 'FulgurjsBridge_' + spec.replace(/[^A-Za-z0-9_-]/g, '_')
 
     return defineComponent({
@@ -145,6 +160,10 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         routing: { type: Object as PropType<BridgeHostRouting>, required: false, default: undefined },
       },
       setup(props) {
+        const managedSession = options.session
+          ? automaticSession!(options.session, options.sessionStorageKey ?? 'fulgurjs-bridge-session')
+          : undefined
+        const currentSession = () => managedSession ? managedSession.sessionKey.value : props.sessionKey
         const status = ref<BridgeStatus>('idle')
         const error = shallowRef<unknown>(undefined)
         /** 稳定挂载容器：多根 fragment 的固定子节点，占位是它的兄弟节点（§4.5 DOM 所有权） */
@@ -201,9 +220,19 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         const run = async (myGeneration: number): Promise<void> => {
           const el = container.value
           if (!el) return
-          const sk = props.sessionKey
+          const sk = currentSession()
           status.value = 'pending'
           error.value = undefined
+          if (managedSession && props.sessionKey !== undefined) {
+            error.value = bridgeHostError('getContext', spec, new Error('session 自动管理与 sessionKey prop 不能同时设置；保留 session 身份 getter，移除手工代次绑定。'))
+            status.value = 'error'
+            return
+          }
+          if (managedSession?.error.value !== undefined) {
+            error.value = bridgeHostError('getContext', spec, managedSession.error.value)
+            status.value = 'error'
+            return
+          }
           if (sk === null) {
             // 登出态：保持空容器，不再 getContext/provide/loadRemote/自动重试（§4.3）
             status.value = 'idle'
@@ -219,7 +248,8 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
               acquiredSession = controlled
             }
             // 1) 会话/上下文校验（副作用自由）；通过后才由桥接层写 AppContext（§4.3）
-            const resolution = resolveBridgeContext(spec, controlled, options.getContext)
+            const resolution = resolveBridgeContext(spec, controlled,
+              options.getContext ?? (managedSession ? () => ({}) : undefined), !!managedSession)
             if (resolution.provide) provideAppContext(resolution.provide)
             // 2) loadRemote 取契约（retries/timeout 透传现行语义；迟到结果按代次丢弃）
             const load = loadRemote(spec, { retries: options.retries })
@@ -274,7 +304,18 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
         })
         // 会话变化（换账号 A→B / 登出 →null / 重登）：作废旧代次并卸载后启动新代次；
         // 同会话重渲染不触发（sessionKey 值未变），只换 appProps 引用也不重挂（§4.3）
-        watch(() => props.sessionKey, () => { start() })
+        if (managedSession) {
+          watch(() => [currentSession(), managedSession.error.value, props.sessionKey] as const, (after, before) => {
+            // 先同步取消所有旧实例，再在微任务中挂新代次，避免同页多远程换号时互相误报会话冲突。
+            const released = invalidate()
+            if (after[0] === null && typeof before[0] === 'string') clearAppContext()
+            if (!released) return
+            const ticket = generation
+            void Promise.resolve().then(() => {
+              if (ticket === generation && !containerBlocked) void run(ticket)
+            })
+          }, { flush: 'sync' })
+        } else watch(() => props.sessionKey, () => { start() })
         // routing 配置变化：引用重建但键相同（normalized basePath + navigation）不重挂；
         // 启用/关闭/换前缀/换端口属于控制配置变化 → 旧代次作废重挂（旧监听器随通道销毁）
         watch(() => routingKey(props.routing), (after, before) => {

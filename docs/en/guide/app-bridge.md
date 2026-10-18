@@ -132,7 +132,7 @@ Both ends side by side:
 
 | Item | `createVueBridgeApp` (Vue host) | `createReactBridgeApp` (React host) |
 |---|---|---|
-| Factory options | `loadingComponent?` `errorComponent?` (receives the `error` prop, takes over completely) `retries?` (integer 0–10) `timeout?` (positive finite ms) `getContext?` | `fallback?` (pending placeholder) `error?` (node or `(error, retry) => ReactNode`) `retries?` `timeout?` `getContext?` |
+| Factory options | `loadingComponent?` `errorComponent?` (receives the `error` prop, takes over completely) `retries?` (integer 0–10) `timeout?` (positive finite ms) `getContext?` `session?` `sessionStorageKey?` | `fallback?` (pending placeholder) `error?` (node or `(error, retry) => ReactNode`) `retries?` `timeout?` `getContext?` |
 | Returned component props | `appProps: P` (business data) + `sessionKey?: string \| null` (control parameter, not mixed into business props) | Same on the left, `ComponentType<{ appProps: P; sessionKey?: string \| null }>` |
 | Generics | `createVueBridgeApp<P>(spec, options?)`; P constrains only `appProps` | Same on the left |
 | spec | Full `<remote>/<expose>`, same resolution rules as `remoteComponent`; no remotePrefixes/schema/deriveSpec | Same on the left |
@@ -164,17 +164,17 @@ Crossing roots inherits nothing: no host provide/inject, Pinia, React Context, o
 
 Illegal values such as empty strings or numbers are rejected at mount with `MFU-017`.
 
-Vue hosts can manage the generation with `createBridgeSession()` (`@fulgurjs/federation/vue`) — it generates a non-sensitive ID, persists it in sessionStorage (unchanged across reloads, invalidated when the tab closes), and exposes renew/clear on one module-level instance, replacing per-project hand-written session code:
+### Recommended for Vue hosts: automatic sessions
 
-```ts
-// src/fulgurjs/host/session.ts (create once at module level)
-import { createBridgeSession } from '@fulgurjs/federation/vue'
-export const bridgeSession = createBridgeSession()
-// on successful login → bridgeSession.renew(); on logout → bridgeSession.clear()
-// in components: <RemoteApp :session-key="bridgeSession.sessionKey.value" />
-```
+Set a synchronous `session` identity getter in createVueBridgeApp options. Return a stable non-sensitive user ID, undefined while identity is restoring (pause without deleting restoration state), or null on explicit logout. The plugin generates/persists the random generation, adds it to AppContext, remounts on identity changes and clears on logout. No separate session.ts, sessionKey prop, or login-flow renew/clear calls are required.
 
-When to call `renew` (after a successful login) and `clear` (on logout) is decided by the host's login flow; the value format and persistence semantics are owned by the plugin. Nested hosts (B being both a child app and a host) coexisting on one page must pass distinct `storageKey`s to each session. React hosts manage the generation value themselves (e.g. `useState`) with the same semantic requirements.
+Read reactive state; localStorage alone does not notify Vue. Never return a token/password/sensitive personal data: sessionStorage contains the non-sensitive identity and random generation. Token rotation with the same identity does not remount. Omission disables automatic sessions. Use sessionStorageKey for a custom namespace, shared by all remotes of one host. Combining automatic mode with a sessionKey prop errors; a conflicting explicit context sessionKey remains MFU-017.
+
+See [first integration](first-integration.md#4-add-business-context-only-when-required) and the [Vue host template](../../../examples/templates/vue-host-react-remote/vue-host/src/App.vue). Unobservable same-account reauthentication cannot be inferred; include a business authentication-batch ID or use explicit sessions.
+
+### Explicit control (Vue / React)
+
+sessionKey props remain available for custom generation control. Vue createBridgeSession generates IDs and exposes renew/clear; keep it inside an existing meaningful auth/context module instead of a one-line wrapper file. Do not renew on token rotation. React hosts continue to provide controlled generations through state/hooks; the automatic Vue getter does not apply to React.
 
 `getContext` is a **synchronous, side-effect-free getter**: called before the actual load on first load, retries, and session switches; it returns a snapshot object (Promises/thenables and non-objects are rejected — `MFU-016`, `phase: 'getContext'`). The bridge layer first validates that the snapshot's `sessionKey` matches the controlled value (on mismatch `MFU-017` and nothing is written globally); **after validation passes, the bridge layer calls `provideAppContext`** — the getter itself never writes globally. Without a getter, the existing `AppContext.sessionKey` must match the controlled value. On a generation switch, the bridge layer first calls `clearAppContext()` to clear old-account-only fields, then writes the new snapshot, guaranteeing zero residue of the old account.
 

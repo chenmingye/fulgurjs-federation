@@ -339,6 +339,8 @@ export const pageProviders: RemoteSetupModule['pageProviders'] = [
 
 `RemoteSetupContext`：`{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`。`appContext` 是**调用时**从页面级 AppContext 取得的快照（不保存永不更新的旧引用）；`signal` 在登录代次变化或退出清理时失效。
 
+没有应用级副作用时可只导出 pageProviders/globalComponents/onSession，省略默认函数；模块至少有一项有效声明，不为通过校验写空函数。
+
 固定契约：
 
 | 维度 | 语义 |
@@ -348,10 +350,9 @@ export const pageProviders: RemoteSetupModule['pageProviders'] = [
 | 执行次数（setup） | 每容器一次；并发调用共享同一 Promise；成功后不重复。`preloadRemote` 只预取资源不执行 |
 | 执行次数（globalComponents） | 声明提取随 setup 一次；**安装随每次 `loadRemote` 执行**（幂等，`app.component` 同名覆盖，后注册生效）——桥接子应用每次挂载新建 app 实例也能拿到注册。Vue `remoteComponent` 和 `createHostPages` 自动捕获消费方 app；手动 `loadRemote` 与 React 侧不自动传入（React 无 Vue 全局注册表）——跳过安装，不报错。注册随消费方 app 生命周期驻留，无独立卸载 API |
 | 执行次数（pageProviders） | 声明提取随 setup 一次；**包裹随每次组件渲染生效**（声明数组按引用缓存，成功的 loader 结果复用，失败清缓存允许同页重试；setup 重跑换新数组时也重新解析）。Vue `remoteComponent`/`createHostPages` 与 React `remoteComponent`/`createReactHostPages` 自动应用（按 外→内 包裹，attrs/slots 透传给最内层业务组件，Provider 不收 props）；手动 `loadRemote` 与 `useLoadRemote`（返回模块自行渲染）不自动应用——这类消费自行包裹 |
-| 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）；`pageProviders` 可选且必须是数组（项=组件对象或零参 loader，带参函数或带 `displayName`/`props`/`emits` 元数据的函数视为静态函数组件；无元数据的零参组件请用 `defineComponent` 包装；项内容在消费方解析时校验）。违反 → MFU-011（报实际类型/预期签名/修法） |
+| 导出校验 | 默认函数可省略，但必须声明 default/onSession/globalComponents/pageProviders 中至少一项；已有默认导出必须为函数，具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）；`pageProviders` 可选且必须是数组（项=组件对象或零参 loader，带参函数或带 `displayName`/`props`/`emits` 元数据的函数视为静态函数组件；无元数据的零参组件请用 `defineComponent` 包装；项内容在消费方解析时校验）。违反 → MFU-011（报实际类型/预期签名/修法） |
 | 执行次数（onSession） | 按非敏感 `sessionKey` 去重：同一登录代次一次；新代次先作废旧 `signal`，再按远程**串行**衔接旧调用与新调用（防两账号异步写入交错）；`clearAppContext()` 失效去重状态，下次登录必须重跑。应用级 setup 不因退出/换代重复执行 |
 | sessionKey | 宿主登录流程每次成功登录/重登生成新代次（非敏感 ID，禁止用 token）；token 刷新但会话未变时沿用。**有 onSession 却缺 sessionKey → MFU-013**，不凭用户对象引用猜测身份；无 onSession 的远程无需 sessionKey |
-| 导出校验 | 必须默认导出函数；具名 `onSession` 可选且必须是函数；`globalComponents` 可选且必须是对象（键=注册名，值=组件）。违反 → MFU-011（报实际类型/预期签名/修法） |
 | 失败与重试 | setup/onSession 抛错 → 该次 `loadRemote` 拒绝（MFU-012）；**只清失败阶段的缓存**（setup 失败重试从 setup 开始；onSession 失败只重跑会话段），已成功的阶段不重复。`fallbackModule` 不掩盖初始化失败 |
 | 自递归 | setup/onSession 同步段内 `loadRemote(同 remote/…)` → MFU-014（该调用会等待自身形成死锁）。异步段内的同远程递归无法精确归因，表现为挂起——不要在初始化内加载同远程模块 |
 | dev/prod 一致 | dev 容器（中间件直出）与 prod 容器（构建产物）携带同一 setup 元数据（容器上的 `__fulgurjsSetup` 字段 + manifest 的 `setup` 字段）；内部 expose 键 `./__fulgurjs_setup__` 不出现在类型产物与公开文档 exposes 清单中 |
@@ -440,7 +441,7 @@ export default defineBridgeApp(async (props, ctx) => {
 // Vue 宿主（/vue）
 import { createVueBridgeApp } from '@fulgurjs/federation/vue'
 const RemoteReactApp = createVueBridgeApp<P>('react-remote/bridge', {
-  loadingComponent?, errorComponent?, retries?, timeout?, getContext?,
+  loadingComponent?, errorComponent?, retries?, timeout?, getContext?, session?, sessionStorageKey?,
 })
 // 模板：<RemoteReactApp :session-key="loginKey" :app-props="{ userId, onReady }" />
 
@@ -454,7 +455,7 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 
 | 项 | `createVueBridgeApp`（Vue 宿主） | `createReactBridgeApp`（React 宿主） |
 |---|---|---|
-| 工厂选项 | `loadingComponent?` `errorComponent?`（收到 `error` prop，完全接管） `retries?`（0–10 整数） `timeout?`（正有限 ms） `getContext?` | `fallback?`（pending 占位） `error?`（节点或 `(error, retry) => ReactNode`） `retries?` `timeout?` `getContext?` |
+| 工厂选项 | `loadingComponent?` `errorComponent?`（收到 `error` prop，完全接管） `retries?`（0–10 整数） `timeout?`（正有限 ms） `getContext?` `session?` `sessionStorageKey?` | `fallback?`（pending 占位） `error?`（节点或 `(error, retry) => ReactNode`） `retries?` `timeout?` `getContext?` |
 | 返回组件 props | `appProps: P`（业务数据）+ `sessionKey?: string \| null`（控制参数，不混入业务 props） | 同左，`ComponentType<{ appProps: P; sessionKey?: string \| null }>` |
 | 泛型 | `createVueBridgeApp<P>(spec, options?)`，P 只约束 `appProps` | 同左 |
 | spec | 完整 `<remote>/<expose>`，与 `remoteComponent` 同一解析规则；无 remotePrefixes/schema/deriveSpec | 同左 |
@@ -467,12 +468,21 @@ const RemoteVueApp = createReactBridgeApp<P>('vue-remote/bridge', {
 - **DOM 所有权**：包装组件只创建并保持稳定的空挂载容器；宿主重渲染不 patch 子应用 root 内部。React 宿主 StrictMode 双 effect 安全。Vue `<KeepAlive>` 的 deactivate 不是卸载——缓存页中的子应用保有 root 与状态。
 - **旧请求不冒充取消**：已进入 `loadRemote` 的工作不因桥接层作废而被取消——迟到的旧结果按代次丢弃；远程 `onSession` 必须遵守 `signal.aborted` 契约。
 
+### Vue 自动会话选项
+
+| 选项 | 类型 / 默认 | 配置与效果 |
+|---|---|---|
+| `session` | `() => string \| number \| null \| undefined` / 不启用 | createVueBridgeApp 的同步响应式身份 getter；非空标识=登录就绪，null=退出，undefined=恢复中。插件管理代次与AppContext，不能同时传sessionKey prop。 |
+| `sessionStorageKey` | `string` / `fulgurjs-bridge-session` | 自动记录写入此命名空间的 `:auto` 键。同一宿主的远程使用相同命名空间；只在 session 启用时有意义。 |
+
+同身份重进/刷新恢复同代次，身份变化新建代次，token不参与身份判断。身份记录不能包含凭据或敏感资料；localStorage变化必须反映到响应式状态。关闭：省略session；开启：在工厂提供身份getter；自定义：同时提供sessionStorageKey。getContext不需要返回sessionKey；显式矛盾仍拒绝。getter非法返回值/抛错显示MFU-016（getContext），配置类型错误立即抛出TypeError。详见[自动会话](../guide/app-bridge.md)。
+
 ### 宿主侧辅助：`createBridgeSession`（Vue）
 
-`createBridgeSession(options?)`（`/vue`）——把 sessionKey 的**契约语义**（非敏感登录代次、禁用 token 充当、null=登出、同会话刷新不变）收进插件，宿主只决定调用时机：
+`createBridgeSession(options?)`（`/vue`）——把 sessionKey 的**契约语义**（非敏感登录代次、禁用 token 充当、null=登出、同会话刷新不变）收进插件，这是显式控制工具；常规Vue桥接推荐配置工厂 `session` 身份 getter，由插件自动管理，不必调用下方方法：
 
 ```ts
-// src/fulgurjs/host/session.ts（模块级创建一次）
+// src/fulgurjs/host/context.ts（模块级创建一次）
 import { createBridgeSession } from '@fulgurjs/federation/vue'
 export const bridgeSession = createBridgeSession()
 // 登录成功 → bridgeSession.renew()；退出登录 → bridgeSession.clear()

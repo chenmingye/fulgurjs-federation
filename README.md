@@ -7,7 +7,7 @@
 [English](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.en.md) ｜ **[完整文档中心](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)**（中文 [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md)）
 
 
-已有应用希望减少独立启动/桥接重复代码，参阅[统一装配与接入预检](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)。
+第一次接入完整应用，从[一条完整接入流程](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)开始；统一装配与预检参考[已有应用接入](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)。
 
 已有工程可先用 `fulgurjs init --plan` 预览接线，审查后再用 `--write`；复杂业务装配会明确列出人工待办。统一 `/vue`、`/react` 入口支持按使用裁剪，不需要改用内部路径。
 
@@ -43,7 +43,7 @@ export default {
 // Vue 应用代码统一入口 @fulgurjs/federation/vue
 import { loadRemote, remoteComponent } from '@fulgurjs/federation/vue'
 const RemoteButton = remoteComponent('remote-a/Button')
-const math = await loadRemote<{ add(a: number, b: number): number }>('remote-a/math')
+const math = await loadRemote('remote-a/math')
 ```
 
 ```tsx
@@ -71,7 +71,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 
 - **组件与模块**：`remoteComponent`（Vue/React）、`useLoadRemote`、`RemoteErrorBoundary`、`loadRemote` —— 失败显式错误态可重试，不静默兜底。
 - **逐页接入**：`definePages` + `createHostPages`（宿主页面路由表 → 远程页面），CLI `check-pages` 启动期契约核对。
-- **完整子应用桥接**：`defineBridgeApp`（子应用）+ `createVueBridgeApp` / `createReactBridgeApp`（宿主）；挂载/卸载、会话代次、卸载失败封锁。
+- **完整子应用桥接**：`defineApplication`（独立/嵌入共用装配；自定义契约可用 `defineBridgeApp`）+ `createVueBridgeApp` / `createReactBridgeApp`（宿主）；挂载/卸载、会话代次、卸载失败封锁。
 - **URL 同步**：`createVueBridgeNavigation` / `createReactBridgeNavigation`（宿主）+ Vue 工厂返回 `{ app, router }` / `createReactBridgeRouter`（子应用）；深链刷新、守卫取消、query/hash 保留。
 - **共享依赖**：singleton / requiredVersion / strictVersion / shareScope / eager，同步与异步裁决，React 18/19 多版本隔离。
 - **远程类型**：提供方随构建产出可分发声明（SFC 真实 props/泛型/重载），宿主 dev 自动同步——普通 import 与 `loadRemote`/`remoteComponent`/桥接工厂共用一套类型，拼错入口编译期报错；CLI `types` 供 CI 在 typecheck 前同步校验。

@@ -69,7 +69,9 @@ pnpm dev        # 统一启动器：远程先启动并探活，再启动宿主�
 
 ## 已有项目接入
 
-已有项目不需要重搭工程，只做三件事：装插件 → 写 `fulgurjs.config.ts` → `vite.config.ts` 注册插件。推荐先按[已有工程接入指南](existing-apps.md#先预览接入再明确写入)运行 `fulgurjs init --plan` 预览接线，确认后 `--write`；也可用不带计划参数的 `init` 只生成配置或直接手写。CLI 统一用 `npx @fulgurjs/federation <命令>` 调用（工程尚未安装依赖时也有效；已安装后 `npx fulgurjs` 亦可）。
+完整应用（已有路由、登录、权限）先按[首次接入完整流程](first-integration.md)操作；下面“三个文件”的说明只概括基础模块/组件接线，不表示完整应用迁移只需改三处。
+
+普通模块或组件接入不需要重搭工程，基础接线是：装插件 → 写 `fulgurjs.config.ts` → `vite.config.ts` 注册插件。推荐先按[已有工程接入指南](existing-apps.md#先预览接入再明确写入)运行 `fulgurjs init --plan` 预览接线，确认后 `--write`；也可用不带计划参数的 `init` 只生成配置或直接手写。CLI 统一用 `npx @fulgurjs/federation <命令>` 调用（工程尚未安装依赖时也有效；已安装后 `npx fulgurjs` 亦可）。
 
 ### 用 `fulgurjs init` 生成起步配置
 

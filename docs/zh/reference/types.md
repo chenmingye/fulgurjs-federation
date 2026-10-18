@@ -213,10 +213,9 @@ setup/onSession 收到的上下文.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `default` | no | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 见对应 API 合同。 |
+| `default` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 见对应 API 合同。 |
 | `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 见对应 API 合同。 |
 | `globalComponents` | yes | `Record<string, unknown>` | 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象或零参 loader）： 组件联邦（remoteComponent）把远程组件渲染进消费方 app 上下文，模板里的 字符串标签（如 <a-divider>）按消费方 app 的全局注册表解析——消费方没注册就 渲染成死元素。提供方在此声明后，运行时在每次 loadRemote 时把它们幂等注册到 当次传入的 consumerApp 上；无 consumerApp（无组件上下文的手动加载）时静默跳过。 值推荐「零参 loader（() => import('./X.vue')）」：setup 模块保持零重依赖， 组件只在本框架消费方真实渲染时才加载——Vue 适配器注册时自动包 defineAsyncComponent； 静态组件值仍支持；带 displayName/props/emits 的零参函数保留组件身份，未标记零参函数作 loader。运行时对值原样透传。 |
-
 | `pageProviders` | yes | `unknown[]` | 远程组件所需的祖先 Provider；元素为组件或零参 loader。由组件适配器包裹实际消费树，不复制提供方整个 app。 |
 
 ## AppContext
@@ -419,6 +418,9 @@ Vue 宿主桥接的加载与上下文选项.
 | `retries` | yes | `number` | 透传现行 loadRemote 的重试选项（0-10 整数），不另叠自动重试 |
 | `timeout` | yes | `number` | 本次桥接加载等待上限 ms；不取消已发出的共享请求，迟到结果一律丢弃 |
 | `getContext` | yes | `() => Partial<AppContext> & Record<string, unknown>` | 无副作用的同步 getter：首次、重试及换会话的实际加载前返回本次所需上下文快照 |
+| `session` | yes | `() => string \| number \| null \| undefined` | 响应式非敏感身份；插件自动管理代次。null退出、undefined恢复中；不与sessionKey prop并用。 |
+| `sessionStorageKey` | yes | `string` | 自动会话命名空间，默认fulgurjs-bridge-session；同一宿主的远程一致。 |
+
 
 ## VueBridgeRouterConnection
 
