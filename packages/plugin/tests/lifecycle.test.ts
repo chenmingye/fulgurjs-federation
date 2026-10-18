@@ -292,7 +292,7 @@ describe('setup/onSession：失败路径与错误码（T4/T6）', () => {
   it('默认导出不是函数 → MFU-011（带实际类型与预期签名）', async () => {
     const c = makeContainer('r17', { setupMod: { default: 'not-a-fn' } })
     await registerFake(rt, 'r17', c)
-    await expect(rt.loadRemote('r17/Page')).rejects.toThrow(/MFU-011[\s\S]*string[\s\S]*export default async function setup/)
+    await expect(rt.loadRemote('r17/Page')).rejects.toThrow(/MFU-011[\s\S]*string[\s\S]*onSession\/globalComponents\/pageProviders/)
   })
 
   it('具名导出 onSession 不是函数 → MFU-011', async () => {
