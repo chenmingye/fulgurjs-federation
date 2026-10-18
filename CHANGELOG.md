@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.12.1
+
+- 公开模板升级到自动会话接线：vue-host-react-remote 宿主改用 session 身份 getter（token 刷新不重挂演示），删除单句 session.ts；模板十二个工程依赖与 pnpm 锁精确钉 6.12.0 正式版（registry 真实 integrity）。
+
 ## 6.12.0
 
 - Vue 宿主桥接新增 session 身份 getter，插件自动管理登录代次、同会话恢复、换号和登出；token刷新不作为换代依据，移除应用登录流程中的手工 renew/clear 接线。自动会话仅 Vue 宿主；React 宿主仍使用显式受控 sessionKey。
