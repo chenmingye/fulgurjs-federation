@@ -13,13 +13,17 @@ pnpm build                       # 构建完整组合
 # 单独启动本应用：pnpm --dir vue-host dev
 ```
 
-端口、复制范围与部署路径见[组合说明](../README.md)。
+端口、复制范围、候选版本验收要求与部署路径见[组合说明](../README.md)。
 
-## 关键点（对应 README §8.2）
+## 关键点
 
 - **双框架安装合同**：本宿主同时安装 `vue` + `react` + `react-dom`，shared 三键全部 `singleton: true`。
-- **入口选择**：统一入口 `@fulgurjs/federation/vue`——宿主代码全部来自 /vue，不会加载 React 适配代码（6.0.0 起 /bridge、/bridge/* 深层入口已移除）。
-- **`sessionKey`**：受控登录代次（非业务 props）。置 `null` = 登出态（立即卸载、不再请求）；换账号走「null → `clearAppContext()` → 新代次」顺序，保证 A 的 context 字段零残留。
-- **`getContext`**：同步纯 getter（`src/fulgurjs/host/session.ts`），桥接层校验其快照的 `sessionKey` 后才代写 AppContext。
+- **入口选择**：统一入口 `@fulgurjs/federation/vue`——宿主侧的联邦适配 API 从 /vue 导入。
+- **`session`**：绑定稳定的业务身份 getter。返回用户ID表示已登录，`null` 表示退出，`undefined` 表示身份恢复中。插件自动管理代次、恢复与卸载；同身份刷新 token 不重挂。
+- **`getContext`**：同步纯 getter（`src/fulgurjs/host/context.ts`），不手工填写 `sessionKey`，由桥接层补入自动管理的代次。token 通过函数读取当前凭据，避免刷新后继续发送旧 token。
 - **`appProps`**：挂载时浅拷贝快照；函数引用（`onReady`）保留原引用；换顶层引用不重挂，需要重置时用 `:key`。
 - 错误占位默认内置中文诊断 +「重试加载 / 刷新页面重试」；可用 `errorComponent` 完全接管。
+
+### 登录接线
+
+Vue宿主在 `src/fulgurjs/host/context.ts` 提供现有业务身份和上下文；挂载配置使用 `session: sessionIdentity`。不在登录/登出流程调用 renew/clear，不手工传 sessionKey。页面提供“刷新 token”按钮，同身份刷新不应增加 onReady 次数；换到 Bob 重挂、登出卸载。真实工程使用已有账号系统，不复制演示登录数据。
