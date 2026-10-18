@@ -312,6 +312,7 @@ interface ProvideRecord {
   version: string
   eager: boolean
   from: string
+  import: string
 }
 
 function providesRecords(options: NormalizedOptions): ProvideRecord[] {
@@ -323,6 +324,7 @@ function providesRecords(options: NormalizedOptions): ProvideRecord[] {
       version: s.version,
       eager: s.eager,
       from: options.name,
+      import: s.import as string,
     }))
 }
 
@@ -352,7 +354,11 @@ export function genInitModule(
   // 标记为已加载——singleton 协商"已加载优先"时远程必然命中宿主正在用的这份，避免双实例
   // 断链。纯 remote（无 remotes）不标记。
   const isDevHost = command === 'serve' && options.remotes.length > 0
-  const loadedFlag = isDevHost ? 'true' : 'false'
+  // 纯宿主（remotes>0、无 exposes）在 build 下自身源码不门面化（见 index.ts 的 rewriteShared），
+  // 本地 Vue 就是应用正在用的实例。提供方必须直接返回这份本地模块并标记 loaded，
+  // 否则远程协商会懒加载门面 fallback，产生第二份 Vue（子应用文本槽渲染成 [object Object]）。
+  const isLocalHostProvider = command === 'build' && options.remotes.length > 0 && options.exposes.length === 0 && !options.devSharedSelf
+  const loadedFlag = isDevHost || isLocalHostProvider ? 'true' : 'false'
 
   lines.push(`initSharing(${JSON.stringify(options.shareScope)});`)
 
@@ -376,6 +382,11 @@ export function genInitModule(
     if (p.eager && eagerIdx !== -1) {
       lines.push(
         `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => Promise.resolve(__fulgurjs_eager_${eagerIdx}), { from: ${JSON.stringify(p.from)}, eager: true, loaded: ${loadedFlag} });`,
+      )
+    } else if (isLocalHostProvider) {
+      // 本地提供包（vue 等）就是宿主应用实例；与入口的静态 import 解析到同一模块
+      lines.push(
+        `registerShare(${JSON.stringify(p.shareScope)}, ${JSON.stringify(p.name)}, ${JSON.stringify(p.version)}, () => import(${JSON.stringify(p.import)}), { from: ${JSON.stringify(p.from)}, eager: false, loaded: ${loadedFlag} });`,
       )
     } else {
       lines.push(
