@@ -74,6 +74,8 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 这仍然是在消费方注册组件，并非 provide/inject 自动复制注册表。复用整套注册函数会带入它的依赖；需要更小的暴露面时，从原注册源抽出表单真正需要的公共子集，独立入口与 Provider 共用该子集，而不是维护两份清单。
 
+主题也应复用同一份配置：把独立根组件的字体、文字色、圆角和主题色配置提取成共享函数，独立入口与远程 Provider 都调用它；只复制亮暗算法仍可能让表单外观不同。模块联邦直渲染共享同一份 DOM，全局 CSS 仍可能互相影响。遇到文字变淡等差异，检查实际生效的选择器、`color` 与 `-webkit-text-fill-color`，将修复限制在所属组件范围，不用全局覆盖或堆叠 `!important`。验收应比较真实控件、数据、只读状态和计算样式，不能仅以“CSS 请求成功”判断一致。
+
 **React**（`@fulgurjs/federation/react`）：
 
 ```tsx

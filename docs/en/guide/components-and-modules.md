@@ -74,6 +74,8 @@ If a project already has `registerComponents(app)`, do not copy a second compone
 
 This explicitly registers components in the consumer; provide/inject does not copy the registry. Reusing the entire registration function also brings its dependencies. If a smaller expose is needed, extract the required public subset from the original source and share it between the standalone entry and Provider, rather than maintaining two lists.
 
+Share theme configuration as well: extract font, text color, border radius, and primary color into one function used by both the standalone root and remote Provider. Copying only the light/dark algorithm can still change the form appearance. Direct federation rendering shares the DOM, so global CSS can affect other components. For faded text, inspect matching selectors, `color`, and `-webkit-text-fill-color`; scope the fix to the owning component instead of adding global overrides or layers of `!important`. Compare real controls, data, read-only behavior, and computed styles; successful CSS requests alone do not establish visual equivalence.
+
 **React** (`@fulgurjs/federation/react`):
 
 ```tsx
