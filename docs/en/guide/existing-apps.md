@@ -12,6 +12,46 @@
 
 Directory names are optional. A small host can keep mounting and context in its existing view. Examples of different APIs are not instructions to create several directory trees.
 
+## Keep integration files together
+
+When an existing project needs several integration files, place them under `src/fulgurjs/`, grouped by responsibility. Create only the directories actually needed:
+
+```text
+src/fulgurjs/
+├── setup.ts                    # Provider environment declaration
+├── host/                       # How the host mounts remote applications
+│   ├── RemoteApplication.vue   # Mount view, session and navigation wiring
+│   ├── context.ts              # Optional remote context
+│   └── session.ts              # Optional host login generation
+├── exposes/                    # What this project provides to consumers
+│   ├── OrderForm.vue           # Example business component entry
+│   ├── FormProviders.vue       # Optional ancestor environment
+│   └── theme.ts                # Optional theme shared with standalone entry
+└── types/                      # Automatically synchronized remote declarations
+```
+
+The `exposes/` name corresponds to the configuration's `exposes` field. Host mounting components belong in `host/`; keep only `setup.ts` at the integration directory root. Do not scatter Providers, bridge views or integration helpers elsewhere. These are organizational conventions, not automatic discovery rules: moving files requires updating actual imports and configured `setup`/`exposes` paths. The minimal CLI output locations are documented by the commands below. When expanding that output into this structure, move the references too; do not keep forwarding shells at old locations.
+
+Keep root `vite.config.ts`/`fulgurjs.config.ts`, existing `src/main.ts`, business pages, and the unified application bootstrap at their project-defined locations. Those files call the integration implementation; organizing files does not require copying pages or introducing a second bootstrap.
+
+### File formats and names
+
+- Vue components use `.vue`; prefer `<script setup lang="ts">` for new components. Existing `defineComponent` components remain valid. A separate normal `<script lang="ts">` may hold shared module state; do not accidentally recreate it inside each setup.
+- React components use `.tsx`. Configuration, sessions, context and theme logic without JSX/templates use `.ts`.
+- `.d.ts` files contain declarations. Remote declarations in `types/` are generated. Declare real props at the provider entry and use synchronized types at the consumer instead of copying interfaces.
+- Name files by responsibility: `RemoteApplication.vue`, `OrderForm.vue`, `FormProviders.vue`. Avoid vague `App1`/`App2` descriptions or naming every helper `bridge.ts`.
+
+### Distinguish roles from execution modes
+
+| Term | Meaning |
+|---|---|
+| Host | Project mounting or displaying remote content |
+| Remote/provider | Project exposing a component, module or complete application |
+| Consumer | Project loading remote content; it may also expose its own content |
+| Standalone / embedded | Two execution modes of the same project, not two extra projects |
+
+Use concrete project names with roles, such as “orders remote” and “admin host.” A child application means a complete remote application embedded in a host; loading a remote component does not require creating another application.
+
 ## Preview integration before writing
 
 Install `@fulgurjs/federation` in the existing application first. Run from its root, replacing files and addresses with real ones. The command does not install dependencies, start servers or guess ports.
