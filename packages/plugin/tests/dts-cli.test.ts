@@ -31,6 +31,39 @@ function makeProject(name: string, files: Record<string, string>): string {
 }
 
 describe('runTypesCommand（fulgurjs types）', () => {
+  it.each(['direct', 'references'] as const)('虚拟模块由应用配置覆盖的 client 声明提供时不误报缺包（%s）', async (layout) => {
+    const root = makeProject(`virtual-client-types-${layout}`, {
+      'fulgurjs.config.ts': "export default { name: 'host', remotes: { remote: 'http://localhost:9999/remote' } }\n",
+      'tsconfig.json': JSON.stringify(layout === 'direct'
+        ? { compilerOptions: { types: [] }, include: ['src'] }
+        : { files: [], references: [{ path: './tsconfig.app.json' }] }),
+      'tsconfig.app.json': JSON.stringify({ compilerOptions: { types: [] }, include: ['src'] }),
+      'src/env.d.ts': "/// <reference path=\"../node_modules/svg-plugin/client.d.ts\" />\n",
+      'node_modules/svg-plugin/client.d.ts': "declare module 'virtual:svg-icons-register' {}\n",
+      // 不在配置输入内的声明不得掩盖真实缺失。
+      'excluded/unused.d.ts': "declare module 'virtual:missing' {}\n",
+      'package.json': JSON.stringify({ name: 'host', private: true, type: 'module' }),
+    })
+    const syncSpy = vi.spyOn(sync, 'syncRemoteTypes').mockResolvedValue({ status: 'synced', message: 'synced' })
+    const metadataSpy = vi.spyOn(sync, 'readMetadata').mockReturnValue({
+      externals: ['virtual:svg-icons-register'],
+    } as ReturnType<typeof sync.readMetadata>)
+    try {
+      const ok = await runTypesCommand({ cwd: root })
+      expect(ok.exitCode).toBe(0)
+      expect(ok.lines.join('\n')).not.toContain('TYP-005')
+      fs.appendFileSync(path.join(root, 'node_modules/svg-plugin/client.d.ts'), "declare module 'virtual:icons/*' {}\n")
+      metadataSpy.mockReturnValue({ externals: ['virtual:icons/logo'] } as ReturnType<typeof sync.readMetadata>)
+      expect((await runTypesCommand({ cwd: root })).exitCode).toBe(0)
+      metadataSpy.mockReturnValue({ externals: ['virtual:missing'] } as ReturnType<typeof sync.readMetadata>)
+      const missing = await runTypesCommand({ cwd: root })
+      expect(missing.exitCode).toBe(1)
+      expect(missing.lines.join('\n')).toContain('virtual:missing')
+    } finally {
+      syncSpy.mockRestore()
+      metadataSpy.mockRestore()
+    }
+  })
   it('缺少虚拟模块类型时提示插件环境声明，实体依赖仍提示安装且严格失败', async () => {
     const root = makeProject('missing-externals', {
       'fulgurjs.config.ts': "export default { name: 'host', remotes: { remote: 'http://localhost:9999/remote' } }\n",

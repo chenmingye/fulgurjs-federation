@@ -104,6 +104,7 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
   if (syncable.length > 0) {
     lines.push(`[consumer] 开始同步 ${syncable.length} 个远程的类型（--mode ${mode}，目录 ${path.relative(root, typesRoot) || typesRoot}）……`)
     const externalsMissing = new Map<string, string[]>()
+    let virtualTypes: Set<string> | undefined
     for (const remote of syncable) {
       const entry = mode === 'dev' ? remote.devEntry : remote.prodEntry
       const entryUrl = entry.startsWith('/') ? (opts.base ? new URL(entry, opts.base).toString() : entry) : entry
@@ -130,6 +131,15 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
       if (meta) {
         for (const ext of meta.externals) {
           if (!resolvePackage(root, ext)) {
+            if (ext.startsWith('virtual:') || ext.startsWith('\0')) {
+              virtualTypes ??= resolveVirtualTypes(root)
+              if (virtualTypes.has(ext) || [...virtualTypes].some(pattern => {
+                const star = pattern.indexOf('*')
+                return star >= 0 && star === pattern.lastIndexOf('*') &&
+                  ext.length >= pattern.length - 1 &&
+                  ext.startsWith(pattern.slice(0, star)) && ext.endsWith(pattern.slice(star + 1))
+              })) continue
+            }
             const list = externalsMissing.get(ext) ?? []
             list.push(remote.key)
             externalsMissing.set(ext, list)
@@ -168,6 +178,39 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
     lines.push(`[discovery] × ${discovery.fixHint ?? '类型目录未被应用 tsconfig 覆盖。'}`)
   }
   return { exitCode: failed ? 1 : 0, lines }
+}
+
+/**
+ * 虚拟 ID 不能由 Node 包解析证明存在；读取应用真正纳入的环境声明及其引用。
+ * 仅构建声明输入的 TS 程序，不检查整棵业务源码，也不以目录中任意同名字符串冒充类型。
+ * project references 工程分别读取其配置；缺工具链或配置无效时仍保留严格缺失诊断。
+ */
+function resolveVirtualTypes(root: string): Set<string> {
+  const modules = new Set<string>()
+  try {
+    const ts: typeof import('typescript') = createRequire(path.join(root, 'package.json'))('typescript')
+    const visited = new Set<string>()
+    const visit = (configPath: string): void => {
+      if (visited.has(configPath)) return
+      visited.add(configPath)
+      const config = ts.readConfigFile(configPath, ts.sys.readFile)
+      if (config.error) return
+      const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, path.dirname(configPath), undefined, configPath)
+      const roots = parsed.fileNames.filter(file => /\.d\.[cm]?ts$/.test(file))
+      const program = ts.createProgram({ rootNames: roots, options: { ...parsed.options, noEmit: true } })
+      for (const symbol of program.getTypeChecker().getAmbientModules()) {
+        // TS 对外部模块名使用引号；通配环境声明也按 TS 的单星号匹配语义处理。
+        const name = symbol.name.slice(1, -1)
+        modules.add(name)
+      }
+      for (const ref of parsed.projectReferences ?? []) visit(ts.resolveProjectReferencePath(ref))
+    }
+    const configPath = ts.findConfigFile(root, ts.sys.fileExists)
+    if (configPath) visit(configPath)
+  } catch {
+    // 环境声明无法被证明时不放宽：由 TYP-005 提示用户修复工具链/环境声明。
+  }
+  return modules
 }
 
 /** 宿主能否解析某包（存在性检查：package.json 可达即视为可解析） */
