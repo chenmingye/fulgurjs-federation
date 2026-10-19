@@ -50,6 +50,8 @@ export default defineApplication(async (_props, { mode, signal }) => {
 }, { routing: true })
 ```
 
+Loading business modules and assembling the app are separate stages. Top-level module code runs before `app.use(pinia)`; avoid calling an app-dependent `useStore()` at the top level of directives or utilities. Read the store when the permission check or business operation actually runs. Outside components, pass that application's Pinia explicitly or reuse its existing explicit store getter. Refreshing, adding delays, or relying on another app to activate Pinia does not establish a reliable initialization order.
+
 The router is created per instance. This example assumes an existing named `routes` export from `./routes`; use the real export found in step 0:
 
 ```ts

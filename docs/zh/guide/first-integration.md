@@ -64,6 +64,8 @@ export default defineApplication(async (_props, { mode, signal }) => {
 }, { routing: true })
 ```
 
+业务模块加载和应用装配是两个阶段。模块顶层的代码会在 `app.use(pinia)` 之前执行；不要在指令或工具模块顶层调用依赖当前应用的 `useStore()`。把读取放到实际鉴权或业务操作中，在组件外显式传入所属应用的 Pinia，或复用原工程已有的显式 store getter。不能靠刷新、延时或其他应用先激活 Pinia 来保证初始化顺序。
+
 原 router 文件改为按实例创建，而不是模块导入时创建 web history：
 
 ```ts
