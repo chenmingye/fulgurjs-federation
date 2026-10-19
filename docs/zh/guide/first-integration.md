@@ -149,6 +149,10 @@ Vue 宿主把已有登录状态传给视图的 getIdentity/getContext，或在 `
 export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m => m.default)]
 ```
 
+共享同一个 Vue 包，不代表两个应用拥有同一棵组件祖先树。原组件通过祖先 `provide` 取得的主题、类名前缀、语言等，需要在消费方重建对应 Provider；全局注册只能解决标签解析，不能补齐这些注入。复用原业务根 Provider，只包裹内容，不再挂一层 RouterView 或整个应用。
+
+通过业务函数自行传递组件时，不会触发远程模块的 setup/Provider 装配；这层业务适配要同时返回已经包好 Provider 的组件。检查实际类名前缀、控件与编辑器宽度，不能只看 CSS 已加载或字体颜色相同就判定样式正确。
+
 普通组件不需要 Provider 时不建这个文件。现有 iframe 里的完整应用或业务表单不会自动变成联邦组件：找到实际 iframe 创建处后，按组件/桥接的真实能力替换，并核对只读、数据和样式。TinyMCE内部编辑iframe不属于业务跨应用iframe，不机械删除。
 
 ## 4.1 替换旧微前端壳时必须一起处理的宿主设施

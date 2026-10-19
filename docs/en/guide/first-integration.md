@@ -164,3 +164,9 @@ Provide installed version/document commit, baseline, changed-file map with respo
 ### A dynamic tag renders as `[object Object]`
 
 Inspect the resolved component before attributing the problem to multiple framework instances based on chunk names. Do not register imperative services with `app.component(service.name, service)`: minification can rename a function to an HTML tag such as `b`, and `resolveDynamicComponent` may then select that service. Register actual view components under stable public component names; use services through their documented invocation or installation APIs. Do not work around the collision by changing business tags or disabling valid chunk configuration.
+
+### Providers belong to the consuming component tree
+
+Sharing a Vue package does not give separate apps the same ancestor tree. Recreate the providers that the original component uses for its theme, class prefix, locale, or other injected values. Global component registration only resolves component names. Reuse the original business root provider around the content, without mounting another RouterView or a full application.
+
+Passing a component through a business callback does not run a remote module's setup/provider pipeline. That callback's business adapter must return a component already wrapped in its required providers. Check the actual class prefix and control/editor widths; successful CSS requests or matching text colors alone do not establish visual equivalence.
