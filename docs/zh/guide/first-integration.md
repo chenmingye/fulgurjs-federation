@@ -155,6 +155,8 @@ export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m
 
 通过业务函数自行传递组件时，不会触发远程模块的 setup/Provider 装配；这层业务适配要同时返回已经包好 Provider 的组件。检查实际类名前缀、控件与编辑器宽度，不能只看 CSS 已加载或字体颜色相同就判定样式正确。
 
+桥接中的组件共用页面的 CSS，不会自动获得 iframe 的样式隔离。第三方主题的全局 `input:disabled` 等规则也可能影响其他应用；遇到差异先定位实际命中的选择器，再在业务边界限定修复范围。只读文字还要检查 `-webkit-text-fill-color` 和父层透明度，不能只比较 `color`。
+
 普通组件不需要 Provider 时不建这个文件。现有 iframe 里的完整应用或业务表单不会自动变成联邦组件：找到实际 iframe 创建处后，按组件/桥接的真实能力替换，并核对只读、数据和样式。TinyMCE内部编辑iframe不属于业务跨应用iframe，不机械删除。
 
 ## 4.1 替换旧微前端壳时必须一起处理的宿主设施
