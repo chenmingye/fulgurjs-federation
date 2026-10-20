@@ -458,9 +458,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     delete baseCo.emitDeclarationOnly
     delete baseCo.declarationDir
     delete baseCo.extends
-    // types 条目改为显式文件 include：显式 typeRoots 下 TS 的 types 条目只查 typeRoots
+    // types 条目解析为显式根文件：显式 typeRoots 下 TS 的 types 条目只查 typeRoots
     // （"vite/client" 落不进 ./types → TS2688，MESZC bpm 实测）；自行按包解析出具体
-    // .d.ts 并纳入 include，绕开该解析歧义；解析失败的条目丢弃（如实记录诊断）
+    // .d.ts 并纳入 files，绕开解析歧义及 exclude 过滤；解析失败的条目丢弃（如实记录诊断）
     const resolvedTypeFiles = resolveTypesEntries(root, baseCo, diagnostics)
 
     fs.writeFileSync(tmpCfg, JSON.stringify({
@@ -479,10 +479,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         rootDir,
         ...(cacheDir && !scopedVueProgram ? { incremental: true, tsBuildInfoFile: path.join(cacheDir, 'state.tsbuildinfo') } : {}),
       },
+      // 显式 types 是声明程序的根文件，不能再受工程 exclude: ["node_modules"] 过滤。
+      // include 仍受继承的 exclude 约束；files 保留 vite/client 等已解析的全局声明。
+      files: resolvedTypeFiles.map((f) => path.relative(root, f)),
       include: [
         ...entryFiles.map((f) => path.relative(root, f)),
         ...ctx.ambientInputs.map((f) => path.relative(root, f)),
-        ...resolvedTypeFiles.map((f) => path.relative(root, f)),
       ],
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
