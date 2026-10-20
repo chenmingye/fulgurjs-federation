@@ -424,3 +424,6 @@ Preflight also reports Vite wiring/base review, interrupted init writes, missing
 `init --plan --kind app --role provider --application src/fulgurjs/exposes/application.ts` reuses an existing syntax-valid explicit default defineApplication export without overwriting the factory or complex main. Only app provider/dual roles accept it; paths remain inside the project and symlinks are refused. Missing/unrecognized factories block the entire write.
 
 Complex-entry JSON includes optional `startup: { entry: string; application: string; imports: string[]; steps: string[] }`, also printed in text mode. Imports are entry-level evidence, not a whole-graph/shared list. Steps name actual destinations and ordering. Existing config remains unchanged; check exposes and main.start explicitly. Reusing a declaration is not completed business migration.
+
+
+This is the CLI's supported unified-startup rewrite, not a federation prerequisite. --application does not recognize arbitrary business creation functions or defineBridgeApp. To preserve main, configure the bridge expose manually following first integration. Do not apply --write when the proposed startup migration is unsuitable; tool suggestions do not replace business entry review.

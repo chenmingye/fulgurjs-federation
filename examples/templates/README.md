@@ -15,7 +15,7 @@
 
 ## 接入代码目录
 
-五模板统一采用 `src/fulgurjs/host/`、`exposes/`、`types/`：宿主装配及会话放 `host/`，远程装配和对外组件/模块放 `exposes/`，同步声明放 `types/`。根部仅按需保留 `setup.ts`，不用的目录不创建。原 `src/main.ts(x)` 只启动对应 `application`；原业务 App、页面仍在原位置。完整说明与文件格式见[已有应用接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md#接入文件集中放在哪里)。
+五模板统一采用 `src/fulgurjs/host/`、`exposes/`、`types/`：宿主装配及会话放 `host/`，远程装配和对外组件/模块放 `exposes/`，同步声明放 `types/`。根部仅按需保留 `setup.ts`，不用的目录不创建。这些新建模板选择让 `src/main.ts(x)` 启动对应 `application`；这只是模板采用的统一启动方案，已有工程保留原入口并复用初始化即可。原业务 App、页面仍在原位置。完整说明与文件格式见[已有应用接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md#接入文件集中放在哪里)。
 
 ## 获取模板的两种方式
 

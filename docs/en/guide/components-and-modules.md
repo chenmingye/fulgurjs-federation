@@ -29,14 +29,14 @@ import type { FederationOptions } from '@fulgurjs/federation'
 export default {
   name: 'admin',
   exposes: {
-    './business-form': './src/fulgurjs/exposes/BusinessForm.vue',
-    './schema-form': './src/fulgurjs/exposes/SchemaForm.vue',
+    './business-form': './src/components/forms/BusinessForm.vue',
+    './schema-form': './src/components/forms/SchemaForm.vue',
   },
   shared: { vue: { singleton: true } },
 } satisfies FederationOptions
 ```
 
-These paths represent real existing entries or necessary adapters. Pass record IDs and readonly state through props, and report save/cancel through emits. Do not infer them from the host's current URL. Declare props at the provider entry and use generated/synchronized types in the consumer instead of copying another interface.
+These paths point directly to existing business components; no relocation or forwarding wrapper is required. Pass record IDs and readonly state through props, and report save/cancel through emits. Do not infer them from the host's current URL. Declare props at the provider entry and use generated/synchronized types in the consumer instead of copying another interface.
 
 **2. Configure the provider in the child.** Keep the host's existing child remote configuration. This additional configuration belongs to the child and identifies its component source.
 
@@ -75,46 +75,72 @@ const SchemaForm = remoteComponent('admin/schema-form')
 
 This path does not pass these two loaders through `getContext`. Context still carries required user information, the latest-token getter and business events. `remoteComponent` handles remote loading and load-error UI/retry; remote declarations support props inference. It does not supply missing business parameters, permissions or Providers.
 
-### Restore required application environment once
+### Does a remote component require a wrapper?
 
-If both entries require the original theme, locale or class-prefix injection, add `setup: './src/fulgurjs/setup.ts'` to the **component provider's** existing configuration:
+**Being remote does not require an additional wrapper component.** Expose existing forms directly as above and pass their props/events normally. Keep direct rendering when dependencies are already satisfied.
+
+| Boundary | Created by | When needed |
+|---|---|---|
+| remoteComponent's internal asynchronous/session boundary | Plugin | Loading, retry and session handling for this API; no new business file |
+| Business adapter component | Project | Real parameter mapping, business composition or interface conversion; no forwarding-only files |
+| Ancestor Provider wrapping | Provider declaration, applied by adapter | Missing ancestor injection required by the original component |
+
+Omitted/empty pageProviders adds no Provider layer. The internal remoteComponent boundary does not require FormProviders.vue. Do not wrap an entire business App merely to render an ordinary component.
+
+### Declare a Provider only for missing ancestor injection
+
+Inspect actual inject/context dependencies first. Does the component already contain its Provider? Does the consumer ancestor provide the same injection key? Components without these dependencies need no setup/Provider file. Sharing Vue does not connect separate ancestor trees, but not every component needs extra environment.
+
+If the original AppProvider really is missing, add setup: './src/fulgurjs/setup.ts' at the provider and reference the existing component directly:
 
 ```ts
-// admin/src/fulgurjs/setup.ts: declarations alone need no empty default function.
+// admin/src/fulgurjs/setup.ts: only for a real ancestor dependency.
 export const pageProviders = [
-  () => import('./exposes/FormProviders.vue').then(m => m.default),
+  () => import('../components/Application/src/AppProvider.vue').then(m => m.default),
 ]
 ```
 
-`FormProviders.vue` must reuse the real business Providers and render `<slot />`. Wrap content, not the entire App or RouterView. Actual components, theme and locale configuration come from the original application; an empty Provider does not restore them. Consumers using `remoteComponent` automatically receive this wrapper for both entries, without per-form wrapper duplication.
+The example assumes an existing default-exported Provider at that path. Use actual paths/exports. No forwarding-only FormProviders.vue is needed. The adapter puts remote components under this Provider in the consumer tree without starting another App or RouterView. Check that the Provider's own listeners, store access and side effects fit this lifecycle.
 
-For example, if the original project already exports `AppProvider` from `src/components/Application`, reuse it as follows. If the original root also configures locale/theme Providers, reuse that configuration and preserve their wrapping order:
+Create a component such as exposes/FormProviders.vue only for real composition of several Providers, theme/locale parameters or adaptation. It must render its slot. Choose either provider-owned component wrapping or pageProviders wrapping, avoiding duplicates. The filename has no special semantics and is not mandatory. pageProviders applies to components loaded from that remote by component adapters, not to individual expose selections. If only some components need a Provider, satisfy that dependency inside those original components instead of wrapping the entire remote.
 
-```vue
-<!-- admin/src/fulgurjs/exposes/FormProviders.vue -->
-<script setup lang="ts">
-import { AppProvider } from '../../components/Application'
-</script>
+### Global registration and Providers are different dependencies
 
-<template>
-  <AppProvider><slot /></AppProvider>
-</template>
+Local component imports travel with the module. Global string tags resolve against the **actual consumer Vue app's** registry. Registration performed by provider main is not copied to another app. Follow this order:
+
+1. If the consumer already registered the components/directives or the original component imports them locally, do not add registration.
+2. For a few missing tags, reuse actual implementations from existing sources. globalComponents should declare only real missing dependencies.
+3. For extensive existing registry dependencies, reuse the original installer idempotently for the actual consumer app. Check dependency cost, customizations and name ownership rather than copying a second UI-library inventory.
+
+GlobalComponents, pageProviders and business application startup have separate roles. Providers do not copy registries; globalComponents does not restore injection; component reuse does not run the provider's entire main. Missing permission directives need real implementations, not no-op substitutes. See [registration reuse](#reuse-an-existing-component-registration-source).
+
+### Automatic types: define once at the provider, infer at the consumer
+
+Declare accurate fields in the **original form**, for example defineProps<{ recordId: string; readonly?: boolean }>(). The plugin synchronizes that contract. A provider Record<string, unknown> remains a broad dictionary after generation; the plugin cannot guess business constraints.
+
+Consumers do not import generated d.ts files manually. Once tsconfig includes the type directory, the registry gives remoteComponent the corresponding props/events. Derive local parameter state from the remote component:
+
+```ts
+import { ref } from 'vue'
+import { remoteComponent } from '@fulgurjs/federation/vue'
+
+const BusinessForm = remoteComponent('admin/business-form')
+type BusinessFormProps = InstanceType<typeof BusinessForm>['$props']
+const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
+  recordId: '',
+  readonly: true,
+})
 ```
 
-This assumes that the original export exists. Use the real project path rather than creating an empty `AppProvider` to satisfy the example. This minimal wrapper restores ancestor injection only; reuse the registration source below when global components/directives are also needed.
+This does not maintain another interface. Do not redeclare known fields as broad objects or any; truly open extension data can be modeled separately. Verify both missing required fields and wrong field types, not only rejection of a string in place of the whole object.
 
-Check these independently:
-
-- **Global components/directives**: Providers do not copy registries. Reuse the original registration source against the actual consumer app, idempotently per app. Resolve name ownership and never substitute no-op permission directives.
-- **State ownership**: sharing Vue/Pinia packages does not share business stores. Explicitly bind provider-owned stores to their Pinia; see [existing application state binding](existing-apps.md). Do not switch global activePinia around rendering.
-- **Data and lifecycle**: pass complete business parameters, stop timers on unmount and reject late writes to disposed instances. The component decides whether prop changes require a fresh query.
-- **Styles**: Providers do not isolate CSS. Verify real data, readonly behavior, class prefixes and input/select/editor widths rather than CSS request success alone.
+Business components own reload-on-prop-change behavior and timer/late-write cleanup. Shared Vue/Pinia packages do not share business state; see [store ownership](existing-apps.md#pinia-ownership). Providers do not isolate CSS. Compare real data, resolved labels, readonly behavior and layout after asynchronous echo completes.
 
 ### When to inject through `getContext`
 
 If workflow must not know admin's name or address—for example, procurement and production hosts use the same workflow—each host supplies the same business contract through bridge `getContext`, such as `loadBusinessForm` and `loadSchemaForm`. The child invokes the current host's loader instead of hardcoding a host remote spec.
 
-These are **application-defined fields, not built-in plugin APIs**. Agree on arguments, synchronous/asynchronous returns, component props/events, missing-capability errors and a real capability source for standalone operation. Never hide absence with an empty component. Loaders return components already wrapped in their required Providers and fulfill the agreed registration and state-ownership responsibilities.
+These are **application-defined fields, not built-in plugin APIs**. Agree on arguments, synchronous/asynchronous returns, component props/events, missing-capability errors and a real capability source for standalone operation. Never hide absence with an empty component. Loaders satisfy any actual Provider dependencies of returned components and fulfill the agreed registration and state-ownership responsibilities.
 
 Passing a component directly or returning one from a local `import()` **does not run the federation setup/pageProviders pipeline**. It also does not automatically receive `remoteComponent`'s remote type synchronization or load-error UI; the caller handles its own loading/error/retry. If the loader actually calls `remoteComponent`, that returned remote component retains its federation loading semantics. Context functions are not reactive subscriptions; do not retain components, data or callbacks from an old session after account changes.
 
@@ -189,6 +215,8 @@ Semantics:
 **Error scope**: Vue remoteComponent errorComponent handles module/initialization/Provider loading failures, not exceptions in business component setup/render; handle those in the component or host onErrorCaptured/app.config.errorHandler. React remoteComponent additionally has a render boundary for its component subtree, but still does not catch event-handler or arbitrary async callback errors. A full-app bridge host boundary also does not cover internal errors in another root.
 
 ### Reuse an existing component registration source
+
+Do not create a Provider just for registration. Reuse an accessible registration source in existing consumer initialization when possible, or export an existing registry map as globalComponents. Verify actual module access and export shape; the plugin does not extract registries from another main automatically. Installation through a Provider is an option only when that Provider is already required.
 
 If a project already has `registerComponents(app)`, do not copy a second component-library list into setup. Nested user pickers and uploaders may also use global tags, so scanning only the outer form misses dependencies. An ancestor Provider can obtain the actual consumer app through `getCurrentInstance()?.appContext.app` in setup and call the existing registration function. Use a module-level `WeakSet<App>` for idempotence and mark the app only after successful registration. A new bridge app needs its own installation; a one-time container flag is insufficient. Preserve project-specific components and resolve ownership before overwriting names.
 

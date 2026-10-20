@@ -7,7 +7,7 @@ For a first complete application integration, start with the [single-path guide]
 | Need | Required integration | Do not add by default |
 |---|---|---|
 | Modules/components | Vite plugin; expose existing files; loadRemote/remoteComponent | Application factory, menu table, session files, Providers |
-| Complete application | App config; one application factory; host mount view | No duplicated main/bridge bootstrap or repeated child menu registration |
+| Complete application | Config; a bridge contract reusing initialization; host mount view | Do not relocate main or duplicate business registration/menu lists |
 | URL synchronization | Controlled child memory router; one host prefix/navigation port | The child must not write browser history |
 | Authentication/session | Explicit host context/sessionKey | No mandatory session/context files for apps without this need |
 | Global components/ancestor injection | Declare required setup.globalComponents/pageProviders | Do not wrap every component in the whole business app |
@@ -18,30 +18,21 @@ Use the layout below for new integration code. Existing business views may call 
 
 ## Keep integration files together
 
-When an existing project needs several integration files, place them under `src/fulgurjs/`, grouped by responsibility. Create only the directories actually needed:
+Existing entry points, initialization, routers, stores, registration sources and pages stay in place. The following lists possible **new wiring**, not a mandatory directory tree:
 
 ```text
 src/fulgurjs/
-├── setup.ts                    # Provider environment declaration
-├── host/                       # How the host mounts remote applications
-│   ├── application.ts          # Host-only bootstrap (.tsx for React)
-│   ├── RemoteApplication.vue   # Mount view, session and navigation wiring
-│   ├── context.ts              # Optional remote context
-│   └── auth.ts                 # Only for real business auth adaptation; no plugin generation store
-├── exposes/                    # What this project provides to consumers
-│   ├── application.ts          # Remote application factory, standalone and embedded
-│   ├── context.ts              # Optional incoming host identity/business-cache mapping
-│   ├── OrderForm.vue           # Example business component entry
-│   ├── FormProviders.vue       # Optional ancestor environment
-│   └── theme.ts                # Optional theme shared with standalone entry
-└── types/                      # Automatically synchronized remote declarations
+├── host/RemoteApplication.vue  # Only for mounting complete remote applications
+├── exposes/application.ts     # Only if a new bridge adapter is needed; calls existing initialization
+├── setup.ts                   # Only for actual remote initialization/missing component environment
+└── types/                     # Automatically synchronized declarations
 ```
 
-The `exposes/` name corresponds to the configuration's `exposes` field. Host mounting components belong in `host/`; keep only `setup.ts` at the integration directory root. Do not scatter Providers, bridge views or integration helpers elsewhere. These are organizational conventions, not automatic discovery rules: moving files requires updating actual imports and configured `setup`/`exposes` paths. Both `init --kind app --plan` and `create` templates follow this layout. Do not add application, mode or session wiring at the src root, or leave forwarding shells at former locations.
+Expose original components directly. An existing valid bridge contract can also be exposed in place. Do not move business files or add forwarding shells for directory uniformity. Reference one existing Provider directly; add a Provider component only for real composition/adaptation. Add context.ts only for meaningful business mapping.
 
-Keep root `vite.config.ts`/`fulgurjs.config.ts`, existing `src/main.ts` and business pages at their project-defined locations. Those files call the integration implementation; organizing files does not require copying pages or introducing a second bootstrap.
+main.ts(x) remains the standalone entry. The bridge calls the same business initializer; main need not call application.start. Projects deliberately choosing defineApplication may use start, but this is optional startup organization rather than an integration prerequisite.
 
-Host-only factories belong in `host/application.ts(x)`. Remotely loaded factories belong in `exposes/application.ts(x)`. When the host application factory is also exposed as a complete remote application, use one factory in `exposes/`, without a second host bootstrap. Create directories and `setup.ts` only when needed.
+Use host/ and exposes/ for newly added consumption/provider wiring. New-project unified startup examples may use host/application.ts(x) or exposes/application.ts(x). Paths are organizational conventions; the plugin loads configured files rather than discovering special filenames. Templates choose unified startup without imposing that layout on existing projects.
 
 ### File formats and names
 
@@ -74,7 +65,7 @@ npx fulgurjs init --plan --role provider --expose ./Button=./src/components/Butt
 npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174/remote-a
 npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174/remote-a --write
 
-# Whole applications: inspect these plans, then append --write when satisfied.
+# Whole applications: inspect whether the plan rewrites the existing main before choosing --write.
 npx fulgurjs init --plan --kind app --role provider
 npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://localhost:5174/remote-a
 ```
@@ -94,9 +85,13 @@ Application mode extracts supported minimal `src/main.ts(x)` entries into `src/f
 
 Plain `init` generates only a starter configuration; `init --config` validates an existing declaration. Do not combine plan/write with `--config/--out/--force`. See [CLI reference](../reference/cli.md#fulgurjs-init) for all flags, JSON and exit codes.
 
-## Vue: share one factory between two entry modes
+## Vue: reuse existing initialization first
 
-Save this factory in `src/fulgurjs/exposes/application.ts`.
+The default [first-integration path](first-integration.md) calls existing business creation from defineBridgeApp and preserves standalone main. Check bridge routing, unmounted return values, per-router guards and cleanup. If business dependencies are already installed, do not install them again in the bridge.
+
+### Optional: defineApplication manages both startup modes
+
+Use this for new projects or an explicit choice of unified startup. It does not require moving an existing main or registration lists. Prefer the existing initializer; the expanded createApp/router example only explains the return contract.
 
 ```ts
 import { createApp } from 'vue'
@@ -118,34 +113,24 @@ export default defineApplication<AppProps>((props, { mode, signal }) => {
 }, { routing: true })
 ```
 
-### Load large application implementations at startup
+### Imports and the original standalone entry
 
-When existing business code has TS diagnostics unrelated to the exposed contract, import components, routes and business plugins inside the asynchronous factory. Keep one `application.ts`; no forwarding file or whole-project TS cleanup is required:
+Static and dynamic imports are both supported according to real dependencies. Do not turn main into Promise.all lists as a default integration recipe. Module-level side effects still evaluate once and do not reinstall guards for every router. Attribute business and public-contract diagnostics separately; do not hide errors with any or broad dictionaries.
+
+Only when choosing defineApplication may standalone main call:
 
 ```ts
-export default defineApplication<AppProps>(async (props, { mode }) => {
-  const { default: App } = await import('../../App.vue')
-  const { routes } = await import('../../router/routes')
-  const router = createRouter({
-    history: mode === 'bridge'
-      ? createMemoryHistory()
-      : createWebHistory(import.meta.env.BASE_URL),
-    routes,
-  })
-  const app = createApp(App, { ...props })
-  return { app, router }
-}, { routing: true })
+import application from './fulgurjs/exposes/application'
+void application.start('#app').catch(console.error)
 ```
 
-Reuse the public imports and `AppProps` above, removing the top-level static App/routes imports. Load runtime-only business plugins and icon registration in the factory as well. The plugin still checks the application entry and static public declaration dependencies; runtime implementation trees are not treated as public type contracts. Browsers cache modules, but each factory invocation must create fresh app/router/store instances. Use `fulgurjs types` to verify declaration generation.
-
-App/routes are existing business code. Save this factory in `src/fulgurjs/exposes/application.ts`; main.ts imports `./fulgurjs/exposes/application` and calls `void application.start('#app').catch(console.error)`. Expose `./bridge` directly from `./src/fulgurjs/exposes/application.ts`; no forwarding bridge file is needed. Standalone starts a web router and waits for isReady. Routing-enabled bridge mode connects its controlled memory router and waits for the initial deep link. Without routing enabled, a returned local memory router is also installed and awaited automatically. A missing routing channel fails explicitly.
+A defineBridgeApp entry alongside existing standalone startup does not require this change. Expose the actual contract file directly. In unified startup, standalone uses its web/hash router and waits for readiness; bridge uses controlled memory history. A missing required routing channel fails explicitly. Local routers without synchronization are also installed/awaited by defineApplication. Do not create forwarding-only files.
 
 If initialization must continue after routing becomes ready, use the explicit installVueBridgeRouter flow and return only app; do not return an already installed router for a second installation. When returning app alone, the factory owns router installation/readiness.
 
 ## React: native and controlled routers in one factory
 
-Save this factory in `src/fulgurjs/exposes/application.tsx`.
+This is also optional unified startup. Existing standalone startup can stay with a defineBridgeApp adapter reusing React initialization. The example factory is in `src/fulgurjs/exposes/application.tsx`.
 
 ```tsx
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
@@ -162,7 +147,7 @@ export default defineApplication((_props, { mode, routing, signal }) => {
 }, { routing: true })
 ```
 
-React factories synchronously return JSX or `{ element, dispose? }`. main.tsx calls application.start('#root'); expose points at application.tsx. start resolves at the first root commit, not completion of all loaders/requests. An application without routing can return JSX directly and omit routing.
+React factories synchronously return JSX or `{ element, dispose? }`. Only projects choosing this option have main.tsx call application.start('#root'); expose points at application.tsx. start resolves at the first root commit, not completion of all loaders/requests. An application without routing can return JSX directly and omit routing.
 
 ## Start, cancel, dispose
 
@@ -174,7 +159,7 @@ handle.unmount()
 - The container must exist. Repeated start/mount in an occupied container fails.
 - `application.unmount(element)` cancels a pending start; start rejects with AbortError and late work cannot remount. Business asynchronous writes still check signal.
 - An old handle cannot dispose a new generation. Disposal failures block the container until a full refresh; props/session changes cannot bypass it.
-- Create a new app/router/business store instance for each factory call. Do not return a module-global instance to several containers.
+- Return a usable app/router with explicit ownership for each mount. Parallel instances need isolated state; installing an existing module-level store does not create a new store. The plugin does not silently rewrite business singletons.
 - mode is instance-local. hasBridgeMount(context) is true for bridge factories and false for standalone factories; no window mode flag is needed.
 
 ## Pinia ownership
@@ -210,15 +195,15 @@ Source mode executes the config only; it does not execute business modules, requ
 
 | Category | Examples | Required for everyone? |
 |---|---|---|
-| Federation integration | Config, child application factory, host mount view | Depends on selected capability |
-| Existing entry wiring | main start call, Vite plugin, router construction | Modify existing code; do not clone bootstrap |
+| Federation integration | Config, full-app bridge contract, host mount view | Components need no application contract |
+| Existing entry wiring | Vite registration, creation/cleanup boundary, router mode | Preserve main; start belongs only to optional unified startup |
 | Business additions | Login, dictionary, permissions, registration, ancestors | Only actual dependencies |
 | Previous-system migration | Remove qiankun bootstrap/window flags | Absent in a new project |
 | Related fixes | Late requests, form hydration, old menus | Not general plugin requirements |
 | Generated/build files | Declarations, locks, assets | Separate from handwritten integration; do not edit generated types |
 
-remoteComponent remains the component API. defineBridgeApp remains a current API for a custom bridge-only entry. defineApplication shares assembly when both entry modes are needed.
+remoteComponent remains the component API. defineBridgeApp can coexist with original standalone startup. defineApplication is optional when the project chooses plugin-managed startup for both modes.
 
 Source examples: [Vue host factory](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts), [React remote factory](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx), [React host factory](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx), [template guide](../../../examples/templates/README.md). Copy whole templates and install their published registry dependencies independently.
 
-Reuse an existing factory with `--application <actual factory file>`. For unsupported extraction, `startup` reports the actual entry/imports and an ordered checklist. The CLI does not invent authentication/routes or forwarding bridge files.
+The current CLI --application option recognizes explicit default defineApplication exports only, not arbitrary business initializers or defineBridgeApp. startup describes its proposed unified-startup rewrite, not a prerequisite. To preserve main, configure the real bridge expose manually instead of applying an unsuitable --write plan.

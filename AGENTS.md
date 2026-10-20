@@ -98,14 +98,15 @@ npm run test:examples
 ### 新增接入文件的统一目录（宿主与远程都适用）
 
 - 新增插件接线集中在 `src/fulgurjs/`：`host/` 管消费、挂载和宿主上下文；`exposes/` 管对外入口及所需装配；`types/` 由插件自动同步。根部只按需保留 `setup.ts`，不散放辅助文件，不创建无用的空目录或空 setup。
-- 仅宿主的统一装配用 `host/application.ts(x)`；完整远程应用（包括装配本身也被远程加载的宿主）用 `exposes/application.ts(x)`。运行模式、接收宿主会话等辅助代码与提供方装配放在 `exposes/`，不在 src 根部新建 application/mode/session 或转发壳。
-- 框架既有入口、业务页面及根配置保留原位置；main 只调用统一装配，配置引用实际文件。不要为集中目录复制业务树。移动时同步静态/动态 import、别名、exposes、setup、声明生成路径与文档。
+- 已有业务初始化保留原位置，新增桥接接线可放 `exposes/application.ts(x)` 并复用真实初始化；不为目录统一移动业务文件。新工程主动采用统一启动时，纯宿主用 `host/application.ts(x)`，被远程加载的契约用 `exposes/application.ts(x)`；不另建无职责转发壳。
+- 默认保留原 main 与业务初始化，defineBridgeApp 可与独立入口共存；不要要求把 main 搬进 fulgurjs、改成 application.start 或重新列一份业务注册清单。defineApplication/start 仅为项目主动选择的统一启动方案。只有入口没有可复用边界时做最小必要适配；配置引用真实文件，移动时同步所有引用。
 - CLI、模板、公开示例和后续私有验收的新增代码采用同一约定；不能只更新目录图，生成结果仍沿用散落路径。新增 Vue 组件优先 `.vue` + `<script setup lang="ts">`，React 组件 `.tsx`，无 JSX 的逻辑 `.ts`。
 
 ### 首次接入与避免空壳文件
 
-- 第一次接入完整业务应用从 `docs/zh/guide/first-integration.md` 走单一路径，API手册只用于查询。先列出真实入口、装配、路由、认证来源，不能按记忆猜路径或创建假模块凑import。
+- 第一次接入完整业务应用从 `docs/zh/guide/first-integration.md` 选择保留原启动、复用初始化的路径；统一启动为可选方案，API手册用于查询。先列出真实入口、装配、路由、认证来源，不能按记忆猜路径或创建假模块凑import。
 - Vue宿主常规会话使用createVueBridgeApp的session身份getter；非敏感随机代次、恢复、换号和登出由插件负责，不在业务登录store手工renew/clear，不用token作身份。必须把登录状态反映为响应式ID/null，初始化未就绪用undefined。
+- 普通远程组件直接 expose 原文件，不默认新增业务包装；pageProviders 只补实际缺少的祖先环境，单个已有 Provider 直接引用；全局组件复用原注册源或最小真实依赖，不照抄 UI 库大全。提供方精确定义 props，消费方使用生成类型推导。
 - 不为一行对象创建、纯转发或复制常量新建session/helper文件。有共享职责时归入现有context/装配模块；纯声明setup不写空默认函数。不能按行数删除包含真实业务映射、Provider注入或必要副作用的文件。
 - 子应用需要自有认证缓存时保留一次业务映射；请求token通过宿主getter取最新值，不能靠token刷新触发整应用重挂来维持有效凭据。
 - “一小时首次接通”与“完整验收交付”分开计时；TS只归因新增/修改接入文件，不擅自全项目清零。明确说不测试时不跑测试、构建、类型检查或业务部署，保留候选和完整验收交接，不发布未验收版本。

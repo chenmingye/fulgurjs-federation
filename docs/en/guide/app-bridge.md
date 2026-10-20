@@ -1,6 +1,6 @@
 # Sub app bridge: embedding a full sub app (Vue ↔ React)
 
-For standalone and embedded operation, **prefer one `defineApplication` factory**; start with [first integration](first-integration.md) and [unified assembly](existing-apps.md). This page uses `defineBridgeApp` for bridge-only/custom contract entries, not as a requirement to duplicate business initialization.
+**Preserve existing standalone startup and use defineBridgeApp to reuse business initialization for the bridge.** Choose defineApplication when the project deliberately wants plugin-managed startup for both modes. Neither requires duplicated business registration. Start with [first integration](first-integration.md) and [existing application reference](existing-apps.md).
 
 > Scenario: mount a **full sub app** (with its own Router/store/menus) into a host of the other framework — a Vue 3 host embedding a React 18/19 child app, or the reverse. What is embedded is the child app: it creates its own component tree and the host only provides a DOM container; **no component type conversion happens** (Vue's `remoteComponent` cannot render React components directly).
 >

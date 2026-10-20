@@ -271,7 +271,7 @@ The **augmentable interface** shared by all three entries (`/runtime`, `/vue`, `
 | `FgStaticEntry<S>` | Static check on string-API parameters (empty-registry/dynamic pass; registered literals narrow to themselves; unregistered literals get an error type carrying the fix text, failing at the call site) |
 | `FgRemoteModule<S>` | The module type for an entry: registered → module namespace; unsynced/dynamic → `unknown` |
 
-Framework-entry check types (re-exported by `/vue` and `/react`): `FgComponentEntry<S>` (remoteComponent accepts only exposes whose default export is a component), `FgBridgeEntry<S>` (bridge factories accept only a `defineBridgeApp` default export), `FgBridgeAppProps<S>` (bridge props extracted from the provider's declaration), `FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>` (real remote component/props types), `FgVueBridgeWrapper<S>` (the Vue bridge wrapper component). Semantics and limits: [API reference · string-API entry checks](api.md#entry-checks-for-the-string-apis-type-registry).
+Framework-entry check types (re-exported by `/vue` and `/react`): `FgComponentEntry<S>` (remoteComponent accepts only exposes whose default export is a component), `FgBridgeEntry<S>` (bridge factories accept a default export implementing the typed bridge contract, including defineBridgeApp and defineApplication), `FgBridgeAppProps<S>` (bridge props extracted from the provider's declaration), `FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>` (real remote component/props types), `FgVueBridgeWrapper<S>` (the Vue bridge wrapper component). Semantics and limits: [API reference · string-API entry checks](api.md#entry-checks-for-the-string-apis-type-registry).
 
 ## RemoteSchemaEntry
 

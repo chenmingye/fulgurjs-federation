@@ -1,6 +1,6 @@
 # 子应用桥接：完整子应用嵌入（Vue ↔ React）
 
-已有应用同时需要独立启动与桥接时，**推荐 `defineApplication` 共用一份装配**，先读[首次接入](first-integration.md)与[统一装配指南](existing-apps.md)。本页的 `defineBridgeApp` 用于只提供桥接入口或需要单独桥接契约的场景；不是要求再复制一份业务初始化。
+**已有应用优先保留原独立入口，用 `defineBridgeApp` 复用已有业务初始化并提供桥接。** 项目主动选择由插件管理两种启动时，再采用 `defineApplication`。两者都不要求重复注册业务依赖；先读[首次接入](first-integration.md)与[已有应用参考](existing-apps.md)。
 
 > 场景：把一个**完整子应用**（自带 Router/store/菜单）挂进另一框架的宿主——Vue 3 宿主嵌 React 18/19 子应用，或反向。嵌入的是子应用：子应用创建自己的组件树，宿主只提供 DOM 容器；**不做组件类型转换**（Vue 的 `remoteComponent` 不能直接渲染 React 组件）。
 >

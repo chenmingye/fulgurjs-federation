@@ -145,7 +145,7 @@ The third argument of the wiring on both ends, `{ signal?: AbortSignal }`, defau
 
 In the host examples, `sess`/`props` stand for existing session state and business parameters, not plugin globals. Vue login integrations should normally use a `session` getter and remove `session-key`; omit session props for public apps. React uses explicit generations from authentication state. Import real List/Detail views rather than creating fake modules to satisfy these examples.
 
-The `defineBridgeApp` examples are bridge-only entries. For standalone operation too, prefer [defineApplication unified assembly](existing-apps.md): web/hash routing when standalone and memory routing when embedded. React standalone returns the actual RouterProvider; embedded mode returns the connection object above so dispose follows instance cleanup.
+The defineBridgeApp examples can coexist with original standalone startup by reusing initialization. Projects choosing plugin-managed startup may use [defineApplication](existing-apps.md): web/hash routing when standalone and memory routing when embedded. React standalone returns the actual RouterProvider; embedded mode returns the connection object above so dispose follows instance cleanup.
 
 ## Behavior contracts and boundaries
 

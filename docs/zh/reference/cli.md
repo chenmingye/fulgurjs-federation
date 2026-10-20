@@ -426,3 +426,6 @@ JSON 字段：`checks`（DoctorCheck[]）、`failed`、`complete`（仅静态扫
 `init --plan --kind app --role provider --application src/fulgurjs/exposes/application.ts` 复用实际存在且语法有效、明确默认导出defineApplication的文件；不覆盖工厂、不替换复杂main。仅app提供方/双角色可用，路径限当前应用且拒绝symlink；目标缺失或无法确认工厂会阻断整批写入。
 
 无法自动提取复杂入口时，JSON新增 `startup?: { entry: string; application: string; imports: string[]; steps: string[] }`；文本模式同样展示。imports来自入口语法分析，不代表整图已扫描或都应shared；steps给出本工程的目标路径和顺序。已有配置保留，使用者需核对exposes和main.start，不把复用声明当作已完成业务迁移。
+
+
+这是 CLI 当前支持的统一启动改写路径，不是模块联邦接入的必要条件。`--application` 不识别任意业务创建函数或 defineBridgeApp。已有项目选择保留原 main 时，按首次接入指南手工声明桥接 expose；不接受 startup 中的迁移步骤就不执行 --write。工具建议不能替代对真实业务入口的判断。

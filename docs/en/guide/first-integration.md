@@ -1,99 +1,103 @@
-# First integration into existing applications
+# First integration: preserve business startup, add the required bridge
 
-> This guide describes the current public API. Verify the actually installed package; use matching plugin versions across hosts/remotes and replace business paths with real project files.
+> This guide describes the current public API. Check the installed package, real entry and router first. Example business paths must be replaced with existing project modules.
 
-Follow one path: preserve the existing projects, share one application factory between standalone and embedded execution, then mount the complete remote application. For individual components/functions use [components and modules](components-and-modules.md).
+**Preserve existing main.ts(x) and business initialization locations by default. A complete application adds a bridge contract that reuses initialization; ordinary components expose their original files.** Moving main into src/fulgurjs/, registering an entire UI library again, and creating component wrappers are not general requirements.
 
-## 0. Record facts before editing
+## 0. Decide what is being loaded
 
-Read the actual package/lock files, index.html entry, main, router, guards and authentication source. Record each project's real install/start commands, mount selector, App/router/store/i18n/registration order, routes export, history base, development root URL, and any authentication dependency. Do not create empty files to satisfy example imports or reuse assumptions from another project.
+| Need | Default integration | Changes to main |
+|---|---|---|
+| Forms, buttons, components or functions | Expose original files; remoteComponent for components, loadRemote for functions | None |
+| A complete application with its own router/state | Expose a bridge contract calling existing business initialization | Preserve standalone startup; check for a reusable initialization function |
+| A new project choosing plugin-managed standalone/embedded startup | Optionally use defineApplication | Only this choice uses application.start in main |
 
-Check TS diagnostics belonging to new or modified integration files. Existing business diagnostics are a separate category, not a prerequisite to integration.
+For component parameters, types and optional Providers see [components and modules](components-and-modules.md). **Do not apply full-application bootstrap steps merely to display a form.**
 
-Distinguish first connection (host login works, the remote shows real content, basic navigation works) from production delivery (build/deployment, refresh/deep links, sessions, reentry and recovery). One hour is a target for first connection, not a universal delivery guarantee.
+Read real index.html, main, router, stores, authentication and initialization functions. Record dependency locations, mount selector, initialization order, development URLs and deployment base. List pre-existing business TS diagnostics separately; fix diagnostics introduced by integration.
 
-## 1. Preview the actual projects
+## 1. Preserve startup and find reusable initialization
 
-Install the plugin inside each existing application with its own package manager and lock strategy. Follow [installation](getting-started.md#installation) for approvals and package-age restrictions; verify the installed version.
+If bootstrap, createApplication, setupAll or another initialization function already exists, inspect whether it creates an app, installs business plugins, creates a router or mounts immediately. **Its name and current location can stay.**
 
-For a Vue host loading an orders remote, replace these example names and URLs with recorded facts:
+A bridge needs the current instance and cleanup ownership. A typical Vue boundary creates/configures app and router and returns them before mounting. Existing main keeps its standalone startup and the bridge calls the same function.
 
-```bash
-# Remote root: app means a complete application; component is the CLI default.
-npx fulgurjs init --plan --kind app --role provider --name orders
-# Host root
-npx fulgurjs init --plan --kind app --role consumer --name admin --remote orders=http://localhost:5174
-```
+| Existing project | Action |
+|---|---|
+| A function returns an unmounted app/router | Reuse it in place with its existing business registration |
+| Existing mount/unmount lifecycle | Check container, cancellation, router and cleanup against the bridge contract |
+| Main only contains top-level createApp/use/mount | Make the smallest necessary business startup adaptation; place reusable creation/initialization according to existing business responsibilities |
+| Only components are exposed | Do not reorganize main or create an application factory |
 
-A supported minimal entry is extracted into `src/fulgurjs/exposes/application.ts`. For a complex entry, no files are written. The `startup.entry/application/imports/steps` report names the actual entry, destination and imports and provides an ordered migration checklist. Preserve the business application; do not replace it with a downloaded shell.
+Importing a main that mounts immediately can target a fixed #app, start browser history, or execute only during the first module evaluation. The plugin cannot safely intercept arbitrary startup scripts. **An application without a reusable boundary needs some business startup adaptation; that does not require moving the whole main into the integration directory.** Never duplicate component, permission, i18n or store installation lists.
 
-Reuse an existing factory using `--application <real file>`. The CLI does not overwrite it or delete the original main. A successful write is not browser acceptance.
+## 2. Vue: adapt existing initialization at the bridge boundary
 
-## 2. Preserve one remote application factory
-
-Put new wiring in `src/fulgurjs/`; leave the original business App, pages and routes where they are. Do not create empty host/types/setup/session files.
+The following assumes an **existing** src/bootstrap.ts exporting createBusinessApplication. This is a business function, not a plugin API or a mandatory new file. In this example it accepts execution mode/cancellation and returns { app, router }; adapt arguments to the real business interface.
 
 ```ts
-// src/fulgurjs/exposes/application.ts
-import { defineApplication } from '@fulgurjs/federation/vue'
+// src/fulgurjs/exposes/application.ts: federation bridge boundary only.
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { createBusinessApplication } from '../../bootstrap'
 
-export default defineApplication(async (_props, { mode, signal }) => {
-  const [{ createApp }, { default: App }, { createApplicationRouter }] = await Promise.all([
-    import('vue'), import('../../App.vue'), import('../../router'),
-  ])
-  if (signal.aborted) throw new DOMException('Application start cancelled', 'AbortError')
-  const app = createApp(App)
-  const router = createApplicationRouter(mode)
-  // Move the original store/i18n/components/directives/guards here in their original order.
-  // Check signal after awaits before writes. Do not mount or install this router here.
-  return { app, router }
+export default defineBridgeApp((_props, context) => {
+  return createBusinessApplication({
+    mode: 'bridge',
+    signal: context?.signal,
+  })
 }, { routing: true })
 ```
 
-Loading business modules and assembling the app are separate stages. Top-level module code runs before `app.use(pinia)`; avoid calling an app-dependent `useStore()` at the top level of directives or utilities. Read the store when the permission check or business operation actually runs. Outside components, pass that application's Pinia explicitly or reuse its existing explicit store getter. Refreshing, adding delays, or relying on another app to activate Pinia does not establish a reliable initialization order.
+defineBridgeApp can coexist with the original standalone main. It defines this **bridge entry**, not a prohibition on standalone execution elsewhere in the project. This path does not require changing main to application.start().
 
-The router is created per instance. This example assumes an existing named `routes` export from `./routes`; use the real export found in step 0:
+The reused function must satisfy these lifecycle conditions. Do not repeat installations it already performs:
+
+- Return this mount's Vue app/router with required stores, i18n, UI plugins, directives and guards already configured.
+- Use memory history in bridge mode. Standalone startup keeps its web/hash history; an embedded application must not compete for host browser history.
+- With { app, router } and { routing: true }, do not call app.use(router) or app.mount first. The plugin connects the routing channel, waits for the initial location, installs the router and mounts. The host must provide routing as in section 3.
+- If initialization must continue after router readiness, use [explicit router installation](url-sync.md) and return only app. Do not return the installed router for a second installation.
+- Install dynamic menus and guards on every new router. Cached user data does not mean a new router has its routes.
+- Observe the current signal before asynchronous writes. Module imports execute once; repeated import does not reinstall side effects for a new router.
+- Declare store ownership accurately. A module-level createPinia() reuses a container; app.use(store) does not create a fresh store. Parallel instances require independent state and cleanup; see [store binding](existing-apps.md#pinia-ownership).
+
+Add to the existing provider configuration:
 
 ```ts
-import { createRouter, createMemoryHistory, createWebHistory } from 'vue-router'
-import { routes } from './routes'
-export function createApplicationRouter(mode: 'standalone' | 'bridge') {
-  const router = createRouter({
-    history: mode === 'bridge' ? createMemoryHistory() : createWebHistory(import.meta.env.BASE_URL),
-    routes,
-  })
-  // Install the original guards on this router here.
-  return router
+// Merge into fulgurjs.config.ts without replacing other settings.
+export default {
+  name: 'orders',
+  exposes: { './bridge': './src/fulgurjs/exposes/application.ts' },
 }
 ```
 
-If a guard module imports a default singleton router and registers at module evaluation, turn it into an installer accepting the current router. Dynamic import alone does not reinstall guards on reentry. Never create a web router first and replace its history later: it may already have written the host URL.
+Only new integration wiring belongs under src/fulgurjs/. Existing initialization, App, router, stores, component-registration sources and pages stay where they are. Do not add forwarding-only expose files. Dynamic imports are optional for real code splitting/declaration boundaries; do not turn all of main into Promise.all lists or use imports to hide integration type errors.
 
-Keep existing style imports in their real entry/assembly locations. main only starts this factory:
+### Optional: defineApplication manages both startup modes
+
+New projects, or projects deliberately choosing plugin-managed standalone and bridge startup, can call the same business initializer through defineApplication:
 
 ```ts
-import application from './fulgurjs/exposes/application'
-void application.start('#app').catch(console.error) // original mount selector
+// An alternative to the defineBridgeApp entry above, not a second bootstrap.
+import { defineApplication } from '@fulgurjs/federation/vue'
+import { createBusinessApplication } from '../../bootstrap'
+
+export default defineApplication((_props, { mode, signal }) => {
+  return createBusinessApplication({ mode, signal })
+}, { routing: true })
 ```
 
-Preview again, then append `--write` after review:
+**Only when choosing this option**, standalone main may call application.start('#app'), letting the plugin manage installation, mounting and disposal. This is optional startup organization, not a prerequisite migration for existing projects. See [existing application reference](existing-apps.md) for the complete contract and React integration.
 
-```bash
-npx fulgurjs init --plan --kind app --role provider --name orders --application src/fulgurjs/exposes/application.ts
-# Existing config is preserved; check:
-# exposes: { './bridge': './src/fulgurjs/exposes/application.ts' }
-```
+## 3. One host mount view and one route prefix
 
-React uses `exposes/application.tsx`. Return the existing BrowserRouter/RouterProvider for standalone mode and controlled `{ element, dispose }` for embedded mode, preserving original Providers and per-instance stores. See the [complete React remote factory](../../../examples/templates/showcase/react-remote/src/fulgurjs/exposes/application.tsx); do not apply Vue createApp code to React.
-
-## 3. Mount from one host view and one route prefix
-
-The host plan generates `src/fulgurjs/host/RemoteApplication.vue`. For Vue with URL synchronization:
+Render in the existing host page/router. Vue example:
 
 ```vue
+<!-- src/fulgurjs/host/RemoteApplication.vue -->
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { createVueBridgeApp, createVueBridgeNavigation } from '@fulgurjs/federation/vue'
+
 const props = defineProps<{
   getIdentity?: () => string | number | null | undefined
   getContext?: () => Record<string, unknown>
@@ -107,74 +111,35 @@ const routing = { basePath: '/orders', navigation: createVueBridgeNavigation(use
 <template><RemoteApplication :routing="routing" /></template>
 ```
 
-Add `/orders/:pathMatch(.*)*` to the host's existing routes and point it at this view. Keep remote menus/routes inside the remote. For multiple remotes, select spec/basePath by static prefix and key a reused Vue mount view by spec. Route paths exclude the deployment base: deployment `/main/` still uses logical `/orders`.
+Point /orders/:pathMatch(.*)* at this view in existing host routes. Remote pages, permissions and menus stay remote-owned; do not copy every route. The logical prefix excludes deployment base: deploying at /main/ still uses /orders.
 
-The [React host view](../../../examples/templates/showcase/react-host/src/fulgurjs/host/BridgeVuePage.tsx) connects the existing data router through createReactBridgeNavigation. React sessions remain explicitly controlled by sessionKey; automatic identity getters on this page are a Vue host capability.
+Keep the bridge stable during navigation within one remote; distinguish remotes by spec when choosing Vue keys. Do not remount the complete child on every fullPath change. React hosts use createReactBridgeApp and createReactBridgeNavigation; see [bridging](app-bridge.md).
 
 ## 4. Add business context only when required
 
-Bind the existing authentication state through getIdentity/getContext, inline or in one useful `host/context.ts`:
+Vue hosts derive getIdentity/getContext from existing authentication. These are business functions accepted by the example view, not a second login system:
 
-- Return a stable, non-sensitive user ID when authenticated. Include a tenant identifier if changing tenants requires resetting business instances.
-- Return undefined while identity is restoring; mounting pauses without deleting the saved generation.
-- Return null on explicit logout; pending work is invalidated, instances unmount and old context clears.
-- Return the real user, a getter for the latest token, and genuinely consumed business capabilities from getContext. Do not supply sessionKey or call provide inside the getter.
-- Use a stable module-level getter reading the host store, not local props that stop updating after unmount. Identity observation continues after the remote view leaves so logout while away is recognized.
-- Read reactive state. localStorage alone is not reactive. Tokens are credentials, not identity keys; token rotation must not remount.
-- sessionStorage saves the non-sensitive identity and random generation for restoration; do not pass tokens, passwords or personal sensitive data. A reauthentication event with no observable identity/logout change requires a business login-batch identity or explicit controlled sessions; the plugin cannot infer it.
+- Return a stable non-sensitive ID when ready, undefined during restoration, null after logout. Read reactive state.
+- Do not use tokens as identity or manually create sessionKey. Context contains actual business capabilities, such as getToken: () => latestToken.
+- Reuse existing authentication-cache mapping if the child needs it. Read current credentials for requests instead of remounting the application on token rotation.
+- Prefer token state once assigned, including an empty logout value; only fall back to cache before restoration.
+- The plugin handles non-sensitive generations and session invalidation. Unobservable same-account reauthentication needs a business authentication-batch identifier or explicit session handling.
 
-If the remote uses a different token cache/user schema, map it once in `exposes/context.ts`, before loading guards/pages. Check signal after asynchronous operations before writing. Private authentication rules stay in the application.
+### Host-provided forms
 
-### Host forms inside a child: choose the component contract first
+For a fixed pair, expose original host forms and use remoteComponent in the child. Several hosts providing different implementations may inject loaders through getContext. See [components and modules](components-and-modules.md#providing-host-components-to-a-child-recommendation-and-decision-rules) for examples, precise props and optional environment adaptation.
 
-For fixed providers and stable interfaces, prefer **host exposes + child remoteComponent**. The host still mounts the full child; the child loads only components in return, not another full application. Inject component loaders through `getContext` when the same child needs implementations supplied by different hosts. Both remain supported; reasonable existing injection integrations need no rewrite. See [host-provided components](components-and-modules.md#providing-host-components-to-a-child-recommendation-and-decision-rules) for the two-form configuration, rendering code and decision rules.
+**Ordinary remote components require no additional wrapper files.** Expose components directly when their dependencies are satisfied. Declare pageProviders only for missing ancestor injection. Reference a single existing Provider directly; create a wrapper only for real composition or parameter adaptation. Global tag registration is separate: a Provider does not copy app registries, and an entire UI-library registration list is not a default requirement.
 
-With federation component loading, keep real user/token-getter/event capabilities in context instead of also passing the same form loaders. Components requiring ancestor environment declare it through the component provider's configured `setup` module:
+## 5. Preview and verify
 
-```ts
-// src/fulgurjs/setup.ts — no empty default function needed
-export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m => m.default)]
-```
+Manual wiring is supported. CLI init --plan previews; --write changes files. Component mode does not create application factories. Application mode may propose extracting supported minimal main entries: **this is a tool-selected rewrite plan, not a runtime prerequisite**. If unsuitable, preserve main and configure the actual bridge entry manually. The current CLI --application option recognizes explicit default defineApplication exports only, not arbitrary bridge contracts or self-mounting main files. Projects preserving standalone main with defineBridgeApp configure exposes manually without that option.
 
-Skip this file for ordinary components without Providers. Business iframes are not automatically migrated: replace their actual creation sites with the appropriate component/application bridge and verify data, readonly state and styles. TinyMCE's internal editing iframe is not a cross-application business iframe.
+Check configuration/types from each real application directory, start its development service, then verify:
 
-## 4.1 Host facilities that must be handled together when replacing a legacy shell
+1. Standalone startup, host login, real lists and business components.
+2. Deep links, menus, back/forward/reload and correct browser-history ownership.
+3. Leave/reenter, cancellation, account changes/logout, late tasks and cleanup.
+4. Formal-package builds/deployment bytes; when Providers/registration are needed, actual fields, values, readonly state, fonts and layout.
 
-A mountable remote does not mean the legacy shell is gone. Check each item before calling the integration complete:
-
-- **Legacy micro-frontend registration points**: the entry bootstrap, a layout `onMounted`, a login `setToken` callback, or similar hooks can each register the old shell again. Disable or short-circuit all of them, and confirm no second container claims the same prefix.
-- **Dynamic routes generated from backend menus**: backend menus often generate component-less records for the child application's internal paths. They are for menu display only. Registering them in vue-router gives them a more specific path than the remote prefix catch-all and leaves the content area blank after a menu click. Build the menu tree first, then remove same-prefix records from the route table.
-- **Host page container key**: do not rebuild the remote mount view from `route.fullPath`. Child-internal navigation synchronizes the host URL; a changing fullPath unmounts the entire remote application, and an asynchronously initializing page then touches refs that have already been cleared. Use a stable per-remote key for the remote prefix route.
-- **Legacy cross-application iframes / host pages**: prefer host exposes and child remoteComponent for fixed component interfaces; use getContext component loaders for implementations supplied by different hosts. Both need the required Providers, component/directive registration and store ownership; pass events as actually needed and render inside the child application. A same-origin iframe is only a fallback for old environments, never evidence of federation. TinyMCE's internal editing iframe is the exception.
-- **Session identity reads**: a logout action may clear store state before clearing the persistent cache. If the identity getter reads a Pinia-cached getToken getter, it can cache the old cached token during that intermediate state; the router guard then redirects `/login` back to the home page. Read state first: use state.token whenever it is assigned (including the empty string) and read the persistent cache only while it is still undefined.
-- **Quick leave and re-entry**: every child mount creates a new router, and its dynamic route table belongs to that router only. A permission guard must not skip `addRoute` merely because user information was already loaded; register dynamic routes per router instance.
-- **Host dependencies of business components**: rendering a component from the host module graph inside the child application requires installing the global components, events and store ownership it assumes. Otherwise you see unresolved tags, raw usernames or empty selects. Do not call getCurrentInstance inside async callbacks to obtain the app; capture it during setup.
-
-## 5. Connect and diagnose in order
-
-1. Start remotes using their existing scripts. Check the actual dev manifest/remoteEntry and provider declaration generation.
-2. Start the host; confirm its original login/home before visiting a remote prefix.
-3. Require real remote content and one real navigation/action. An empty shell, menu or placeholder is not first connection.
-4. Inspect synchronized declarations for actual props/methods. Do not copy consumer interfaces or hide errors with any/Record.
-5. Check new/modified integration TS only, recording inherited diagnostics separately.
-6. Then perform production build/deployment and verify deep links, refresh, query/hash, sessions, reentry, recovery and visuals.
-
-Build target: the shared facade output contains top-level await. The production `target` must support TLA (for example es2022), or use a TLA transform that correctly handles every emitted chunk; do not disable a legal `manualChunks` configuration just to make the build pass. `sourcemap: 'inline'` can trigger a Vite import-analysis stack overflow on very large outputs; external sourcemaps are a supported alternative. After introducing the plugin into an existing project for the first time, clear `node_modules/.vite` once before acceptance.
-
-Preserve the first error, URL and stack before diagnosing. Fix implementation/documentation defects; do not use silent fallbacks, disabled valid chunk settings, fabricated API responses or weakened acceptance. Record unreachable backends by actual endpoint and continue independent work.
-
-## 6. Handoff evidence
-
-Provide installed version/document commit, baseline, changed-file map with responsibilities, commands, first real connection time, blockers and durations, TS ownership, deployment manifest and actual per-case results. Mark unexecuted/external cases explicitly; never reuse earlier run totals as current evidence.
-
-### A dynamic tag renders as `[object Object]`
-
-Inspect the resolved component before attributing the problem to multiple framework instances based on chunk names. Do not register imperative services with `app.component(service.name, service)`: minification can rename a function to an HTML tag such as `b`, and `resolveDynamicComponent` may then select that service. Register actual view components under stable public component names; use services through their documented invocation or installation APIs. Do not work around the collision by changing business tags or disabling valid chunk configuration.
-
-### Providers belong to the consuming component tree
-
-Sharing a Vue package does not give separate apps the same ancestor tree. Recreate the providers that the original component uses for its theme, class prefix, locale, or other injected values. Global component registration only resolves component names. Reuse the original business root provider around the content, without mounting another RouterView or a full application.
-
-Passing a component through a business callback does not run a remote module's setup/provider pipeline. That callback's business adapter must return a component already wrapped in its required providers. Check the actual class prefix and control/editor widths; successful CSS requests or matching text colors alone do not establish visual equivalence.
-
-Bridged components share the page's CSS; they do not automatically receive iframe style isolation. A third-party theme's global rules, such as `input:disabled`, can affect other apps. Identify the matched selector before applying a correction limited to the business boundary. For readonly text, also compare `-webkit-text-fill-color` and ancestor opacity rather than `color` alone.
+Document paths, tool writes, type generation, builds, deployment and browser acceptance are distinct evidence. Documentation-only changes do not rebuild a business site or imply that business code has been reorganized.

@@ -146,7 +146,7 @@ export default defineBridgeApp((_props, ctx) => {
 
 上方宿主示例中的 `sess`/`props` 表示已有会话代次与业务参数，不是插件全局变量。Vue 常规登录推荐 `session` getter（此时删除 `session-key`），无会话需求则省略该 prop；React 用已有认证状态提供显式代次。子应用示例的 List/Detail 也应导入真实页面，不创建假模块满足示例。
 
-`defineBridgeApp` 的示例是仅桥接入口。需要同一应用独立启动时，推荐[defineApplication 统一装配](existing-apps.md)：独立模式用 web/hash router，桥接模式用 memory router；React 独立模式返回实际 RouterProvider，桥接模式返回上面的连接对象，让 dispose 跟随实例清理。
+`defineBridgeApp` 示例可以与原独立入口共存，桥接复用已有初始化即可。项目主动采用插件统一启动时，可选[defineApplication](existing-apps.md)：独立模式用 web/hash router，桥接模式用 memory router；React 独立模式返回实际 RouterProvider，桥接模式返回上面的连接对象，让 dispose 跟随实例清理。
 
 ## 行为契约与边界
 

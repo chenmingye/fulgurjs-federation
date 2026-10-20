@@ -14,8 +14,8 @@
 | 新建可运行示例工程 | CLI create，整套模板一起安装/运行 | [快速上手](guide/getting-started.md) |
 | 在现有页面使用另一个应用的组件/函数 | exposes + remoteComponent / loadRemote；不加完整应用桥接 | [组件与模块](guide/components-and-modules.md) |
 | 宿主掌握一组远程页面的路由 | 页面表 + createHostPages/createReactHostPages | [逐页接入](guide/remote-pages.md) |
-| 完整应用保留自己的路由、菜单与状态 | defineApplication 共用独立/桥接装配，宿主工厂挂载 | [首次接入](guide/first-integration.md) |
-| 只需自定义桥接入口、不需要独立启动 | defineBridgeApp | [桥接合同](guide/app-bridge.md) |
+| 完整应用保留自己的路由、菜单与状态 | 保留原启动，defineBridgeApp 复用初始化，宿主工厂挂载 | [首次接入](guide/first-integration.md) |
+| 主动选择由插件管理独立与嵌入启动 | 可选 defineApplication | [桥接合同](guide/app-bridge.md) |
 | 让完整子应用的内部位置出现在浏览器 URL | 在桥接基础上显式接通 routing，两端都配置 | [URL 同步](guide/url-sync.md) |
 
 宿主/子应用是挂载关系，提供方/消费方是模块关系，允许同一应用兼任两种角色。Vue 应用从 /vue、React 应用从 /react 导入；这不转换组件框架。Vue 常规桥接会话推荐 session getter，React 或需手动管理时用 sessionKey。各指南代码中的业务模块/变量来自真实工程，不是插件自动生成的全局对象。
@@ -47,7 +47,7 @@
 | 文档 | 内容 |
 |---|---|
 | [系统架构图](guide/architecture.md) | 三条接入路径、开发/浏览器边界、会话去重与挂载/卸载顺序 |
-| [已有应用统一装配](guide/existing-apps.md) | 一份装配同时服务独立启动/桥接、状态绑定、接入预检、必改/可选文件清单 |
+| [已有应用接入参考](guide/existing-apps.md) | 保留原启动、复用初始化、可选统一启动、状态绑定与接入预检 |
 | [快速上手](guide/getting-started.md) | 安装、`create` 新建工程、已有项目 `init`/手工接入（Vue/React/纯 TS；consumer/provider/dual）、从 qiankun 类方案迁入的概念映射 |
 | [组件与模块加载](guide/components-and-modules.md) | remoteComponent（Vue/React）、useLoadRemote、RemoteErrorBoundary、loadRemote、开发类型直连 |
 | [远程页面接入](guide/remote-pages.md) | definePages / createHostPages / createReactHostPages、hostPages 导出、check-pages、业务菜单归应用自管的边界 |

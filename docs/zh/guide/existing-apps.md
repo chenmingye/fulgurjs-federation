@@ -1,13 +1,13 @@
 # 已有应用接入：先看必改文件，再选需要的能力
 
-第一次接入完整应用，请从[单一路径接入指南](first-integration.md)开始；本页提供装配与工具参考。
+第一次接入完整应用，请从[单一路径接入指南](first-integration.md)开始；本页提供已有启动复用、可选统一启动与工具参考。
 
 ## 先确定场景
 
 | 需求 | 必需接入 | 不需要默认增加 |
 |---|---|---|
 | 普通模块或组件 | Vite 注册插件；提供方 expose 原文件，消费方 loadRemote/remoteComponent | 应用工厂、菜单表、会话文件、Provider |
-| 完整子应用 | 应用配置；一份 application 装配；宿主视图挂载 | 不逐页登记子应用菜单，不复制两套 main/bridge 初始化 |
+| 完整子应用 | 应用配置；有效桥接契约复用原初始化；宿主挂载视图 | 不搬整份 main，不逐页复制菜单或再抄业务注册清单 |
 | 与宿主 URL 同步 | 子应用受控 memory router；宿主一个静态挂载前缀与导航端口 | 子应用不再调用浏览器 history |
 | 登录态或会话 | 宿主明确提供 context/sessionKey | 无登录需求时不强制新建 session/context 文件 |
 | 组件依赖全局注册或祖先注入 | 按真实需要声明 setup.globalComponents/pageProviders | 普通组件不默认包装整个业务 app |
@@ -18,30 +18,21 @@
 
 ## 接入文件集中放在哪里
 
-已有工程需要多个接入文件时，统一放在 `src/fulgurjs/`，按职责分三类。只创建实际需要的目录：
+已有业务入口、初始化函数、router、store、注册源与页面保留原位置。新增联邦接线按需集中；下面列的是可能需要的文件，不是必须生成的目录树：
 
 ```text
 src/fulgurjs/
-├── setup.ts                    # 提供方环境声明，引用下方 Provider
-├── host/                       # 宿主端：如何加载、显示远程应用
-│   ├── application.ts          # 仅作为宿主时的统一启动装配（React 用 .tsx）
-│   ├── RemoteApplication.vue   # 挂载视图，负责会话和 URL 同步接线
-│   ├── context.ts              # 传给远程的上下文（按需）
-│   └── auth.ts                 # 仅有实际业务登录适配时需要；不存插件代次
-├── exposes/                    # 提供方：本工程对外导出的内容
-│   ├── application.ts          # 完整远程应用的统一装配（独立/嵌入共用）
-│   ├── context.ts              # 需要时接收宿主登录态，复用原业务模式/缓存适配
-│   ├── OrderForm.vue           # 对外组件入口（例名，按业务命名）
-│   ├── FormProviders.vue       # 这些组件需要的祖先环境（按需）
-│   └── theme.ts                # 独立入口和 Provider 共用的配置（按需）
-└── types/                      # 插件自动同步的远程声明，不手写、不复制 props
+├── host/RemoteApplication.vue  # 需要挂载完整远程应用时增加
+├── exposes/application.ts     # 需要新桥接适配时增加；只调用已有业务初始化
+├── setup.ts                   # 确有远程初始化/缺失组件环境时才增加
+└── types/                     # 自动同步声明，不手写
 ```
 
-`exposes/` 就是对外导出目录，名称对应联邦配置的 `exposes` 字段；宿主挂载组件放 `host/`。外层只保留环境声明 `setup.ts`，不要再散放 Provider、桥接组件或接入辅助文件。目录名是组织约定，不是插件自动识别规则：文件移动后必须同步真实 import、`setup`、`exposes` 路径，不能只改目录图。CLI 的 `init --kind app --plan` 和 `create` 模板也采用这套分工，不在 `src/` 根部另建 application、mode、session 等接线文件，不保留旧位置的转发文件。
+原组件可以直接被 exposes 指向，不必在 exposes/ 再包一层。已有有效桥接契约也可直接作为 expose；不为目录统一移动业务文件或创建纯转发壳。一个已有 Provider 直接引用，只有真实的组合/参数适配才新增 Provider 组件。业务上下文映射有实际职责时才增加 context.ts。
 
-项目根的 `vite.config.ts`、`fulgurjs.config.ts`，以及已有的 `src/main.ts` 和业务页面仍遵循原项目约定。`main.ts` 只调用接入目录中的统一装配；不用为了集中目录复制一份业务页面或两套启动流程。
+`main.ts(x)` 继续是项目原独立入口。新增桥接调用同一个已有业务初始化，不要求 main 改成 application.start。若项目主动采用 defineApplication，则可让 main 调用其 start；这是可选启动组织，不能当作接入前置条件。
 
-仅作为宿主的装配放 `host/application.ts(x)`；被远程加载的装配放 `exposes/application.ts(x)`。同一份装配既启动宿主、又作为完整远程应用被加载时，共用 `exposes/application.ts(x)`，不再创建第二份 host 装配。所有目录和 `setup.ts` 都按需创建，不为目录图造空文件。
+新建的纯接线使用 host/、exposes/ 区分消费与提供；新项目的统一启动示例可使用 host/application.ts(x) 或 exposes/application.ts(x)。路径是组织约定，插件按配置中的真实文件加载，不自动识别文件名。模板中 main 采用统一启动，展示的是该可选方案，不要求已有项目照搬。
 
 ### 文件格式和名称
 
@@ -85,18 +76,18 @@ npx fulgurjs init --plan --role consumer --remote remote-a=http://localhost:5174
 **完整子应用**：提供方使用 `--kind app --role provider`；宿主使用 `--kind app --role consumer --remote ...`。例如：
 
 ```bash
-# 子应用：从可识别的最小 src/main.ts(x) 提取一份 application，并 expose ./bridge
+# 子应用：预览完整应用接线；审查计划是否会改写现有 main
 npx fulgurjs init --plan --kind app --role provider
 # 宿主：生成 src/fulgurjs/host/RemoteApplication.vue 或 .tsx，放入现有页面/路由
 npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://localhost:5174/remote-a
 ```
 
-预览满意后同样追加 `--write`。宿主挂载视图不自动增加登录态或 URL 同步：需要时按下文和 [URL 同步指南](url-sync.md)接入宿主导航端口、一个挂载前缀和真实会话来源。子应用不重复登记内部菜单。跨框架完整桥接的依赖要求见[桥接指南](app-bridge.md)，不能把普通组件的安装要求直接套到它。
+只有接受计划中的具体改写时才追加 `--write`。若要保留原入口结构，可手工声明有效桥接契约与 exposes；无需执行提取 main 的计划。宿主挂载视图不自动增加登录态或 URL 同步：需要时按下文和 [URL 同步指南](url-sync.md)接入宿主导航端口、一个挂载前缀和真实会话来源。子应用不重复登记内部菜单。跨框架完整桥接的依赖要求见[桥接指南](app-bridge.md)，不能把普通组件的安装要求直接套到它。
 
 ### 自动接线的边界
 
 - Vite 支持直接对象、`defineConfig` 对象以及可识别的单返回箭头配置工厂，保留原插件、端口和注释；原插件返回值可作为嵌套 PluginOption 保留。
-- 最小应用入口支持具名 `createApp` 的 Vue 启动、具名 `createRoot` 的 React JSX 启动。已有 Router/store、权限、异步初始化或自定义入口布局需按下文先整理工厂，工具不会盲改业务。
+- 最小应用入口支持具名 `createApp` 的 Vue 启动、具名 `createRoot` 的 React JSX 启动。已有 Router/store、权限、异步初始化或自定义入口布局需核对已有初始化边界，工具不会盲改业务；手工复用真实初始化是有效接法。
 - 无法证明的配置控制流、插值模板、顶层 spread、重复 plugins 或已有人工接线会列为阻断项，**整批不写**，同时给出文件和手动接入块。
 - 已有配置和手改挂载视图不覆盖；重复运行相同计划不会重复插入。预览函数不执行业务模块/Vite 配置。`--force` 不适用于接入计划。
 - `--write` 写入前再次核对文件；失败回退。进程中断留下 `.fulgurjs-init-pending.json` 时，先运行 `npx fulgurjs init --rollback`。有后续人工编辑则拒绝覆盖，按记录人工合并；恢复成功记录会删除，不应提交它。
@@ -104,9 +95,13 @@ npx fulgurjs init --plan --kind app --role consumer --remote remote-a=http://loc
 
 仅想生成配置时仍可直接 `npx fulgurjs init`；想校验已有配置用 `init --config`，不要混用 `--plan/--write` 与 `--config/--out/--force`。完整参数、JSON 与退出码见 [CLI 参考](../reference/cli.md#fulgurjs-init)。
 
-## Vue：两种入口复用一份装配
+## Vue：优先复用已有初始化
 
-`src/fulgurjs/exposes/application.ts` 默认导出就是远程桥接契约，同时带独立 `start` 方法。下面的 App 和 routes 是项目原有组件与路由；守卫、状态库、i18n、指令等原装配放在同一工厂内。
+默认做法见[首次接入第2节](first-integration.md)：defineBridgeApp 调用既有业务创建函数，原 main 保留其独立启动。检查桥接模式、未挂载返回值、每个 router 的守卫与实例清理；函数已经装配业务依赖时，桥接文件不再注册一次。
+
+### 可选：defineApplication 同时管理两种启动
+
+下面用于新工程或主动选择统一启动的项目。它演示插件能力，不要求把既有 main、业务插件或注册清单搬进该文件。已有初始化函数优先直接复用；此处展开 createApp/router 只是说明返回合同。
 
 ```ts
 import { createApp } from 'vue'
@@ -131,33 +126,18 @@ export default defineApplication<AppProps>((props, { mode, signal }) => {
 }, { routing: true })
 ```
 
-### 大型应用的业务代码按启动时加载
+### 导入与原独立入口
 
-如果已有应用存在与公开接口无关的业务 TS 诊断，可以把业务组件、路由和装配插件的导入放进异步工厂。仍然只有一个 `application.ts`，不增加转发文件，也不需要先整改整个业务项目：
+静态导入和按需动态导入都支持，取决于真实业务依赖。不要把所有业务导入改成一串 Promise.all 当作接入模板；模块级副作用仍只执行一次，不能靠动态 import 保证每个新 router 都注册守卫。公开声明应准确描述入口；业务类型诊断与公开合同诊断分开归因，不用 any 或宽泛字典掩盖错误。
 
-```ts
-export default defineApplication<AppProps>(async (props, { mode }) => {
-  const { default: App } = await import('../../App.vue')
-  const { routes } = await import('../../router/routes')
-  const router = createRouter({
-    history: mode === 'bridge'
-      ? createMemoryHistory()
-      : createWebHistory(import.meta.env.BASE_URL),
-    routes,
-  })
-  const app = createApp(App, { ...props })
-  return { app, router }
-}, { routing: true })
-```
-
-这里沿用上例的公开导入和 `AppProps`，移除顶部的静态 App/routes 导入。业务插件与只在运行期需要的图标注册，也在本工厂中加载和安装。插件仍检查应用入口和公开声明的静态依赖；不会将只在启动时使用的整棵业务树当成必须先通过的公开类型接口。模块会被浏览器缓存，但每次工厂执行仍应创建新的 app/router/store。对外声明能否完整生成，可用 `fulgurjs types` 核验。
-
-已有 `main.ts` 的联邦相关部分变为：
+仅采用上述 defineApplication 方案时，原独立入口可改为调用它：
 
 ```ts
 import application from './fulgurjs/exposes/application'
 void application.start('#app').catch(console.error)
 ```
+
+保留原独立启动、仅 expose defineBridgeApp 的项目不做这一步。
 
 提供方配置直接指向它，不再增加 bridge.ts 转发文件：
 
@@ -175,7 +155,7 @@ export default {
 
 ## React：同一工厂选择原生或受控 router
 
-下面的 React 工厂位于 `src/fulgurjs/exposes/application.tsx`。工厂同步返回 JSX，或 `{ element, dispose? }`。异步页面/loader 保留 React 原生行为；start 的 Promise 表示首次根提交，不表示所有请求都完成。
+此节同样是可选的统一启动方案；已有独立入口可保留，并用 defineBridgeApp 复用原 React 初始化。下面的 React 工厂位于 `src/fulgurjs/exposes/application.tsx`。工厂同步返回 JSX，或 `{ element, dispose? }`。异步页面/loader 保留 React 原生行为；start 的 Promise 表示首次根提交，不表示所有请求都完成。
 
 ```tsx
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
@@ -192,7 +172,7 @@ export default defineApplication((_props, { mode, routing, signal }) => {
 }, { routing: true })
 ```
 
-main.tsx 从 `./fulgurjs/exposes/application` 导入，只调用 `application.start('#root')`，expose 指向 application.tsx。工厂没有 router 时直接返回 JSX 即可，不用声明 routing。
+仅采用本节方案时，main.tsx 从 `./fulgurjs/exposes/application` 导入并调用 `application.start('#root')`，expose 指向 application.tsx。工厂没有 router 时直接返回 JSX 即可，不用声明 routing。
 
 ## 启动、取消和卸载
 
@@ -205,7 +185,7 @@ handle.unmount()
 - 等待启动时可调用 `application.unmount(element)` 取消。start 按 AbortError 拒绝；工厂迟到结果不得重新挂载。异步业务回写仍须检查 signal。
 - 旧 handle 只对应原启动代次，不会卸载同容器的新实例。
 - 卸载失败后容器封锁，整页刷新恢复；不能换个 props/sessionKey 绕过。
-- 每次工厂创建新 app/router/业务 store 实例；不返回一个模块全局创建的实例让多个容器共用。
+- 每次挂载必须得到可用且归属明确的 app/router；并行实例的状态应隔离。已有业务单例不由插件自动改写，不要把复用同一个 store 的安装调用描述成“创建新 store”。
 - mode 属于本次工厂上下文，不写 window 全局开关；hasBridgeMount(context) 在桥接模式为 true，独立模式为 false。
 
 ## Pinia：库单例与业务实例分别管理
@@ -245,15 +225,15 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 
 | 类别 | 例子 | 是否人人必改 |
 |---|---|---|
-| 联邦必需 | 每应用配置；子应用 application；宿主挂载视图 | 按选定能力需要 |
-| 原入口接线 | main 的 start；Vite 插件注册；router 创建模式 | 修改已有文件，不复制整套业务启动 |
+| 联邦必需 | 每应用配置；完整应用的桥接契约及宿主视图 | 普通组件不需要应用契约 |
+| 原入口接线 | Vite 注册；桥接所需的创建/清理边界与 router 模式 | 保留 main，复用原初始化；start 仅可选统一启动使用 |
 | 业务附加 | 登录、字典、权限、组件注册、祖先 Provider | 仅真实业务依赖时需要 |
 | 旧方案迁移 | 去掉乾坤入口与全局运行标志 | 新项目没有这些成本 |
 | 关联修复 | 迟到请求、业务表单回显、旧菜单配置 | 不算插件普遍要求 |
 | 生成/构建资源 | 类型声明、锁文件、公共资源 | 与手写接入分开，不手改生成类型 |
 
-普通组件仍用 remoteComponent；只需要一个自定义桥接入口时 defineBridgeApp 仍是有效当前 API。统一装配用于有独立启动与桥接两种形态的应用。
+普通组件直接用 remoteComponent；defineBridgeApp 可与原独立入口共存；defineApplication 是项目选择让插件管理两种启动时使用的当前 API。它们的选择不取决于文件必须放在哪里。
 
 源码演示：[Vue 宿主装配](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts)、[React 远程装配](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx)、[React 宿主装配](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx)、[模板入口](../../../examples/templates/README.md)。模板使用 registry 正式包，可整目录复制后独立安装。
 
-复杂工程整理完工厂后可用 `--application <实际工厂文件>` 复用；不能自动提取时，计划中的 `startup` 会列出实际入口、导入模块和逐步整理清单。CLI 不生成假登录、假路由或只转发的 bridge 文件。
+当前 CLI 的 --application 只识别明确默认导出的 defineApplication；不能用它扫描任意业务初始化或 defineBridgeApp。startup 中的步骤属于工具提出的统一启动改写方案，不是接入硬要求。保留 main 的项目手工配置真实桥接 expose，不执行不合适的 --write 计划。

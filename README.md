@@ -7,7 +7,9 @@
 [English](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.en.md) ｜ **[完整文档中心](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)**（中文 [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md)）
 
 
-第一次接入完整应用，从[一条完整接入流程](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)开始；统一装配与预检参考[已有应用接入](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)。
+第一次接入完整应用，从[一条完整接入流程](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)开始；保留原启动、复用初始化与预检参考[已有应用接入](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/existing-apps.md)。
+
+**已有组件直接 expose 原文件；完整应用保留原业务入口并复用初始化，不默认搬 main、重复注册 UI 库或新建 Provider 包装。**
 
 已有工程可先用 `fulgurjs init --plan` 预览接线，审查后再用 `--write`；复杂业务装配会明确列出人工待办。统一 `/vue`、`/react` 入口支持按使用裁剪，不需要改用内部路径。
 

@@ -339,7 +339,7 @@ export const pageProviders: RemoteSetupModule['pageProviders'] = [
 
 `RemoteSetupContext`: `{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`. `appContext` is the snapshot taken from the page-level AppContext **at call time** (never a saved stale reference); `signal` is invalidated when the login generation changes or on logout cleanup.
 
-A module with only pageProviders/globalComponents/onSession can omit the default function. Empty modules and non-function defaults remain invalid.
+A module with only pageProviders/globalComponents/onSession can omit the default function. With no initialization, missing registration or ancestor dependency, omit setup entirely. Reference one existing Provider directly; no wrapper file is required for ordinary components. Empty modules and non-function defaults remain invalid.
 
 **Keep execution scopes separate**: default setup runs once per remote container; onSession once per login generation; globalComponents installation targets each actual consumer app, and pageProviders applies during component rendering. defineApplication/defineBridgeApp factories run on every mount. Create independent app/router/store instances in factories, not one-time setup. A direct static/dynamic remote import uses the plugin loading chain, but does not render the export as a component or wrap manually rendered components in Providers.
 
@@ -552,7 +552,7 @@ Remote types are on by default (`dts: true`). The chain is **provider generates 
 
 `loadRemote`, `remoteComponent`, `createVueBridgeApp` and `createReactBridgeApp` share one registry (`FgRemoteTypes`, populated by the synced output) with plain imports:
 
-- **Synced entry literals** get real module/component/bridge types — parameters, return values, props and `appProps` are all checked precisely; `remoteComponent` only accepts exposes whose default export is a component, and the bridge factories only accept a `defineBridgeApp` default export (a plain module masquerading as one is a compile error);
+- **Synced entry literals** get real module/component/bridge types — parameters, return values, props and `appProps` are all checked precisely; `remoteComponent` only accepts exposes whose default export is a component, and the bridge factories accept typed bridge-contract default exports, including defineBridgeApp and defineApplication (a plain module masquerading as one is a compile error);
 - **Misspelled entry literals** fail at the **call site** once the registry is non-empty (no wide string overload can absorb them);
 - **Dynamic string variables** (entry names assembled at runtime) always pass with an `unknown` result — an honest boundary: loading still works, the type system just does not know the remote's real shape; narrow with an explicit generic when needed;
 - **No types synced** (old remote / `dts: false`): all literals pass with `unknown` results; pages run normally. Precise checking requires upgrading the remote with `dts: true`.
@@ -623,7 +623,7 @@ The [public type reference](types.md) lists every exported type and its fields b
 ## One application for standalone and bridge startup: `defineApplication`
 
 
-Import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; no additional subpath. See [existing application assembly](../guide/existing-apps.md) for complete examples. `defineBridgeApp` remains available for bridge-only applications.
+Import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`; no additional subpath. See [existing application assembly](../guide/existing-apps.md) for complete examples. Existing standalone startup can stay with a defineBridgeApp adapter reusing initialization. Main relocation is not required; defineApplication is optional unified startup.
 
 | Item | Contract |
 |---|---|

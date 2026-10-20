@@ -7,7 +7,9 @@ For example: a main system loads an independently deployed approval page, a Vue 
 [简体中文](https://github.com/chenmingye/fulgurjs-federation/blob/master/README.md) ｜ **[Documentation center](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/README.md)** (Chinese [docs/zh](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/README.md) · English [docs/en](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/README.md))
 
 
-To reduce duplicated standalone/bridge startup code, see [application assembly and preflight](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/existing-apps.md).
+Preserve existing startup and reuse initialization; see [existing application integration and preflight](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/existing-apps.md).
+
+**Expose original components directly. Complete applications preserve business startup and reuse initialization; relocating main, duplicating UI registration and adding Provider wrappers are not default requirements.**
 
 For existing projects, `fulgurjs init --plan` previews wiring and `--write` explicitly applies it. Complex business assembly remains an explicit manual task. Unified `/vue` and `/react` imports support tree shaking without internal import paths.
 

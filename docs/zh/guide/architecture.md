@@ -4,6 +4,8 @@
 
 [下载离线图册 HTML](../../diagrams/architecture.zh.html) · [English](../../en/guide/architecture.md)
 
+图中的 `application.start` 独立分支展示可选统一启动方式；已有 main 也可保持原启动，并另外提供桥接契约。图不要求移动业务入口或增加组件包装文件。
+
 ## 1. 总体架构与推荐路径
 
 ![系统总体架构：本地工具链、资源服务和浏览器执行，包含三条并列接入路径](../../diagrams/overview.zh.svg)
@@ -14,8 +16,8 @@
 |---|---|---|
 | 复用另一个应用的组件/函数 | `exposes` + `remoteComponent` / `loadRemote` | 组件按各自框架渲染；不需要页面表或完整应用桥接 |
 | 宿主持有远程页面集合的路由 | `createHostPages` / `createReactHostPages` | 宿主维护页面表、菜单与路由；适配器加载对应 expose |
-| 完整应用保留自己的导航与状态 | `defineApplication` + 宿主桥接工厂 | 独立/嵌入共用装配；子应用维护自身 root/router/store |
-| 只提供桥接契约 | `defineBridgeApp` + 宿主桥接工厂 | 工厂在每次挂载时执行，不要求另外创建独立入口 |
+| 完整应用保留自己的导航与状态 | `defineBridgeApp` + 宿主桥接工厂 | 复用已有业务初始化，原独立入口保持；子应用维护自身 root/router/store |
+| 主动选择统一启动 | 可选 `defineApplication` + 宿主桥接工厂 | 项目选择时才由插件同时管理独立/嵌入启动 |
 
 宿主与远程各自在自己的 Vite 工程注册插件、开发和构建；图中的插件节点表示相同能力，不是跨进程共用一个插件实例。serve 通过开发服务提供联邦端点；生产产物由 HTTP 静态服务器/CDN 提供。远程代码最终在消费方浏览器执行，插件不提供托管或业务后端。
 

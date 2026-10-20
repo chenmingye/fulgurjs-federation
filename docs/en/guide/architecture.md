@@ -4,6 +4,8 @@ These figures help choose an integration shape and understand execution boundari
 
 [Download the offline HTML atlas](../../diagrams/architecture.en.html) · [中文](../../zh/guide/architecture.md)
 
+The diagram's application.start branch illustrates optional unified startup. Existing main can retain its startup alongside a bridge contract. The figures do not require moving main or adding component wrapper files.
+
 ## 1. Overview and recommended paths
 
 ![System architecture: local tools, resource serving and browser execution with three parallel integration paths](../../diagrams/overview.en.svg)
@@ -14,8 +16,8 @@ These figures help choose an integration shape and understand execution boundari
 |---|---|---|
 | Reuse another app’s component/function | exposes + remoteComponent / loadRemote | Components render in their own framework; no page table or full-app bridge required |
 | Host owns routes for a remote page collection | createHostPages / createReactHostPages | Host owns the page table, menus and routing; adapters load the mapped expose |
-| Full app retains its navigation/state | defineApplication + host bridge factory | One standalone/embedded assembly; child owns its root/router/stores |
-| Bridge-only contract | defineBridgeApp + host bridge factory | Factory runs per mount; no extra standalone entry is required |
+| Full app retains its navigation/state | defineBridgeApp + host bridge factory | Reuse initialization and preserve standalone startup; child owns root/router/stores |
+| Choose unified startup | Optional defineApplication + host bridge factory | Plugin manages standalone/embedded modes only when the project chooses it |
 
 Hosts and remotes register the plugin, develop and build in their own Vite projects. One plugin node represents common capabilities, not a plugin instance shared across processes. serve supplies development endpoints; production artifacts are served over HTTP/CDN. Remote code executes in the consuming browser; the plugin provides neither hosting nor a business backend.
 

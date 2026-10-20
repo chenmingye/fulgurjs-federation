@@ -14,8 +14,8 @@
 | Create a runnable example | CLI create; install/run the entire template | [Getting started](guide/getting-started.md) |
 | Reuse a component/function inside an existing view | exposes + remoteComponent / loadRemote; no full-app bridge | [Components/modules](guide/components-and-modules.md) |
 | Host owns routes for a remote page collection | Page table + createHostPages/createReactHostPages | [Per-page integration](guide/remote-pages.md) |
-| Full application retains its own router, menus and state | defineApplication shares standalone/embedded assembly; host factory mounts it | [First integration](guide/first-integration.md) |
-| Bridge-only/custom contract, without standalone startup | defineBridgeApp | [Bridge contract](guide/app-bridge.md) |
+| Full application retains its own router, menus and state | Preserve startup; defineBridgeApp reuses initialization; host factory mounts it | [First integration](guide/first-integration.md) |
+| Choose plugin-managed standalone/embedded startup | Optional defineApplication | [Bridge contract](guide/app-bridge.md) |
 | Show a full child's internal location in the browser URL | Add explicit routing on both ends of a bridge | [URL sync](guide/url-sync.md) |
 
 Host/child describe mounting; provider/consumer describe module loading, and one app can hold both roles. Vue uses /vue and React uses /react; these entries do not convert component frameworks. Normal Vue bridge sessions should use a session getter; React or manually controlled sessions use sessionKey. Business modules/variables in examples come from the real project, not automatic plugin globals.

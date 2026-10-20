@@ -1,112 +1,99 @@
-# 已有完整应用首次接入：从原入口到真实页面
+# 已有完整应用首次接入：保留业务入口，增加必要桥接
 
-> 本文描述当前正式 API。先核对本工程实际安装版本；宿主与远程使用同一插件版本，代码示例中的业务路径必须替换为真实文件。
+> 本文描述当前公开 API。先核对实际安装包、业务入口和路由；示例路径代表已有业务模块，必须替换为项目真实位置。
 
-这一页只讲一条路径：**保留原工程，用一份装配同时支持独立运行和嵌入运行，再由宿主加载整个应用**。先让真实页面可用，再进入生产交付。普通组件/函数使用[组件与模块](components-and-modules.md)，不要套完整应用的装配步骤。
+**已有工程默认保留原 `main.ts(x)` 和业务初始化的位置。完整应用只增加桥接契约并复用已有初始化；普通组件直接 expose 原文件。** 不要求把 main 搬进 `src/fulgurjs/`，不要求再注册整套组件库，也不要求为远程组件新建包装文件。
 
-## 0. 接入前只确认这些事实
+## 0. 先区分你要加载什么
 
-在原工程里找到并记下真实位置；不知道就读该文件，不靠旧项目记忆，也不要新建空文件来满足示例 import。
-
-| 必须确认 | 从哪里找 | 记录什么 |
+| 需要 | 默认接法 | 是否需要处理原 main |
 |---|---|---|
-| 框架、Vite、包管理器 | package.json、实际锁文件 | 每个应用自己的安装/启动命令 |
-| 原启动入口 | index.html 指向的脚本 | main 的实际路径、原挂载选择器 |
-| 原装配顺序 | main 与它调用的函数 | App、router、store、i18n、组件注册、权限守卫的真实导入和调用 |
-| 路由形态 | router 创建处 | 独立模式的 base、routes 来源、守卫是否通过模块副作用注册 |
-| 开发地址 | Vite base/端口与实际服务 | remote 的完整开发根 URL，不能只猜端口 |
-| 登录依赖（确有才记录） | 原登录状态/请求层 | 是否已登录、稳定用户标识、取最新token的方法；子应用如何读登录态 |
+| 两个表单、按钮、普通组件或函数 | expose 原文件；组件用 remoteComponent，函数用 loadRemote | 不需要 |
+| 带自己的路由和状态的完整子应用 | expose 应用桥接契约，调用已有业务初始化 | 保留原独立入口；核对是否已有可复用初始化函数 |
+| 新工程，希望插件统一管理独立/嵌入启动 | 可选择 defineApplication | 选择这种组织方式后，main 才调用 application.start |
 
-只检查新增及实际修改接入文件的 TS 诊断。原业务树里已有的 TS 错误单独登记，不以修复整个项目为接入前置条件。
+远程组件的参数传递、类型与可选 Provider 见[组件与模块](components-and-modules.md)。**不要为了显示一个表单套用本页的完整应用步骤。**
 
-**目标分开记录**：首次接通 = 原宿主登录可用、远程显示真实业务内容、基本导航正常；生产交付 = 另完成构建、部署、深链刷新、换号/登出、重进和故障恢复。以一小时内首次接通为优化目标，不能把一小时当作所有工程完整交付的保证。
+开始前读取真实 `index.html`、main、router、store、认证来源和初始化函数，记录依赖安装位置、挂载选择器、初始化顺序、开发地址和部署 base。原有业务 TS 错误单列；接入新增错误必须修复。
 
-## 1. 先预览，看到复杂入口就按清单整理
+## 1. 保留原入口，先确认可复用的业务初始化
 
-在每个应用自己的目录安装插件，保留原有依赖与锁文件体系。pnpm 安装审批、冷却提示见[安装说明](getting-started.md#安装)，先确认实际版本再继续。
+已有 `bootstrap`、`createApplication`、`setupAll` 等函数时，先查它是否会创建 app、注册业务插件、创建 router，以及是否已经 mount。**名称不限，也不必改名或移动。**
 
-以下以 Vue 宿主加载 Vue 订单远程为例；名称和 URL 改成第 0 步确认的真实值：
+桥接需要取得本次实例及清理能力。Vue 常用的可复用边界是：创建并配置 app/router，返回尚未挂载的实例。原 main 继续负责原来的独立启动，桥接入口调用同一个初始化函数。
 
-```bash
-# 远程应用根目录；app 明确表示完整应用，不使用默认的 component 模式
-npx fulgurjs init --plan --kind app --role provider --name orders
+| 原工程情况 | 处理方式 |
+|---|---|
+| 已有初始化函数，能返回未挂载的 app/router | 直接复用，保留原路径与业务注册代码 |
+| 已有 mount/unmount 生命周期 | 核对容器、取消、路由和清理合同；按桥接 API 适配已有生命周期 |
+| main 只有顶层 createApp/use/mount，没有可复用边界 | 需要做最小的业务启动适配；仅整理必须复用的创建/初始化部分，位置按原业务职责决定 |
+| 只有普通组件需要被远程使用 | 不整理 main，不创建应用工厂 |
 
-# 宿主根目录；orders 必须与远程容器名一致
-npx fulgurjs init --plan --kind app --role consumer --name admin --remote orders=http://localhost:5174
-```
+最后一种完整应用入口不能通过 `import('./main')` 安全复用：它可能立即挂到固定 `#app`、启动浏览器路由或只在首次模块求值时执行。插件不会自动拦截任意业务 main。**确实没有可复用边界时，需要调整业务启动代码；这不等于默认把整份 main 迁进插件目录。** 不复制两套组件、权限、i18n 或 store 注册清单。
 
-- 最小入口可安全提取时，计划生成 `src/fulgurjs/exposes/application.ts`，同步 main 的相对导入。
-- 入口已有 Router/store/权限时，**整批不写**。输出 `startup.entry/application/imports/steps`：当前入口、目标文件、实际依赖与整理顺序。按第 2 步迁移原装配，不换模板工程、不复制另一套业务。
-- 已有统一装配时直接 `--application <真实文件>` 复用，不为 CLI 再造一个转发文件。命令不会覆盖现有工厂或擅自删除旧 main。
-- 所有“写入成功”都仅表示接线已写入，不表示页面已验收。
+## 2. Vue：桥接入口只适配已有初始化
 
-## 2. 远程只保留一份原装配
-
-新增接线放 `src/fulgurjs/`；原 App、页面、路由仍在原位置。只需要 `exposes/application.ts` 时就只建这一目录，不强建 host/types/setup/session 文件。
-
-Vue 示例的 App 与 router 都是原项目的真实模块，路径需与第 0 步一致：
+以下假定项目**已有** `src/bootstrap.ts` 导出的 `createBusinessApplication`。它不是插件 API，不是要求新建的文件。示例约定它接收运行模式和取消信号，返回 `{ app, router }`；实际函数的参数按项目真实接口适配。
 
 ```ts
-// src/fulgurjs/exposes/application.ts
-import { defineApplication } from '@fulgurjs/federation/vue'
+// src/fulgurjs/exposes/application.ts：只增加联邦桥接边界。
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import { createBusinessApplication } from '../../bootstrap'
 
-export default defineApplication(async (_props, { mode, signal }) => {
-  // 动态加载原业务实现，避免把整个业务TS树当成公开声明必须检查的入口。
-  const [{ createApp }, { default: App }, { createApplicationRouter }] = await Promise.all([
-    import('vue'), import('../../App.vue'), import('../../router'),
-  ])
-  if (signal.aborted) throw new DOMException('本次启动已取消', 'AbortError')
-  const app = createApp(App)
-  const router = createApplicationRouter(mode)
-  // 将原 main 的 store/i18n/全局组件/指令/权限装配原样迁入这里，保留顺序。
-  // 异步等待后写状态前检查 signal.aborted；不要再调用 app.mount 或 app.use(router)。
-  return { app, router }
+export default defineBridgeApp((_props, context) => {
+  return createBusinessApplication({
+    mode: 'bridge',
+    signal: context?.signal,
+  })
 }, { routing: true })
 ```
 
-业务模块加载和应用装配是两个阶段。模块顶层的代码会在 `app.use(pinia)` 之前执行；不要在指令或工具模块顶层调用依赖当前应用的 `useStore()`。把读取放到实际鉴权或业务操作中，在组件外显式传入所属应用的 Pinia，或复用原工程已有的显式 store getter。不能靠刷新、延时或其他应用先激活 Pinia 来保证初始化顺序。
+`defineBridgeApp` 可以与项目原有的独立 main 同时存在。它表示这里定义的是桥接入口，**不表示这个项目不能独立启动**。此路径不要求 main 改成 `application.start()`。
 
-原 router 文件改为按实例创建，而不是模块导入时创建 web history：
+复用函数必须满足这些真实生命周期条件；如果它已经满足，就不要再次注册：
+
+- 返回本次挂载的 Vue app 和 router；app 已装配实际需要的 store、i18n、UI 插件、指令与守卫。
+- 桥接 router 使用 memory history。独立入口保留原有 web/hash history，不能让嵌入应用直接争用宿主浏览器历史。
+- 返回 `{ app, router }` 并声明 `{ routing: true }` 时，不提前 `app.use(router)` 或 `app.mount()`；插件连接路由通道、等待初始深链、安装 router 并挂载。宿主也要按第 3 步提供 routing。
+- 若业务初始化必须在 router 就绪后继续执行，使用[显式路由安装方式](url-sync.md)，只返回 app；不要把已安装的 router 再交给插件安装。
+- 每次新建 router 都要安装它自己的动态路由和守卫。用户资料已缓存不代表新 router 的菜单已经注册。
+- 异步初始化遵守本次 signal；离页、登出或换代后不再写旧实例。模块顶层 import 只求值一次，不能靠重复 import 重装本次 router 的副作用。
+- 明确业务状态归属。模块级 `createPinia()` 是复用同一个 store 容器，不能把 `app.use(store)` 说明成“每次新建 store”。并行应用实例需要独立的状态和清理，见[状态绑定](existing-apps.md#pinia库单例与业务实例分别管理)。
+
+提供方在已有配置中声明：
 
 ```ts
-// src/router/index.ts：这里假定原工程已有 ./routes 导出 routes；使用你找到的真实导出。
-import { createRouter, createMemoryHistory, createWebHistory } from 'vue-router'
-import { routes } from './routes'
-
-export function createApplicationRouter(mode: 'standalone' | 'bridge') {
-  const router = createRouter({
-    history: mode === 'bridge' ? createMemoryHistory() : createWebHistory(import.meta.env.BASE_URL),
-    routes,
-  })
-  // 原项目的守卫在此对本 router 安装；不要漏掉权限初始化。
-  return router
+// 合并进原 fulgurjs.config.ts，不覆盖其余业务配置。
+export default {
+  name: 'orders',
+  exposes: { './bridge': './src/fulgurjs/exposes/application.ts' },
 }
 ```
 
-**如果原守卫文件静态 import 默认 router 并在模块求值时注册**：将其改为接收 router 的安装函数，并在每次装配时调用。只把 import 改成动态导入不能保证重进时守卫再次安装。不能为省事先创建一个 web router 再改 history，那会先写错宿主 URL。
+只有新增接线放在 `src/fulgurjs/`。已有业务初始化、App、router、store、组件注册源和页面保留原位置；不为 expose 再造无职责的转发文件。动态 import 不是接入要求；需要代码分割或声明依赖边界时可按真实模块使用，不把整个 main 改成一长串 Promise.all，也不用它掩盖接入类型错误。
 
-原 main 只调用这份装配；原样式导入也要保留在 main 或装配的真实位置，不能丢失：
+### 可选：用 defineApplication 统一管理两种启动
+
+新工程，或项目主动选择由插件同时管理独立启动和桥接时，可以让 `defineApplication` 调用同一个业务初始化函数：
 
 ```ts
-import application from './fulgurjs/exposes/application'
-void application.start('#app').catch(console.error) // 使用原工程真实选择器
+// 此方案替代上面的 defineBridgeApp 入口，不同时维护两份。
+import { defineApplication } from '@fulgurjs/federation/vue'
+import { createBusinessApplication } from '../../bootstrap'
+
+export default defineApplication((_props, { mode, signal }) => {
+  return createBusinessApplication({ mode, signal })
+}, { routing: true })
 ```
 
-整理后重新预览：
+**仅选择此方案时**，独立入口可调用 `application.start('#app')`，由插件管理安装、挂载和卸载。它是可选启动方式，不是已有工程接入前必须进行的入口迁移。完整合同与 React 接法见[已有应用参考](existing-apps.md)。
 
-```bash
-npx fulgurjs init --plan --kind app --role provider --name orders --application src/fulgurjs/exposes/application.ts
-# 审查后追加 --write；已有 fulgurjs.config.ts 保留，需核对这一项：
-# exposes: { './bridge': './src/fulgurjs/exposes/application.ts' }
-```
+## 3. 宿主使用一个挂载视图和一个路由前缀
 
-React 使用 `exposes/application.tsx`，同一个 `defineApplication` 工厂独立时返回原 BrowserRouter/RouterProvider，嵌入时返回受控 router 的 `{ element, dispose }`。原 Provider/store 放在这个工厂里，每次创建自己的实例；完整代码可直接按 [showcase 远程装配](../../../examples/templates/showcase/react-remote/src/fulgurjs/exposes/application.tsx)对照搬入，不能用 Vue createApp 写法套 React。
-
-## 3. 宿主只有一个远程挂载视图和一条前缀路由
-
-宿主预览后 `--write` 生成 `src/fulgurjs/host/RemoteApplication.vue`。Vue + URL 同步的完整挂载视图如下；这里不假造登录 store：
+在宿主已有页面/路由中挂载，Vue 示例：
 
 ```vue
+<!-- src/fulgurjs/host/RemoteApplication.vue -->
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { createVueBridgeApp, createVueBridgeNavigation } from '@fulgurjs/federation/vue'
@@ -116,7 +103,7 @@ const props = defineProps<{
   getContext?: () => Record<string, unknown>
 }>()
 const RemoteApplication = createVueBridgeApp('orders/bridge', {
-  session: props.getIdentity, // 无登录需求时不传，仍可独立加载
+  session: props.getIdentity,
   getContext: () => props.getContext?.() ?? {},
 })
 const routing = { basePath: '/orders', navigation: createVueBridgeNavigation(useRouter()) }
@@ -124,74 +111,35 @@ const routing = { basePath: '/orders', navigation: createVueBridgeNavigation(use
 <template><RemoteApplication :routing="routing" /></template>
 ```
 
-在**宿主原有 routes** 中增加 `/orders/:pathMatch(.*)*`，组件指向这个视图。不要逐页复制远程菜单。远程已有菜单/路由继续由远程自己管理。
+在宿主原 routes 中让 `/orders/:pathMatch(.*)*` 指向这个视图。远程已有页面、权限与菜单由远程管理，不逐页在宿主复制。basePath 不含部署 base：部署 `/main/` 时逻辑路由仍是 `/orders`。
 
-有多个远程时，按各自静态前缀选择 spec 和 basePath；复用挂载视图时按 spec 绑定 Vue `key`，避免实例仍保持上一个远程的工厂。host 路由逻辑路径不含部署 base（例如部署 `/main/`，路由仍是 `/orders`）。
-
-React 宿主的相同职责见 [showcase 挂载视图](../../../examples/templates/showcase/react-host/src/fulgurjs/host/BridgeVuePage.tsx)：使用 `createReactBridgeNavigation` 连接原 data router，不能把 Vue hooks 放进 React 工程。React 的会话仍使用明确受控 `sessionKey`；本页的自动身份 getter 仅属于 Vue 宿主。
+同一远程内部导航保持桥接实例稳定；切换远程时按 spec 区分 Vue key。不要默认以每次 fullPath 变化重建整个子应用。React 宿主用 `createReactBridgeApp` 和 `createReactBridgeNavigation`，见[桥接指南](app-bridge.md)。
 
 ## 4. 有登录依赖才增加业务上下文
 
-Vue 宿主把已有登录状态传给视图的 getIdentity/getContext，或在 `host/context.ts` 集中实现这两个有实际职责的 getter：
+Vue 宿主使用已有认证状态提供 getIdentity/getContext；这些是上例视图接收的业务函数，不是新建一套登录流程：
 
-- 身份就绪：返回稳定、非敏感的用户ID；切租户要重置业务实例时将租户ID一起纳入标识。
-- 身份恢复中：返回 `undefined`，插件暂不加载并保留刷新前的恢复记录。
-- 明确退出：返回 `null`，插件作废异步任务、卸载并清理旧上下文。
-- `getContext` 返回真实 `user`、`getToken: () => 最新token` 和确有消费方的业务能力，不手填 sessionKey，不在 getter 里 provide。
-- getter 使用模块级稳定函数并读取宿主store，不捕获卸载后不再更新的局部props；插件在远程视图离开后仍观察该身份来源，才能识别离页期间的登出。
-- getter 必须读取响应式状态。localStorage 本身不响应；登出时必须让已绑定的登录状态变为空。token 只判断是否登录，不作为身份标识，刷新token不重挂。
-- 插件在 sessionStorage 中保存非敏感身份与随机代次以支持刷新恢复，不能传token、密码或个人敏感资料。无法从业务状态观测到的“同账号再次认证”需用业务登录批次标识，或采用显式受控会话；插件不猜认证事件。
+- 身份就绪返回稳定、非敏感用户 ID；恢复中返回 undefined；明确退出返回 null。getter 读取响应式状态。
+- token 不作身份，不手工制造 sessionKey。getContext 只传真实业务能力，如 `getToken: () => 最新token`。
+- 已有子应用认证缓存确需适配时，复用其原业务映射。请求时读取最新凭据，不通过整应用重挂来刷新 token。
+- token state 已赋值（含空串）时优先读 state；仅未恢复时回退缓存，避免登出读回旧登录态。
+- 插件生成非敏感代次并处理会话失效。无法从业务状态观测的同账号重新认证，需业务认证批次标识或显式会话，不能假定插件能猜出来。
 
-子应用若原先有自己的 token 缓存或不同用户字段，只在 `exposes/context.ts` 做一次实际字段映射，**先于业务守卫和页面加载**，异步写回前检查 signal。不把私有认证结构塞进插件，不重复创建空 session/helper 文件。
+### 宿主给子应用提供表单
 
-### 宿主表单给子应用用：先选组件合同
+固定配套组件推荐宿主 expose 原表单，子应用 `remoteComponent`。多个宿主提供不同实现时可用 getContext 注入装载器。完整示例、准确 props 和可选环境适配见[组件与模块](components-and-modules.md#宿主向子应用提供组件推荐方式与选择依据)。
 
-固定配套、接口稳定的组件推荐 **宿主 exposes + 子应用 remoteComponent**；宿主仍加载完整子应用，子应用只反向加载所需组件，不互相挂载完整应用。只有同一子应用需要不同宿主提供不同实现时，才通过 `getContext` 注入组件装载器。两种方式都支持，不要求已有合理的注入方案改写。完整双表单配置、消费代码和选择依据见[宿主向子应用提供组件](components-and-modules.md#宿主向子应用提供组件推荐方式与选择依据)。
+**普通远程组件不要求新增包装组件。** 原组件可直接渲染且依赖齐全时，保持原文件。只有缺少特定祖先注入才按需配置 pageProviders；一个已有 Provider 可直接引用，仅组合多个 Provider 或确有参数适配时再写包装组件。全局标签注册是另一件事，不能靠 Provider 自动复制注册表，也不能默认复制整套 UI 库清单。
 
-选择联邦组件方式后，context 保留用户、最新 token getter、事件等真实业务能力，不再重复传同一组表单装载器。组件需要 AppProvider/主题注入时，在组件提供方配置 `setup`，只保留一个真实 Provider 声明：
+## 5. 工具预览与验收
 
-```ts
-// src/fulgurjs/setup.ts：没有应用级副作用就不写空默认函数
-export const pageProviders = [() => import('./exposes/FormProviders.vue').then(m => m.default)]
-```
+手工接线是有效路径。CLI `init --plan` 只预览，`--write` 才写入；组件模式不生成应用工厂。完整应用模式对可识别的最小 main 可能提出提取装配的计划，**那是工具选择的改写方案，不是插件运行的必要条件**。已有工程若不采用该方案，保留 main 并手工配置真实桥接入口即可。当前 CLI 的 `--application` 只识别明确默认导出的 defineApplication 文件，不识别任意桥接契约或会自行 mount 的 main。保留独立入口并使用 defineBridgeApp 的项目，手工配置 exposes 即可，不运行这个参数。
 
-共享同一个 Vue 包，不代表两个应用拥有同一棵组件祖先树。原组件通过祖先 `provide` 取得的主题、类名前缀、语言等，需要在消费方重建对应 Provider；全局注册只能解决标签解析，不能补齐这些注入。复用原业务根 Provider，只包裹内容，不再挂一层 RouterView 或整个应用。
+在每个真实应用目录检查配置和类型，启动自己的开发服务，再验证：
 
-通过业务函数自行传递组件时，不会触发远程模块的 setup/Provider 装配；这层业务适配要同时返回已经包好 Provider 的组件。检查实际类名前缀、控件与编辑器宽度，不能只看 CSS 已加载或字体颜色相同就判定样式正确。
+1. 独立启动仍正常；宿主登录、真实列表和原有业务组件可用。
+2. 详情深链、菜单、前进/后退、刷新；没有多余 history 写入。
+3. 离页/重进、取消、换号/登出、迟到请求和组件清理。
+4. 正式包构建与实际部署文件一致；Provider/全局组件确有必要时，比较字段、数据、只读、字体和布局。
 
-桥接中的组件共用页面的 CSS，不会自动获得 iframe 的样式隔离。第三方主题的全局 `input:disabled` 等规则也可能影响其他应用；遇到差异先定位实际命中的选择器，再在业务边界限定修复范围。只读文字还要检查 `-webkit-text-fill-color` 和父层透明度，不能只比较 `color`。
-
-普通组件不需要 Provider 时不建这个文件。现有 iframe 里的完整应用或业务表单不会自动变成联邦组件：找到实际 iframe 创建处后，按组件/桥接的真实能力替换，并核对只读、数据和样式。TinyMCE内部编辑iframe不属于业务跨应用iframe，不机械删除。
-
-## 4.1 替换旧微前端壳时必须一起处理的宿主设施
-
-远程能挂载不等于旧壳已经退出。逐项核对后再宣称接通：
-
-- **旧微前端注册点**：入口 bootstrap、布局 mounted、登录 setToken 回调等可能各自再注册一次旧壳。切换为联邦后全部关闭或按开关短路，并确认没有第二个容器抢占同一前缀。
-- **后台菜单生成的动态路由**：后台菜单常为子应用内部路径生成组件为空的记录。它们只用于菜单展示；注册进 vue-router 会以更具体的路径压过远程前缀的 catch-all，点击菜单后内容区空白。先构建菜单树，再把同前缀记录从路由表剔除。
-- **宿主页面容器 key**：不要按 `route.fullPath` 重建远程挂载视图。子应用内部导航会同步宿主 URL，fullPath 变化会卸载整个远程应用，正在初始化的异步页面会在已置空的 ref 上抛错。远程前缀路由使用每个远程稳定的 key。
-- **旧跨应用 iframe / 宿主页面**：固定组件接口推荐宿主 expose、子应用 remoteComponent；多宿主实现注入才用 getContext 组件装载器。两种方式均需补齐 Provider、全局组件/指令和状态归属，事件按真实需求传递，在子应用内直接渲染；同源 iframe 只能作为旧环境兜底，不能作为联邦验收。TinyMCE 编辑 iframe 例外。
-- **会话身份读取**：登出动作可能先清 store 状态、后清持久缓存。身份 getter 若读取会被 Pinia 缓存的 getToken getter，会在中间态把旧缓存 token 缓存进计算属性，随后路由守卫把 `/login` 重定向回首页。按 state 优先：state.token 已赋值（含空串）就以它为准，只有未恢复（undefined）才读持久缓存。
-- **快速离开后重进**：子应用每次挂载是新 router，动态路由表只属于该 router。权限守卫不能只凭“用户资料已设置”跳过 `addRoute`；以 router 实例为粒度重新登记动态路由。
-- **业务组件的宿主依赖**：直接从宿主模块图取组件在子应用内渲染时，必须同时补齐它假设的全局组件、事件与存储归属；否则出现未解析标签、原始 username 或空下拉。异步回调里不要用 `getCurrentInstance` 取 app，应在 setup 期捕获。
-
-## 5. 按这一顺序接通，卡在哪一步就处理哪一步
-
-1. 按原启动脚本先启动远程，核对实际 dev manifest/remoteEntry 与提供方类型生成日志。
-2. 再启动宿主，先确认宿主原登录/首页正常，再进入 `/orders/...`。
-3. 确认远程显示真实业务数据，并能操作一个真实导航/按钮；白壳、占位或只有菜单不算首通。
-4. 打开自动同步的声明体验真实 props/方法提示；不手写消费方类型、不用 any/Record 占位掩盖接口。
-5. 仅检查新增及修改接入文件的 TS；错误落在原业务依赖内时登记归属，不顺手全项目整改。
-6. 接通后再执行生产构建、部署体检、深链刷新、query/hash、退出/换号、重进、故障恢复与视觉对照。
-
-构建目标：共享门面产物包含顶层 await。生产 `target` 必须支持 TLA（如 es2022），或使用能正确处理全部 chunk 的 TLA 转换；不要为了绕过构建错误停用合法的 `manualChunks`。`sourcemap: 'inline'` 在超大产物上可能触发 Vite import-analysis 栈溢出，可改为外部 sourcemap。首次给旧工程引入插件后清一次 `node_modules/.vite` 再验收。
-
-遇到问题先保留第一条错误、URL及调用栈，再按[错误码](../reference/errors.md)定位。发现源码或文档缺陷就修正；不得靠静默fallback、停用合法打包配置、伪造接口数据或改验收判据绕过。后端不可达单独记录具体接口，继续完成不依赖它的工作。
-
-## 6. 交接时只交这些可核实的内容
-
-实际版本/文档提交、原基线与本次接入的文件清单、每个文件的职责、安装/启动命令、首次真实接通时间、卡点与耗时、类型检查归属、生产部署清单、逐项执行结果。未执行与外部阻塞明确标注，不能引用旧报告冒充本次通过。
-
-### 动态标签变成 `[object Object]`
-
-先检查实际组件解析结果，而不是仅凭 chunk 名推断框架实例分裂。`app.component(service.name, service)` 不能用于命令式消息等服务：生产压缩会改变函数名，若短名与 `b` 等 HTML 标签相同，`resolveDynamicComponent` 可能将动态标签解析成该服务。只注册具有稳定公开组件名的真实视图组件；服务按其公开调用或安装方式使用。不要通过替换业务标签或关闭合法分包配置掩盖冲突。
+文档路径、工具写入、类型生成、构建、部署和浏览器验收是不同事实，逐项记录。纯文档工作不重建业务站点，也不代表业务代码已按新文档整理。

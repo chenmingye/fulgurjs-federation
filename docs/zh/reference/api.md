@@ -335,7 +335,7 @@ export const pageProviders: RemoteSetupModule['pageProviders'] = [
 
 `RemoteSetupContext`：`{ appContext: Readonly<AppContext>, sessionKey?: string, signal: AbortSignal }`。`appContext` 是**调用时**从页面级 AppContext 取得的快照（不保存永不更新的旧引用）；`signal` 在登录代次变化或退出清理时失效。
 
-没有应用级副作用时可只导出 pageProviders/globalComponents/onSession，省略默认函数；模块至少有一项有效声明，不为通过校验写空函数。
+没有应用级副作用时可只导出 pageProviders/globalComponents/onSession，省略默认函数；模块至少有一项有效声明，不为通过校验写空函数。没有初始化、缺失注册或祖先依赖时，整个 setup 配置和文件都可省略。单个已有 Provider 直接引用，不要求新建包装组件；普通组件直接 expose 即可。
 
 **不要混淆四种执行粒度**：默认 setup 是每个远程容器一次；onSession 是每个登录代次一次；globalComponents 安装按实际消费方 app、pageProviders 包裹按组件渲染生效；defineApplication/defineBridgeApp 工厂则每次挂载都调用。需要独立 app/router/store 的装配写在工厂中，不能放进仅执行一次的 setup。直接静态或动态 import 一个远程业务模块会走插件加载链，但不会自动把模块导出渲染成组件，也不会替手动渲染包装 Provider。
 
@@ -548,7 +548,7 @@ export const bridgeSession = createBridgeSession()
 
 `loadRemote`、`remoteComponent`、`createVueBridgeApp`、`createReactBridgeApp` 与普通 import 共用同一份注册表类型（`FgRemoteTypes`，由同步产物登记）：
 
-- **已同步的入口字面量**：获得真实模块/组件/桥接类型——参数、返回值、props、`appProps` 全部精确检查；`remoteComponent` 只接受默认导出为组件的暴露项，桥接工厂只接受 `defineBridgeApp` 的默认导出（普通模块冒充会编译报错）；
+- **已同步的入口字面量**：获得真实模块/组件/桥接类型——参数、返回值、props、`appProps` 全部精确检查；`remoteComponent` 只接受默认导出为组件的暴露项，桥接工厂接受带类型的桥接契约默认导出，包括 defineBridgeApp 与 defineApplication 的返回值（普通模块冒充会编译报错）；
 - **拼错的入口字面量**：注册表非空时在**调用点编译报错**（不再被宽泛 string 重载兜底通过）；
 - **动态字符串变量**（业务拼接的入口名）：永远放行，结果类型为 `unknown`——这是诚实边界：运行时仍可加载，但类型系统不知道远程真实形状；需要时可显式泛型 `loadRemote<T>(spec)` 或先用类型化变量收窄；
 - **未同步任何类型**（远程旧版本/`dts: false`）：所有字面量放行、结果 `unknown`，页面正常运行；严格类型检查需要升级远程并保持 `dts: true`。
@@ -619,13 +619,13 @@ void preloadRemote('remote-a/business-form', { mode: 'prefetch' }).catch(reportP
 ## 同一应用独立启动与桥接：`defineApplication`
 
 
-Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入；不新增子路径。完整例子见[已有应用统一装配](../guide/existing-apps.md)。只需要桥接、不需要独立启动时，仍可使用 `defineBridgeApp`。
+Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入；不新增子路径。完整例子见[已有应用统一装配](../guide/existing-apps.md)。已有独立入口可以保留，用 `defineBridgeApp` 另提供桥接并复用原初始化；不要求迁移 main。`defineApplication` 是主动选择统一启动时的可选 API。
 
 ```ts
 // Vue；React 使用同名入口，工厂返回 ReactElement 或 { element, dispose? }
 import { defineApplication } from '@fulgurjs/federation/vue'
 // application.ts 默认导出这个返回值；exposes 指向 application.ts。
-// 独立 main.ts 导入该默认导出，只调用 application.start('#app', props)。
+// 仅选择 defineApplication 统一启动时，独立入口调用 application.start('#app', props)。
 ```
 
 | 项目 | 合同 |

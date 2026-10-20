@@ -29,14 +29,14 @@ import type { FederationOptions } from '@fulgurjs/federation'
 export default {
   name: 'admin',
   exposes: {
-    './business-form': './src/fulgurjs/exposes/BusinessForm.vue',
-    './schema-form': './src/fulgurjs/exposes/SchemaForm.vue',
+    './business-form': './src/components/forms/BusinessForm.vue',
+    './schema-form': './src/components/forms/SchemaForm.vue',
   },
   shared: { vue: { singleton: true } },
 } satisfies FederationOptions
 ```
 
-这里两个文件代表已存在或确有适配职责的真实入口。它们通过 props 接收单据 ID、只读状态等，通过 emits 通知保存/取消；不要再从宿主当前 URL 猜参数。props 在入口组件声明，消费方使用插件生成/同步的类型，不复制第二份接口。
+这里直接指向两个已存在的业务组件；无需为 expose 将它们移进 fulgurjs 或新增转发组件。它们通过 props 接收单据 ID、只读状态等，通过 emits 通知保存/取消；不要再从宿主当前 URL 猜参数。props 在入口组件声明，消费方使用插件生成/同步的类型，不复制第二份接口。
 
 **2. 子应用配置组件提供方。** 宿主原来加载子应用的 remotes 保留；这里是在子应用自己的配置中增加反向的组件来源。
 
@@ -75,46 +75,72 @@ const SchemaForm = remoteComponent('admin/schema-form')
 
 这条路径不再经 `getContext` 传这两个组件装载器。context 继续承载实际需要的用户、最新 token getter、事件等业务能力。`remoteComponent` 负责远程组件加载及加载错误展示/重试，远程声明用于 props 推导；它不会替你补齐业务参数、权限或 Provider。
 
-### 组件依赖原应用环境时，统一补齐
+### 远程组件是否必须包装：先分清三件事
 
-两个入口都依赖原应用的主题、语言或类名前缀时，在**组件提供方**已有配置加 `setup: './src/fulgurjs/setup.ts'`，并声明：
+**不需要因为“远程”就新增包装组件。** 上面的两个 expose 默认直接指向已有表单，消费方照常传 props/emits。原来直接渲染能满足依赖的组件，保持这种接法。
+
+| 名称 | 谁创建 | 何时需要 |
+|---|---|---|
+| remoteComponent 的内部异步/会话边界 | 插件内部 | 使用这个 API 时自动处理加载、重试和会话，不要求新增业务文件 |
+| 业务适配组件 | 项目 | 真实的参数映射、组合业务视图或接口转换时才增加；纯转发不建文件 |
+| 祖先 Provider 包裹 | 提供方按需声明，适配器执行 | 原组件确实依赖祖先注入，且消费方没有提供匹配环境时才补 |
+
+`pageProviders` 未声明或为空时，不增加这层 Provider。`remoteComponent` 自身的异步边界不等于必须写 `FormProviders.vue`。也不要为了避开插件内部异步边界而把完整业务 App 包进普通组件。
+
+### 只有缺少祖先注入时才声明 Provider
+
+先读原组件实际使用的 inject/context：它是否自己包含 Provider？消费方祖先是否已提供同一个注入键？组件没有这类依赖时，不创建 setup 或 Provider 文件。共享同一个 Vue 包不会自动连接两棵应用的祖先树，但这也不代表所有组件都缺少环境。
+
+确实缺少原工程已有 `AppProvider` 时，提供方配置 `setup: './src/fulgurjs/setup.ts'`，直接复用真实组件：
 
 ```ts
-// admin/src/fulgurjs/setup.ts：只需要环境声明时，不写空默认函数。
+// admin/src/fulgurjs/setup.ts：仅在确有祖先依赖时使用。
 export const pageProviders = [
-  () => import('./exposes/FormProviders.vue').then(m => m.default),
+  () => import('../components/Application/src/AppProvider.vue').then(m => m.default),
 ]
 ```
 
-`FormProviders.vue` 必须复用真实业务 Provider 并渲染 `<slot />`；只包内容，不挂整个 App 或 RouterView。具体组件名、主题和语言配置来自原工程，不能复制一个不含真实环境的空 Provider。消费方通过 `remoteComponent` 渲染本远程的两个入口时会自动包装，无需逐表单重复写包装代码。
+示例假定该文件已存在且通过 default 导出 Provider。路径和导出按原项目替换；无需为这一层纯转发再建 FormProviders.vue。插件会在消费方将本远程组件放到这个 Provider 的子树中，不启动另一个 App，也不挂 RouterView。Provider 自身的监听器、store 操作和副作用仍需核对是否适合这里的生命周期。
 
-例如，原工程已经有 `src/components/Application` 导出的 `AppProvider` 时，可以这样复用；原根组件还配置了语言/主题 Provider 的，也要复用相同配置并按原顺序包裹：
+只有组合多个 Provider、传真实主题/语言配置或进行实际适配时，才新增如 `exposes/FormProviders.vue` 的组件，并将它声明进 pageProviders。它必须渲染 slot；提供方已自行包好与 pageProviders 包裹二选一，避免重复。这个文件名没有特殊含义，也不是接入必备文件。pageProviders 对该远程经组件适配器加载的组件生效，并非按单个 expose 选择；只有部分组件依赖 Provider 时，可在那些原组件内部满足依赖，避免给整个远程统一加层。
 
-```vue
-<!-- admin/src/fulgurjs/exposes/FormProviders.vue -->
-<script setup lang="ts">
-import { AppProvider } from '../../components/Application'
-</script>
+### 全局组件注册与 Provider 是不同依赖
 
-<template>
-  <AppProvider><slot /></AppProvider>
-</template>
+组件模板里的局部 import 会随组件模块加载；全局字符串标签按**实际消费方 Vue app** 的注册表解析。提供方 main 注册过组件，并不自动复制到另一个 app。处理顺序如下：
+
+1. 消费方已注册对应组件/指令，或原组件已经局部导入：不再增加注册。
+2. 缺少少量标签：从原有注册源复用确实需要的实现；用 globalComponents 声明时只列缺失的真实依赖。
+3. 存量组件广泛依赖原统一注册：复用原注册函数并对实际消费方 app 幂等安装，先核对依赖成本、定制项和同名冲突；不要手抄另一份 UI 库大全。
+
+`globalComponents`、`pageProviders` 和业务 app 的初始化不是同一件事。Provider 不复制全局注册表，globalComponents 不补 inject，组件复用也不意味着执行提供方整个 main。缺少自定义权限指令时复用其真实实现，不能用空指令凑渲染通过。具体注册粒度见下方[复用注册源](#已有项目复用原组件注册源)。
+
+### 自动类型：提供方定义一次，消费方推导使用
+
+在**原表单组件**明确声明真实字段，例如 `defineProps<{ recordId: string; readonly?: boolean }>()`。插件同步的是该公开合同；如果提供方写成 Record<string, unknown>，生成结果也只能是宽泛字典，不会凭字段名猜业务约束。
+
+消费端无需手工 import 生成的 d.ts；类型目录被 tsconfig 包含后，注册表会让 remoteComponent 得到对应组件的 props/events。需要给本地表单参数状态标注类型时，从远程组件推导：
+
+```ts
+import { ref } from 'vue'
+import { remoteComponent } from '@fulgurjs/federation/vue'
+
+const BusinessForm = remoteComponent('admin/business-form')
+type BusinessFormProps = InstanceType<typeof BusinessForm>['$props']
+const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
+  recordId: '',
+  readonly: true,
+})
 ```
 
-该例假定原组件导出真实存在；请替换为本工程真实路径，不能为了满足示例新建一个空 `AppProvider`。这个最小例子只恢复祖先注入；业务还使用全局组件/指令时，继续按下文复用原注册源。
+这不是维护第二份接口。已知业务字段不应重新声明为宽泛对象或 any；真正开放扩展的数据可单列扩展字段。类型验收需要同时验证错误字段类型和缺少必填字段会失败，不能只测试“整个参数传字符串报错”。
 
-还要分别核对：
-
-- **全局组件/指令**：Provider 不自动复制注册表。复用原注册源在实际消费方 app 注册，按 app 幂等；组件同名冲突先明确归属，指令不能用空实现替代。
-- **状态归属**：共享 Vue/Pinia 包不等于共享业务 store。组件需要提供方状态时显式绑定所属 Pinia，见[状态绑定](existing-apps.md#pinia库单例与业务实例分别管理)；不要在渲染前后切换全局 activePinia。
-- **数据与生命周期**：明确传入完整业务参数；离页后停止定时器，异步返回不再写旧实例。组件 props 更新是否重新查询由组件自身处理。
-- **样式**：Provider 不提供 CSS 隔离。检查真实数据、只读状态、类名前缀及输入框/选择框/编辑器宽度，不能只看 CSS 请求成功。
+组件参数变化是否重新查询由业务组件负责；离页取消定时器和迟到回写。共享 Vue/Pinia 包不等于共享业务状态，状态归属见[状态绑定](existing-apps.md#pinia库单例与业务实例分别管理)。Provider 也不隔离 CSS，视觉验收比较真实数据、回显完成后的标签、只读与布局。
 
 ### 何时改用 `getContext` 注入
 
 如果 workflow 不应该知道 admin 的名称或地址，例如同一个 workflow 分别被采购、生产两个宿主使用，就由每个宿主在桥接 `getContext` 中提供同一业务契约，例如 `loadBusinessForm`、`loadSchemaForm`。子应用调用当前宿主提供的装载器，而不是硬编码某个宿主的远程 spec。
 
-这两个名称是**业务自定义字段，不是插件内置 API**。双方明确约定参数、异步/同步返回、组件 props/events、缺少能力时的错误展示，以及独立运行时的真实能力来源；不要用空组件伪装成功。装载器应返回已带所需 Provider 的组件，并负责约定的组件/指令注册及正确状态归属。
+这两个名称是**业务自定义字段，不是插件内置 API**。双方明确约定参数、异步/同步返回、组件 props/events、缺少能力时的错误展示，以及独立运行时的真实能力来源；不要用空组件伪装成功。装载器仅在组件有祖先依赖时补齐所需 Provider，并负责约定的组件/指令注册及正确状态归属。
 
 直接传组件或通过本地 `import()` 返回组件，**不会触发联邦远程模块的 setup/pageProviders 管线**，也不会自动得到 `remoteComponent` 的远程类型同步和加载错误 UI；调用方需处理自己的 loading/error/retry。若装载器内部实际调用 `remoteComponent`，则该远程组件仍遵循它自己的联邦加载语义。context 中的函数不是响应式订阅，换号后不要继续持有旧会话的组件、数据或回调。
 
@@ -190,7 +216,7 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 ### 已有项目复用原组件注册源
 
-已有统一 `registerComponents(app)` 的工程，不要在 setup 模块再手抄一份组件库清单：表单内层的选人框、上传器也可能使用全局标签，扫描最外层模板容易漏。可以由上面的祖先 Provider 在 setup 中取得实际消费方 `getCurrentInstance()?.appContext.app`，调用原注册函数；用模块级 `WeakSet<App>` 对同一 app 幂等，注册成功后才加入集合。桥接创建新 app 时会重新安装，不能仅用容器级一次性标记。保留原项目定制组件，同名冲突先确定归属，不能盲覆盖。
+已有统一 `registerComponents(app)` 的工程，不要为了注册再造 Provider，也不要在 setup 模块手抄另一份组件库清单。消费方原初始化已经能使用同一注册源时，在原位置复用即可；已有注册映射也可直接作为 globalComponents 导出。要先核实模块实际可访问与导出形态，不假设插件会从别的 main 自动提取注册表。表单内层的选人框、上传器也可能使用全局标签，扫描最外层模板容易漏。仅当本来就需要祖先 Provider 时，也可在它的 setup 中取得实际消费方 `getCurrentInstance()?.appContext.app`，调用原注册函数；用模块级 `WeakSet<App>` 对同一 app 幂等，注册成功后才加入集合。桥接创建新 app 时会重新安装，不能仅用容器级一次性标记。保留原项目定制组件，同名冲突先确定归属，不能盲覆盖。
 
 这仍然是在消费方注册组件，并非 provide/inject 自动复制注册表。复用整套注册函数会带入它的依赖；需要更小的暴露面时，从原注册源抽出表单真正需要的公共子集，独立入口与 Provider 共用该子集，而不是维护两份清单。
 
