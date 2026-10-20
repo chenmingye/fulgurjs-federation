@@ -34,10 +34,14 @@ npm add @fulgurjs/federation
 import federation from '@fulgurjs/federation'
 
 export default {
-  plugins: [federation({
-    name: 'my-app',
-    // exposes / remotes / shared as needed — see "Adopting in an existing project"
-  })],
+  plugins: [
+    // Keep the existing framework plugins.
+    federation({
+      name: 'host',
+      remotes: { 'remote-a': { dev: 'http://localhost:5174', prod: '/remote-a' } },
+      shared: { vue: { singleton: true } },
+    }),
+  ],
 }
 ```
 
@@ -45,7 +49,7 @@ export default {
 // Vue app code imports from @fulgurjs/federation/vue
 import { loadRemote, remoteComponent } from '@fulgurjs/federation/vue'
 const RemoteButton = remoteComponent('remote-a/Button')
-const math = await loadRemote<{ add(a: number, b: number): number }>('remote-a/math')
+const math = await loadRemote('remote-a/math')
 ```
 
 ```tsx
@@ -57,6 +61,8 @@ import { remoteComponent, useLoadRemote, RemoteErrorBoundary } from '@fulgurjs/f
 // Framework-agnostic browser modules: @fulgurjs/federation/runtime (zero Vue/React)
 import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 ```
+
+The configuration above illustrates wiring an existing Vue consumer: preserve its Vite/Vue plugins and business settings. remote-a must really expose ./Button and ./math and be running/deployed at the configured addresses, including its actual base. React consumers use their own shared runtime and /react APIs. Use full-app bridging for cross-framework UI, not direct rendering of another framework’s component. For a complete runnable project, use create above.
 
 ## Import entries
 

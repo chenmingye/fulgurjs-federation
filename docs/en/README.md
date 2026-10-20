@@ -5,6 +5,19 @@
 
 **First complete application integration**：[One end-to-end workflow](guide/first-integration.md)。
 
+## Choose the integration shape first
+
+| Goal | Current recommendation | Start here |
+|---|---|---|
+| Create a runnable example | CLI create; install/run the entire template | [Getting started](guide/getting-started.md) |
+| Reuse a component/function inside an existing view | exposes + remoteComponent / loadRemote; no full-app bridge | [Components/modules](guide/components-and-modules.md) |
+| Host owns routes for a remote page collection | Page table + createHostPages/createReactHostPages | [Per-page integration](guide/remote-pages.md) |
+| Full application retains its own router, menus and state | defineApplication shares standalone/embedded assembly; host factory mounts it | [First integration](guide/first-integration.md) |
+| Bridge-only/custom contract, without standalone startup | defineBridgeApp | [Bridge contract](guide/app-bridge.md) |
+| Show a full child's internal location in the browser URL | Add explicit routing on both ends of a bridge | [URL sync](guide/url-sync.md) |
+
+Host/child describe mounting; provider/consumer describe module loading, and one app can hold both roles. Vue uses /vue and React uses /react; these entries do not convert component frameworks. Normal Vue bridge sessions should use a session getter; React or manually controlled sessions use sessionKey. Business modules/variables in examples come from the real project, not automatic plugin globals.
+
 ## Recommended reading paths
 
 **First contact (build a project from scratch)**:
@@ -16,7 +29,7 @@
 **Integrating an existing project**:
 
 1. [Getting started · integrating an existing project](guide/getting-started.md#integrating-an-existing-project) — `fulgurjs init` / manual integration; choose the configuration by role (provider/consumer/dual)
-2. Go deeper as needed: [shared dependencies](guide/sharing.md) (one instance across apps) → [remote pages](guide/remote-pages.md) (per-page pages) or [sub app bridge](guide/app-bridge.md) (full sub app embedding)
+2. Go deeper as needed: [shared dependencies](guide/sharing.md) (library negotiation within a scope, not automatic business-store sharing) → [remote pages](guide/remote-pages.md) (per-page pages) or [sub app bridge](guide/app-bridge.md) (full sub app embedding)
 3. When remote business pages need login state, read the AppContext section of [sub app bridge](guide/app-bridge.md#session-sessionkey-and-appcontext) and [API reference · setup/onSession](reference/api.md#setup-on-session)
 
 **Cross-framework embedding (Vue host embedding React, or the reverse)**:
@@ -48,7 +61,7 @@
 | [Configuration reference](reference/configuration.md) | Every `federation(options)` field: type/default value/omitted-vs-explicit semantics/valid range; the four remotes forms, every SharedHint field, the `hostPages` named export |
 | [API reference](reference/api.md) | Every public API of the four entries: purpose/import location/signature/default value/return value/lifecycle/error boundaries/full usage |
 | [CLI reference](reference/cli.md) | create / init / explain / check-pages / doctor / port: syntax/flags/default values/side effects/exit codes/examples |
-| [Error code table](reference/errors.md) | All 49 error codes, each with symptom/cause/fix |
+| [Error code table](reference/errors.md) | All error codes, each with symptom/cause/fix |
 
 ### Troubleshooting (troubleshooting/)
 

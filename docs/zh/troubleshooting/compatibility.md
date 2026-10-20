@@ -6,14 +6,14 @@
 
 | 维度 | 支持范围 | 说明 |
 |---|---|---|
-| Vite | 5.1 及以上的 5 / 6 / 7 / 8 系列 | fixtures 全矩阵实测：5.1.4 / 5.2.12 / 6.4.3 / 7.3.6 / 8.3.0 dev+prod e2e 通过；Vite 8（Rolldown）dev 73/73 + prod 33/33 随 CI 常驻矩阵。项目必须同时满足所用 Vite 和框架插件的版本要求 |
+| Vite | 5.1 及以上的 5 / 6 / 7 / 8 系列 | 声明支持这些主版本，不表示验证过每个补丁版本或任意业务工程；持续验证配置见 [.github/workflows/ci.yml](../../../.github/workflows/ci.yml)，实际通过状态以对应提交的 CI 日志为准。还须满足框架插件兼容要求 |
 | Node.js | 插件本体 ≥ 18；**Vite 7/8 要求 20.19+ 或 22.12+** | 不能只按插件最低版本选 Node；模板工程按 `engines.node` 校验（≥ 20.19.0） |
 | Vue | 3.2+（浏览器端） | 普通工程零 vue-router 依赖；URL 同步按需引用 vue-router |
 | vue-router | 4.1 – 5.x | 仅 URL 同步使用（`createVueBridgeNavigation`/`connectVueBridgeRouter`）；history 与 hash 模式皆可 |
 | React | 18 / 19（浏览器端） | 普通工程零 react-router-dom 依赖；react-dom 与 React 版本必须兼容 |
 | react-router-dom | 6.11 – 7.x | 仅 URL 同步使用；**宿主仅支持 data router**（`createBrowserRouter`/`createHashRouter` + `RouterProvider`），declarative 模式（BrowserRouter）不支持；≥ 6.11（`createMemoryRouter`） |
 | 浏览器基线 | Chrome 108+ | 需要相应 ESM、动态导入、顶层 await 支持 |
-| 构建目标 | `es2022` 或更新 | 低于该目标构建报 `BLD-002`（TLA 需要） |
+| 构建目标 | 支持 TLA 的实际浏览器目标，通常 es2022 | 省略时插件设置 es2022；不兼容的显式目标可能收到提示或被打包器拒绝。target 不会替业务依赖补 polyfill，也不代表完成浏览器兼容验收 |
 | 平台口径 | macOS 与 Linux（CI）实测 | 模板启动器含 Windows 兜底路径但未经验证 |
 
 ## 支持的能力面
@@ -31,7 +31,7 @@
 |---|---|
 | SSR / RSC / Node 服务端联邦 / Next.js 全栈 | 仅支持浏览器客户端 |
 | webpack `script`/`var` 容器互操作 | 产物恒为 ESM remote；`remoteType`/`library` 已删除（传入报 CFG-011） |
-| Vue/React 组件级直接混渲染 | 不提供组件类型转换层——**组件可互载**（Vue 应用可 loadRemote 纯 TS 模块、React 应用同样），但 **Vue↔React 组件混渲染不支持**：Vue 的 `remoteComponent` 不能渲染 React 组件，反之亦然。跨框架走子应用桥接（各自管理组件树） |
+| Vue/React 组件级直接混渲染 | loadRemote 可以取得任意模块，但“成功取得模块”不表示能由另一框架渲染其组件。纯 TS 模块可跨框架消费；Vue/React 组件直渲染使用各自框架，跨框架 UI 使用完整应用桥接 |
 | JS 沙箱 / 自动 CSS 隔离 | 同 realm 共存 + 依赖级隔离（见[沙箱边界审计](../../maintainers/沙箱边界审计.md)）；全局样式与 `:root` 变量仍可能互相影响 |
 | 独立浏览器 DevTools 扩展 | 提供 `window.__FULGURJS_SCOPE__` / `__FULGURJS_INFO__` 调试面 |
 | React 页面 KeepAlive | 不承诺组件状态保活（模块复用不等于状态保活）；Vue 侧 `keepAlive` 是页面级可选能力 |

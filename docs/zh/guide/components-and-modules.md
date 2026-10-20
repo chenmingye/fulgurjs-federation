@@ -2,6 +2,124 @@
 
 > 加载一个远程组件或函数模块，不需要桥接、页面表或登录初始化——这是联邦的最小用法。导入入口：Vue 从 `@fulgurjs/federation/vue` 导入，React 从 `@fulgurjs/federation/react` 导入，框架无关代码从 `@fulgurjs/federation/runtime` 导入。
 
+## 宿主向子应用提供组件：推荐方式与选择依据
+
+**组件有固定的提供方和稳定的对外接口时，推荐 `exposes + remoteComponent`。** 只有组件实现需要由当前宿主决定、子应用需要适配多个宿主时，才选择通过桥接 `getContext` 注入组件装载器。两者都是当前支持的用法，不按新旧划分，也不要求已有可用的注入方案改写。
+
+“宿主/子应用”描述完整应用的挂载关系；“提供方/消费方”描述某个模块的加载关系。**宿主可以同时是组件提供方，子应用可以同时是组件消费方。** 不需要因为应用叫 host 就把它提供的所有组件都放进 context。
+
+| 需求 | 推荐用法 | 子应用依赖什么 |
+|---|---|---|
+| 管理宿主与流程子应用固定配套，子应用需要两类宿主表单 | 宿主 expose 两个组件入口，子应用 `remoteComponent` 加载 | 远程名称、exposes 键及组件 props/events |
+| 同一个流程子应用由不同业务宿主挂载，每个宿主提供不同表单实现 | 宿主 `getContext` 注入业务组件装载器 | 约定的装载器签名及返回组件的 props/events |
+| 组件需要自己的完整路由、状态容器和挂载/卸载生命周期 | [完整子应用桥接](app-bridge.md) | 应用桥接契约；不要把整个应用当普通组件渲染 |
+
+### 推荐示例：宿主提供两个表单，子应用直接加载
+
+以下为 **Vue → Vue 组件复用**。它可以用于 Vue 桥接子应用内部，但不能把 Vue 组件直接交给 React 渲染。跨框架完整应用使用应用桥接。
+
+关系为：`admin 宿主 ─挂载→ workflow 子应用`，同时 `workflow ─加载表单→ admin`。这是两种职责，不表示两个完整应用互相挂载；避免在模块顶层互相等待对方完整应用启动。
+
+**1. 宿主声明两个组件入口。** 文件名描述实际职责，原业务组件与页面保留原位置；只有确实需要参数转换或环境装配时才新增适配组件，不为 expose 创建纯转发文件。
+
+```ts
+// admin/fulgurjs.config.ts：合并到宿主已有配置，不覆盖已有 remotes/shared。
+import type { FederationOptions } from '@fulgurjs/federation'
+
+export default {
+  name: 'admin',
+  exposes: {
+    './business-form': './src/fulgurjs/exposes/BusinessForm.vue',
+    './schema-form': './src/fulgurjs/exposes/SchemaForm.vue',
+  },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+这里两个文件代表已存在或确有适配职责的真实入口。它们通过 props 接收单据 ID、只读状态等，通过 emits 通知保存/取消；不要再从宿主当前 URL 猜参数。props 在入口组件声明，消费方使用插件生成/同步的类型，不复制第二份接口。
+
+**2. 子应用配置组件提供方。** 宿主原来加载子应用的 remotes 保留；这里是在子应用自己的配置中增加反向的组件来源。
+
+```ts
+// workflow/fulgurjs.config.ts：保留原有完整应用 bridge expose 等配置。
+import type { FederationOptions } from '@fulgurjs/federation'
+
+export default {
+  name: 'workflow',
+  remotes: {
+    admin: { dev: 'http://localhost:5173', prod: '/admin' },
+  },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+示例地址是假设的部署位置：用提供方真实的开发根 URL 和生产挂载路径替换；有 Vite base 时必须包含该 base。双方继续在各自 Vite 配置中通过 `federation(fulgurjsConfig)` 注册，不是仅创建这个文件即可生效，接线见[快速上手](getting-started.md#已有项目接入)。生产 `/admin` 必须确实服务 admin 的构建文件。
+
+**3. 子应用在真实业务视图渲染。** 下面假定两个入口都声明了 `recordId: string` 和 `readonly?: boolean`；实际使用以提供方生成的 props 类型为准。
+
+```vue
+<!-- workflow/src/views/ApprovalDetail.vue：放在现有业务视图，不另造空壳页面。 -->
+<script setup lang="ts">
+import { remoteComponent } from '@fulgurjs/federation/vue'
+
+defineProps<{ recordId: string; formKind: 'business' | 'schema' }>()
+const BusinessForm = remoteComponent('admin/business-form')
+const SchemaForm = remoteComponent('admin/schema-form')
+</script>
+
+<template>
+  <BusinessForm v-if="formKind === 'business'" :record-id="recordId" :readonly="true" />
+  <SchemaForm v-else :record-id="recordId" :readonly="true" />
+</template>
+```
+
+这条路径不再经 `getContext` 传这两个组件装载器。context 继续承载实际需要的用户、最新 token getter、事件等业务能力。`remoteComponent` 负责远程组件加载及加载错误展示/重试，远程声明用于 props 推导；它不会替你补齐业务参数、权限或 Provider。
+
+### 组件依赖原应用环境时，统一补齐
+
+两个入口都依赖原应用的主题、语言或类名前缀时，在**组件提供方**已有配置加 `setup: './src/fulgurjs/setup.ts'`，并声明：
+
+```ts
+// admin/src/fulgurjs/setup.ts：只需要环境声明时，不写空默认函数。
+export const pageProviders = [
+  () => import('./exposes/FormProviders.vue').then(m => m.default),
+]
+```
+
+`FormProviders.vue` 必须复用真实业务 Provider 并渲染 `<slot />`；只包内容，不挂整个 App 或 RouterView。具体组件名、主题和语言配置来自原工程，不能复制一个不含真实环境的空 Provider。消费方通过 `remoteComponent` 渲染本远程的两个入口时会自动包装，无需逐表单重复写包装代码。
+
+例如，原工程已经有 `src/components/Application` 导出的 `AppProvider` 时，可以这样复用；原根组件还配置了语言/主题 Provider 的，也要复用相同配置并按原顺序包裹：
+
+```vue
+<!-- admin/src/fulgurjs/exposes/FormProviders.vue -->
+<script setup lang="ts">
+import { AppProvider } from '../../components/Application'
+</script>
+
+<template>
+  <AppProvider><slot /></AppProvider>
+</template>
+```
+
+该例假定原组件导出真实存在；请替换为本工程真实路径，不能为了满足示例新建一个空 `AppProvider`。这个最小例子只恢复祖先注入；业务还使用全局组件/指令时，继续按下文复用原注册源。
+
+还要分别核对：
+
+- **全局组件/指令**：Provider 不自动复制注册表。复用原注册源在实际消费方 app 注册，按 app 幂等；组件同名冲突先明确归属，指令不能用空实现替代。
+- **状态归属**：共享 Vue/Pinia 包不等于共享业务 store。组件需要提供方状态时显式绑定所属 Pinia，见[状态绑定](existing-apps.md#pinia库单例与业务实例分别管理)；不要在渲染前后切换全局 activePinia。
+- **数据与生命周期**：明确传入完整业务参数；离页后停止定时器，异步返回不再写旧实例。组件 props 更新是否重新查询由组件自身处理。
+- **样式**：Provider 不提供 CSS 隔离。检查真实数据、只读状态、类名前缀及输入框/选择框/编辑器宽度，不能只看 CSS 请求成功。
+
+### 何时改用 `getContext` 注入
+
+如果 workflow 不应该知道 admin 的名称或地址，例如同一个 workflow 分别被采购、生产两个宿主使用，就由每个宿主在桥接 `getContext` 中提供同一业务契约，例如 `loadBusinessForm`、`loadSchemaForm`。子应用调用当前宿主提供的装载器，而不是硬编码某个宿主的远程 spec。
+
+这两个名称是**业务自定义字段，不是插件内置 API**。双方明确约定参数、异步/同步返回、组件 props/events、缺少能力时的错误展示，以及独立运行时的真实能力来源；不要用空组件伪装成功。装载器应返回已带所需 Provider 的组件，并负责约定的组件/指令注册及正确状态归属。
+
+直接传组件或通过本地 `import()` 返回组件，**不会触发联邦远程模块的 setup/pageProviders 管线**，也不会自动得到 `remoteComponent` 的远程类型同步和加载错误 UI；调用方需处理自己的 loading/error/retry。若装载器内部实际调用 `remoteComponent`，则该远程组件仍遵循它自己的联邦加载语义。context 中的函数不是响应式订阅，换号后不要继续持有旧会话的组件、数据或回调。
+
+选择一种组件获取合同即可，不同时让同一消费点在“context 注入失败”后偷偷改走另一个 remote。已经使用注入且符合多宿主需求的工程可以保留；无需为了使用联邦而增加固定宿主依赖。
+
 ## 提供方：exposes 一个模块
 
 远程应用在 `fulgurjs.config.ts` 里声明对外暴露的模块。普通组件、函数模块都可以直接 expose：
@@ -68,6 +186,8 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 - **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
+**错误处理范围**：Vue remoteComponent 的 errorComponent 处理模块/初始化/Provider 加载失败，不捕获业务组件 setup/render 抛错；这类错误由组件自身或宿主 onErrorCaptured/app.config.errorHandler 处理。React remoteComponent 另带组件子树渲染错误边界，但同样不捕获事件处理器或任意异步回调异常。完整应用桥接的宿主错误边界也不覆盖另一 root 的内部错误。
+
 ### 已有项目复用原组件注册源
 
 已有统一 `registerComponents(app)` 的工程，不要在 setup 模块再手抄一份组件库清单：表单内层的选人框、上传器也可能使用全局标签，扫描最外层模板容易漏。可以由上面的祖先 Provider 在 setup 中取得实际消费方 `getCurrentInstance()?.appContext.app`，调用原注册函数；用模块级 `WeakSet<App>` 对同一 app 幂等，注册成功后才加入集合。桥接创建新 app 时会重新安装，不能仅用容器级一次性标记。保留原项目定制组件，同名冲突先确定归属，不能盲覆盖。
@@ -101,7 +221,7 @@ React 版要点：
 - 内置 pending 占位、错误占位与错误边界；加载失败与渲染出错**分开记录与展示**（文案区分「加载失败」与「渲染出错」）；
 - 失败恢复穿透浏览器 ESM 失败缓存：对入口 URL 与容器 expose loader 在失败后的重试上变更 URL（`fulgurjs_retry=N`）；并发失败只推进一个重试代次；
 - **已知边界**：expose 的静态依赖 chunk 失败后同页重试不可恢复（浏览器 module map 缓存了该依赖 URL 的失败），需整页刷新——默认占位的「刷新页面重试」就是这条路径（仅用户点击，永不自动刷新）；
-- **Context 不跨提供方根部**：与 Vue 同理，提供方 app 根部创建的 React Context 在消费方树里不可见；依赖 Context 的暴露面在暴露入口组件内自带 Provider（单一来源）。
+- **Context 不跨提供方根部**：与 Vue 同理，提供方 app 根部创建的 React Context 在消费方树里不可见；依赖 Context 的暴露面推荐在 setup.pageProviders 声明本框架 Provider，由 remoteComponent/createReactHostPages 包装；也可在暴露入口自带 Provider，但两者选一，避免重复装配。消费方祖先 Provider 只有使用同一个 Context 对象时才能生效，不能跨不同 renderer/版本传 Context。
 
 完整可运行示例：模板 [vue-vue](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) / [react-react](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) 的宿主首页。
 
@@ -215,4 +335,4 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | 组件渲染成功但字符串标签（如 `<a-divider>`）成死元素 | — | 远程在 setup 模块声明 `globalComponents`（`remoteComponent` 消费时自动安装），见 [API 参考 · setup/onSession](../reference/api.md#setuponsession-远程初始化生命周期) |
 | 组件渲染成功但类名前缀变 `undefined-xxx` / 主题类缺失（inject 未命中） | — | 远程在 setup 模块声明 `pageProviders`（祖先 Provider 自动包裹），见上文 provide/inject 说明 |
 
-完整 49 码见[错误码总表](../reference/errors.md)；按症状排查见[排错目录](../troubleshooting/README.md)。
+完整错误码见[错误码总表](../reference/errors.md)；按症状排查见[排错目录](../troubleshooting/README.md)。

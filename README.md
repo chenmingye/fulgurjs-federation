@@ -32,10 +32,14 @@ npm add @fulgurjs/federation
 import federation from '@fulgurjs/federation'
 
 export default {
-  plugins: [federation({
-    name: 'my-app',
-    // exposes / remotes / shared 按需配置，见文档「已有项目接入」
-  })],
+  plugins: [
+    // Keep the existing framework plugins.
+    federation({
+      name: 'host',
+      remotes: { 'remote-a': { dev: 'http://localhost:5174', prod: '/remote-a' } },
+      shared: { vue: { singleton: true } },
+    }),
+  ],
 }
 ```
 
@@ -55,6 +59,8 @@ import { remoteComponent, useLoadRemote, RemoteErrorBoundary } from '@fulgurjs/f
 // 框架无关的浏览器模块 @fulgurjs/federation/runtime（零 Vue/React 依赖）
 import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 ```
+
+上面配置是已有 Vue 消费方的接线示意，保留原 Vite/Vue 插件和业务配置；remote-a 必须真实暴露 ./Button、./math，并在开发地址启动或生产路径部署。地址按实际 base 替换。React 消费方使用自己的框架 shared 配置与 /react API；跨框架 UI 使用完整应用桥接，不把另一框架组件直接交给 remoteComponent。需要整套可运行工程时直接使用上方 create。
 
 ## 导入入口
 

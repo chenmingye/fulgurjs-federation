@@ -1,6 +1,6 @@
 # Sub app bridge: embedding a full sub app (Vue ↔ React)
 
-For applications that need both standalone and bridge startup, start with [the assembly guide](existing-apps.md).
+For standalone and embedded operation, **prefer one `defineApplication` factory**; start with [first integration](first-integration.md) and [unified assembly](existing-apps.md). This page uses `defineBridgeApp` for bridge-only/custom contract entries, not as a requirement to duplicate business initialization.
 
 > Scenario: mount a **full sub app** (with its own Router/store/menus) into a host of the other framework — a Vue 3 host embedding a React 18/19 child app, or the reverse. What is embedded is the child app: it creates its own component tree and the host only provides a DOM container; **no component type conversion happens** (Vue's `remoteComponent` cannot render React components directly).
 >
@@ -8,12 +8,16 @@ For applications that need both standalone and bridge startup, start with [the a
 
 ## Product scope
 
-- Supported: bidirectional embedding with site-level mount/unmount; sub app internal routes synced with the host URL (explicit opt-in, see [URL sync](url-sync.md); default off = memory routing); controlled sessions (switch/logout); nesting (multiple bridge instances on one page, A→B→C multi-level).
+- Supported: bidirectional embedding with site-level mount/unmount; sub app internal routes synced with the host URL (explicit opt-in, see [URL sync](url-sync.md); off by default; the child factory must create its memory router); controlled sessions (switch/logout); nesting (multiple bridge instances on one page, A→B→C multi-level).
 - Not supported: component-level interconversion, Angular, SSR/RSC, JS sandbox, automatic CSS isolation (see [supported scope](../troubleshooting/compatibility.md) and the [sandbox boundary audit (Chinese)](../../maintainers/沙箱边界审计.md)).
 
-## Dual-framework installation contract (required for bridge hosts)
+<a id="dual-framework-installation-contract-required-for-bridge-hosts"></a>
 
-A bridge host installs `vue` + `react` + `react-dom` together, with all three shared keys `singleton: true`:
+## Framework dependencies: same-framework versus cross-framework
+
+**Same-framework bridging only requires its own framework**: Vue-in-Vue does not need React, and React-in-React does not need Vue.
+
+The cross-framework templates use this recommended arrangement: **the host provides both framework runtimes**, so it installs `vue` + `react` + `react-dom` and shares all three as singletons in the same scope. These dependencies belong to that provider arrangement; the bridge factory does not unconditionally import the other framework. If the child provides its own framework runtime instead, explicitly configure providers, consumers and fallback for that scope rather than removing dependencies while leaving consumption configured.
 
 ```ts
 // Bridge host fulgurjs.config.ts
@@ -32,7 +36,7 @@ export default {
 } satisfies FederationOptions
 ```
 
-The child app only installs and shares its own framework (Vue child app: `vue`; React child app: `react` + `react-dom`). Shared subpaths (`react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom/client`) are negotiated to a single instance by the shared mechanism; the host configuring shared for `react` and `react-dom` is the prerequisite for that subpath negotiation. The zero-other-framework promise of pure Vue/pure React projects is unaffected. Real symptoms of a missing singleton (Invalid hook call, two isolated instances) are error code `MFU-010` — the plugin runs the negotiation mechanism as-is and does not block misconfiguration. When multiple React major versions share a page, singleton cannot make incompatible versions compatible; isolate them into separate scopes per [version isolation](sharing.md#sharescope-group-isolation-react-1819-on-the-same-page).
+The child app only installs and shares its own framework (Vue child app: `vue`; React child app: `react` + `react-dom`). Shared subpaths (`react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom/client`) are negotiated to a single instance by the shared mechanism; the host configuring shared for `react` and `react-dom` is the prerequisite for that subpath negotiation. The zero-other-framework promise of pure Vue/pure React projects is unaffected. Missing required instance identity can cause Invalid hook call or isolated state. `MFU-010` specifically means the selected singleton version fails a consumer range; it is not a general detector for missing singleton configuration. When multiple React major versions share a page, singleton cannot make incompatible versions compatible; isolate them into separate scopes per [version isolation](sharing.md#sharescope-group-isolation-react-1819-on-the-same-page).
 
 ## Child app side: `defineBridgeApp`
 
@@ -87,6 +91,16 @@ Contract semantics (the `BridgeApp` interface; `/vue` and `/react` share the sam
 - Child app internal errors after the first root commit are the responsibility of the **child app's own error boundary** — the host's ErrorBoundary/errorCaptured cannot catch render errors across roots, and the plugin does not pretend to be the fallback.
 
 The second argument of `defineBridgeApp(factory, { routing: true })` declares the URL sync protocol; see [URL sync](url-sync.md).
+
+## Choose session ownership before creating the host component
+
+| Scenario | Recommended approach | Host responsibilities |
+|---|---|---|
+| Vue host with authentication observable in a reactive business store | Factory option `session: getIdentity` | Return a stable non-sensitive ID / null / undefined; omit the sessionKey prop and manual login-store renew/clear calls |
+| React host or explicitly controlled login generations | Component prop `sessionKey` | Supply the generation through host state; update on login/reauthentication, preserve on token rotation, set null on logout; share one generation across same-page bridges |
+| Public applications without session requirements | Omit both | Do not invent identities, empty session files or unused context |
+
+See [first integration](first-integration.md) for complete automatic Vue wiring. **The host examples below demonstrate explicit mode**: `loginKey` comes from existing authentication state, not a hardcoded string. To use automatic mode, configure `session` and remove `:session-key`; they cannot be combined. `getLatestHostContext` and loading/error components represent existing project implementations; replace them or omit optional settings as appropriate.
 
 ## Host side: `createVueBridgeApp` / `createReactBridgeApp`
 
@@ -147,7 +161,7 @@ Host closures are not passed to the child app automatically. Three channels for 
 | Scenario | What to use | Cost |
 |---|---|---|
 | The child app needs live host values (token, username, etc.) | Pass a **stable callback** (e.g. `getToken: () => store.token`); the child app gets the latest value when it calls | No remount; good for "reading" |
-| Both sides share one piece of state | Pass the host store instance via `appProps` or AppContext; both sides subscribe to the same instance | Framework reactivity does not cross roots; the child app must subscribe itself |
+| Both sides share one piece of state | Pass the host store instance via `appProps` or AppContext; both sides subscribe to the same instance | The same Vue runtime can track an explicitly passed reactive object; React/cross-framework consumers need explicit subscriptions, not automatic reactivity conversion |
 | Must re-initialize with new props | The host changes the bridge component's `key` to remount explicitly (unmount → full load chain again) | All state resets; do not trigger frequently |
 
 Crossing roots inherits nothing: no host provide/inject, Pinia, React Context, or routing — needed data goes through `appProps`, AppContext, shared instances, or the child app installs its own.
@@ -215,4 +229,4 @@ Session change table:
 | `MFU-016` | Bridge preparation/mount/unmount failure (`details.phase` distinguishes getContext/mount/unmount; the root cause carries the child app's original error) | Troubleshoot the child app initialization code by phase; a container whose unmount threw is persistently locked out — recover with a full page refresh |
 | `MFU-017` | Session parameters inconsistent with AppContext (controlled sessionKey contradicts the global session, illegal values, page-level single-session conflict) | Unify controlled sessions on the page; change illegal values to a legal string/null/omitted |
 | `MFU-013` | Remote declares onSession but the host lacks sessionKey | The host login flow provides a non-sensitive login generation ID (never a token) |
-| `MFU-010` | The selected singleton version fails some consumer's requirement (double-instance-like symptoms when singleton is missing) | Bridge host: all three keys singleton; multiple React major versions: split scopes |
+| `MFU-010` | The selected singleton version fails a consumer range | Align versions/requiredVersion; strictVersion:true rejects conflicts; use distinct scopes for different React majors |

@@ -1,6 +1,6 @@
 # URL sync: sub app routes ↔ host browser address
 
-> Bridge defaults to **memory routing**: sub app internal navigation does not change the browser address, and a refresh cannot restore the sub app's internal page. URL sync makes the **host URL express the sub app's internal location** — refresh lands directly, bookmarks/sharing, back/forward, and host menu navigation all behave consistently. It is an explicit opt-in, **off by default** (without sync, sub app internal navigation does not touch the host address — that is normal behavior).
+> Bridge factories should use **memory routing** (the plugin does not convert an arbitrary web router to memory): sub app internal navigation does not change the browser address, and a refresh cannot restore the sub app's internal page. URL sync makes the **host URL express the sub app's internal location** — refresh lands directly, bookmarks/sharing, back/forward, and host menu navigation all behave consistently. It is an explicit opt-in, **off by default** (without sync, sub app internal navigation does not touch the host address — that is normal behavior).
 >
 > Import entries: `createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` all import from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`. Router libraries are optional peers: `/vue` does not require vue-router, `/react` does not require react-router-dom — the corresponding library is only needed when the route-sync APIs are actually called (the React side errors clearly when the dependency is missing).
 
@@ -26,10 +26,10 @@ Host guard rejects                 → URL/history/sub app location all unchange
 **Step 1: declare suffix matching in host routes** (without it, detail navigation unmounts the sub app):
 
 ```ts
-// main.ts
+// src/router/index.ts (Home/ApprovalBridgePage are real project view components)
 import { createRouter, createWebHistory } from 'vue-router'
 
-const router = createRouter({
+export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // use createWebHashHistory for hash mode
   routes: [
     { path: '/', component: Home },
@@ -47,8 +47,10 @@ router.beforeEach((to) => (to.path.startsWith('/approval/secret') ? false : unde
 ```vue
 <!-- ApprovalBridgePage.vue: the routing prop = an independent control channel -->
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { createVueBridgeApp, createVueBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/vue'
 
+const router = useRouter()
 const navigation = createVueBridgeNavigation(router) // Vue Router fullPath is already the logical path; no deployment base needed
 const routing: BridgeHostRouting = { basePath: '/approval', navigation }
 const RemoteApp = createVueBridgeApp('react-remote/bridge', { /* factory options as in the bridge guide */ })
@@ -126,20 +128,24 @@ If initialization must inspect the settled initial route, manually `await instal
 **React child app**: `createReactBridgeRouter` returns `{ element, dispose(), routerReady }`, where `element` is a directly usable `RouterProvider` element; a missing routing channel throws the standardized `MFU-034` (no hand-written guard needed in the factory):
 
 ```tsx
-// src/bridge.tsx (React child app)
+// src/fulgurjs/exposes/application.tsx (bridge-only example)
 import { createReactBridgeRouter, defineBridgeApp } from '@fulgurjs/federation/react'
 
 export default defineBridgeApp((_props, ctx) => {
   return createReactBridgeRouter(ctx!.routing!, [
     { path: '/list', element: <List /> },
     { path: '/detail/:id', element: <Detail /> },
-  ], { signal: ctx!.signal }).element
+  ], { signal: ctx!.signal })
 }, { routing: true })
 ```
 
 `routerReady: Promise<Router>` is the wired memory-router readiness contract: the fast path (module-level warmup settled — the overwhelmingly common case) returns an **already-resolved** Promise whose value equals `element.props.router`; the slow path (a rare warmup race) resolves when the lazy host finishes wiring on first render; a missing react-router-dom rejects with a clear error. Hosts/tests that need to introspect the router instance (e.g. asserting the current location) should `await routerReady` instead of assuming `element.props.router` exists synchronously. After teardown (`dispose()` / `signal` abort), late router operations never write navigation state.
 
 The third argument of the wiring on both ends, `{ signal?: AbortSignal }`, defaults to empty; passing `ctx.signal` is recommended for automatic dispose — without it, the child app must explicitly call the connection's `dispose()`.
+
+In the host examples, `sess`/`props` stand for existing session state and business parameters, not plugin globals. Vue login integrations should normally use a `session` getter and remove `session-key`; omit session props for public apps. React uses explicit generations from authentication state. Import real List/Detail views rather than creating fake modules to satisfy these examples.
+
+The `defineBridgeApp` examples are bridge-only entries. For standalone operation too, prefer [defineApplication unified assembly](existing-apps.md): web/hash routing when standalone and memory routing when embedded. React standalone returns the actual RouterProvider; embedded mode returns the connection object above so dispose follows instance cleanup.
 
 ## Behavior contracts and boundaries
 

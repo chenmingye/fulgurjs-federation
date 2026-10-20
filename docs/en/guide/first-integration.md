@@ -1,6 +1,6 @@
 # First integration into existing applications
 
-> Automatic Vue sessions, `--application`, and declaration-only setup modules ship in the official package starting with 6.12.0. Every example on this page works directly with the registry release.
+> This guide describes the current public API. Verify the actually installed package; use matching plugin versions across hosts/remotes and replace business paths with real project files.
 
 Follow one path: preserve the existing projects, share one application factory between standalone and embedded execution, then mount the complete remote application. For individual components/functions use [components and modules](components-and-modules.md).
 
@@ -125,7 +125,11 @@ Bind the existing authentication state through getIdentity/getContext, inline or
 
 If the remote uses a different token cache/user schema, map it once in `exposes/context.ts`, before loading guards/pages. Check signal after asynchronous operations before writing. Private authentication rules stay in the application.
 
-Only components that need ancestor environment require a declaration:
+### Host forms inside a child: choose the component contract first
+
+For fixed providers and stable interfaces, prefer **host exposes + child remoteComponent**. The host still mounts the full child; the child loads only components in return, not another full application. Inject component loaders through `getContext` when the same child needs implementations supplied by different hosts. Both remain supported; reasonable existing injection integrations need no rewrite. See [host-provided components](components-and-modules.md#providing-host-components-to-a-child-recommendation-and-decision-rules) for the two-form configuration, rendering code and decision rules.
+
+With federation component loading, keep real user/token-getter/event capabilities in context instead of also passing the same form loaders. Components requiring ancestor environment declare it through the component provider's configured `setup` module:
 
 ```ts
 // src/fulgurjs/setup.ts — no empty default function needed
@@ -141,7 +145,7 @@ A mountable remote does not mean the legacy shell is gone. Check each item befor
 - **Legacy micro-frontend registration points**: the entry bootstrap, a layout `onMounted`, a login `setToken` callback, or similar hooks can each register the old shell again. Disable or short-circuit all of them, and confirm no second container claims the same prefix.
 - **Dynamic routes generated from backend menus**: backend menus often generate component-less records for the child application's internal paths. They are for menu display only. Registering them in vue-router gives them a more specific path than the remote prefix catch-all and leaves the content area blank after a menu click. Build the menu tree first, then remove same-prefix records from the route table.
 - **Host page container key**: do not rebuild the remote mount view from `route.fullPath`. Child-internal navigation synchronizes the host URL; a changing fullPath unmounts the entire remote application, and an asynchronously initializing page then touches refs that have already been cleared. Use a stable per-remote key for the remote prefix route.
-- **Legacy cross-application iframes / host pages**: replace them with host-provided real components and events (a component loader, global component installation and event objects returned from getContext) and render inside the child application. A same-origin iframe is only a fallback for old environments, never evidence of federation. TinyMCE's internal editing iframe is the exception.
+- **Legacy cross-application iframes / host pages**: prefer host exposes and child remoteComponent for fixed component interfaces; use getContext component loaders for implementations supplied by different hosts. Both need the required Providers, component/directive registration and store ownership; pass events as actually needed and render inside the child application. A same-origin iframe is only a fallback for old environments, never evidence of federation. TinyMCE's internal editing iframe is the exception.
 - **Session identity reads**: a logout action may clear store state before clearing the persistent cache. If the identity getter reads a Pinia-cached getToken getter, it can cache the old cached token during that intermediate state; the router guard then redirects `/login` back to the home page. Read state first: use state.token whenever it is assigned (including the empty string) and read the persistent cache only while it is still undefined.
 - **Quick leave and re-entry**: every child mount creates a new router, and its dynamic route table belongs to that router only. A permission guard must not skip `addRoute` merely because user information was already loaded; register dynamic routes per router instance.
 - **Host dependencies of business components**: rendering a component from the host module graph inside the child application requires installing the global components, events and store ownership it assumes. Otherwise you see unresolved tags, raw usernames or empty selects. Do not call getCurrentInstance inside async callbacks to obtain the app; capture it during setup.

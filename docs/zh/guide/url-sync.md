@@ -1,8 +1,8 @@
 # URL 同步：子应用路由 ↔ 宿主浏览器地址
 
-> 桥接默认 **memory 路由**：子应用内部跳转不改浏览器地址、刷新不能恢复子应用内部页面。URL 同步让**宿主 URL 表达子应用内部位置**——刷新直达、收藏分享、前进后退、宿主菜单跳转全部一致。显式开启，**默认关闭**（不开同步时子应用内部跳转不影响宿主地址，这是正常行为）。
+> 桥接工厂应使用 **memory 路由**（插件不会把任意 web router 自动转换为 memory）：子应用内部跳转不改浏览器地址、刷新不能恢复子应用内部页面。URL 同步让**宿主 URL 表达子应用内部位置**——刷新直达、收藏分享、前进后退、宿主菜单跳转全部一致。显式开启，**默认关闭**（不开同步时子应用内部跳转不影响宿主地址，这是正常行为）。
 >
-> 导入入口：`createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` 全部从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 导入。路由库是可选 peer：`/vue` 不要求安装 vue-router，`/react` 不要求安装 react-router-dom——只在真正调用路由同步 API 时才需要对应库（React 端缺依赖时报清晰错误）。
+> 导入入口：`createVueBridgeNavigation`/`connectVueBridgeRouter`/`createReactBridgeNavigation`/`createReactBridgeRouter` Vue 的两个 API 从 `@fulgurjs/federation/vue` 导入，React 的两个 API 从 `@fulgurjs/federation/react` 导入，不能交叉选入口。路由库是可选 peer：`/vue` 不要求安装 vue-router，`/react` 不要求安装 react-router-dom——只在真正调用路由同步 API 时才需要对应库（React 端缺依赖时报清晰错误）。
 
 ## 效果
 
@@ -26,10 +26,10 @@
 **第一步：宿主路由声明后缀匹配**（缺它详情导航会卸载子应用）：
 
 ```ts
-// main.ts
+// src/router/index.ts（示例假定 Home/ApprovalBridgePage 为真实页面组件）
 import { createRouter, createWebHistory } from 'vue-router'
 
-const router = createRouter({
+export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL), // hash 模式用 createWebHashHistory
   routes: [
     { path: '/', component: Home },
@@ -47,8 +47,10 @@ router.beforeEach((to) => (to.path.startsWith('/approval/secret') ? false : unde
 ```vue
 <!-- ApprovalBridgePage.vue：routing prop = 独立控制通道 -->
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { createVueBridgeApp, createVueBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/federation/vue'
 
+const router = useRouter()
 const navigation = createVueBridgeNavigation(router) // Vue Router fullPath 已是逻辑路径，无需传部署 base
 const routing: BridgeHostRouting = { basePath: '/approval', navigation }
 const RemoteApp = createVueBridgeApp('react-remote/bridge', { /* 工厂选项同桥接篇 */ })
@@ -127,20 +129,24 @@ export default defineBridgeApp((props) => {
 **React 子应用**：`createReactBridgeRouter` 返回 `{ element, dispose(), routerReady }`，`element` 是直接可用的 `RouterProvider` 元素；routing 缺失时统一抛 `MFU-034`（不再需要工厂里手写守卫）：
 
 ```tsx
-// src/bridge.tsx（React 子应用）
+// src/fulgurjs/exposes/application.tsx（仅桥接入口示例）
 import { createReactBridgeRouter, defineBridgeApp } from '@fulgurjs/federation/react'
 
 export default defineBridgeApp((_props, ctx) => {
   return createReactBridgeRouter(ctx!.routing!, [
     { path: '/list', element: <List /> },
     { path: '/detail/:id', element: <Detail /> },
-  ], { signal: ctx!.signal }).element
+  ], { signal: ctx!.signal })
 }, { routing: true })
 ```
 
 `routerReady: Promise<Router>` 是已接线 memory router 的就绪合同：fast 路径（模块级预热已就绪，绝大多数情况）返回**同步已 resolve** 的 Promise，值与 `element.props.router` 等价；slow 路径（预热未落定的罕见竞态）在惰性宿主首次渲染接线完成时 resolve；缺 react-router-dom 时以清晰错误 reject。宿主/测试需要内省 router 实例（如断言当前 location）时 `await routerReady`，不要假设 `element.props.router` 同步存在。卸载（`dispose()`/`signal` abort）后迟到的 router 操作不再写导航状态。
 
 两端接线的第三参数 `{ signal?: AbortSignal }` 默认为空；推荐传 `ctx.signal` 自动 dispose，未传时由子应用显式调用连接的 `dispose()`。
+
+上方宿主示例中的 `sess`/`props` 表示已有会话代次与业务参数，不是插件全局变量。Vue 常规登录推荐 `session` getter（此时删除 `session-key`），无会话需求则省略该 prop；React 用已有认证状态提供显式代次。子应用示例的 List/Detail 也应导入真实页面，不创建假模块满足示例。
+
+`defineBridgeApp` 的示例是仅桥接入口。需要同一应用独立启动时，推荐[defineApplication 统一装配](existing-apps.md)：独立模式用 web/hash router，桥接模式用 memory router；React 独立模式返回实际 RouterProvider，桥接模式返回上面的连接对象，让 dispose 跟随实例清理。
 
 ## 行为契约与边界
 

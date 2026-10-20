@@ -1,6 +1,6 @@
 # 错误码总表
 
-> 49 个错误码，按段分组：CFG（配置期）/ DEV（开发期）/ BLD（构建期）/ MFU（运行时）/ CC（跨应用上下文）。每条给出**现象 / 原因 / 修法**三段式。错误文案中的修法具体到配置键 / 文件 / 命令；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
+> 全部错误码，按段分组：CFG（配置期）/ DEV（开发期）/ BLD（构建期）/ MFU（运行时）/ CC（跨应用上下文）。每条给出**现象 / 原因 / 修法**三段式。错误文案中的修法具体到配置键 / 文件 / 命令；`fulgurjs doctor` 可提前把部署面的 MFU-001 类问题拦在上线前。
 >
 > 维护提示：新增/修改错误码必须三处同步——源码码表（`src/runtime/errors.ts` 的 MFU 段 / `src/context.ts` 的 CC 段）＋ 登记表 `CODE_REGISTRY`（`src/diagnostics.ts`）＋ 本表；`npm run build` 里的 `scripts/check-manual-codes.mjs` 做三方一致性校验（见[维护者 · 测试方法](../../maintainers/testing.md)）。
 
@@ -15,7 +15,7 @@
 | `CFG-004` | 配置期报「shared 必须是数组或对象」 | shared 写成了字符串等非法形态 | 用 `['vue']` 或 `{ vue: { singleton: true } }` |
 | `CFG-005` | 配置期报 remotes 键与 shared 键同名冲突 | 同一个名字既在 `remotes` 又在 `shared`——加载改写规则会互相覆盖 | 重命名其一（通常改 remotes 键，如 `vue` → 不允许则用别的前缀名） |
 | `CFG-006` | 启动时警告「未配置 exposes 或 remotes，目前只会注册共享依赖」 | 孤岛配置：既不提供也不消费（常见于手滑删了 exposes） | 要提供模块配 `exposes`；要消费远程配 `remotes` |
-| `CFG-007` | 配置期报「对象写法不支持 name@ 前缀」 | `remotes['x'].dev/prod` 写成 `'bpm@http://…'`——对象形式整串当 URL 拼接，产出坏地址（运行时表现为无关的 MFU-001） | 对象 dev/prod 槽位写不带前缀的 URL（远程名称默认用键名）；需要改名用字符串写法 `'name@url'` |
+| `CFG-007` | 配置期报「对象写法不支持 name@ 前缀」 | `remotes['x'].dev/prod` 写成 `'bpm@http://…'`——对象形式整串当 URL 拼接，产出坏地址（运行时表现为无关的 MFU-001） | 对象 dev/prod 槽位写不带前缀的 URL（远程名称默认用键名）；需要改名推荐字符串写法 `'name@url'` |
 | `CFG-008` | 配置期报「不能同时配置 eager 和 import:false」或「共享键重复声明」 | `eager` 需要本地副本打进初始 chunk，与 `import: false`（纯消费）互斥；或同 shareKey+shareScope 声明了两次 | 二选一：`{ eager: true }` 或 `{ import: false }`；合并重复声明或改用不同 shareKey |
 | `CFG-009` | 配置期报 timeout/retries/breaker 数值非法 | `timeout`/`breaker.threshold`/`breaker.resetMs` 非有限正数；`retries` 非 0–10 整数 | `timeout: 15000`、`retries: 2`（上限 10 防退避风暴）、`breaker: { threshold: 5, resetMs: 30000 }` |
 | `CFG-010` | 配置期报 devCorsOrigins 形态非法 | 值既不是 `"*"` 也不是 http(s) 来源数组 | `'*'`（全放开）或 `['http://localhost:5100', …]` allowlist |
@@ -64,7 +64,7 @@
 | `MFU-007` | console 警告预加载失败（不阻断业务） | `preloadRemote` 预取的 chunk/CSS 不可达 | 查 `fulgurjs:error` 事件历史与远程部署；预载失败不影响后续真实加载 |
 | `MFU-008` | 运行时报未知远程 | spec/调用里的远程名不在 `remotes`/运行时注册表里 | 核对远程名拼写；动态远程先 `registerRemote`/`registerRemotes` |
 | `MFU-009` | 运行时报加载到的模块没有任何导出 | expose 目标文件没有导出（空模块/只有副作用） | 给 expose 目标文件补导出；确认加载的是预期文件 |
-| `MFU-010` | 运行时警告选中的共享单例版本不满足某消费方要求（列出候选版本、提供方、影响与修法；同一组合只告警一次） | singleton 收敛到的版本不在某消费方 requiredVersion 内；或桥接宿主/子应用缺 singleton 导致双实例症状（Invalid hook call） | 统一依赖版本；确认告警可接受或调整 requiredVersion；跨框架宿主三键 singleton |
+| `MFU-010` | 选中的共享单例版本不满足当前消费方 requiredVersion | 同一 shareScope/shareKey 已选定的单例与消费范围不兼容 | 对齐版本或确认兼容后修正范围；必须拒绝时设 strictVersion:true，不同 React 大版本隔离整组依赖 |
 | `MFU-011` | 运行时报 setup 生命周期入口导出形态非法（报实际类型/预期签名/修法） | setup模块为空、已有默认导出/onSession不是函数，或组件/Provider声明形态非法 | 默认导出初始化函数，或声明有效onSession/globalComponents/pageProviders；无需空函数，不接受空模块 |
 | `MFU-012` | 该次 `loadRemote` 拒绝，报 setup/onSession 执行抛错（cause 含原始异常） | 初始化代码自身抛错 | 修复 setup/onSession 内部错误后直接重试——只清失败阶段缓存（setup 失败重试从 setup 开始；onSession 失败只重跑会话段），已成功阶段不重复 |
 | `MFU-013` | 运行时报远程声明 onSession 但宿主 AppContext 缺 sessionKey | 宿主未提供非敏感登录代次 ID（禁止用 token 充当） | 宿主登录流程 `provideAppContext({ sessionKey })`——每次成功登录/重登生成新值，token 刷新沿用 |

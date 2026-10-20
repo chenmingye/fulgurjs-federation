@@ -13,40 +13,49 @@
 | `remotes` | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | Consumes no remotes | Consumed remotes; the four forms are in the next section. Keys are import prefixes and must not contain `@`, `/`, or whitespace (CFG-003) |
 | `shared` | `string[] \| Record<string, string \| SharedHint>` | Shares no dependencies | Shared dependencies. The string shorthand = `requiredVersion`; an array = each item inferred from package.json. Full field set: [shared dependencies guide](../guide/sharing.md#all-sharedhint-fields) |
 | `shareScope` | `string` | `'default'` | Default shared scope name; each item can override via `shared[*].shareScope` |
-| `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` disables; any other value enables (the object form provides no extra field configuration). A prod build generates `fulgurjs-manifest.json` — `preloadRemote` and `check-pages`/`doctor` depend on it; disabling makes those two capabilities unavailable |
+| `manifest` | `boolean \| Record<string, unknown>` | `true` | false disables the production fulgurjs-manifest.json; object form adds no configurable fields. loadRemote still works; preloadRemote falls back to the entry only; check-pages cannot verify exposes without a manifest. doctor can use --no-manifest and check other endpoints. |
 | `runtimePlugins` | `string[]` | `[]` | Runtime plugin module paths (relative paths resolve against the app root). Hook error contract: observational hooks only warn on throw; `resolveShare` (a decision hook) propagates explicit throws to the caller. See [API reference · runtime plugins](api.md#runtime-plugins) |
-| `dts` | `boolean \| { dir?: string }` | `true` | Remote type generation and sync. Provider: background generation in dev and a **distributable declaration resource** shipped with the prod build (declaration closure + type manifest — never depends on the remote's local source). Host: automatic dev sync into `src/fulgurjs/types/` (`.fulgurjs/types` without a src layout) producing ambient declarations plus a type registry — plain imports, dynamic imports and the string APIs (`loadRemote`/`remoteComponent`/bridge factories) share one set of types. `{ dir }` overrides the directory; `false` disables. Providers with `.vue` exposes need `vue-tsc` (templates include it). See [CLI · types](cli.md#types) |
+| `dts` | `boolean \| { dir?: string }` | `true` | Remote type generation and sync. Provider: background generation in dev and a **distributable declaration resource** shipped with the prod build (declaration closure + type manifest — never depends on the remote's local source). Host: automatic dev sync into `src/fulgurjs/types/` (`.fulgurjs/types` without a src layout) producing ambient declarations plus a type registry — plain imports, dynamic imports and the string APIs (`loadRemote`/`remoteComponent`/bridge factories) share one set of types. `{ dir }` overrides the directory; `false` disables. Providers with `.vue` exposes need `vue-tsc` (templates include it). See [CLI · types](cli.md#fulgurjs-types) |
 | `devSharedSelf` | `boolean` | Inferred from role: apps providing `exposes`/`setup` are `true`; pure hosts `false`; **explicit configuration always wins** | Whether, in dev, the app's own source (including dependencies) participates in the shared negotiation rewrite. Bidirectional federation defaults to `true` with no explicit config needed. In build, the negotiation facade is isolated into plugin-owned chunks automatically; business manualChunks can stay |
-| `devCorsOrigins` | `string[] \| '*'` | `'*'` (omitted and explicit `'*'` behave identically; the only difference is whether DEV-011 reminds you) | Dev cross-origin access policy: the plugin endpoints (`/@fulgurjs-entry.js`, `/@fulgurjs-manifest.json`) share the same origin source as `server.cors`. An array reflects the Origin against an allowlist (header omitted on miss). **Dev only**; a user-configured `server.cors` always wins. An illegal form reports CFG-010 |
+| `devCorsOrigins` | `string[] \| '*'` | `'*'` | Dev federation entry/manifest/types Origin policy, default *. It supplies Vite module CORS only when server.cors is omitted; explicit server.cors does not override plugin endpoints. Non-loopback wildcard configurations may still warn DEV-011. Production CORS is separate. |
 
 Omitted-semantics summary: `manifest`/`dts` omitted = enabled/default; `setup` omitted = no initialization behavior; `shared`/`exposes`/`remotes` omitted = the corresponding capability is off (none configured = an isolated-island config, producing a CFG-006-style reminder: neither provides nor consumes).
 
 ## The four forms of `remotes`
 
 ```ts
-remotes: {
-  // ① Single-address string: dev appends /@fulgurjs-entry.js automatically, prod appends the filename
-  'remote-a': 'http://localhost:5101',
+import type { FederationOptions } from '@fulgurjs/federation'
 
-  // ② 'selfName@url': rename semantics (string form only; writing name@ in an object's dev/prod slots is CFG-007)
-  'checkout': 'shop@http://localhost:5102',
+export default {
+  name: 'host',
+  remotes: {
+    // ① Single-address string: dev appends /@fulgurjs-entry.js automatically, prod appends the filename
+    'remote-a': 'http://localhost:5101',
 
-  // ③ Object: explicit dev/prod split + resilience parameters (everything except dev/prod is optional)
-  'remote-b': {
-    dev: 'http://localhost:5103/remote-b',   // falls back to external when omitted
-    prod: '/remote-b',                       // falls back to external when omitted
-    shareScope: 'default',                   // this remote's shared scope
-    timeout: 15000,            // load timeout ms (finite positive, validated at config time CFG-009; default 15s when omitted)
-    retries: 2,                // retry count on failure (integer 0–10; default 2 when omitted)
-    fallback: ['http://backup/remote-b'],  // backup remoteEntry URLs, tried in order
-    breaker: { threshold: 5, resetMs: 30000 }, // circuit breaker on consecutive failures (both values must be finite positives)
-  },
+    // ② 'selfName@url': rename semantics (string recommended; external also supports it, but name@ in dev/prod is CFG-007)
+    'checkout': 'shop@http://localhost:5102',
 
-  // ④ Function: promise-based remote (address unknown at build time; equivalent to webpack "promise new Promise",
-  //    needs registerRemote at runtime; the config key is still used to rewrite import syntax, with a concurrency warning)
-  'remote-c': () => fetch('/api/remote-url').then(r => r.text()),
-}
+    // ③ Object: environment-specific addresses + resilience parameters (at least one of external/dev/prod; every used environment must resolve an address)
+    'remote-b': {
+      dev: 'http://localhost:5103/remote-b',   // falls back to external when omitted
+      prod: '/remote-b',                       // falls back to external when omitted
+      shareScope: 'default',                   // this remote's shared scope
+      timeout: 15000,            // load timeout ms (finite positive, validated at config time CFG-009; default 15s when omitted)
+      retries: 2,                // retry count on failure (integer 0–10; default 2 when omitted)
+      fallback: ['https://backup.example.com/remote-b/fulgurjs-remoteEntry.js'],  // backup remoteEntry URLs, tried in order
+      breaker: { threshold: 5, resetMs: 30000 }, // circuit breaker on consecutive failures (both values must be finite positives)
+    },
+
+    // ④ Function: promise-based remote (address unknown at build time; equivalent to webpack "promise new Promise",
+    //    needs registerRemote at runtime; the config key is still used to rewrite import syntax, with a concurrency warning)
+    'remote-c': () => fetch('/api/remote-url').then(r => r.text()),
+  }
+} satisfies FederationOptions
 ```
+
+Omitted dev/prod slots fall back only to external, not to each other: a dev-only configuration does not establish a production address. Complete .js URLs are used verbatim in both environments; directory URLs receive an entry filename. Backup fallback values must be actual entry-file URLs, not site directories.
+
+remotes.fallback means backup container entries; loadRemote fallbackModule means an explicit replacement business module; loadShare fallback means a local shared-dependency copy. These are distinct contracts, not interchangeable options.
 
 `timeout` semantics: a timeout only means "the caller stops waiting" — the browser does not cancel an already-issued dynamic import; later calls reuse the same in-flight record and never re-initialize the same container.
 
@@ -56,7 +65,7 @@ remotes: {
 // ① On (default/omitted): fully open — cross-dev-server collaboration works out of the box; on non-loopback hosts DEV-011/012 remind
 federation({ name: 'remote-a', exposes: { './Button': './src/Button.vue' } })
 
-// ② Explicitly fully open: same as ①, but no more reminders (declares "I know")
+// ② Explicit wildcard: same access as omitted; non-loopback hosts may still warn DEV-011
 federation({
   name: 'remote-a',
   exposes: { './Button': './src/Button.vue' },
@@ -73,6 +82,8 @@ federation({
 ```
 
 Behavior boundaries: `devCorsOrigins` applies only to dev (build output is unaffected); for non-matching origins the endpoints merely omit the `Access-Control-Allow-Origin` response header (same-origin requests are untouched).
+
+If server.cors is also configured, align its allowlist with devCorsOrigins. Inspect federation endpoints and actual JS/CSS responses separately; restricting one does not restrict the other. CORS is not authentication/authorization.
 
 ## Full shape of `fulgurjs.config.ts`
 

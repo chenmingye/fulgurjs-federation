@@ -62,10 +62,10 @@
 | Symptom | Check first | Go deeper |
 |---|---|---|
 | After a redeploy old hashed chunks 404 and the site fails | remoteEntry configured with immutable long caching | Switch the three files (remoteEntry/manifest/index.html) to `no-cache`; doctor FAILs on immutable |
-| Occasional partial asset 404s | The release window wiped old chunks | Keep chunks still referenced by old pages; `rsync -a --delete` whole-directory consistent deploys |
+| Occasional partial asset 404s | The release window wiped old chunks | Keep old referenced chunks at their original URLs; upload new assets before switching entries, without --delete against the active directory |
 | Asset is 200 but its content is HTML | The fallback swallowed JS (the status code illusion) | doctor's chunk shape check catches it; fix the nginx fallback rules |
 | `Cannot find module '@fulgurjs/federation'` after a pnpm tarball install | Broken symlinks | Reinstall and verify the directory resolves |
-| Pages report 404/401 resource errors and the business API is not implemented on the backend | The backend endpoint is missing | Add an honest empty-response shim at the proxy/NGINX layer (never fake business data); the frontend renders an empty state |
+| Pages report 404/401 resource errors and the business API is not implemented on the backend | The backend endpoint is missing | Verify real endpoints, proxy prefixes and permissions; retain the actual failure and report missing backend capabilities rather than disguising them with empty HTTP 200 responses |
 | e2e occasionally bounces back to the login page | The assertion ran before the async login chain finished | Wait for "the login form to disappear" instead of a fixed number of seconds; leave generous timeouts for slow chains |
 
 ## Type fetching failures / IDE issues
@@ -76,7 +76,7 @@
 | Remote types report not provided (TYP-004) | The remote runs an older plugin or sets `dts: false` | Pages run normally; for precise types upgrade the remote keeping `dts: true`; dynamic strings on the host follow the unknown boundary |
 | ts(2307) cannot find `@fulgurjs/federation/*` | The IDE TS service cached the old package | `Restart TS Server` (⌘⇧P) or reopen the window |
 | Types missing or not taking effect (TYP-006) | The generated directory is outside the app tsconfig include (exclude or strict `files` allowlist) | Follow the TYP-006 minimal fix to extend include; the default directory under `src` needs no config |
-| React precise types not working | The host tsconfig lacks paths | Configure `paths` per the `_paths.d.ts` instructions; [React dev types](../reference/api.md#react-dev-types-dual-track) |
+| React precise types do not apply | Declarations were not synchronized or included in the effective tsconfig | Keep dts enabled, run fulgurjs types, then resolve TYP-006 include issues; see [current remote types](../reference/api.md#remote-types-generation-and-sync) |
 
 ## Bridge / session
 

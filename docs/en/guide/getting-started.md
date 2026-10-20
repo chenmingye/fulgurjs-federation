@@ -15,15 +15,13 @@ Environment requirements:
 
 - Node.js: the plugin itself requires ≥ 18, but Vite 7/8 requires **20.19+** (or 22.12+). Pick Node according to the Vite version you use.
 - Browser baseline: Chrome 108+ (ESM, dynamic import, and top-level await are required).
-- Build target `es2022` or newer (lower targets fail with `BLD-002`).
-- A plain Vue project only needs Vue; a plain React project only needs react + react-dom. Vue/React projects do **not** need to install the other framework or any router library; the exception is a **bridge host** (when embedding another framework's full sub app into your application, both frameworks must be installed — see [the dual-framework installation contract](app-bridge.md#dual-framework-installation-contract-required-for-bridge-hosts)). A router library is only referenced on demand by the side that actually uses URL sync (type-level imports; a missing runtime dependency only errors when a route-sync API is actually called).
+- Choose a browser target supporting top-level await (usually es2022); omitted target becomes es2022. An explicit incompatible target may produce a diagnostic or bundler error; the plugin does not automatically downlevel for older browsers.
+- Ordinary component/module use and same-framework bridges only need their own framework. Importing `/vue` or `/react` does not require the other framework or a router. Cross-framework templates use a host-provides-both arrangement; see [framework dependencies](app-bridge.md#framework-dependencies-same-framework-versus-cross-framework). Install the appropriate router on each side actually using URL sync; business routing requirements remain application-owned.
 
-Package manager notes (pnpm users):
+Package-manager behavior follows the project's pnpm version and effective configuration:
 
-- pnpm ≥ 11 enables `minimumReleaseAge: 1440` by default (a 24-hour supply-chain cooldown): a freshly published version is not resolvable within 24 hours, so `pnpm add` installs the newest version that satisfies the cooldown instead. If you need the newest version right after a release, add `minimumReleaseAgeExclude: ['@fulgurjs/federation@<version>']` to `pnpm-workspace.yaml` (this is what the five templates do), or temporarily run `pnpm config set minimum-release-age 0`.
-- When pnpm 12 hits unapproved build scripts (esbuild and friends), it writes the `allowBuilds: { esbuild: set this to true or false }` placeholder prompt into `pnpm-workspace.yaml` and finishes the install with a non-zero exit code. Change the value to `true` and rerun the install.
-
-Keep the exception in the current project and restrict it to the verified plugin version, rather than disabling the machine-wide cooldown. Since pnpm 11, `npm_config_*` is no longer the general configuration source: setting `npm_config_minimum_release_age=0` does not prove that the restriction is lifted. Check `pnpm config get minimumReleaseAgeExclude`, the lockfile, and the installed version. See the [pnpm 11 configuration notes](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/11.0.md).
+- Release-age limits, including strict/non-strict behavior, affect version selection. Successful installation does not prove the intended version was installed. Exempt only a verified exact release in project pnpm-workspace.yaml with `minimumReleaseAgeExclude: ['@fulgurjs/federation@<version>']`, then check the lockfile and installed version. See [release-age settings](https://pnpm.io/settings/dependency-resolution#minimumreleaseage).
+- For unreviewed build scripts, inspect project `allowBuilds`, allow only reviewed required scripts (e.g. `esbuild: true`), then reinstall. Never ignore non-zero exits. See [build settings](https://pnpm.io/settings/build#allowbuilds).
 
 ## New project: `fulgurjs create`
 
@@ -120,6 +118,7 @@ export default {
 **② `vite.config.ts`** — only two federation lines:
 
 ```ts
+import { defineConfig } from 'vite'
 import federation from '@fulgurjs/federation'
 import fulgurjsConfig from './fulgurjs.config'
 

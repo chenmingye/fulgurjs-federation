@@ -18,7 +18,7 @@ The single hand-maintained location is this data module; runtime and CLI always 
 export const remotePrefixes = { '/remote-a/': 'remote-a' }
 
 export const pages = [
-  { route: '/remote-a/home', name: 'RemoteAHome', title: 'Home' },
+  { route: '/remote-a/home', spec: 'pages/remote-a/home', name: 'RemoteAHome', title: 'Home' },
   { route: '/remote-a/detail/:id', name: 'RemoteADetail', spec: 'pages/remote-a/detail', title: 'Detail' },
 ]
 ```
@@ -30,23 +30,18 @@ export const pages = [
 `definePages(pages, options?)` validates the "URL path → remote exposes key" mapping at **startup**, so silent conflicts of parameterized routes fail at startup instead of loading the wrong component at runtime:
 
 ```ts
-import { definePages, remoteSchema } from '@fulgurjs/federation/vue'   // React: same names from /react
+// src/fulgurjs/host/pages.ts
+import { definePages, remoteSchema } from '@fulgurjs/federation/vue'
+import { pages, remotePrefixes } from './pages.data'
 
-export const PAGES = definePages(
-  [
-    { route: '/remote-a/home', name: 'RemoteAHome', title: 'Home' },
-    // Parameterized route: by default spec is derived as drop the first segment + strip :param segments;
-    // when the derivation collapses onto another entry that is an ERROR; point at a dedicated expose with an explicit spec
-    { route: '/remote-a/detail/:id', name: 'RemoteADetail', spec: 'pages/remote-a/detail', title: 'Detail' },
-  ],
-  {
-    deriveSpec: (route) => 'pages/' + route.replace(/^\//, '').split('/').filter(s => !s.startsWith(':')).join('/'),
-    remotes: { '/remote-a/': 'remote-a' },   // route prefix → remote name
-    schema: remoteSchema,                    // { [remoteName]: { exposes: string[], exists?: boolean } }
-    strict: true,                            // ERROR throws by default; false downgrades to console.error
-  },
-)
+export const PAGES = definePages(pages, {
+  remotes: remotePrefixes,
+  schema: remoteSchema,
+  strict: true,
+})
 ```
+
+Reuse the same pages.data source; React imports these APIs from /react. createHostPages/createReactHostPages already perform this validation, so normal page adapters need no extra PAGES copy. Call definePages directly for standalone validation. Without an explicit spec the default drops the first route segment and :param segments, without adding pages/. Define a custom deriveSpec once and share it between runtime and CLI if needed.
 
 `remoteSchema` is the remote exposes probe result that the plugin fills in automatically during dev; in build it is always an empty table (honest degradation — the build does not know the remote's exposes and skips the R3 check).
 
@@ -69,7 +64,7 @@ Validation rules (R1–R5):
 **Vue: `createHostPages(options)`** (`@fulgurjs/federation/vue`):
 
 ```ts
-import { createHostPages, type PageEntry } from '@fulgurjs/federation/vue'
+import { createHostPages } from '@fulgurjs/federation/vue'
 import { pages, remotePrefixes } from './pages.data'
 
 export const hostPagesRuntime = createHostPages({
@@ -98,7 +93,7 @@ Behavior contract:
 - `remotePrefixes` uses **longest-prefix-first**; a page route without a matching prefix errors at creation (fail fast);
 - The component is a local wrapper component (stable name for KeepAlive matching) and does not modify the component object exported by the remote module; attrs/slots are passed through in full;
 - Load order: `beforeLoad` → optional remote `setup`/`onSession` → page module; failures enter the error state (explicit error code/root cause/fix) with no silent fallback;
-- Page-level keep-alive: add `keepAlive: true` to a page entry (off by default, cache cap max=8 LRU); if a kept-alive page registers window-level listeners/timers/context back-registrations, it must clean them up inside the component (a kept-alive page only unmounts when evicted by the LRU).
+- Page-level keep-alive: add `keepAlive: true` to a page entry (the page-table flag defaults off; the host must render Vue KeepAlive and choose its max/key); if a kept-alive page registers window-level listeners/timers/context back-registrations, it must clean them up inside the component (a kept-alive page only unmounts when evicted by the LRU).
 
 **React: `createReactHostPages(options)`** (`@fulgurjs/federation/react`):
 
@@ -116,13 +111,21 @@ const hostPages = createReactHostPages({
 })
 
 // The routing layer creates the routes itself (the plugin ships no Router): React Router 7 example
-// <Route path="/remote-a/home" element={createElement(hostPages.component('pages/remote-a/home'))} />
+// <Route path="/remote-a/home" element={createElement(hostPages.component('remote-a/pages/remote-a/home'))} />
 // Parameterized routes read params via useParams/useSearchParams and pass them as props to the component(spec) output
 ```
 
 - Shares the same page-table data and the same `definePages` R1–R5 validation as the Vue side; `resolve(path)` behaves identically (base stripping, longest prefix, param decoding, query/hash, returns `null` on no match);
 - `component(spec)` returns a React component type; the routing layer renders it with JSX/`createElement` (no `.element()` alias is provided);
 - Component cache is reused per spec and login generation; rebuilt **only when a new non-empty `sessionKey` arrives** (logout to `undefined` does not rebuild); no `keepAliveNames` (no keep-alive promise).
+
+### Page specs, route matching, and keep-alive ownership
+
+- Page-table `spec: 'pages/remote-a/home'` is an **expose key**. `component('remote-a/pages/remote-a/home')` and `resolve(...).spec` use a **full loading spec**, including the remote name. Do not interchange them.
+- `resolve(path)` returns `params`, matching ordinary static segments and `:param` segments after removing query/hash. It neither turns query/hash into props nor implements arbitrary optional/regex/wildcard Router syntax. The host router handles navigation; business code passes parameters explicitly.
+- `keepAlive: true` only adds the wrapper name to `keepAliveNames`. It creates no cache. The host renders `<KeepAlive :include="hostPagesRuntime.keepAliveNames" :max="8">` around the real RouterView content; 8 is a project-selected example.
+- Wrapper names select the include list, not cache keys. The key assigned by the host decides whether parameter variants use separate instances. Scroll restoration remains a router/page responsibility.
+- Remove cached private pages on logout. Deactivation is not unmounting; pause visible-page listeners/polling on deactivation and resume on activation.
 
 ## ③ Hand the page table to the CLI: the `hostPages` named export
 
@@ -172,7 +175,7 @@ Complete runnable example: [examples/demos/pages-cli](https://github.com/chenmin
 
 ## Page unmount cleanup checklist
 
-Federation **component-level** unmounting does not automatically clean up window-level resources (unlike qiankun's forced `unmount` cleanup) — the resources below must be removed by the page component itself in `onUnmounted` (React: effect cleanup), otherwise leaving and returning re-registers / re-fires them:
+Federation **component-level** unmounting does not automatically clean up window-level resources — the resources below must be removed by the page component itself in `onUnmounted` (React: effect cleanup), otherwise leaving and returning re-registers / re-fires them:
 
 | Resource | How to clean it up |
 |---|---|
@@ -193,4 +196,4 @@ onUnmounted(() => {
 })
 ```
 
-> A lightweight reminder, not a plugin mechanism: the vast majority of pages only make data requests (which end naturally when the component is destroyed) and need no cleanup at all; pages with global side effects just walk through this checklist item by item. A full sub app mounted through the bridge relies on the contract's `unmount` for container-level cleanup; an error thrown from `unmount` permanently blocks that container (only a full page refresh recovers), so the child app's cleanup logic must be robust. Pages under `keepAlive` unmount only when actually evicted by the LRU.
+> A lightweight reminder, not a plugin mechanism: unmounting does not automatically cancel fetch/axios requests; pass a business AbortSignal when cancellation is needed and at least reject late writes to disposed instances; pages with global side effects just walk through this checklist item by item. A full sub app mounted through the bridge relies on the contract's `unmount` for container-level cleanup; an error thrown from `unmount` permanently blocks that container (only a full page refresh recovers), so the child app's cleanup logic must be robust. Pages under `keepAlive` unmount only when actually evicted by the LRU.

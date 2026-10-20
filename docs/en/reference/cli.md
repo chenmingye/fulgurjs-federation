@@ -1,6 +1,6 @@
 # CLI reference: `fulgurjs`
 
-> All commands run purely locally (of `explain`/`check-pages`/`doctor`, only doctor and check-pages access site URLs per their arguments); none read tokens/environment secrets. Single-project shape: `fulgurjs.config.ts` sits in the application root, and commands read `./fulgurjs.config.ts` by default.
+> Running locally does not mean offline or read-only: create installs dependencies by default, types synchronizes remote declarations, check-pages/doctor request sites, and init/port may write files. explain interprets local configuration. The CLI does not automatically attach business tokens; project config is executed code whose imports/environment reads follow that config. Single-project commands default to ./fulgurjs.config.ts at the application root; see each command for network, writes and exit codes.
 >
 > Entry selection mnemonic (for application code imports): Vue apps `@fulgurjs/federation/vue` | React apps `/react` | framework-agnostic modules `/runtime` | Vite config uses the package root (`federation(options)`).
 
@@ -12,7 +12,7 @@
 | `fulgurjs init` | Existing project: generate a starter config / validate a config | Template written or validation passed |
 | `fulgurjs explain` | Explain this app's effective federation shape and load chain | Explanation succeeded |
 | `fulgurjs types` | Remote types: providers validate declaration generation / hosts sync declarations (run before typecheck in CI) | Generation + sync + discovery checks all pass |
-| `fulgurjs check-pages` | Host page table ↔ remote manifest contract verification | No deterministic errors and verified |
+| `fulgurjs check-pages` | Host page table ↔ remote manifest contract verification | No deterministic errors; unverified results are allowed unless --require-verified is set |
 | `fulgurjs doctor` | Deployment/config layer checkup | No FAILs |
 | `fulgurjs port` | Unified port change across a template project | Plan generated or write succeeded |
 | `fulgurjs --help` | Help | — |
@@ -60,7 +60,7 @@ fulgurjs create <template> [--dir <path>] [--no-install] [--force] [--json]
 ```bash
 # Success: created and installed
 $ npx @fulgurjs/federation create vue-vue --dir my-federation
-[fulgurjs:create] Created the full project /path/my-federation (template vue-vue, plugin dependency 6.1.8)
+[fulgurjs:create] Created the full project /path/my-federation (template vue-vue, plugin dependency from the actual template package.json)
 Next steps:
   cd "/path/my-federation"
   pnpm dev                # starts every app in launch order; any failure exits the whole group with the reason

@@ -1,6 +1,6 @@
 # 共享依赖：singleton、版本裁决与作用域
 
-> shared 让多个应用共用同一个依赖实例（如同一份 Vue/React 运行时、同一家 Pinia store），避免双实例崩溃与体积冗余。裁决语义对齐 webpack Module Federation。
+> shared 让多个应用共用同一个依赖实例（如同一份 Vue/React 或 Pinia 库运行时；业务 store 实例仍由各应用创建/显式传递），避免双实例崩溃与体积冗余。裁决语义对齐 webpack Module Federation。
 
 ## 基本用法
 
@@ -14,7 +14,7 @@ export default {
   shared: {
     // 完整写法（SharedHint 全项见下）
     vue: {
-      singleton: true,            // 全页单实例（Vue/React 等需要同一运行时身份的库设 true）
+      singleton: true,            // 同一 shareScope + shareKey 单实例（Vue/React 等需要同一运行时身份的库设 true）
       requiredVersion: '^3.4.0',  // semver 全语法；false = 接受任意；缺省从本应用 package.json 推断
       strictVersion: false,       // 缺省：有本地副本且非 singleton → true（不满足即抛 MFU-003）
     },
@@ -25,7 +25,7 @@ export default {
 } satisfies FederationOptions
 ```
 
-原则：**只列「项目实际安装且跨应用共享」的库**。不要把业务库（组件库/dayjs 等）放 shared——插件会在预构建与构建期自动处理其内部对 shared 键的引用。独立 Router/store 的完整子应用隔离设计是合法的——不是所有共享项都必须 singleton。
+原则：**只列「项目实际安装且跨应用共享」的库**。初次接入不必把组件库、dayjs 等所有依赖都列入 shared；它们内部对已声明 shared 键的引用由插件处理。确实需要共享某个库的实例/插件注册状态时，可显式加入，但要验证版本兼容与样式影响；shared 不提供 CSS 隔离。独立 Router/store 的完整子应用隔离设计是合法的——不是所有共享项都必须 singleton。
 
 ### 完整子应用是否共享 vue-router
 
@@ -53,11 +53,11 @@ export default {
 
 ## 版本裁决规则
 
-1. **满足 requiredVersion 的最高版本胜出**；多个候选版本本身不是错误（`^2.1.7` 包含 `2.3.1`，不能仅凭两个版本号不同判定不兼容）；
-2. **已加载版本永不替换**——第一个被加载的实例在场时，后续请求协商到它；
-3. **singleton 收敛到唯一实例**——全员拿到同一家，无论谁先加载；
-4. `strictVersion` 冲突抛 `MFU-003`；
-5. `MFU-010` 仅在**最终选中的单例版本不满足某个消费方的 requiredVersion** 时告警：列出候选版本、实际提供方、影响与修法；同一版本组合只提示一次。
+1. **非 singleton**：在当前 `shareScope + shareKey` 中选满足 `requiredVersion` 的最高版本；不同消费条件可以使用不同版本，不强制所有应用拿同一个实例。
+2. **singleton**：优先复用已加载版本；没有已加载版本时选当前已注册候选中的最高版本。`requiredVersion` 用于检查这次单例选择是否兼容，不用于偷偷选择第二个单例。
+3. **singleton 不等于固定版本**：首次加载时已注册哪些提供方会影响选择；实例使用后不会为后注册版本热替换。版本对齐或准确的范围约束仍然必要。
+4. 选中的单例不满足范围时，`strictVersion: true` 抛 `MFU-003`；否则 `MFU-010` 告警并继续复用。非 singleton 无满足候选时，strict 模式抛错，非 strict 模式可用本地 fallback；无 fallback 则报共享缺失。
+5. 以上为默认裁决。配置 `runtimePlugins.resolveShare` 时，以该 hook 的显式裁决和错误契约为准，见下节。
 
 加载顺序（dev 与 prod 一致）：应用/容器初始化时插件生成的 init 模块调用 `initSharing(shareScope)` 建作用域并把各 `shared` 键经 `registerShare` 登记；随后业务代码里对该键的导入被改写为经 `loadShare` 协商——同步消费者拿已就绪/同步可用的实例，异步消费者等待协商结果。`initSharing`/`registerShare` 一般由 init 模块自动完成，手工调用只用于自定义运行时。
 
@@ -98,9 +98,9 @@ singleton 不把不兼容的大版本变成兼容——React 18 的 renderer 不
 |---|---|---|
 | 提供 `exposes`（或 `setup`）的应用 | `true` | 被宿主消费的组件需协商到宿主实例 |
 | 纯宿主（只消费） | `false` | 自身 import 即自身 provide，避免巨型工程 TLA/循环依赖风险 |
-| 双向联邦（既 expose 又消费） | `true` | 4.1.0 起按角色推断，无需显式背诵；**显式配置永远优先** |
+| 双向联邦（既 expose 又消费） | `true` | 按角色推断；**显式配置永远优先** |
 
-build 下该路径的协商门面自动隔离进插件专属 chunk（`fulgurjs-runtime` + `fulgurjs-shared-<key>`）；共享包本体（含其静态闭包）自动隔离进 `fulgurjs-provider-<key>` 组（5.8.0 起，优先于用户 `manualChunks` 分组——防自等待环与跨 chunk TDZ），**业务自身的 manualChunks 分组规则可原样保留**；不保证用户任意模块图无循环。
+build 下该路径的协商门面自动隔离进插件专属 chunk（`fulgurjs-runtime` + `fulgurjs-shared-<key>`）；共享包本体（含其静态闭包）自动隔离进 `fulgurjs-provider-<key>` 组（优先于用户 `manualChunks` 对这些依赖的分组，避免自等待环与跨 chunk TDZ），**业务自身的 manualChunks 分组规则可原样保留**；不保证用户任意模块图无循环。
 
 ## 诊断
 

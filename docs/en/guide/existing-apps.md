@@ -12,6 +12,8 @@ For a first complete application integration, start with the [single-path guide]
 | Authentication/session | Explicit host context/sessionKey | No mandatory session/context files for apps without this need |
 | Global components/ancestor injection | Declare required setup.globalComponents/pageProviders | Do not wrap every component in the whole business app |
 
+For host-provided forms and other components, prefer `exposes + remoteComponent` for a fixed provider; choose `getContext` injection when several hosts supply different implementations. A host can provide components and a full child can consume them. See [decision rules and the recommended example](components-and-modules.md#providing-host-components-to-a-child-recommendation-and-decision-rules) for two forms, Providers and store ownership.
+
 Use the layout below for new integration code. Existing business views may call the API directly; keep new wiring and helpers together instead of creating separate trees for each API example.
 
 ## Keep integration files together

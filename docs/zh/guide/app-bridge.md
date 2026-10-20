@@ -1,6 +1,6 @@
 # 子应用桥接：完整子应用嵌入（Vue ↔ React）
 
-已有应用同时需要独立启动与桥接时，先读[统一装配指南](existing-apps.md)。
+已有应用同时需要独立启动与桥接时，**推荐 `defineApplication` 共用一份装配**，先读[首次接入](first-integration.md)与[统一装配指南](existing-apps.md)。本页的 `defineBridgeApp` 用于只提供桥接入口或需要单独桥接契约的场景；不是要求再复制一份业务初始化。
 
 > 场景：把一个**完整子应用**（自带 Router/store/菜单）挂进另一框架的宿主——Vue 3 宿主嵌 React 18/19 子应用，或反向。嵌入的是子应用：子应用创建自己的组件树，宿主只提供 DOM 容器；**不做组件类型转换**（Vue 的 `remoteComponent` 不能直接渲染 React 组件）。
 >
@@ -8,12 +8,16 @@
 
 ## 产品范围
 
-- 支持：整站挂载/卸载的双向嵌入；子应用内部路由与宿主 URL 同步（显式开启，见[URL 同步](url-sync.md)，默认关闭=memory 路由）；受控会话（切换/登出）；嵌套（同页多个桥接实例、A→B→C 多层）。
+- 支持：整站挂载/卸载的双向嵌入；子应用内部路由与宿主 URL 同步（显式开启，见[URL 同步](url-sync.md)，默认不建立同步通道；子应用工厂应自行创建 memory 路由）；受控会话（切换/登出）；嵌套（同页多个桥接实例、A→B→C 多层）。
 - 不支持：组件级互转、Angular、SSR/RSC、JS 沙箱、CSS 自动隔离（见[支持范围](../troubleshooting/compatibility.md)与[沙箱边界审计](../../maintainers/沙箱边界审计.md)）。
 
-## 双框架安装合同（桥接宿主必须）
+<a id="双框架安装合同桥接宿主必须"></a>
 
-桥接宿主同时安装 `vue` + `react` + `react-dom`，shared 三键全部 `singleton: true`：
+## 框架依赖怎么安装：同框架与跨框架分开
+
+**同框架桥接只需要本框架**：Vue 套 Vue 不必安装 React，React 套 React 不必安装 Vue。
+
+下面是跨框架模板采用的推荐配置：**由宿主统一提供两套框架运行时**，所以宿主安装 `vue` + `react` + `react-dom`，在同一共享作用域配置三键 `singleton: true`。这是此供给方案的依赖要求，不是桥接工厂无条件导入另一框架。若由子应用自行提供另一框架运行时，需明确该作用域的提供方/消费方及 fallback，不能只删依赖却保留消费配置。
 
 ```ts
 // 桥接宿主 fulgurjs.config.ts
@@ -32,7 +36,7 @@ export default {
 } satisfies FederationOptions
 ```
 
-子应用只装并共享自己的框架（Vue 子应用：`vue`；React 子应用：`react` + `react-dom`）。共享子路径（`react/jsx-runtime`、`react/jsx-dev-runtime`、`react-dom/client`）由 shared 机制协商单实例；宿主侧为 `react`、`react-dom` 配置 shared 是子路径协商的前提。纯 Vue/纯 React 项目的零对方依赖承诺不受影响。缺 singleton 的真实症状（Invalid hook call、双实例状态不互通）见错误码 `MFU-010`——插件按协商机制如实运行，不拦截配置违例。同页有多个 React 大版本时，singleton 不能把不兼容版本变成兼容，需按[版本隔离](sharing.md#sharescope分组隔离react-1819-同页隔离)分 scope。
+子应用只装并共享自己的框架（Vue 子应用：`vue`；React 子应用：`react` + `react-dom`）。共享子路径（`react/jsx-runtime`、`react/jsx-dev-runtime`、`react-dom/client`）由 shared 机制协商单实例；宿主侧为 `react`、`react-dom` 配置 shared 是子路径协商的前提。纯 Vue/纯 React 项目的零对方依赖承诺不受影响。缺少所需实例一致性可能表现为 Invalid hook call 或状态不互通；`MFU-010` 专门表示最终单例版本不满足消费范围，并不是“缺少 singleton”的通用检测码。同页有多个 React 大版本时，singleton 不能把不兼容版本变成兼容，需按[版本隔离](sharing.md#sharescope分组隔离react-1819-同页隔离)分 scope。
 
 ## 子应用侧：`defineBridgeApp`
 
@@ -87,6 +91,16 @@ export default defineBridgeApp((props) => (
 - 首次根提交后的子应用内部错误由**子应用自己的错误边界**负责——宿主 ErrorBoundary/errorCaptured 捕不到跨 root 的渲染错误，插件不冒充兜底。
 
 `defineBridgeApp(工厂, { routing: true })` 的第二参数声明 URL 同步协议，见[URL 同步](url-sync.md)。
+
+## 先选会话方式，再创建宿主组件
+
+| 场景 | 推荐方式 | 宿主需要做什么 |
+|---|---|---|
+| Vue 宿主，登录状态可从响应式业务 store 读取 | 工厂选项 `session: getIdentity` | getter 返回稳定非敏感 ID / null / undefined；不再传 sessionKey prop，不在登录 store 手动 renew/clear |
+| React 宿主，或业务必须显式控制登录代次 | 组件 prop `sessionKey` | 用宿主状态提供非敏感代次；登录/重新认证更新、token 轮换保持、退出置 null；同页多个桥接实例共用同一代次 |
+| 无登录/会话依赖的公开应用 | 两者都省略 | 不为满足示例创建假身份、空 session 文件或无用 context |
+
+Vue 常规接线见[首次接入的完整代码](first-integration.md#4-有登录依赖才增加业务上下文)。**下方宿主代码演示显式模式**：`loginKey` 来自已有认证状态，不能照抄一个固定字符串；若改用自动模式，配置 `session` 并删除模板的 `:session-key`，二者不能并用。`getLatestHostContext`、加载/错误组件均代表项目已有实现，按需替换或省略可选配置。
 
 ## 宿主侧：`createVueBridgeApp` / `createReactBridgeApp`
 
@@ -147,7 +161,7 @@ export default function BridgePage() {
 | 场景 | 用什么 | 代价 |
 |---|---|---|
 | 子应用需要宿主实时值（token、用户名等） | 传**稳定回调**（如 `getToken: () => store.token`），子应用调用时取最新值 | 无重挂；适合「读」 |
-| 两边共享一块状态 | 把宿主 store 实例经 `appProps` 或 AppContext 传过去，双方订阅同一实例 | 框架响应式不跨 root，子应用需自行订阅 |
+| 两边共享一块状态 | 把宿主 store 实例经 `appProps` 或 AppContext 传过去，双方订阅同一实例 | 同一 Vue 运行时可追踪显式传入的同一响应式对象；React/跨框架使用明确的订阅适配，不自动互转响应式 |
 | 必须以新 props 重新初始化 | 宿主给桥接组件换 `key` 显式重挂（卸载→重走完整加载链） | 全部状态重置；不要频繁触发 |
 
 跨 root 不继承宿主 provide/inject、Pinia、React Context 或路由——需要的数据经 `appProps`、AppContext、共享实例或子应用自装。
@@ -215,4 +229,4 @@ export default function BridgePage() {
 | `MFU-016` | 桥接准备/挂载/卸载失败（`details.phase` 区分 getContext/mount/unmount；根因含子应用原始错误） | 按 phase 排查子应用初始化代码；unmount 抛错的容器被持久封锁，整页刷新恢复 |
 | `MFU-017` | 会话参数与 AppContext 不一致（受控 sessionKey 与全局会话矛盾、非法值、页面级单会话冲突） | 统一同页受控会话；非法值改为合法字符串/null/省略 |
 | `MFU-013` | 远程声明 onSession 但宿主缺 sessionKey | 宿主登录流程 provide 非敏感登录代次 ID（禁止用 token） |
-| `MFU-010` | 选中单例版本不满足某消费方要求（缺 singleton 时双实例类症状） | 桥接宿主三键 singleton；多 React 大版本分 scope |
+| `MFU-010` | 选中的单例版本不满足某消费方要求 | 对齐版本/准确配置 requiredVersion；必须拒绝则 strictVersion:true；多 React 大版本分 scope |

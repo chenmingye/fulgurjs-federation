@@ -5,6 +5,19 @@
 
 **已有完整应用首次接入**：[单一路径操作](guide/first-integration.md)。
 
+## 先选接入形态，再读对应指南
+
+| 你要完成的事 | 当前推荐 | 先读 |
+|---|---|---|
+| 新建可运行示例工程 | CLI create，整套模板一起安装/运行 | [快速上手](guide/getting-started.md) |
+| 在现有页面使用另一个应用的组件/函数 | exposes + remoteComponent / loadRemote；不加完整应用桥接 | [组件与模块](guide/components-and-modules.md) |
+| 宿主掌握一组远程页面的路由 | 页面表 + createHostPages/createReactHostPages | [逐页接入](guide/remote-pages.md) |
+| 完整应用保留自己的路由、菜单与状态 | defineApplication 共用独立/桥接装配，宿主工厂挂载 | [首次接入](guide/first-integration.md) |
+| 只需自定义桥接入口、不需要独立启动 | defineBridgeApp | [桥接合同](guide/app-bridge.md) |
+| 让完整子应用的内部位置出现在浏览器 URL | 在桥接基础上显式接通 routing，两端都配置 | [URL 同步](guide/url-sync.md) |
+
+宿主/子应用是挂载关系，提供方/消费方是模块关系，允许同一应用兼任两种角色。Vue 应用从 /vue、React 应用从 /react 导入；这不转换组件框架。Vue 常规桥接会话推荐 session getter，React 或需手动管理时用 sessionKey。各指南代码中的业务模块/变量来自真实工程，不是插件自动生成的全局对象。
+
 ## 推荐阅读路径
 
 **第一次接触（从零建工程）**：
@@ -16,7 +29,7 @@
 **已有项目接入**：
 
 1. [快速上手 · 已有项目接入](guide/getting-started.md#已有项目接入) —— `fulgurjs init` / 手工接入，按角色（提供方/消费方/双角色）选配置
-2. 按需深入：[共享依赖](guide/sharing.md)（跨应用同实例）→ [远程页面](guide/remote-pages.md)（逐页接入）或[子应用桥接](guide/app-bridge.md)（整应用嵌入）
+2. 按需深入：[共享依赖](guide/sharing.md)（同作用域的库实例协商，非自动共享业务 store）→ [远程页面](guide/remote-pages.md)（逐页接入）或[子应用桥接](guide/app-bridge.md)（整应用嵌入）
 3. 远程业务页需要登录态时读[子应用桥接](guide/app-bridge.md#会话sessionkey与-appcontext)的 AppContext 一节与 [API 参考 · setup/onSession](reference/api.md#setuponsession-远程初始化生命周期)
 
 **跨框架嵌入（Vue 宿主嵌 React 或反向）**：
@@ -48,7 +61,7 @@
 | [配置参考](reference/configuration.md) | `federation(options)` 全部字段：类型/默认值/省略语义/有效范围；remotes 四形态、SharedHint 全项、hostPages 具名导出 |
 | [API 参考](reference/api.md) | 四个入口的全部公共 API：用途/导入位置/签名/默认值/返回/生命周期/错误边界/完整用法 |
 | [CLI 参考](reference/cli.md) | create / init / explain / check-pages / doctor / port：语法/参数/默认值/副作用/退出码/示例 |
-| [错误码总表](reference/errors.md) | 49 个错误码，逐条现象/原因/修法 |
+| [错误码总表](reference/errors.md) | 全部错误码，逐条现象/原因/修法 |
 
 ### 排错（troubleshooting/）
 

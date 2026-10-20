@@ -2,6 +2,124 @@
 
 > Loading a remote component or function module needs no bridge, no page table, and no login initialization — this is the minimal use of the federation. Import entries: Vue imports from `@fulgurjs/federation/vue`, React from `@fulgurjs/federation/react`, framework-agnostic code from `@fulgurjs/federation/runtime`.
 
+## Providing host components to a child: recommendation and decision rules
+
+**Use `exposes + remoteComponent` when components have a fixed provider and a stable public interface.** Inject component loaders through bridge `getContext` when the current host must choose the implementation and the child supports several hosts. Both approaches are supported today; neither is a deprecated form, and working injection integrations do not need rewriting.
+
+Host/child describe application mounting; provider/consumer describe module loading. **An application host can also provide components, and its child can consume them.** Being called a host does not require passing every component through context.
+
+| Requirement | Recommended approach | Child dependency |
+|---|---|---|
+| A fixed admin/workflow pair; workflow needs two admin forms | Admin exposes two component entries; workflow uses `remoteComponent` | Remote name, expose keys, component props/events |
+| One workflow is mounted by several business hosts, each supplying different forms | Each host injects component loaders through `getContext` | Agreed loader signatures and returned component props/events |
+| Content needs an entire router, state container and application lifecycle | [App bridging](app-bridge.md) | Application bridge contract; do not render a complete application as an ordinary component |
+
+### Recommended example: a host provides two forms
+
+This example reuses **Vue components in Vue**. It also works inside a Vue bridged child, but does not make Vue components renderable by React. Use application bridging for complete cross-framework applications.
+
+The relationships are `admin host → mounts workflow child` and `workflow → loads forms from admin`. They are separate responsibilities, not two complete applications mounting each other. Avoid module-level waits for each other's full application startup.
+
+**1. Expose two component entries in the host.** Preserve existing business files. Add adapters only when actual parameter conversion or environment assembly is needed; do not create forwarding-only files just to expose something.
+
+```ts
+// admin/fulgurjs.config.ts: merge into the existing configuration; preserve remotes/shared.
+import type { FederationOptions } from '@fulgurjs/federation'
+
+export default {
+  name: 'admin',
+  exposes: {
+    './business-form': './src/fulgurjs/exposes/BusinessForm.vue',
+    './schema-form': './src/fulgurjs/exposes/SchemaForm.vue',
+  },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+These paths represent real existing entries or necessary adapters. Pass record IDs and readonly state through props, and report save/cancel through emits. Do not infer them from the host's current URL. Declare props at the provider entry and use generated/synchronized types in the consumer instead of copying another interface.
+
+**2. Configure the provider in the child.** Keep the host's existing child remote configuration. This additional configuration belongs to the child and identifies its component source.
+
+```ts
+// workflow/fulgurjs.config.ts: preserve the existing application bridge expose and other options.
+import type { FederationOptions } from '@fulgurjs/federation'
+
+export default {
+  name: 'workflow',
+  remotes: {
+    admin: { dev: 'http://localhost:5173', prod: '/admin' },
+  },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+Replace these illustrative addresses with the provider's actual development root URL and production mount path, including any Vite base. Both projects must register `federation(fulgurjsConfig)` in their Vite configurations; creating this file alone is insufficient. See [getting started](getting-started.md). Production `/admin` must serve the admin build.
+
+**3. Render inside the child's existing business view.** This example assumes both entries declare `recordId: string` and `readonly?: boolean`; use the actual provider-generated props in your application.
+
+```vue
+<!-- workflow/src/views/ApprovalDetail.vue: use the existing business view. -->
+<script setup lang="ts">
+import { remoteComponent } from '@fulgurjs/federation/vue'
+
+defineProps<{ recordId: string; formKind: 'business' | 'schema' }>()
+const BusinessForm = remoteComponent('admin/business-form')
+const SchemaForm = remoteComponent('admin/schema-form')
+</script>
+
+<template>
+  <BusinessForm v-if="formKind === 'business'" :record-id="recordId" :readonly="true" />
+  <SchemaForm v-else :record-id="recordId" :readonly="true" />
+</template>
+```
+
+This path does not pass these two loaders through `getContext`. Context still carries required user information, the latest-token getter and business events. `remoteComponent` handles remote loading and load-error UI/retry; remote declarations support props inference. It does not supply missing business parameters, permissions or Providers.
+
+### Restore required application environment once
+
+If both entries require the original theme, locale or class-prefix injection, add `setup: './src/fulgurjs/setup.ts'` to the **component provider's** existing configuration:
+
+```ts
+// admin/src/fulgurjs/setup.ts: declarations alone need no empty default function.
+export const pageProviders = [
+  () => import('./exposes/FormProviders.vue').then(m => m.default),
+]
+```
+
+`FormProviders.vue` must reuse the real business Providers and render `<slot />`. Wrap content, not the entire App or RouterView. Actual components, theme and locale configuration come from the original application; an empty Provider does not restore them. Consumers using `remoteComponent` automatically receive this wrapper for both entries, without per-form wrapper duplication.
+
+For example, if the original project already exports `AppProvider` from `src/components/Application`, reuse it as follows. If the original root also configures locale/theme Providers, reuse that configuration and preserve their wrapping order:
+
+```vue
+<!-- admin/src/fulgurjs/exposes/FormProviders.vue -->
+<script setup lang="ts">
+import { AppProvider } from '../../components/Application'
+</script>
+
+<template>
+  <AppProvider><slot /></AppProvider>
+</template>
+```
+
+This assumes that the original export exists. Use the real project path rather than creating an empty `AppProvider` to satisfy the example. This minimal wrapper restores ancestor injection only; reuse the registration source below when global components/directives are also needed.
+
+Check these independently:
+
+- **Global components/directives**: Providers do not copy registries. Reuse the original registration source against the actual consumer app, idempotently per app. Resolve name ownership and never substitute no-op permission directives.
+- **State ownership**: sharing Vue/Pinia packages does not share business stores. Explicitly bind provider-owned stores to their Pinia; see [existing application state binding](existing-apps.md). Do not switch global activePinia around rendering.
+- **Data and lifecycle**: pass complete business parameters, stop timers on unmount and reject late writes to disposed instances. The component decides whether prop changes require a fresh query.
+- **Styles**: Providers do not isolate CSS. Verify real data, readonly behavior, class prefixes and input/select/editor widths rather than CSS request success alone.
+
+### When to inject through `getContext`
+
+If workflow must not know admin's name or address—for example, procurement and production hosts use the same workflow—each host supplies the same business contract through bridge `getContext`, such as `loadBusinessForm` and `loadSchemaForm`. The child invokes the current host's loader instead of hardcoding a host remote spec.
+
+These are **application-defined fields, not built-in plugin APIs**. Agree on arguments, synchronous/asynchronous returns, component props/events, missing-capability errors and a real capability source for standalone operation. Never hide absence with an empty component. Loaders return components already wrapped in their required Providers and fulfill the agreed registration and state-ownership responsibilities.
+
+Passing a component directly or returning one from a local `import()` **does not run the federation setup/pageProviders pipeline**. It also does not automatically receive `remoteComponent`'s remote type synchronization or load-error UI; the caller handles its own loading/error/retry. If the loader actually calls `remoteComponent`, that returned remote component retains its federation loading semantics. Context functions are not reactive subscriptions; do not retain components, data or callbacks from an old session after account changes.
+
+Choose one component acquisition contract. Do not silently fall back from a missing context capability to another remote at the same consumption site. Existing injection integrations that serve multiple hosts can stay as they are, without adding a fixed host dependency merely to use federation.
+
 ## Provider: expose a module
 
 The remote app declares the modules it exposes in `fulgurjs.config.ts`. Ordinary components and function modules can both be exposed directly:
@@ -68,6 +186,8 @@ Semantics:
 
 - **State injection belongs to the consumer too**: a remote component using injected Pinia may resolve a consumer store with the same ID. When provider-owned state is required, pass the provider Pinia instance explicitly. A complete application requiring its own router, stores and lifecycle should use [app bridging](app-bridge.md).
 
+**Error scope**: Vue remoteComponent errorComponent handles module/initialization/Provider loading failures, not exceptions in business component setup/render; handle those in the component or host onErrorCaptured/app.config.errorHandler. React remoteComponent additionally has a render boundary for its component subtree, but still does not catch event-handler or arbitrary async callback errors. A full-app bridge host boundary also does not cover internal errors in another root.
+
 ### Reuse an existing component registration source
 
 If a project already has `registerComponents(app)`, do not copy a second component-library list into setup. Nested user pickers and uploaders may also use global tags, so scanning only the outer form misses dependencies. An ancestor Provider can obtain the actual consumer app through `getCurrentInstance()?.appContext.app` in setup and call the existing registration function. Use a module-level `WeakSet<App>` for idempotence and mark the app only after successful registration. A new bridge app needs its own installation; a one-time container flag is insufficient. Preserve project-specific components and resolve ownership before overwriting names.
@@ -101,7 +221,7 @@ React version notes:
 - Built-in pending placeholder, error placeholder, and error boundary; load failure and render errors are **recorded and displayed separately** (copy distinguishes "load failed" from "render error");
 - Failure recovery punches through the browser's ESM failure cache: after a failure, the entry URL and the container's expose loader get a changed URL on retry (`fulgurjs_retry=N`); concurrent failures advance a single retry generation;
 - **Known boundary**: if a static dependency chunk of an expose fails, same-page retry cannot recover (the browser's module map cached the failure for that dependency URL); a full page refresh is needed — the default placeholder's "Refresh page" is exactly that path (user click only, never an automatic refresh).
-- **Context does not cross from the provider's app root**: same as Vue — React Context created at the provider app's root is invisible inside the consumer tree; exposed surfaces depending on Context carry their own Provider inside the exposed entry component (single source).
+- **Context does not cross from the provider's app root**: same as Vue — React Context created at the provider app's root is invisible inside the consumer tree; declare required React Providers in setup.pageProviders for remoteComponent/createReactHostPages to apply. Alternatively wrap the exposed entry itself; choose one source instead of double-wrapping. Consumer ancestor Providers only apply when using the same Context object; do not pass Context across different renderers/versions.
 
 Complete runnable examples: the host home page of the [vue-vue](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/vue-vue) / [react-react](https://github.com/chenmingye/fulgurjs-federation/tree/master/examples/templates/react-react) templates.
 
@@ -215,4 +335,4 @@ For debugging, `(globalThis as any).__FULGURJS_RUNTIME__` gives direct access to
 | Component renders, but string tags like `<a-divider>` stay as dead elements | — | The remote declares `globalComponents` in its setup module (auto-installed for `remoteComponent` consumers); see [API reference · setup/onSession](../reference/api.md#setup-on-session) |
 | Component renders, but the class prefix turns `undefined-xxx` / theme classes missing (inject miss) | — | The remote declares `pageProviders` in its setup module (ancestor providers auto-wrapped); see the provide/inject note above |
 
-The full 49 codes: [error code table](../reference/errors.md); symptom-based troubleshooting: [troubleshooting index](../troubleshooting/README.md).
+The full error code list: [error code table](../reference/errors.md); symptom-based troubleshooting: [troubleshooting index](../troubleshooting/README.md).

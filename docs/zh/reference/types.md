@@ -12,18 +12,18 @@ Vite 联邦插件配置.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `name` | no | `string` | 见对应 API 合同。 |
-| `filename` | yes | `string` | 见对应 API 合同。 |
-| `exposes` | yes | `Record<string, string \| ExposeHint>` | 见对应 API 合同。 |
-| `setup` | yes | `string` | 可选远程初始化入口：相对本应用根目录的 TS/JS 模块路径。 模块须默认导出 `setup(context)`（应用级，容器首次加载业务模块前执行一次）， 可选具名导出 `onSession(context)`（会话级，按宿主 AppContext.sessionKey 去重执行）。 缺省时无初始化行为（普通 exposes 语义完全不变）。 |
-| `remotes` | yes | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | 见对应 API 合同。 |
-| `shared` | yes | `SharedConfig` | 见对应 API 合同。 |
-| `shareScope` | yes | `string` | 见对应 API 合同。 |
-| `manifest` | yes | `boolean \| Record<string, unknown>` | 见对应 API 合同。 |
-| `runtimePlugins` | yes | `string[]` | 见对应 API 合同。 |
+| `name` | no | `string` | 页面内唯一容器名，字母开头，后续仅字母/数字/下划线/点/连字符；必填。 |
+| `filename` | yes | `string` | 生产容器入口文件名，默认 fulgurjs-remoteEntry.js；部署缓存规则与 doctor --entry 同步调整。 |
+| `exposes` | yes | `Record<string, string \| ExposeHint>` | 对外暴露的模块键与真实源文件映射；组件和普通模块都可暴露。 |
+| `setup` | yes | `string` | 可选初始化模块路径。default setup 函数可省略，但模块必须至少声明 default/onSession/globalComponents/pageProviders 中一项；按应用、会话或消费方的执行粒度见 [setup 合同](api.md#setuponsession-远程初始化生命周期)。 |
+| `remotes` | yes | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | 远程配置；地址必须在实际使用的 dev/prod 环境可解析。 |
+| `shared` | yes | `SharedConfig` | 参与协商的依赖键与消费条件；不自动创建或共享业务 store 实例。 |
+| `shareScope` | yes | `string` | 共享分组名；不同作用域独立协商，默认 default。 |
+| `manifest` | yes | `boolean \| Record<string, unknown>` | 默认开启生产清单；false 关闭，普通模块加载仍可使用，清单相关检查/预载能力受限。 |
+| `runtimePlugins` | yes | `string[]` | 运行时插件模块路径数组，默认空；相对路径按应用根解析。 |
 | `dts` | yes | `boolean \| { dir?: string }` | 远程类型自动生成与同步（见[配置参考](configuration.md)与[API · 远程类型](api.md#远程类型自动生成与同步)）。 |
-| `devSharedSelf` | yes | `boolean` | dev 下自身源码（含依赖，需配合 optimizeDeps.exclude）是否参与 shared 协商改写。 缺省按角色推断：提供 exposes/setup 的应用（纯 remote 与双向联邦）为 true——被宿主 消费的组件需协商到宿主实例；纯宿主（只配 remotes、无 exposes）为 false——自身 import 即自身 provide，避免巨型工程 TLA/循环依赖风险。显式配置永远优先。 |
-| `devCorsOrigins` | yes | `string[] \| "*"` | dev 跨源访问策略（插件端点 /@fulgurjs-entry.js、/@fulgurjs-manifest.json 与 server.cors 共用同一来源）。缺省 = '*'（现状兼容：端点与 server.cors 全放开）；'*' = 显式全放开（不告警）； 数组 = 来源 allowlist（端点按 Origin 反射匹配，不匹配省略头；server.cors 传 { origin: [...] }， 用户显式配置的 server.cors 永远优先）。 |
+| `devSharedSelf` | yes | `boolean` | dev 自身源码参与共享协商；省略时 exposes/setup 提供方为 true、纯消费方为 false。显式值优先；插件处理自身预构建接线，不要求所有工程手动 exclude 全部共享依赖。 |
+| `devCorsOrigins` | yes | `string[] \| "*"` | dev 联邦 entry/manifest/types 端点的来源策略，默认 *；未显式配置 server.cors 时也用于 Vite 源码模块。显式 server.cors 仅覆盖 Vite 侧策略，不覆盖这些插件端点。非 loopback 的通配配置仍可提示 DEV-011；不配置生产 CORS。 |
 
 ## PageRouteLike
 
@@ -35,7 +35,7 @@ Vite 联邦插件配置.
 |---|---|---|---|
 | `route` | no | `string` | 宿主路由路径（:param 段） |
 | `spec` | yes | `string` | 显式 spec（缺省走推导） |
-| `name` | yes | `string` | 其余字段（name/title/...）由宿主自由扩展，校验器按需读取 |
+| `name` | yes | `string` | 宿主路由名称；可扩展 title/keepAlive 等业务字段，不代表插件自动注册路由。 |
 
 ## ShareEntry
 
@@ -45,11 +45,11 @@ Vite 联邦插件配置.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `version` | no | `string` | 见对应 API 合同。 |
-| `get` | no | `() => Promise<any>` | 见对应 API 合同。 |
-| `from` | no | `string` | 见对应 API 合同。 |
-| `eager` | no | `boolean` | 见对应 API 合同。 |
-| `loaded` | yes | `boolean` | 见对应 API 合同。 |
+| `version` | no | `string` | 提供的真实依赖版本号，用于版本协商；不能伪报版本绕过兼容检查。 |
+| `get` | no | `() => Promise<any>` | 加载并返回该版本模块的工厂；成功结果由运行时复用。 |
+| `from` | no | `string` | 提供方标识，用于裁决诊断和来源追踪。 |
+| `eager` | no | `boolean` | 是否作为同步可用的本地共享副本；不表示业务模块自动预载。 |
+| `loaded` | yes | `boolean` | 该提供条目是否已被使用；单例裁决优先复用已加载条目。 |
 | `value` | yes | `any` | 首次 loadShare 成功后缓存的实例值；getLoadedShare 同步查询与 CJS 垫片依赖它 |
 | `pendingGet` | yes | `Promise<any>` | 进行中的 get()：并发 loadShare 共享同一次加载，落定后清除（失败后允许重新加载） |
 
@@ -81,13 +81,13 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `name` | no | `string` | 见对应 API 合同。 |
-| `entry` | no | `string` | 见对应 API 合同。 |
-| `shareScope` | yes | `string` | 见对应 API 合同。 |
-| `timeout` | yes | `number` | 加载超时 ms，默认 15000。注意：超时只代表"调用方不再等待"，浏览器不会取消已发出的 动态 import——下一次调用复用同一条 in-flight 记录，不会重复初始化同一容器。 |
+| `name` | no | `string` | 运行时注册名，与调用 spec 的远程前缀对应。 |
+| `entry` | no | `string` | 远程容器入口 URL；运行时注册填写实际入口文件，不是业务页面地址。 |
+| `shareScope` | yes | `string` | 共享分组名；不同作用域独立协商，默认 default。 |
+| `timeout` | yes | `number` | 容器加载等待上限，默认 15000 ms；不取消浏览器动态 import。 |
 | `retries` | yes | `number` | 失败重试次数，默认 2（上限 10；配置期与运行时注册均校验，非法当场抛错） |
-| `fallback` | yes | `string[]` | 备用 remoteEntry 地址（首个失败后依次尝试） |
-| `breaker` | yes | `{ threshold?: number; resetMs?: number; }` | 见对应 API 合同。 |
+| `fallback` | yes | `string[]` | 主入口失败后依次尝试的备用入口 URL 列表。 |
+| `breaker` | yes | `{ threshold?: number; resetMs?: number; }` | 熔断阈值和恢复等待，默认 threshold=5、resetMs=30000；数值须为有限正数。 |
 | `promise` | yes | `() => Promise<any>` | promise-based remote：运行时解析出容器或容器地址（其解析同样受 timeout 约束） |
 | `manifestUrl` | yes | `string` | 内部：远程自报的发布路径（preload 用） |
 
@@ -99,12 +99,12 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `requiredVersion` | yes | `string \| false` | 见对应 API 合同。 |
-| `singleton` | yes | `boolean` | 见对应 API 合同。 |
-| `strictVersion` | yes | `boolean` | 见对应 API 合同。 |
-| `shareKey` | yes | `string` | 见对应 API 合同。 |
-| `shareScope` | yes | `string` | 见对应 API 合同。 |
-| `fallback` | yes | `() => Promise<any>` | 本地副本兜底（webpack shared.import） |
+| `requiredVersion` | yes | `string \| false` | 本次消费接受的 semver 范围；false 表示任意版本；本运行时调用不再从 package.json 推断。 |
+| `singleton` | yes | `boolean` | 本次消费要求同一 shareScope/shareKey 复用单例；并不把不兼容版本变兼容。 |
+| `strictVersion` | yes | `boolean` | 版本不满足时拒绝；运行时手动调用不继承构建配置推断的默认组合。 |
+| `shareKey` | yes | `string` | 作用域中查找的依赖键，省略使用本次 name。 |
+| `shareScope` | yes | `string` | 共享分组名；不同作用域独立协商，默认 default。 |
+| `fallback` | yes | `() => Promise<any>` | 无可用共享模块时显式加载本地副本；严格版本冲突不被它掩盖。 |
 | `localVersion` | yes | `string` | 内部：本地副本的版本号（fallback 回写共享作用域与 CJS 垫片 pin 使用；不参与快照键） |
 
 ## LoadRemoteOptions
@@ -115,10 +115,10 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `shareScope` | yes | `string` | 见对应 API 合同。 |
-| `retries` | yes | `number` | 见对应 API 合同。 |
-| `fallbackModule` | yes | `() => any` | 见对应 API 合同。 |
-| `consumerApp` | yes | `unknown` | 发起本次加载的消费方应用实例（框架适配器自动传入，业务代码不用手填）： Vue 侧 remoteComponent 捕获当前渲染 app；远程 setup 声明的 globalComponents 会在每次加载时幂等注册到它（桥接子应用每次挂载新建 app 也能拿到注册）。 宿主页面适配器（createHostPages）、React 侧与手动 loadRemote 均不传—— 页面场景组件解析走宿主自身全局注册表，React 无全局注册表概念。 运行时只在当次调用内消费该引用，不保存、不感知具体框架类型。 |
+| `shareScope` | yes | `string` | 共享分组名；不同作用域独立协商，默认 default。 |
+| `retries` | yes | `number` | 加载失败后的重试次数，0–10 整数；省略沿用远程注册值（默认 2）。 |
+| `fallbackModule` | yes | `() => any` | 远程模块加载失败时显式返回替代模块；初始化失败仍抛错，不静默伪装成功。 |
+| `consumerApp` | yes | `unknown` | Vue remoteComponent/createHostPages 自动传入实际消费方 app，供 globalComponents 幂等注册；手动加载与 React 不自动传入。 |
 
 ## PreloadRemoteOptions
 
@@ -128,7 +128,7 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `mode` | yes | `"preload" \| "prefetch"` | 见对应 API 合同。 |
+| `mode` | yes | `"preload" \| "prefetch"` | 默认 preload；prefetch 降低资源提示优先级，不自动空闲调度；见 API 的等待范围。 |
 
 ## RuntimePlugin
 
@@ -138,8 +138,8 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `name` | yes | `string` | 见对应 API 合同。 |
-| `init` | yes | `(hooks: RuntimeHooks) => void` | 见对应 API 合同。 |
+| `name` | yes | `string` | 可选插件诊断名称，便于区分 hook 来源。 |
+| `init` | yes | `(hooks: RuntimeHooks) => void` | 注册插件时接收可填写的 hooks 对象；只安装所需 hook，不在此加载业务页面。 |
 
 ## RuntimeHooks
 
@@ -150,9 +150,9 @@ export type ShareScopeMap = Record<string, ShareScope>
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
 | `resolveShare` | yes | `(shareInfo: { shareKey: string; shareScope: string; requiredVersion?: string \| false; picked?: ShareEntry; available: ShareEntry[]; }) => void \| ShareEntry \| Promise<void \| ShareEntry>` | 覆写共享版本裁决结果：返回 ShareEntry 即生效 |
-| `beforeLoadRemote` | yes | `(info: { remote: string; module: string; }) => void` | 见对应 API 合同。 |
-| `afterLoadRemote` | yes | `(info: { remote: string; module: string; module_ns?: any; }) => void` | 见对应 API 合同。 |
-| `onRemoteError` | yes | `(info: { remote: string; error: FgError; }) => void` | 见对应 API 合同。 |
+| `beforeLoadRemote` | yes | `(info: { remote: string; module: string; }) => void` | 远程加载前的观测 hook；抛错只记录告警，不修改加载裁决。 |
+| `afterLoadRemote` | yes | `(info: { remote: string; module: string; module_ns?: any; }) => void` | 远程加载后的观测 hook，module_ns 为实际结果；抛错不改写结果。 |
+| `onRemoteError` | yes | `(info: { remote: string; error: FgError; }) => void` | 接收远程错误及其 remote 标识，用于日志/诊断，不作为替代模块返回通道。 |
 
 ## RemoteDebugInfo
 
@@ -162,11 +162,11 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `entry` | no | `string` | 见对应 API 合同。 |
-| `status` | no | `"idle" \| "loading" \| "loaded" \| "failed"` | 见对应 API 合同。 |
-| `lastLoadMs` | yes | `number` | 见对应 API 合同。 |
-| `error` | yes | `string` | 见对应 API 合同。 |
-| `setup` | yes | `"failed" \| "none" \| "pending" \| "ready"` | setup 生命周期状态：none=未配置 / pending=执行中 / ready=应用级已完成 / failed=失败可重试 |
+| `entry` | no | `string` | 远程容器入口 URL；运行时注册填写实际入口文件，不是业务页面地址。 |
+| `status` | no | `"idle" \| "loading" \| "loaded" \| "failed"` | 容器状态 idle/loading/loaded/failed；loaded 不等于业务页面异步数据全部完成。 |
+| `lastLoadMs` | yes | `number` | 最近容器加载耗时（毫秒），不是完整业务页面交付耗时。 |
+| `error` | yes | `string` | 最近容器错误的说明字符串；不是 React 错误展示选项。 |
+| `setup` | yes | `"none" \| "pending" \| "ready" \| "failed"` | 远程应用级 setup 状态，不是模块路径；ready 不代表会话或业务请求均已完成。 |
 
 ## FgRuntime
 
@@ -176,22 +176,22 @@ export type ShareScopeMap = Record<string, ShareScope>
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `shareScopeMap` | no | `ShareScopeMap` | 见对应 API 合同。 |
-| `initSharing` | no | `(scopeName?: string) => ShareScopeMap` | 见对应 API 合同。 |
-| `registerShare` | no | `(scopeName: string, name: string, version: string, get: () => Promise<any>, opts?: { from?: string; eager?: boolean; loaded?: boolean; }) => void` | 见对应 API 合同。 |
-| `registerRemotes` | no | `(list: RemoteConfig[]) => void` | 见对应 API 合同。 |
-| `registerRemote` | no | `(remote: RemoteConfig) => void` | 见对应 API 合同。 |
-| `registerPlugins` | no | `(list: RuntimePlugin[]) => void` | 见对应 API 合同。 |
-| `loadShare` | no | `(name: string, opts?: LoadShareOptions) => Promise<any>` | 见对应 API 合同。 |
-| `loadShareSync` | no | `(name: string, opts: LoadShareOptions) => { kind: "ready" \| "local"; value?: any; }` | 见对应 API 合同。 |
-| `prepareShares` | no | `(requests: { name: string; opts: LoadShareOptions; }[]) => Promise<void>` | 见对应 API 合同。 |
-| `getLoadedShare` | no | `(name: string, opts?: LoadShareOptions) => any` | 见对应 API 合同。 |
-| `pinLoadedShare` | no | `(name: string, opts: LoadShareOptions, localVersion: string, instance: unknown) => void` | 见对应 API 合同。 |
-| `loadRemote` | no | `<S extends string, T = FgRemoteModule<S>>(spec: S & FgStaticEntry<S>, opts?: LoadRemoteOptions) => Promise<T>` | 见对应 API 合同（类型注册表语义见 `FgRemoteTypes`）。 |
-| `getContainer` | no | `(name: string) => Promise<any>` | 见对应 API 合同。 |
-| `preloadRemote` | no | `(spec: string, opts?: PreloadRemoteOptions) => Promise<void>` | 见对应 API 合同。 |
-| `parseSpec` | no | `(spec: string) => { remote: string; module: string; }` | 见对应 API 合同。 |
-| `clearSessionState` | no | `() => void` | 见对应 API 合同。 |
+| `shareScopeMap` | no | `ShareScopeMap` | 当前共享注册表；只用于诊断，不直接写业务状态。 |
+| `initSharing` | no | `(scopeName?: string) => ShareScopeMap` | 初始化指定作用域，默认 default；普通工程由插件调用。 |
+| `registerShare` | no | `(scopeName: string, name: string, version: string, get: () => Promise<any>, opts?: { from?: string; eager?: boolean; loaded?: boolean; }) => void` | 登记一个依赖版本与加载工厂；普通工程由插件生成。 |
+| `registerRemotes` | no | `(list: RemoteConfig[]) => void` | 批量登记远程配置，语义同 registerRemote。 |
+| `registerRemote` | no | `(remote: RemoteConfig) => void` | 登记/更新远程配置，当场校验参数；地址为实际入口。 |
+| `registerPlugins` | no | `(list: RuntimePlugin[]) => void` | 安装运行时 hooks；运行后改变共享策略不会改写已求值静态绑定。 |
+| `loadShare` | no | `(name: string, opts?: LoadShareOptions) => Promise<any>` | 异步协商并取得共享模块；普通共享导入由插件转换。 |
+| `loadShareSync` | no | `(name: string, opts: LoadShareOptions) => { kind: "ready" \| "local"; value?: any; }` | 生成的同步门面使用：返回 ready/value 或 local；不支持的异步裁决显式报错，不作为普通加载入口。 |
+| `prepareShares` | no | `(requests: { name: string; opts: LoadShareOptions; }[]) => Promise<void>` | 生成入口执行前预先完成一组共享裁决；高级自定义接入使用。 |
+| `getLoadedShare` | no | `(name: string, opts?: LoadShareOptions) => any` | 同步读取已就绪共享实例，未命中 undefined；不下载模块，严格版本错误仍可抛出。 |
+| `pinLoadedShare` | no | `(name: string, opts: LoadShareOptions, localVersion: string, instance: unknown) => void` | 按实际版本登记已存在实例，不覆盖其他提供方事实；普通接入由插件处理。 |
+| `loadRemote` | no | `typeof loadRemote` | 与对应公开入口的 loadRemote 相同；默认推导已同步入口，显式 `loadRemote<T>` 表示调用方接管类型。 |
+| `getContainer` | no | `(name: string) => Promise<any>` | 加载并 init 远程容器，不执行业务 setup/onSession。 |
+| `preloadRemote` | no | `(spec: string, opts?: PreloadRemoteOptions) => Promise<void>` | 资源预载，不执行模块；prefetch 不自动空闲调度，样式表可能影响当前页面。 |
+| `parseSpec` | no | `(spec: string) => { remote: string; module: string; }` | 拆出 remote 与 ./module；仅远程名时 module 为空。 |
+| `clearSessionState` | no | `() => void` | 作废 onSession 信号与去重记录，不删除 AppContext；退出通常用 clearAppContext。 |
 
 ## RemoteSetupContext
 
@@ -201,9 +201,9 @@ setup/onSession 收到的上下文.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `appContext` | no | `Readonly<Record<string, any>>` | 见对应 API 合同。 |
-| `sessionKey` | yes | `string` | 见对应 API 合同。 |
-| `signal` | no | `AbortSignal` | 见对应 API 合同。 |
+| `appContext` | no | `Readonly<Record<string, any>>` | 调用时取得的只读上下文快照；不是持续响应式订阅。 |
+| `sessionKey` | yes | `string` | 非敏感登录代次；不同于用户 ID/token。声明 onSession 时需要，同一会话保持一致。 |
+| `signal` | no | `AbortSignal` | 本次生命周期取消信号；异步等待后写状态前检查 aborted。 |
 
 ## RemoteSetupModule
 
@@ -213,8 +213,8 @@ setup/onSession 收到的上下文.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `default` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 见对应 API 合同。 |
-| `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 见对应 API 合同。 |
+| `default` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 可选应用级 setup，每个远程容器成功执行一次；不是每个 app/组件实例的装配函数。 |
+| `onSession` | yes | `(ctx: RemoteSetupContext) => void \| Promise<void>` | 按登录代次去重的同步/异步函数；换代失效旧信号，失败可重试。 |
 | `globalComponents` | yes | `Record<string, unknown>` | 远程暴露面依赖的「宿主全局注册组件」声明（键=组件注册名，值=组件对象或零参 loader）： 组件联邦（remoteComponent）把远程组件渲染进消费方 app 上下文，模板里的 字符串标签（如 <a-divider>）按消费方 app 的全局注册表解析——消费方没注册就 渲染成死元素。提供方在此声明后，运行时在每次 loadRemote 时把它们幂等注册到 当次传入的 consumerApp 上；无 consumerApp（无组件上下文的手动加载）时静默跳过。 值推荐「零参 loader（() => import('./X.vue')）」：setup 模块保持零重依赖， 组件只在本框架消费方真实渲染时才加载——Vue 适配器注册时自动包 defineAsyncComponent； 静态组件值仍支持；带 displayName/props/emits 的零参函数保留组件身份，未标记零参函数作 loader。运行时对值原样透传。 |
 | `pageProviders` | yes | `unknown[]` | 远程组件所需的祖先 Provider；元素为组件或零参 loader。由组件适配器包裹实际消费树，不复制提供方整个 app。 |
 
@@ -227,10 +227,10 @@ setup/onSession 收到的上下文.
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
 | `user` | no | `Record<string, any>` | 宿主登录用户原始形态（只读约定） |
-| `getToken` | yes | `() => string` | 取最新 token（拉取式防过期；在使用时调用，避免持有过期 token 快照） |
+| `getToken` | yes | `() => string \| undefined` | 调用时取最新 token，允许 undefined；有效性/刷新由业务认证负责。 |
 | `store` | yes | `unknown` | 宿主 pinia 实例：子应用 useUserStore(ctx.store) 拿共享响应式状态 |
-| `hostApp` | yes | `unknown` | 宿主 Vue App 实例（同 realm 直引用）：全局组件/指令注册目标 |
-| `locale` | yes | `unknown` | EP locale 等 UI 配置（原 W4 字段） |
+| `hostApp` | yes | `unknown` | 宿主 app 引用；子应用全局注册应取得实际消费方 app，不能用该引用替代。 |
+| `locale` | yes | `unknown` | 显式传递的 UI 配置；业务按需消费，不自动安装语言 Provider。 |
 | `events` | yes | `Record<string, any>` | 事件/方法池：events.main.* 宿主提供、events.bpm.* / events.lowcode.* 子应用反向注册 |
 | `sessionKey` | yes | `string` | 非敏感登录代次 ID：宿主每次成功登录/重新登录生成新值，token 刷新但会话未变时沿用。 远程 onSession 按它去重（同一代次只执行一次）。不是用户 ID、不是 token、不作为授权凭证。 远程声明了 onSession 时必填（缺省即 MFU-013）。 |
 
@@ -244,7 +244,7 @@ setup/onSession 收到的上下文.
 |---|---|---|---|
 | `deriveSpec` | yes | `(route: string) => string` | 带参路由的缺省 spec 推导规则（宿主私有约定，如 (route) => `pages/${route 去前缀去 :参}`）。 缺省 = 去掉首段（远程前缀）+ 剥 :参 段（无 pages/ 前缀）—— 推导只需在全部条目间自洽即可保持冲突判定成立。 |
 | `remotes` | yes | `Record<string, string>` | 路由前缀 → remote 名（R3 用：{'/remote-a/': 'remote-a'}）；缺省跳过 R3 |
-| `schema` | yes | `Record<string, RemoteSchemaEntry>` | remote exposes 清单（dev 由 virtual:fulgurjs-remote-schema 提供）；缺省跳过 R3 |
+| `schema` | yes | `Record<string, RemoteSchemaEntry>` | 远程 exposes 探针表；使用公开 remoteSchema，不直接导入内部 virtual 模块。 |
 | `strict` | yes | `boolean` | false = ERROR 降级 console.error（默认 true = throw） |
 
 ## PageViolation
@@ -255,9 +255,9 @@ setup/onSession 收到的上下文.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `rule` | no | `"R1" \| "R2" \| "R3" \| "R4" \| "R5"` | 见对应 API 合同。 |
-| `level` | no | `"error" \| "warn"` | 见对应 API 合同。 |
-| `message` | no | `string` | 见对应 API 合同。 |
+| `rule` | no | `"R1" \| "R2" \| "R3" \| "R4" \| "R5"` | 违例所属 R1–R5 规则编号，详见逐页接入的校验表。 |
+| `level` | no | `"error" \| "warn"` | error 表示确定性合同错误；warn 表示需评估的潜在问题。 |
+| `message` | no | `string` | 包含实际问题与处理建议的说明，用于启动日志或 CLI 报告。 |
 
 ## RemoteSchemaEntry
 
@@ -267,7 +267,7 @@ setup/onSession 收到的上下文.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `exposes` | no | `string[]` | 该 remote 的 exposes 键清单（与 spec 同口径，剥 ./ 前缀比较） |
+| `exposes` | no | `string[]` | 该远程的公开 exposes 键列表，比较时去掉 ./ 前缀。 |
 | `exists` | yes | `boolean` | manifest 是否成功拉取（false 时跳过该 remote 的 R3，诚实降级） |
 
 ## FgRemoteTypes — 远程类型注册表
@@ -302,11 +302,11 @@ Vue 远程组件加载与占位选项.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `loadingComponent` | yes | `Component` | 见对应 API 合同。 |
-| `errorComponent` | yes | `Component` | 见对应 API 合同。 |
-| `retries` | yes | `number` | 见对应 API 合同。 |
-| `delay` | yes | `number` | 见对应 API 合同。 |
-| `timeout` | yes | `number` | 见对应 API 合同。 |
+| `loadingComponent` | yes | `Component` | Vue 加载占位组件，默认不设；不会自动生成业务骨架。 |
+| `errorComponent` | yes | `Component` | Vue 加载错误占位，默认内置诊断/恢复按钮；自定义时完全接管，只接收 error prop。 |
+| `retries` | yes | `number` | 加载失败后的重试次数，0–10 整数；省略沿用远程注册值（默认 2）。 |
+| `delay` | yes | `number` | 显示加载占位前等待毫秒数，默认 200；不是请求超时。 |
+| `timeout` | yes | `number` | 适配器本次等待上限（毫秒），默认不设；超时不取消已发出的共享请求。 |
 
 ## HostPagesOptions
 
@@ -361,9 +361,9 @@ Vue 页面解析和组件创建对象.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `mount` | no | `(el: HTMLElement, props?: Record<string, unknown>, options?: BridgeMountOptions) => void \| Promise<void>` | 首次根提交完成时才算挂载成功；同一容器未卸载前重复 mount 是契约违例 |
-| `unmount` | no | `(el: HTMLElement) => void` | 同步使当前挂载代次失效并清理已创建的 root；未知容器为 no-op |
-| `routing` | yes | `BridgeRoutingProtocol` | 路由协议声明（URL 同步）：defineBridgeApp(工厂, { routing: true }) 时写入 { protocol: 1 }。宿主启用 routing 时必须存在且 protocol === 1（MFU-031）， 不允许静默退回 memory 假装深链成功。 |
+| `mount` | no | `(el: HTMLElement, props?: Record<string, unknown>, options?: BridgeMountOptions) => void \| Promise<void>` | 挂载到给定容器；Promise 成功表示首次根提交，不表示全部业务异步完成。 |
+| `unmount` | no | `(el: HTMLElement) => void` | 同步失效并清理该容器代次；抛错会封锁容器，不能假装可安全重挂。 |
+| `routing` | yes | `BridgeRoutingProtocol` | 契约是否声明 URL 同步协议；不是路由对象或部署 base。 |
 
 ## BridgeSession
 
@@ -433,7 +433,7 @@ Vue 子应用 memory 路由连接与就绪/释放.
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
 | `ready` | no | `Promise<void>` | 必须 await ready 后再 app.use(router)，初始错误会拒绝此 Promise。 |
-| `dispose` | no | `() => void` | 见对应 API 合同。 |
+| `dispose` | no | `() => void` | 幂等释放当前路由连接/订阅；只清理该连接拥有的资源。 |
 
 ## BridgeHostRouting
 
@@ -444,7 +444,7 @@ Vue 子应用 memory 路由连接与就绪/释放.
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
 | `basePath` | no | `string` | 宿主路由视角的静态绝对路径，如 "/approval"；同页各同步实例不得相同或重叠 |
-| `navigation` | no | `BridgeHostNavigation` | 见对应 API 合同。 |
+| `navigation` | no | `BridgeHostNavigation` | 宿主导航端口，由对应框架导航适配器创建；宿主持有浏览器历史。 |
 
 ## ReactBridgeAppOptions
 
@@ -514,7 +514,7 @@ React hook 的数据、错误、状态与重试.
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
 | `data` | no | `Module` | 加载成功后的模块命名空间；开始新尝试（包括 reload）时清空，失败时为 undefined |
-| `error` | no | `unknown` | 失败原因；无错误时恒为 undefined（统一空值） |
+| `error` | no | `unknown` | 本轮加载错误，无错时 undefined；请求代次隔离，不保留上轮错误。 |
 | `loading` | no | `boolean` | 是否有请求在途 |
 | `reload` | no | `() => Promise<void>` | 清空旧数据并重新走加载生命周期；卸载后调用不发起请求。成功模块复用缓存，Promise<void> 正常结束（不抛） |
 
@@ -526,8 +526,8 @@ React 渲染错误边界属性.
 
 | 字段 | 可省略 | 类型 | 说明 |
 |---|---|---|---|
-| `children` | yes | `ReactNode` | 见对应 API 合同。 |
-| `fallback` | yes | `ReactNode \| ((args: { error: unknown; reset: () => void; }) => ReactNode)` | 错误占位：节点或 ({ error, reset }) 渲染函数；默认内置中文占位 |
+| `children` | yes | `ReactNode` | 边界内需要保护的 React 子树；不包含另一桥接 root 的内部错误。 |
+| `fallback` | yes | `ReactNode \| ((args: { error: unknown; reset: () => void; }) => ReactNode)` | 渲染错误时的节点或接收 error/reset 的函数；不是 pending 占位。 |
 | `onError` | yes | `(error: unknown, info: ErrorInfo) => void` | 渲染异常回调（error + React componentStack 信息） |
 | `resetKeys` | yes | `readonly unknown[]` | 任一项变化时重置边界状态（受控重试的常用形态：传 [retryEpoch]） |
 

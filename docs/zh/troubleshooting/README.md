@@ -62,10 +62,10 @@
 | 症状 | 先检查 | 深入 |
 |---|---|---|
 | 重部署后旧 hash chunk 404、全站失败 | remoteEntry 被配了 immutable 长缓存 | 三文件（remoteEntry/manifest/index.html）改 `no-cache`；doctor 对 immutable FAIL |
-| 偶发部分资源 404 | 发布窗口清了旧 chunk | 保留仍被旧页面引用的 chunk；`rsync -a --delete` 整目录一致部署 |
+| 偶发部分资源 404 | 发布窗口清了旧 chunk | 在原 URL 保留旧页面仍引用的 chunk；新资源先上传再切入口，不对服务目录直接 --delete |
 | 资源 200 但内容是 HTML | 回退吞 JS（状态码假象） | doctor 的 chunk 形态检查会拦；修 nginx 回退规则 |
 | pnpm 装 tarball 后 `Cannot find module '@fulgurjs/federation'` | 软链断链 | 重新安装并验证目录可达 |
-| 页面 404/401 资源报错，业务接口后端未实现 | 后端缺端点 | 代理/NGINX 层加诚实空响应垫片（不伪造业务数据），前端按空态渲染 |
+| 页面 404/401 资源报错，业务接口后端未实现 | 后端缺端点 | 核对真实接口、代理前缀和权限；保留实际失败并明确后端缺失，不能用空 200 伪装成功 |
 | e2e 偶发被弹回登录页 | 登录异步链未完成就断言 | 等「登录表单消失」而非固定秒数；慢链留足超时 |
 
 ## 类型获取失败 / IDE 问题
@@ -76,7 +76,7 @@
 | 远程类型提示未提供（TYP-004） | 远程是旧版本插件或配置了 `dts: false` | 页面正常运行；要精确类型请升级远程并保持 `dts: true`，宿主动态字符串走 unknown 边界 |
 | ts(2307) 找不到 `@fulgurjs/federation/*` | IDE TS 服务缓存旧包 | `Restart TS Server`（⌘⇧P）或重开窗口 |
 | 类型缺失或不生效（TYP-006） | 生成目录未被应用 tsconfig include 覆盖（exclude 或严格 `files` 白名单） | 按 TYP-006 给出的最小修法补 include；默认目录在 `src` 下无需配置 |
-| React 精确类型不生效 | 宿主 tsconfig 未配 paths | 按 `_paths.d.ts` 说明配置 `paths`；[React 的 dev 类型](../reference/api.md#react-的-dev-类型双轨) |
+| React 精确类型不生效 | 声明未同步或未被有效 tsconfig 收录 | 保持 dts 开启，先运行 fulgurjs types，再按 TYP-006 修正 include；[当前类型机制](../reference/api.md#远程类型自动生成与同步) |
 
 ## 桥接 / 会话
 
@@ -85,7 +85,7 @@
 | `MFU-015` 契约非法 | `./bridge` 是否用 `defineBridgeApp` 默认导出 | [子应用桥接](../guide/app-bridge.md#子应用侧definebridgeapp) |
 | `MFU-016` 挂载/卸载失败 | `details.phase`；子应用原始错误 | mount 失败先清理再抛；unmount 抛错容器被持久封锁，整页刷新恢复 |
 | `MFU-017` 会话不一致 | sessionKey 三态用法；同页多实例代次 | [会话触发表](../guide/app-bridge.md#会话sessionkey与-appcontext) |
-| `MFU-013` 缺 sessionKey | 远程声明了 onSession 但宿主没给登录代次 | 宿主 provide 非敏感 sessionKey（禁用 token） |
+| `MFU-013` 缺 sessionKey | 远程声明了 onSession 但宿主没给登录代次 | Vue 常规用 session 身份 getter；React/显式模式传同页统一的非敏感 sessionKey，禁止用 token |
 | 换 props 子应用不更新 | appProps 是挂载快照（by design） | 稳定回调 / 共享 store / 换 key 重挂；[快照语义](../guide/app-bridge.md#appprops-快照语义重要) |
 | 登出后子应用残留 | `sessionKey→null` 未传或缓存的私有页面未移除 | null 立即卸载；宿主 `clearAppContext()` 并移除缓存页 |
 | 子应用卸载后定时器/监听重复 | 页面全局副作用未清理 | [卸载清理清单](../guide/remote-pages.md#页面卸载清理清单) |

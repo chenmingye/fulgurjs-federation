@@ -6,14 +6,14 @@
 
 | Dimension | Supported range | Notes |
 |---|---|---|
-| Vite | The 5 / 6 / 7 / 8 series from 5.1 up | Full fixture matrix tested: 5.1.4 / 5.2.12 / 6.4.3 / 7.3.6 / 8.3.0 dev+prod e2e passing; Vite 8 (Rolldown) dev 73/73 + prod 33/33 is a permanent CI matrix entry. A project must satisfy both its Vite's and the framework plugin's version requirements |
+| Vite | The 5 / 6 / 7 / 8 series from 5.1 | Supported majors do not mean every patch or business project has been tested. See [.github/workflows/ci.yml](../../../.github/workflows/ci.yml) for configured coverage and the corresponding commit CI logs for actual results; satisfy framework-plugin compatibility too |
 | Node.js | Plugin itself ≥ 18; **Vite 7/8 requires 20.19+ or 22.12+** | Node cannot be chosen by the plugin's minimum version alone; template projects validate against `engines.node` (≥ 20.19.0) |
 | Vue | 3.2+ (browser side) | Ordinary projects have zero vue-router dependency; URL sync references vue-router on demand |
 | vue-router | 4.1 – 5.x | Used only by URL sync (`createVueBridgeNavigation`/`connectVueBridgeRouter`); history and hash modes both work |
 | React | 18 / 19 (browser side) | Ordinary projects have zero react-router-dom dependency; react-dom and React versions must be compatible |
 | react-router-dom | 6.11 – 7.x | Used only by URL sync; **the host supports the data router only** (`createBrowserRouter`/`createHashRouter` + `RouterProvider`); declarative mode (BrowserRouter) is not supported; ≥ 6.11 (`createMemoryRouter`) |
 | Browser baseline | Chrome 108+ | Needs the corresponding ESM, dynamic import, and top-level await support |
-| Build target | `es2022` or newer | Lower targets fail the build with `BLD-002` (TLA needs it) |
+| Build target | A real browser target supporting TLA, usually es2022 | Omitted target becomes es2022; incompatible explicit targets may produce diagnostics or bundler errors. target does not polyfill business dependencies or establish browser acceptance |
 | Platform scope | macOS and Linux (CI) tested | The template launcher has Windows fallback paths but they are unverified |
 
 ## Supported capability surface

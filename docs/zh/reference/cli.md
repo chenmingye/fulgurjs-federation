@@ -1,6 +1,6 @@
 # CLI 参考：`fulgurjs`
 
-> 全部命令纯本地执行（`explain`/`check-pages`/`doctor` 中只有 doctor 与 check-pages 会按参数访问站点 URL），不读取 token/环境秘密。单项目形态：`fulgurjs.config.ts` 在应用根目录，命令默认读 `./fulgurjs.config.ts`。
+> CLI 在本机运行，不等于离线或无文件写入：create 默认联网安装依赖，types 同步远程声明，check-pages/doctor 按参数请求站点；init/port 可能写文件。explain 解释本地配置。工具不自动附带业务 token；配置是会被加载执行的项目代码，其 import/环境变量读取由配置自身决定。单项目命令默认从应用根读取 ./fulgurjs.config.ts，具体写入、联网和退出码以各命令小节为准。
 >
 > 入口选择口诀（应用代码导入）：Vue 应用 `@fulgurjs/federation/vue` ｜ React 应用 `/react` ｜ 框架无关模块 `/runtime` ｜ Vite 配置用包根（`federation(options)`）。
 
@@ -12,7 +12,7 @@
 | `fulgurjs init` | 已有项目：生成配置起步模板 / 校验配置 | 模板写出或校验通过 |
 | `fulgurjs explain` | 解释本应用有效联邦形态与加载链 | 解释成功 |
 | `fulgurjs types` | 远程类型：提供方验证声明生成 / 宿主同步声明（CI 在 typecheck 前运行） | 生成+同步+发现检查全部通过 |
-| `fulgurjs check-pages` | 宿主页面表 ↔ 远程 manifest 契约核对 | 无确定性错误且已验证 |
+| `fulgurjs check-pages` | 宿主页面表 ↔ 远程 manifest 契约核对 | 无确定性错误；默认允许“无法验证”，CI 要求 --require-verified 才将其作为失败 |
 | `fulgurjs doctor` | 部署/配置层体检 | 无 FAIL |
 | `fulgurjs port` | 模板工程端口统一变更 | 计划生成或写入成功 |
 | `fulgurjs --help` | 帮助 | — |
@@ -60,7 +60,7 @@ fulgurjs create <模板> [--dir <路径>] [--no-install] [--force] [--json]
 ```bash
 # 成功：创建并安装
 $ npx @fulgurjs/federation create vue-vue --dir my-federation
-[fulgurjs:create] 已创建完整工程 /path/my-federation（模板 vue-vue，插件依赖 6.1.8）
+[fulgurjs:create] 已创建完整工程 /path/my-federation（模板 vue-vue，插件依赖以实际模板 package.json 为准）
 后续步骤：
   cd "/path/my-federation"
   pnpm dev                # 按启动顺序拉起全部应用，失败会整组退出并说明原因

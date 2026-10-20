@@ -27,7 +27,7 @@ pnpm dev          # 统一启动器：远程先启动并探活，再启动宿主
 # 打开模板 README 标注的宿主地址（vue-vue 为 http://localhost:5214）
 ```
 
-环境：Node ≥ 20（实测 24.x）、pnpm ≥ 9（推荐 ≥ 12，锁文件由 pnpm 12 生成）。启动器行为：启动前端口预检（占用即拒绝）、按序启动逐个探活、全生命周期监督失败整组退出、Ctrl+C 清理到孙进程。单独调试：`pnpm run dev:remote` / `pnpm run dev:host`（showcase 四个入口）。
+环境以模板 package.json 的 engines、packageManager、锁文件及所用 Vite 的引擎要求共同为准，不是任意 Node 20.x 都可用。使用模板指定的包管理器执行冻结安装，避免换版本重写锁文件。启动器行为：启动前端口预检（占用即拒绝）、按序启动逐个探活、全生命周期监督失败整组退出、Ctrl+C 清理到孙进程。单独调试：`pnpm run dev:remote` / `pnpm run dev:host`（showcase 四个入口）。
 
 ### 默认端口表（远程先于宿主启动）
 
@@ -88,4 +88,4 @@ npm 包仅附带 `examples/templates/` 五个模板；功能 Demo、Jeecg 集成
 
 五个模板在模板根执行 `pnpm build`，再执行 `pnpm prod`；后者直接服务 dist，无需另开远程 dev server。宿主沿用 scripts/dev.config.json 的端口，按真实构建 base 挂载远程。若 dev 占用端口，先在自己的 dev 终端停止服务。Ctrl+C 关闭本次生产服务器；未构建、base 冲突或端口占用会失败，不自动跳过。
 
-功能 Demo 的生产入口从仓库根执行 `node examples/scripts/serve-prod.mjs --scenario <id>`。支持 shared-runtime、errors、pages-cli、same-frame、jeecg；先按对应 README 构建全部应用。生产端口与路径以 examples/scenarios.json 的 production 为准。未登记生产形态的场景不因此自动获得生产支持。这些启动器是本轮未测试的源码改动，正式包模板仍以其发布内容为准。
+功能 Demo 的生产入口从仓库根执行 `node examples/scripts/serve-prod.mjs --scenario <id>`。支持 shared-runtime、errors、pages-cli、same-frame、jeecg；先按对应 README 构建全部应用。生产端口与路径以 examples/scenarios.json 的 production 为准。未登记生产形态的场景不因此自动获得生产支持。仓库源码和 npm 包内模板可能处于不同发布进度，创建工程时以所安装包携带的模板、脚本和锁文件为准。

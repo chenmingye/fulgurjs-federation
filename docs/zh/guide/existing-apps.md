@@ -12,6 +12,8 @@
 | 登录态或会话 | 宿主明确提供 context/sessionKey | 无登录需求时不强制新建 session/context 文件 |
 | 组件依赖全局注册或祖先注入 | 按真实需要声明 setup.globalComponents/pageProviders | 普通组件不默认包装整个业务 app |
 
+宿主向子应用提供表单等组件时，固定提供方推荐 `exposes + remoteComponent`；多个宿主分别提供实现时选 `getContext` 注入。宿主也可以是组件提供方，完整子应用也可以是组件消费方。双表单配置、Provider 与状态约束见[选择依据和推荐示例](components-and-modules.md#宿主向子应用提供组件推荐方式与选择依据)。
+
 后续接入统一推荐下面的目录结构。小项目仍可在已有业务视图调用 API；新增接线、装配和辅助组件集中管理，不因多个 API 示例再创建多套目录。
 
 ## 接入文件集中放在哪里
@@ -160,7 +162,11 @@ void application.start('#app').catch(console.error)
 提供方配置直接指向它，不再增加 bridge.ts 转发文件：
 
 ```ts
-exposes: { './bridge': './src/fulgurjs/exposes/application.ts' }
+// Merge into the existing fulgurjs.config.ts default export.
+export default {
+  name: 'orders',
+  exposes: { './bridge': './src/fulgurjs/exposes/application.ts' },
+}
 ```
 
 独立模式安装 web router 并等待 isReady；桥接开启 routing 时安装同步通道并等待初始深链；不开启 routing 时，返回的本地 memory router 也由插件安装并等待，不需要手动 app.use(router)。宿主开启 URL 同步时仍需 `{ routing: true }`，没有通道会明确失败，不能自动退回一个看似正常的首页。

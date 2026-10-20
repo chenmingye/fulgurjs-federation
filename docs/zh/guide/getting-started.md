@@ -15,15 +15,13 @@ pnpm add -D @fulgurjs/federation
 
 - Node.js：插件本体要求 ≥ 18；但 Vite 7/8 要求 **20.19+**（或 22.12+），按所用 Vite 版本选 Node。
 - 浏览器基线 Chrome 108+（需要 ESM、动态导入、顶层 await）。
-- 构建目标 `es2022` 或更新（低于该目标报 `BLD-002`）。
-- 普通 Vue 项目装 Vue 即可；普通 React 项目装 react + react-dom 即可。Vue/React 项目**不需要**安装对方框架或任何路由库；例外是**桥接宿主**（把另一框架的完整子应用嵌入本应用时，必须同时安装两个框架，见[子应用桥接](app-bridge.md#双框架安装合同桥接宿主必须)）。路由库仅在实际使用 URL 同步时由相应端按需引用（类型层面导入，运行时缺依赖只在真正调用路由同步 API 时报错）。
+- 构建目标按实际浏览器选择支持顶层 await 的目标（通常 es2022）；省略时插件设置 es2022。显式设置不兼容目标会产生目标提示或由打包器拒绝 TLA，插件不自动做旧浏览器降级。
+- 普通组件/模块和同框架桥接只需自身框架；不因使用 `/vue` 或 `/react` 就要求安装另一框架或路由库。跨框架模板采用宿主统一提供两套运行时的方案，依赖选择见[桥接框架依赖](app-bridge.md#框架依赖怎么安装同框架与跨框架分开)。URL 同步按实际使用端安装对应路由库；业务自身的 Router 需求仍由业务决定。
 
-包管理器提示（pnpm 用户）：
+包管理器设置以本工程使用的 pnpm 版本与有效配置为准：
 
-- pnpm ≥ 11 默认开启 `minimumReleaseAge: 1440`（24 小时供应链冷却）：刚发布的版本在 24 小时内不会被解析，`pnpm add` 会装到上一个满足冷却期的版本。刚发版就要用最新版时，在 `pnpm-workspace.yaml` 加 `minimumReleaseAgeExclude: ['@fulgurjs/federation@<版本>']`（五模板即此做法），或临时 `pnpm config set minimum-release-age 0`。
-- pnpm 12 遇到未批准的构建脚本（esbuild 等）会把 `allowBuilds: { esbuild: set this to true or false }` 占位提示写进 `pnpm-workspace.yaml` 并以非零码结束安装。把值改成 `true` 后重跑安装即可。
-
-配置只写在当前工程：优先精确豁免已核验的插件版本，不关闭整个机器的冷却保护。pnpm 11 起不再把 `npm_config_*` 当作通用配置来源，不能靠 `npm_config_minimum_release_age=0` 判断限制已解除；配置后核对 `pnpm config get minimumReleaseAgeExclude`、锁文件与实际安装版本。详见 [pnpm 11 配置说明](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/11.0.md)。
+- 发布冷却可能影响可安装版本；当前默认还区分 strict/非 strict 行为，不应把“安装成功”当成“已安装目标版本”。需要豁免刚发布的已核验版本时，仅在本工程 pnpm-workspace.yaml 配置 `minimumReleaseAgeExclude: ['@fulgurjs/federation@<版本>']`，然后核对锁文件及实际安装结果。见 [pnpm 发布冷却设置](https://pnpm.io/settings/dependency-resolution#minimumreleaseage)。
+- 安装因未审核依赖构建脚本失败时，按提示检查项目 `allowBuilds`，仅允许已审核且需要的脚本（如 `esbuild: true`），再重跑安装；不要忽略非零退出码。见 [pnpm 构建设置](https://pnpm.io/settings/build#allowbuilds)。
 
 ## 新建工程：`fulgurjs create`
 
@@ -120,6 +118,7 @@ export default {
 **② `vite.config.ts`**——联邦相关只有两行：
 
 ```ts
+import { defineConfig } from 'vite'
 import federation from '@fulgurjs/federation'
 import fulgurjsConfig from './fulgurjs.config'
 

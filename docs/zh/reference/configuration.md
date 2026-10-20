@@ -13,39 +13,48 @@
 | `remotes` | `Record<string, string \| RemoteEntryConfig \| (() => Promise<any>)>` | 不消费任何远程 | 消费的远程，四种形态见下节。键是 import 前缀，不得含 `@`、`/`、空白（CFG-003） |
 | `shared` | `string[] \| Record<string, string \| SharedHint>` | 不共享任何依赖 | 共享依赖。字符串简写 = `requiredVersion`；数组 = 每项按 package.json 推断。字段全集见[共享依赖指南](../guide/sharing.md#sharedhint-全部字段) |
 | `shareScope` | `string` | `'default'` | 默认共享作用域名；各项可用 `shared[*].shareScope` 覆盖 |
-| `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` 关闭；其余值开启（对象形态不提供额外字段配置）。prod 构建生成 `fulgurjs-manifest.json`——`preloadRemote` 与 `check-pages`/`doctor` 依赖它；关闭后这两类能力不可用 |
+| `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` 关闭；其余值开启（对象形态不提供额外字段配置）。prod 构建生成 `fulgurjs-manifest.json`——关闭不影响普通 loadRemote；preloadRemote 降为仅预载入口，check-pages 缺清单时无法验证 exposes；doctor 可通过 --no-manifest 继续检查其他端点 |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（相对路径按应用根解析）。hook 错误契约：观测 hook 抛错只告警；`resolveShare`（决策 hook）显式抛错向调用方传播。见 [API 参考 · 运行时插件](api.md#运行时插件) |
-| `dts` | `boolean \| { dir?: string }` | `true` | 远程类型自动生成与同步。提供方：dev 后台生成、随 prod 构建输出**可分发声明资源**（声明闭包 + 类型清单，不依赖远程本机源码）；宿主：dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`）并生成 ambient 声明与类型注册表——普通 import、动态 import 与字符串 API（`loadRemote`/`remoteComponent`/桥接工厂）共用同一套类型。`{ dir }` 自定义输出目录；`false` 完全关闭。含 `.vue` 暴露的提供方需 `vue-tsc`（模板已带）。见 [CLI · types](cli.md#types) |
+| `dts` | `boolean \| { dir?: string }` | `true` | 远程类型自动生成与同步。提供方：dev 后台生成、随 prod 构建输出**可分发声明资源**（声明闭包 + 类型清单，不依赖远程本机源码）；宿主：dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`）并生成 ambient 声明与类型注册表——普通 import、动态 import 与字符串 API（`loadRemote`/`remoteComponent`/桥接工厂）共用同一套类型。`{ dir }` 自定义输出目录；`false` 完全关闭。含 `.vue` 暴露的提供方需 `vue-tsc`（模板已带）。见 [CLI · types](cli.md#fulgurjs-types) |
 | `devSharedSelf` | `boolean` | 按角色推断：提供 `exposes`/`setup` 的应用 `true`；纯宿主 `false`；**显式配置永远优先** | dev 下自身源码（含依赖）是否参与 shared 协商改写。双向联邦缺省即 `true` 无需显式。build 下协商门面自动隔离进插件专属 chunk，业务 manualChunks 可保留 |
-| `devCorsOrigins` | `string[] \| '*'` | `'*'`（缺省与显式 `'*'` 行为相同，差别只在是否提醒 DEV-011） | dev 跨源访问策略：插件端点（`/@fulgurjs-entry.js`、`/@fulgurjs-manifest.json`）与 `server.cors` 共用同一来源。数组按 Origin 反射 allowlist（未命中省略头）。**只作用于 dev**；用户显式配置的 `server.cors` 永远优先。形态非法报 CFG-010 |
+| `devCorsOrigins` | `string[] \| '*'` | '*' | dev 联邦 entry/manifest/types 端点按本项响应；Vite 源码模块在 server.cors 省略时沿用本项，显式 server.cors 仅覆盖 Vite 侧。省略与显式 * 均可能在非 loopback 提示 DEV-011；不修改生产服务器。 |
 省略语义小结：`manifest`/`dts` 省略 = 开启/默认；`setup` 省略 = 无初始化行为；`shared`/`exposes`/`remotes` 省略 = 对应能力关闭（都不配 = 孤岛配置，得到 CFG-006 类提醒：既不提供也不消费）。
 
 ## remotes 的四种形态
 
 ```ts
-remotes: {
-  // ① 字符串单地址：dev 自动拼 /@fulgurjs-entry.js，prod 自动拼 filename
-  'remote-a': 'http://localhost:5101',
+import type { FederationOptions } from '@fulgurjs/federation'
 
-  // ② '自报名@url'：重命名语义（仅字符串形式支持；对象 dev/prod 槽位写 name@ 即 CFG-007）
-  'checkout': 'shop@http://localhost:5102',
+export default {
+  name: 'host',
+  remotes: {
+    // ① 字符串单地址：dev 自动拼 /@fulgurjs-entry.js，prod 自动拼 filename
+    'remote-a': 'http://localhost:5101',
 
-  // ③ 对象：dev/prod 显式拆分 + 容错参数（除 dev/prod 全部可选）
-  'remote-b': {
-    dev: 'http://localhost:5103/remote-b',   // 缺省回落 external
-    prod: '/remote-b',                       // 缺省回落 external
-    shareScope: 'default',                   // 该远程的共享作用域
-    timeout: 15000,            // 加载超时 ms（有限正数，配置期校验 CFG-009；省略用默认 15s）
-    retries: 2,                // 失败重试次数（0–10 整数；省略默认 2）
-    fallback: ['http://backup/remote-b'],  // 备用 remoteEntry，依次尝试
-    breaker: { threshold: 5, resetMs: 30000 }, // 连续失败熔断（数值均须有限正数）
-  },
+    // ② '自报名@url'：重命名语义（推荐字符串形式；对象 external 也支持，dev/prod 槽位写 name@ 即 CFG-007）
+    'checkout': 'shop@http://localhost:5102',
 
-  // ④ 函数：promise-based remote（构建时地址未知；等价 webpack "promise new Promise"，
-  //    需在运行时配合 registerRemote 注册；配置中的键仍用于改写 import 语法，并发警告）
-  'remote-c': () => fetch('/api/remote-url').then(r => r.text()),
-}
+    // ③ 对象：按环境拆分 + 容错参数（external/dev/prod 至少一项；每种实际运行环境必须能解析出地址）
+    'remote-b': {
+      dev: 'http://localhost:5103/remote-b',   // 缺省回落 external
+      prod: '/remote-b',                       // 缺省回落 external
+      shareScope: 'default',                   // 该远程的共享作用域
+      timeout: 15000,            // 加载超时 ms（有限正数，配置期校验 CFG-009；省略用默认 15s）
+      retries: 2,                // 失败重试次数（0–10 整数；省略默认 2）
+      fallback: ['https://backup.example.com/remote-b/fulgurjs-remoteEntry.js'],  // 备用 remoteEntry，依次尝试
+      breaker: { threshold: 5, resetMs: 30000 }, // 连续失败熔断（数值均须有限正数）
+    },
+
+    // ④ 函数：promise-based remote（构建时地址未知；等价 webpack "promise new Promise"，
+    //    需在运行时配合 registerRemote 注册；配置中的键仍用于改写 import 语法，并发警告）
+    'remote-c': () => fetch('/api/remote-url').then(r => r.text()),
+  }
+} satisfies FederationOptions
 ```
+
+对象 dev/prod 槽位省略时只回落到 external，不互相回落；例如只有 dev 的配置不能保证生产可用。完整 .js URL 在 dev/prod 都原样使用，目录 URL 才拼入口文件名。备用 fallback 填实际入口文件 URL，不填站点目录。
+
+这里的 remotes.fallback 是“备用容器入口”；loadRemote 的 fallbackModule 是“显式替代业务模块”；loadShare 的 fallback 是“本地共享依赖副本”。三者不是同一个开关，不能互换参数。
 
 `timeout` 语义：超时只代表「调用方不再等待」，浏览器不会取消已发出的动态 import——后续调用复用同一 in-flight 记录，不会重复初始化同一容器。
 
@@ -55,7 +64,7 @@ remotes: {
 // ① 开（默认/省略）：全放开——跨 dev-server 协作开箱即用；非 loopback host 时提醒 DEV-011/012
 federation({ name: 'remote-a', exposes: { './Button': './src/Button.vue' } })
 
-// ② 显式全开：同 ①，但不再提醒（声明"我知情"）
+// ② 显式全开：与省略时同样允许 *，非 loopback 时仍可能提醒 DEV-011
 federation({
   name: 'remote-a',
   exposes: { './Button': './src/Button.vue' },
@@ -71,6 +80,8 @@ federation({
 ```
 
 行为边界：`devCorsOrigins` 只作用于 dev（build 产物不受影响）；端点对未命中来源只是省略 `Access-Control-Allow-Origin` 响应头（同源请求不受任何影响）。
+
+若项目另有 server.cors，请将它与 devCorsOrigins 的 allowlist 对齐，分别检查联邦端点和实际 JS/CSS 响应；一处收紧不表示另一处已收紧。上述策略不是认证/鉴权机制。
 
 ## `fulgurjs.config.ts` 的完整形状
 

@@ -18,33 +18,30 @@
 export const remotePrefixes = { '/remote-a/': 'remote-a' }
 
 export const pages = [
-  { route: '/remote-a/home', name: 'RemoteAHome', title: '首页' },
+  { route: '/remote-a/home', spec: 'pages/remote-a/home', name: 'RemoteAHome', title: '首页' },
   { route: '/remote-a/detail/:id', name: 'RemoteADetail', spec: 'pages/remote-a/detail', title: '详情' },
 ]
 ```
+
+<a id="define-pages"></a>
 
 ## ① 定义页面表：`definePages`
 
 `definePages(pages, options?)` 在**启动期**校验「URL 路径 → 远程 exposes 键」映射，带参路由的静默冲突在启动时报错而不是运行时加载错组件：
 
 ```ts
-import { definePages, remoteSchema } from '@fulgurjs/federation/vue'   // React 同名从 /react 导入
+// src/fulgurjs/host/pages.ts
+import { definePages, remoteSchema } from '@fulgurjs/federation/vue'
+import { pages, remotePrefixes } from './pages.data'
 
-export const PAGES = definePages(
-  [
-    { route: '/remote-a/home', name: 'RemoteAHome', title: '首页' },
-    // 带参路由：缺省推导 spec = 去首段 + 剥 :参 段；与其它条目收敛相同时 ERROR，
-    // 指向独立 expose 用 spec 显式覆盖
-    { route: '/remote-a/detail/:id', name: 'RemoteADetail', spec: 'pages/remote-a/detail', title: '详情' },
-  ],
-  {
-    deriveSpec: (route) => 'pages/' + route.replace(/^\//, '').split('/').filter(s => !s.startsWith(':')).join('/'),
-    remotes: { '/remote-a/': 'remote-a' },   // 路由前缀 → 远程名
-    schema: remoteSchema,                    // { [remoteName]: { exposes: string[], exists?: boolean } }
-    strict: true,                            // ERROR 默认 throw；false 降级 console.error
-  },
-)
+export const PAGES = definePages(pages, {
+  remotes: remotePrefixes,
+  schema: remoteSchema,
+  strict: true,
+})
 ```
+
+这里复用上面的唯一 pages.data 数据源；React 从 /react 导入同名 API。createHostPages/createReactHostPages 已包含这套校验，常规页面工厂不必再创建一份 PAGES；独立需要校验结果时才直接调用 definePages。未显式写 spec 时默认去路由首段和 :param 段，不自动加 pages/，需要其他规则时定义一次 deriveSpec 并由运行时与 CLI 共用。
 
 `remoteSchema` 是插件 dev 期自动填充的远程 exposes 探针结果；build 恒为空表（诚实降级——构建期不知道远程 exposes，不做 R3 校验）。
 
@@ -60,12 +57,14 @@ export const PAGES = definePages(
 
 `validatePages(pages, options?)` 是独立导出：返回违例清单不抛错，便于自测。
 
+<a id="page-adapters"></a>
+
 ## ② 生成页面适配器
 
 **Vue：`createHostPages(options)`**（`@fulgurjs/federation/vue`）：
 
 ```ts
-import { createHostPages, type PageEntry } from '@fulgurjs/federation/vue'
+import { createHostPages } from '@fulgurjs/federation/vue'
 import { pages, remotePrefixes } from './pages.data'
 
 export const hostPagesRuntime = createHostPages({
@@ -94,7 +93,7 @@ export const hostPagesRuntime = createHostPages({
 - `remotePrefixes` **最长前缀优先**；页面路由无匹配前缀在创建期即报错（fail fast）；
 - 组件是本地包装组件（稳定 name 供 KeepAlive 匹配），不修改远程模块导出的组件对象；attrs/slots 全量透传；
 - 加载顺序：`beforeLoad` → 远程可选 `setup`/`onSession` → 页面模块；失败进错误态（显式错误码/根因/修法），不静默回退；
-- 页面级保活：页面条目加 `keepAlive: true`（默认关，缓存上限 max=8 LRU）；保活页若有 window 级监听/定时器/context 反向注册，须在组件内自行清理（保活页只在被 LRU 淘汰时才 unmount）。
+- 页面级保活：页面条目加 `keepAlive: true`（页面表标记默认关；宿主必须实际渲染 Vue KeepAlive，max 与缓存 key 由宿主设置）；保活页若有 window 级监听/定时器/context 反向注册，须在组件内自行清理（保活页只在被 LRU 淘汰时才 unmount）。
 
 **React：`createReactHostPages(options)`**（`@fulgurjs/federation/react`）：
 
@@ -112,13 +111,21 @@ const hostPages = createReactHostPages({
 })
 
 // 路由层自己创建（插件不提供 Router）：React Router 7 示例
-// <Route path="/remote-a/home" element={createElement(hostPages.component('pages/remote-a/home'))} />
+// <Route path="/remote-a/home" element={createElement(hostPages.component('remote-a/pages/remote-a/home'))} />
 // 带参路由经 useParams/useSearchParams 取参后作 props 传给 component(spec) 产物
 ```
 
 - 与 Vue 侧共用同一份页面表数据与 `definePages` R1–R5 校验；`resolve(path)` 行为一致（base 剥离、最长前缀、参数解码、query/hash、无匹配返回 `null`）；
 - `component(spec)` 返回 React 组件类型，路由层用 JSX/`createElement` 渲染（不提供 `.element()` 同义入口）；
 - 组件缓存按 spec 与登录代次复用；**仅新的非空 `sessionKey` 到来时重建**（登出变 `undefined` 不重建）；不提供 `keepAliveNames`（不承诺保活）。
+
+### 页面 spec、路由匹配和保活分别由谁负责
+
+- 页面表的 `spec: 'pages/remote-a/home'` 是 **exposes 键**；`component('remote-a/pages/remote-a/home')` 和 `resolve(...).spec` 是 **完整加载 spec**，包含远程名。不要把两个参数混用。
+- `resolve(path)` 返回 `params`，只匹配普通静态段与 `:param` 段，去除 query/hash 后匹配；它不会把 query/hash 自动变成 props，也不是支持任意可选参数/正则/通配语法的完整 Router。宿主路由库负责导航，业务显式传参。
+- `keepAlive: true` 只将包装组件名加入 `keepAliveNames`，不会自动创建缓存。宿主需在真实 RouterView 外使用 `<KeepAlive :include="hostPagesRuntime.keepAliveNames" :max="8">`；这里的 8 是示例值，可自定。
+- 包装组件名用于 include，不是缓存 key。是否按完整 URL 区分同一路由的不同参数，由宿主给渲染组件设置的 key 决定；滚动位置恢复仍需路由/页面自身实现。
+- 登出时移除缓存的私有页面；停用（deactivate）不等于卸载。仅希望页面可见时生效的监听/轮询应在停用时暂停，激活时恢复。
 
 ## ③ 把页面表交给 CLI：`hostPages` 具名导出
 
@@ -168,7 +175,7 @@ npx @fulgurjs/federation check-pages --manifest remote-a=https://cdn.example.com
 
 ## 页面卸载清理清单
 
-联邦**组件级**卸载不会自动清 window 级资源（这与乾坤 `unmount` 的强制清理不同）——以下资源必须在页面组件 `onUnmounted`（React 用 effect cleanup）里自行摘除，否则切走再切回会重复注册/重复触发：
+联邦**组件级**卸载不会自动清 window 级资源——以下资源必须在页面组件 `onUnmounted`（React 用 effect cleanup）里自行摘除，否则切走再切回会重复注册/重复触发：
 
 | 资源 | 清理方式 |
 |---|---|
@@ -189,4 +196,4 @@ onUnmounted(() => {
 })
 ```
 
-> 轻量提醒而非插件机制：绝大多数页面只有数据请求（随组件销毁自然结束），无需任何清理；有全局副作用的页面按清单逐项过一遍即可。桥接挂载的完整子应用由契约 `unmount` 负责容器级清理；unmount 抛错会导致该容器被持久封锁（只能整页刷新），子应用清理逻辑务必健壮。开启 `keepAlive` 的页面只在真正被 LRU 淘汰时才 unmount。
+> 轻量提醒而非插件机制：组件销毁不会自动取消 fetch/axios 请求；需要取消时传业务 AbortSignal，至少在迟到响应写状态前确认实例仍有效。有全局副作用的页面按清单逐项过一遍即可。桥接挂载的完整子应用由契约 `unmount` 负责容器级清理；unmount 抛错会导致该容器被持久封锁（只能整页刷新），子应用清理逻辑务必健壮。开启 `keepAlive` 的页面只在真正被 LRU 淘汰时才 unmount。

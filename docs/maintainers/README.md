@@ -26,6 +26,7 @@
 
 ## 文档维护约定
 
-- 使用者文档一律放 `docs/zh/`（中文）与根 README/API.en.md（英文入口）；维护者文档放本目录；
+- 使用者指南与参考手册分别维护在 docs/zh/（中文）和 docs/en/（英文），根 README.md/README.en.md 是入口；维护者文档放本目录；
+- 文档中的推荐、默认值和边界必须跨指南/参考手册一致；示例参数可替换时写清真实来源，不把项目自建缓存、骨架屏或诊断页面写成插件内置功能。涉及推荐变化，同步中英文并检查链接/示例语法。
 - 私密信息红线：文档不得包含内部项目名、内网地址、验收报告内容——文档是随 npm 包与 GitHub 公开的；
 - 示例与模板工程统一放 `examples/`（模板 `templates/`、演示 `demos/`、集成 `integrations/`、门户 `portal/`、脚本 `scripts/`），场景登记在 `examples/scenarios.json`；新增或移动工程后跑 `npm run test:examples`。

@@ -1,6 +1,6 @@
 # Shared dependencies: singleton, version arbitration, and scopes
 
-> shared lets multiple apps share the same dependency instance (e.g. one Vue/React runtime, one Pinia store), avoiding double-instance crashes and bundle bloat. The arbitration semantics align with webpack Module Federation.
+> shared lets multiple apps share the same dependency instance (such as the same Vue/React or Pinia library runtime; applications still create or explicitly pass their business store instances), avoiding double-instance crashes and bundle bloat. The arbitration semantics align with webpack Module Federation.
 
 ## Basic usage
 
@@ -14,7 +14,7 @@ export default {
   shared: {
     // Full form (all SharedHint fields below)
     vue: {
-      singleton: true,            // single instance for the whole page (use true for Vue/React libraries that require a shared runtime identity)
+      singleton: true,            // single instance per shareScope + shareKey (use true for Vue/React libraries that require a shared runtime identity)
       requiredVersion: '^3.4.0',  // full semver syntax; false = accept anything; omitted = inferred from this app's package.json
       strictVersion: false,       // default rule: with a local copy and non-singleton → true (mismatch throws MFU-003)
     },
@@ -25,7 +25,7 @@ export default {
 } satisfies FederationOptions
 ```
 
-Principle: **only list libraries the project actually installs and wants to share across apps**. Do not put business libraries (component libraries/dayjs etc.) into shared — the plugin handles their internal references to shared keys automatically during pre-bundling and build. A full sub app designed with its own isolated Router/store is legitimate — not every shared item must be singleton.
+Principle: **only list libraries the project actually installs and wants to share across apps**. Do not list every component library, dayjs, or other dependency by default. The plugin handles their references to declared shared keys. Explicitly share such a library when a common instance or plugin-registration state is required, after verifying version compatibility and style effects; shared does not isolate CSS. A full sub app designed with its own isolated Router/store is legitimate — not every shared item must be singleton.
 
 ### Should full sub-apps share vue-router?
 
@@ -53,11 +53,11 @@ Key differences between omitted and explicit values:
 
 ## Version arbitration rules
 
-1. **The highest version satisfying requiredVersion wins**; multiple candidate versions are not an error by themselves (`^2.1.7` includes `2.3.1` — differing version numbers alone never prove incompatibility);
-2. **The already-loaded version is never replaced** — while the first loaded instance is present, later requests negotiate onto it;
-3. **singleton converges onto one unique instance** — everyone gets the same one, regardless of who loaded first;
-4. A `strictVersion` conflict throws `MFU-003`;
-5. `MFU-010` warns only when **the finally selected singleton version fails some consumer's requiredVersion**: it lists candidate versions, the actual provider, impact, and fixes; the same version combination warns only once.
+1. **Non-singleton**: select the highest candidate satisfying `requiredVersion` within the current `shareScope + shareKey`. Different consumption conditions may use different versions; applications are not forced onto one instance.
+2. **Singleton**: prefer an already-loaded version; otherwise select the highest currently registered candidate. `requiredVersion` checks compatibility of that singleton choice, rather than silently selecting a second singleton.
+3. **Singleton does not pin a version**: the providers registered at first consumption affect the result. A used instance is not hot-swapped for a later registration. Align versions or declare accurate compatibility ranges.
+4. An incompatible selected singleton throws `MFU-003` with `strictVersion: true`; otherwise it warns with `MFU-010` and remains selected. For non-singletons without a matching candidate, strict mode throws; non-strict mode may use a local fallback, and missing fallback reports a missing share.
+5. These are the default rules. A configured `runtimePlugins.resolveShare` follows its explicit decision/error contract; see below.
 
 Load order (identical in dev and prod): at app/container initialization, the plugin-generated init module calls `initSharing(shareScope)` to build the scope and registers each `shared` key via `registerShare`; afterwards, imports of those keys in business code are rewritten to negotiate through `loadShare` — synchronous consumers take the ready/synchronously available instance, asynchronous consumers await the negotiation result. `initSharing`/`registerShare` normally run automatically from the init module; manual calls are only for custom runtimes.
 
@@ -98,9 +98,9 @@ singleton does not turn incompatible major versions into compatible ones — Rea
 |---|---|---|
 | Apps providing `exposes` (or `setup`) | `true` | Components consumed by the host must negotiate onto the host instance |
 | Pure host (consume only) | `false` | Its own imports are its own provides, avoiding TLA/circular dependency risk in giant projects |
-| Bidirectional federation (both expose and consume) | `true` | Inferred from role since 4.1.0 — no need to memorize; **explicit configuration always wins** |
+| Bidirectional federation (both expose and consume) | `true` | Inferred from role; **explicit configuration always wins** |
 
-In build, the negotiation facade for that path is automatically isolated into plugin-owned chunks (`fulgurjs-runtime` + `fulgurjs-shared-<key>`); the shared package bodies (including their static closures) are automatically isolated into `fulgurjs-provider-<key>` groups (since 5.8.0, taking precedence over user `manualChunks` groups — preventing self-await cycles and cross-chunk TDZ), **while business `manualChunks` grouping rules are preserved as-is**; no guarantee is made about arbitrary user module graphs having no cycles.
+In build, the negotiation facade for that path is automatically isolated into plugin-owned chunks (`fulgurjs-runtime` + `fulgurjs-shared-<key>`); the shared package bodies (including their static closures) are automatically isolated into `fulgurjs-provider-<key>` groups (taking precedence over user grouping for these dependencies to avoid self-await cycles and cross-chunk TDZ), **while business `manualChunks` grouping rules are preserved as-is**; no guarantee is made about arbitrary user module graphs having no cycles.
 
 ## Diagnostics
 
