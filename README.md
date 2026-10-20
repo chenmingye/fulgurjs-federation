@@ -87,6 +87,7 @@ import { loadRemote, loadShare } from '@fulgurjs/federation/runtime'
 
 | 需求 | 入口 |
 |---|---|
+| 系统架构 / 执行顺序 | [系统架构图](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/architecture.md) |
 | 新建工程 / 已有项目接入 | [快速开始](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/getting-started.md) |
 | Vue/React 组件与普通模块 | [组件与模块](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/components-and-modules.md) |
 | 完整子应用 / 跨框架嵌套 | [子应用桥接](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/app-bridge.md) |

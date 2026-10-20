@@ -2,6 +2,8 @@
 
 > 设计决策与命名约定见 [DESIGN.md](../../DESIGN.md)；与 webpack MF 的能力对照见[对照与缺口](webpack-mf-对照与缺口.md)；测试与发布见本目录 [testing.md](testing.md) / [releasing.md](releasing.md)。
 
+面向使用者的[系统架构图与执行顺序](../zh/guide/architecture.md)（[English](../en/guide/architecture.md)）覆盖三条接入路径、模块加载与完整应用生命周期；图源与更新方式见[图册维护说明](../diagrams/README.md)。本页继续解释实现模块与设计决策。
+
 ## 定位与边界
 
 - 目标：在 Vite 上提供模块联邦能力——远程组件/页面/普通模块、共享依赖协商、完整子应用桥接（含可选 URL 同步）；

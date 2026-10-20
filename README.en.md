@@ -89,6 +89,7 @@ Rule of thumb: import from the entry of the framework your app runs on; framewor
 
 | Need | Entry |
 |---|---|
+| Architecture / execution flows | [Architecture diagrams](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/architecture.md) |
 | New project / existing project | [Getting started](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/getting-started.md) |
 | Vue/React components & plain modules | [Components & modules](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/components-and-modules.md) |
 | Full sub apps / cross-framework nesting | [App bridge](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/en/guide/app-bridge.md) |

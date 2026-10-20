@@ -6,6 +6,8 @@
 
 **已有完整应用首次接入**：[从原入口到真实页面](zh/guide/first-integration.md)。
 
+**先看整体关系**：[系统架构与执行顺序](zh/guide/architecture.md) · [Architecture and execution flows](en/guide/architecture.md)。
+
 ## 文档结构
 
 ```text
@@ -21,6 +23,7 @@ docs/
 │   ├── guide/                 # Guides (by scenario)
 │   ├── reference/             # Reference (config / API / CLI / error codes)
 │   └── troubleshooting/       # Troubleshooting (by symptom / compatibility)
+├── diagrams/                  # 双语图源、SVG/PNG、离线 HTML 与维护说明
 └── maintainers/               # 维护者文档（架构 / 测试 / 发布 / 能力对照）
 ```
 
@@ -28,6 +31,7 @@ docs/
 
 | 你的场景 | 从这里开始 |
 |---|---|
+| 理解系统边界与选择接入路径 | [系统架构图](zh/guide/architecture.md) |
 | 新建一个联邦工程 | [快速上手：安装与创建工程](zh/guide/getting-started.md) |
 | 已有 Vue/React/纯 TS 项目接入（提供方/消费方/双角色） | [快速上手：已有项目接入](zh/guide/getting-started.md#已有项目接入) |
 | 已有应用减少重复启动代码 | [统一装配、状态绑定与接入预检](zh/guide/existing-apps.md) |

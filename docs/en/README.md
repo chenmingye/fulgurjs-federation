@@ -5,6 +5,8 @@
 
 **First complete application integration**：[One end-to-end workflow](guide/first-integration.md)。
 
+**See the whole system**: [Architecture and execution flows](guide/architecture.md) (overview, module loading and full-app lifecycle).
+
 ## Choose the integration shape first
 
 | Goal | Current recommendation | Start here |
@@ -44,6 +46,7 @@ Host/child describe mounting; provider/consumer describe module loading, and one
 
 | Document | Content |
 |---|---|
+| [Architecture diagrams](guide/architecture.md) | Three integration paths, tooling/browser boundaries, session deduplication and mount/unmount order |
 | [Existing application assembly](guide/existing-apps.md) | One factory for standalone/bridge startup, store ownership, preflight and required/optional files |
 | [Getting started](guide/getting-started.md) | Install, scaffold a new project with `create`, integrate existing projects with `init`/manual wiring (Vue/React/pure TS; consumer/provider/dual), concept mapping from qiankun-style frameworks |
 | [Loading components and modules](guide/components-and-modules.md) | remoteComponent (Vue/React), useLoadRemote, RemoteErrorBoundary, loadRemote, dev-time type passthrough |

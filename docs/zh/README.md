@@ -5,6 +5,8 @@
 
 **已有完整应用首次接入**：[单一路径操作](guide/first-integration.md)。
 
+**先看整体关系**：[系统架构图与执行顺序](guide/architecture.md)（总体架构、模块加载、完整应用生命周期）。
+
 ## 先选接入形态，再读对应指南
 
 | 你要完成的事 | 当前推荐 | 先读 |
@@ -44,6 +46,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [系统架构图](guide/architecture.md) | 三条接入路径、开发/浏览器边界、会话去重与挂载/卸载顺序 |
 | [已有应用统一装配](guide/existing-apps.md) | 一份装配同时服务独立启动/桥接、状态绑定、接入预检、必改/可选文件清单 |
 | [快速上手](guide/getting-started.md) | 安装、`create` 新建工程、已有项目 `init`/手工接入（Vue/React/纯 TS；consumer/provider/dual）、从 qiankun 类方案迁入的概念映射 |
 | [组件与模块加载](guide/components-and-modules.md) | remoteComponent（Vue/React）、useLoadRemote、RemoteErrorBoundary、loadRemote、开发类型直连 |
