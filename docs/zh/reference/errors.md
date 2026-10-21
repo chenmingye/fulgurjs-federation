@@ -50,6 +50,7 @@
 | `BLD-002` | 构建报构建目标低于 es2022 | `build.target` 低于 es2022——顶层 await（TLA）需要 | `build.target: 'es2022'` 或更新 |
 | `BLD-003` | 人工检查项：expose 组件缺少必填 props（不自动发射告警） | 组件需要参数，但消费处未传入；插件无法在提供方构建时知道宿主是否传值 | 必填 props 给默认值，或在使用处保证始终传入 |
 | `BLD-006` | 构建报 output 数组形态下无法自动注入协商门面 chunk 隔离 | `build.rollupOptions.output` 是数组，插件无法自动加协商门面 chunk 隔离分支 | 手工在 output 各分支补齐插件提示的隔离规则 |
+| `BLD-007` | 构建报「共享 provider chunk 之间存在静态依赖环」（列出环上 chunk） | 多个 shared 键的本地副本闭包在分块期交错，公共传递依赖被首占归组，provider chunk 互为静态依赖；产物按某种求值序加载即 undefined/TDZ 且无 pageerror 线索 | 把环上其中一个 shared 键改为消费方本地依赖（双方 `shared` 移除该键，消费方直接安装并注册——模板标签按消费方全局注册解析，语义不变）；或减少共享键使闭包不再交错。改完重新构建 |
 
 ### MFU 运行时
 

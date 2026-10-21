@@ -1276,6 +1276,51 @@ export function federation(options: FederationOptions): Plugin[] {
       order: 'post',
       async handler(_opts, bundle) {
         const n = state.normalized
+        // BLD-007：fulgurjs-provider-* chunk 静态环拦截（消费方/提供方通用）。
+        // 多个 shared 键的本地副本闭包交错时（如 ant-design-vue 与 element-plus 的公共
+        // 传递依赖），manualChunks 归组无法在分块期完整预知交错关系，产物会出现
+        // provider chunk 互为静态依赖的环；浏览器按某种求值序加载即
+        // undefined/TDZ（实测 TypeError: Cannot read properties of undefined），且完全
+        // 无 pageerror 级线索。构建期确定性拦截并给出改法，优于交付一个运行期随机
+        // 崩溃的产物。
+        if (state.command === 'build' && n) {
+          const providerGraph = new Map<string, string[]>()
+          for (const [fileName, item] of Object.entries(bundle)) {
+            if (item.type !== 'chunk' || !fileName.includes('fulgurjs-provider-')) continue
+            const edges = [...(item.imports ?? [])].filter((imp) => imp.includes('fulgurjs-provider-') && imp !== fileName)
+            if (edges.length > 0) providerGraph.set(fileName, edges)
+          }
+          const visitState = new Map<string, 0 | 1 | 2>()
+          const visitPath: string[] = []
+          let providerCycle: string[] | null = null
+          const detectCycle = (node: string): void => {
+            if (providerCycle) return
+            const mark = visitState.get(node) ?? 0
+            if (mark === 1) {
+              providerCycle = [...visitPath.slice(visitPath.indexOf(node)), node]
+              return
+            }
+            if (mark === 2) return
+            visitState.set(node, 1)
+            visitPath.push(node)
+            for (const next of providerGraph.get(node) ?? []) detectCycle(next)
+            visitPath.pop()
+            visitState.set(node, 2)
+          }
+          for (const node of providerGraph.keys()) {
+            detectCycle(node)
+            if (providerCycle) break
+          }
+          if (providerCycle) {
+            const ring = (providerCycle as string[]).map((f) => f.split('/').pop()).join(' → ')
+            this.error(formatFulgurjsDiagnostic({
+              code: 'BLD-007',
+              symptom: `共享 provider chunk 之间存在静态依赖环：${ring}。`,
+              cause: '多个 shared 键的本地副本闭包在分块期交错，公共传递依赖被首占归组进其中一个 provider chunk，另一个 provider chunk 反向静态依赖它，形成环。此类产物在浏览器按特定求值序加载时报 undefined/TDZ（如 TypeError: Cannot read properties of undefined），没有对应的 pageerror 级线索。',
+              fix: '把环上的其中一个 shared 键改为消费方本地依赖：从双方 federation({ shared }) 移除该键，消费方直接安装并在应用上注册（模板标签按消费方全局注册表解析，语义不变；仅失去该库的跨应用实例收敛——UI 组件库通常不需要）。或减少共享键使闭包不再交错。改完后重新构建。',
+            }))
+          }
+        }
         if (state.command !== 'build' || !n || n.exposes.length === 0 || !n.manifest) return
 
         // Vite 在 post 阶段补齐 importedCss；样式也可能归属静态依赖 chunk，而非 expose facade。

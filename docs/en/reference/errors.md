@@ -51,6 +51,7 @@
 | `BLD-002` | Build reports a build target below es2022 | `build.target` is below es2022 — top-level await (TLA) needs it | `build.target: 'es2022'` or newer |
 | `BLD-003` | Manual check: required exposed-component props are missing (no automatic warning) | The consumer did not provide a required prop; provider-side builds cannot know whether a host supplies values | Give required props defaults, or guarantee they are always passed at the usage site |
 | `BLD-006` | Build reports that the negotiation facade chunk isolation cannot be injected automatically under an array-shaped output | `build.rollupOptions.output` is an array, so the plugin cannot add the facade chunk isolation branch automatically | Manually complete the isolation rules the plugin suggests in every output branch |
+| `BLD-007` | Build reports "a static dependency cycle between shared provider chunks" (the cycle's chunks are listed) | The local-copy closures of multiple shared keys interleave at chunking time; a common transitive dep is claimed by the first provider chunk and the other statically depends back, forming a cycle. The bundle then fails with undefined/TDZ under some evaluation orders, with no pageerror-level clue | Turn one shared key on the cycle into a plain consumer-local dependency (remove it from both sides' `shared`; install and register it in the consumer — template tags resolve via the consumer's global registry, semantics unchanged); or reduce the number of shared keys so closures no longer interleave. Rebuild afterwards |
 
 #### MFU runtime
 
