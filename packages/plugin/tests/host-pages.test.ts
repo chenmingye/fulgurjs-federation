@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
 import { createHostPages } from '../src/vue-adapter'
 
-const load = vi.fn(async (spec: string) => ({ default: { name: 'Inner', __spec: spec } }))
+const load = vi.fn(async (spec: string) => ({ default: { name: 'Inner', __spec: spec, render: () => null } }))
 
 async function mount(Comp: any): Promise<HTMLElement> {
   const el = document.createElement('div')
@@ -140,7 +140,7 @@ describe('createHostPages：组件加载与会话感知缓存', () => {
       { pages: basePages, remotePrefixes: { '/remote-a/': 'remote-a', '/b/': 'remote-b' }, beforeLoad: () => { order.push('beforeLoad') } } as Parameters<typeof createHostPages>[0],
       async (spec) => {
         order.push('load:' + spec)
-        return { default: { name: 'Inner' } }
+        return { default: { name: 'Inner', render: () => null } }
       },
     )
     const comp = hp.component('remote-a/home')

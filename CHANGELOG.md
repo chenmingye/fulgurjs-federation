@@ -1,5 +1,13 @@
 # 当前发布说明
 
+## 6.12.9
+
+- 新增 MFU-018：远程模块在组件消费边界（remoteComponent/宿主页面）导出的不是可渲染组件时，按实测导出形态报错并给出具体修法（Vue 侧补齐形态判定：函数或含 render/setup/template 的选项对象；React 侧沿用既有 isValidComponentType，共用同一错误）。
+- 新增 MFU-019：Vue 组件直渲染时在适配器边界比对「渲染链 Vue 引用」与「共享作用域实际收敛的 Vue 实例」，证实分裂即报错（附双方版本与修法）；共享收敛一致、双方未声明 shared、自定义 shareScope 或旧远程无元数据时不误拦（可自动确认的边界与限制见错误码文档）。
+- MFU-001 的 details 新增 stage 字段（container/expose），机器可区分容器获取与 expose 求值阶段；远程组件默认错误占位补充网络取证指引（区分 chunk 404、无请求的失败缓存与身份分裂）。
+- `fulgurjs doctor --config` 新增接入风险预检：本地为 Vue 应用且配置远程消费但未声明 shared.vue 时给 WARN（明确"尚未证实双实例"，不判 FAIL）；manualChecks 增加直渲染空白排查的观测边界说明。
+- React 适配器不引入运行时身份自动检查（错误码文档明确该边界）；react-adapter gzip 预算不变。
+
 ## 6.12.7
 
 - 五个可复制模板及包内模板统一精确依赖已发布的基础修复包 6.12.6，使用 registry 实际解析的锁文件并完成冻结安装/构建验证。

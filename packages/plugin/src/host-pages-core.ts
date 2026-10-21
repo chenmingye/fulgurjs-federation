@@ -6,6 +6,9 @@
  * 保活策略由各框架适配器自行负责（不把 Vue 的卸载策略强加给 React，反之亦然）。
  */
 import { definePages, type PageRouteLike, type RemoteSchemaEntry } from './pages'
+// 码值常量只取字符串（不引 FgError 类）：host-pages-core 同时进 Vue/React 适配器 bundle，
+// react-adapter 的 gzip 预算余量极小；错误形态沿用 runtime MFU-002 先例（Error + code/details）。
+import { ErrorCodes } from './runtime/errors'
 
 /** 页面表数据项（两个框架适配器共用；展示项 fallback/error 等在各适配器定义） */
 export interface HostPagesCoreOptions {
@@ -74,11 +77,27 @@ export function shouldResetSessionCache(sessionKey: string | undefined, cached: 
   return sessionKey !== undefined && sessionKey !== cached
 }
 
-/** 远程模块无可渲染导出时的统一报错（Vue/React 适配器共用文案，MFU-006 语义） */
+/**
+ * 远程模块在组件消费边界无可渲染导出（MFU-018）。
+ * 触发条件：remoteComponent / hostPages 已取得远程模块导出，但实测形态不是当前框架
+ * 可渲染组件（null/undefined、原始值、无 render/setup/template 的普通对象等）。
+ * 证据来源：适配器对「实际导出值」的运行时形态检查——不是猜测 exposes 配置。
+ * 合法例外：loadRemote/loadModule 直接消费普通 JS 模块不经组件适配器，不会触发本错误。
+ */
 export function noRenderableExportError(spec: string, inner: unknown): Error {
-  return new Error(
-    `[fulgurjs] 远程模块 "${spec}" 没有导出可渲染组件；当前值类型为 ${inner === null ? 'null' : typeof inner}。\n` +
-      `  修法: 核对远程 exposes 键名与页面表 spec 是否一致（MFU-006 语义）`,
+  const shape = inner === null ? 'null'
+    : typeof inner === 'object' ? `普通对象（键：${Object.keys(inner as object).slice(0, 5).join('、') || '空'}）`
+      : typeof inner
+  return Object.assign(
+    new Error(
+      `现象：远程模块 "${spec}" 已加载成功，但它导出的内容不是可渲染组件（实际形态：${shape}）。\n` +
+        `根因：该 exposes 指向的文件导出的是普通模块/常量，或 default 导出被写成了不可渲染的值；模块加载成功不等于组件可用。\n` +
+        `修法：核对远程 exposes["${spec.slice(spec.indexOf('/') + 1)}"] 指向的文件——组件场景应 export default 一个组件（Vue：defineComponent/<script setup> 组件或函数式组件；React：函数组件或 memo/forwardRef）；若本意是消费普通模块/函数，请改用 loadRemote 而不是 remoteComponent。`,
+    ),
+    {
+      code: ErrorCodes.COMPONENT_EXPORT_INVALID,
+      details: { remote: spec.slice(0, spec.indexOf('/')) || spec, module: spec.slice(spec.indexOf('/') + 1) || undefined, exportShape: typeof inner },
+    },
   )
 }
 

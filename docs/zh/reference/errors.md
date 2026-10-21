@@ -69,6 +69,8 @@
 | `MFU-012` | 该次 `loadRemote` 拒绝，报 setup/onSession 执行抛错（cause 含原始异常） | 初始化代码自身抛错 | 修复 setup/onSession 内部错误后直接重试——只清失败阶段缓存（setup 失败重试从 setup 开始；onSession 失败只重跑会话段），已成功阶段不重复 |
 | `MFU-013` | 运行时报远程声明 onSession 但宿主 AppContext 缺 sessionKey | 宿主未提供非敏感登录代次 ID（禁止用 token 充当） | 宿主登录流程 `provideAppContext({ sessionKey })`——每次成功登录/重登生成新值，token 刷新沿用 |
 | `MFU-014` | 运行时报 setup/onSession 同步段内递归 loadRemote 同一远程 | 初始化同步段内加载同远程模块——该调用会等待自身形成死锁 | 初始化内不要加载同远程模块；跨远程加载放异步段 |
+| `MFU-018` | remoteComponent/宿主页面组件消费时报「导出的不是可渲染组件」（附实际导出形态） | 该 exposes 指向的文件导出了普通模块/常量/不可渲染对象——模块加载成功不等于组件可用 | exposes 指向 `export default` 组件（Vue：defineComponent/`<script setup>`/函数式；React：函数组件或 memo/forwardRef）；消费普通模块改用 `loadRemote` |
+| `MFU-019` | Vue 组件直渲染时报「渲染器与共享作用域收敛的 Vue 实例不一致」（附渲染链/共享实例双版本） | 已证实的实例分裂：至少一方声明 shared.vue，但消费方 vue 导入未收敛到同一实例（未声明 shared.vue、dev 预构建绕过门面、shareScope 不一致）。实例分裂时 inject/Pinia/getCurrentInstance 跨实例断链，常见「外壳在、内部空白且无 pageerror」 | 两侧 `shared` 均声明 vue（建议 singleton）且 shareScope 一致；dev 核对未把 vue 预构建成第二份；需独立 Vue 运行时的完整子应用改用应用桥接，不要 remoteComponent 直渲染。核实：`window.__FULGURJS_SCOPE__.default.vue` |
 | `MFU-015` | 运行时报桥接契约非法（`./bridge` 默认导出缺 mount/unmount 或非函数） | expose `./bridge` 的模块没有用 `defineBridgeApp` 构造契约对象 | 子应用入口改用 `defineBridgeApp(...)` 默认导出（见[子应用桥接](../guide/app-bridge.md)） |
 | `MFU-016` | 运行时报桥接准备或生命周期失败（`details.phase` 区分 getContext/mount/unmount；根因含子应用原始错误） | getContext 返回 Promise/非对象、mount 首次提交前抛错、或 unmount 清理抛错 | 按 phase 排查子应用代码：getContext 返回同步快照对象；mount 失败先清理 app/root 再抛；unmount 修复清理逻辑——unmount 抛错的容器被持久封锁，整页刷新恢复 |
 | `MFU-017` | 运行时报桥接会话参数与 AppContext 不一致 | 受控 `sessionKey` 与全局会话矛盾（getContext 快照不一致）、非法值（空串/数字）、或页面级单会话冲突（多实例代次不一致） | 同页受控桥接实例统一会话；sessionKey 只用 非空字符串/null/省略 三态；换代按「先 null 卸载、clearAppContext、再写新代次」顺序 |

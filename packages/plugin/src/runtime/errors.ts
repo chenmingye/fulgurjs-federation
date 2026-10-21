@@ -41,4 +41,8 @@ export const ErrorCodes = {
   SETUP_SESSION_KEY_MISSING: 'MFU-013',
   /** setup/onSession 执行的同步段内递归 loadRemote 同一远程 */
   SETUP_RECURSION: 'MFU-014',
+  /** 远程模块在组件消费边界导出的不是可渲染组件（适配器实测导出形态后报出） */
+  COMPONENT_EXPORT_INVALID: 'MFU-018',
+  /** Vue 组件直渲染的渲染器与共享作用域实际收敛的 Vue 实例不一致（身份证据已证实） */
+  VUE_RUNTIME_IDENTITY_MISMATCH: 'MFU-019',
 } as const

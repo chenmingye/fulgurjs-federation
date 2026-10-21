@@ -196,6 +196,14 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
         '确认真实用途；完整子应用自有的状态库通常由子应用提供，不要求未使用它的宿主重复提供。')
     }
   }
+  // D02 正向风险：Vue 消费方未声明 shared.vue。证据只有「本地确实使用 vue + 配置了 remotes
+  // 且本地 shared 无 vue」——远程配置与最终打包结果未知，不据此断言双实例已发生。
+  const usesVue = [...imports].some(v => v === 'vue' || v.startsWith('vue/') || v === '@fulgurjs/federation/vue')
+  if (Object.keys(options.remotes ?? {}).length && usesVue && !shared.includes('vue')) {
+    add('shared.vue', 'WARN', '本地是 Vue 应用且配置了远程消费，但 shared 未声明 vue。',
+      '组件直渲染要求远程组件与消费方渲染器使用同一 Vue 实例；本地未声明时无法从静态扫描确认是否收敛——这是接入风险，尚未证实存在重复实例（远程可能未共享 vue、或仅暴露纯 TS 模块）。',
+      '消费远程 Vue 组件的两侧都在 federation({ shared }) 声明 vue（建议 singleton），并核对 shareScope 一致；运行时若实例分裂，remoteComponent 边界会报 MFU-019。仅消费纯 TS 模块可忽略本项。')
+  }
   for (const [key, remote] of Object.entries(options.remotes ?? {})) {
     if (typeof remote === 'function') {
       add(`remotes.${key}`, 'WARN', '远程地址由运行时函数决定，未执行该函数。', '离线预检不执行业务远程地址回调。', '在实际 dev/prod 链路核对函数返回值、入口类型和网络错误。')
@@ -217,6 +225,7 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
       'Vue 远程组件：需要的祖先注入、全局组件、权限指令和主题必须在实际消费 app 中存在；不会自动复制整个业务 app。',
       '业务 store 实例与共享库实例是两件事；并行容器不能靠一个可变模块变量区分状态归属。',
       '源码预检不证明挂载、深链、会话、卸载和错误恢复通过；这些由实际验收确认。',
+      '直渲染空白排查边界：模块导出成功≠组件挂载≠业务就绪；合法 null/注释节点/Suspense 等待/KeepAlive 停用不是故障。插件只观察到外层模块加载——内部 loader、业务请求与分支进入情况须用 props 到达、网络面板与远程自身日志核实，不从「无 pageerror/无 chunk 请求」直接推断根因。',
     ],
     integrationFiles: {
       required: [...new Set(required)],

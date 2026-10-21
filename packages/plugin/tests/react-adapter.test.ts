@@ -82,7 +82,7 @@ describe('remoteComponent 加载与渲染', () => {
       const load = okLoader(() => ({ default: bad }))
       const RC = createRemoteComponent(load)('r/Bad')
       render(createElement(RC))
-      expect(await screen.findByText(/没有导出可渲染组件/)).toBeTruthy()
+      expect(await screen.findByText(/不是可渲染组件/)).toBeTruthy()
       cleanup()
     }
   })

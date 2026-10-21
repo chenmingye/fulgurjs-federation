@@ -1,6 +1,7 @@
 /** Vue 适配层只接收加载函数，不静态引用运行时内核。 */
-import { defineAsyncComponent, defineComponent, getCurrentInstance, h, ref, shallowRef, onActivated, onUnmounted, type App, type Component, type PropType } from 'vue'
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, ref, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type PropType } from 'vue'
 import type { PageRouteLike, RemoteSchemaEntry } from './pages'
+import { ErrorCodes } from './runtime/errors'
 import {
   cleanCompName,
   createHostPagesCore,
@@ -12,6 +13,55 @@ import {
 } from './host-pages-core'
 
 export type { ResolvedHostPage } from './host-pages-core'
+
+/**
+ * Vue 组件导出形态判定（MFU-018 的证据来源）：
+ * 可渲染 = 函数（函数式/异步包装）或带 render/setup/template 的选项对象。
+ * 只判形态，不执行组件；缺三者之一的对象交给 Vue 也会报
+ * "missing template or render function"，在这里提前给出带错误码的修法。
+ */
+function isVueRenderableComponent(inner: unknown): inner is Component {
+  if (!inner) return false
+  if (typeof inner === 'function') return true
+  if (typeof inner !== 'object') return false
+  const c = inner as Record<string, unknown>
+  return typeof c.render === 'function' || typeof c.setup === 'function' || typeof c.template === 'string'
+}
+
+/**
+ * Vue 运行时身份检查（MFU-019，组件直渲染边界）。
+ *
+ * 证据链：组件直渲染要求「实际驱动渲染的 Vue」（本适配器闭包里的 vue 导入，随消费方
+ * 模块图解析）与「远程组件内部实际使用的 Vue」（远程声明 shared.vue 时，其门面收敛到
+ * 共享作用域的实例）是同一实例，否则 provide/inject、Pinia、getCurrentInstance 会跨实例
+ * 断链，典型现象是外壳渲染成功、内部空白且没有 pageerror。
+ *
+ * 比较对象是可信的实际导出引用（scope 实例的 ref 函数 vs 渲染链的 ref 函数），
+ * 不是版本号字符串——同版本号不证明同实例。仅当作用域确有已加载的 vue 实例
+ * （双方至少一方声明了 shared.vue）时才可比：
+ * - 一致 → 收敛证实，放行；
+ * - 不一致 → 已证实违反组件消费契约，抛 MFU-019（附双方版本与修法）；
+ * - 作用域无实例（双方都未声明 shared / 自定义 shareScope / 旧远程无元数据）→
+ *   无法自动确认，不判（配置风险由 doctor 预检与文档说明，D02/D13 边界）。
+ * 合法例外：完整应用桥接走独立 renderer 与独立运行时，不经本适配器，不受此检查约束。
+ */
+function vueRuntimeIdentityError(spec: string): Error | undefined {
+  const sharedVue = (globalThis as { __FULGURJS_RUNTIME__?: { getLoadedShare?: (name: string) => any } })
+    .__FULGURJS_RUNTIME__?.getLoadedShare?.('vue')
+  if (!sharedVue || typeof sharedVue.ref !== 'function' || typeof sharedVue.version !== 'string') return undefined
+  if (sharedVue.ref === ref) return undefined
+  return Object.assign(
+    new Error(
+      `现象：消费方直渲染远程组件 "${spec}" 时，检测到渲染器使用的 Vue 与共享作用域实际收敛的 Vue 不是同一实例（渲染链 ${vueRuntimeVersion}，共享实例 ${sharedVue.version}；版本号相同也不代表实例相同）。\n` +
+        `根因（已证实）：双方至少一方声明了 shared.vue，但消费方自身的 vue 导入没有收敛到同一实例——常见于消费方未声明 shared.vue、dev 预构建/optimizeDeps 绕过共享门面、或 shareScope 不一致。实例分裂时 inject/provide/Pinia/getCurrentInstance 跨实例断链，页面常表现为外壳在、内部空白且无 pageerror。\n` +
+        `修法：① 消费方与远程都在 federation({ shared }) 声明 vue（singleton 建议开启）并使用同一 shareScope；② dev 下确认插件版本一致、未用 optimizeDeps 把 vue 预构建成第二份副本；③ 需要独立 Vue 运行时的完整子应用不要用 remoteComponent 直渲染，改用应用桥接（defineBridgeApp/createVueBridgeApp）。核实手段：window.__FULGURJS_SCOPE__.default.vue 查看实际收敛条目与来源。`,
+    ),
+    {
+      code: ErrorCodes.VUE_RUNTIME_IDENTITY_MISMATCH,
+      details: { remote: spec.slice(0, spec.indexOf('/')) || spec, module: spec.slice(spec.indexOf('/') + 1) || undefined, rendererVueVersion: vueRuntimeVersion, sharedVueVersion: sharedVue.version },
+    },
+  )
+}
 
 export interface RemoteComponentOptions {
   loadingComponent?: Component
@@ -77,7 +127,8 @@ const RemoteErrorPlaceholder = /*#__PURE__*/ defineComponent({
       return h('div', { style: ERROR_STYLE, 'data-fulgurjs-error': code }, [
         h('p', { style: 'margin:0 0 4px;font-weight:600' }, `远程组件加载失败（错误码 ${code}）`),
         h('p', { style: 'margin:0 0 8px;word-break:break-all' }, message),
-        h('p', { style: 'margin:0 0 8px' }, '修法：① 核对 spec 的「远程名/expose 名」与远程应用 exposes 是否一致（MFU-006/008）；② 核对 remotes 地址端口与远程服务可达性、remoteEntry 是否可访问（MFU-001）；③ 查看 window 的 fulgurjs:error 事件与 console 同源错误定位根因。'),
+        h('p', { style: 'margin:0 0 8px' }, '修法：① 核对 spec 的「远程名/expose 名」与远程应用 exposes 是否一致（MFU-006/008/018）；② 核对 remotes 地址端口与远程服务可达性、remoteEntry 是否可访问（MFU-001）；③ 查看 window 的 fulgurjs:error 事件与 console 同源错误定位根因。'),
+        h('p', { style: 'margin:0 0 8px' }, '网络取证：Network 面板看失败的具体 chunk——有红色请求（404/502）= 资源缺失或代理错误；零新请求且直接拒绝 = 浏览器已缓存上次 import 失败（同 URL 不再发请求），用「刷新页面重试」穿透；外壳正常而内部空白且无报错 = 优先核对 shared.vue 实例收敛（MFU-019）。'),
         h('p', { style: 'margin:0 0 10px' }, '「重试加载」在当前页面重建加载；若浏览器已缓存失败的模块（如远程静态子依赖曾加载失败），请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。'),
         h('div', { style: 'margin:0' }, buttons),
       ])
@@ -119,7 +170,7 @@ function createRecoverableErrorPlaceholder(
         try {
           const mod = await loader()
           const inner = (mod?.default ?? mod) as Component | undefined
-          if (!inner) throw noRenderableExportError(spec, inner)
+          if (!isVueRenderableComponent(inner)) throw noRenderableExportError(spec, inner)
           recovered.value = inner
         } catch (e) {
           retryError.value = e
@@ -273,7 +324,15 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
       const captured: { providers?: unknown[] } = {}
       return loadRemote(spec, {
         retries: opts.retries, consumerApp: consumerRegistry(app, captured),
-      }).then(async (m: any) => applyPageProviders((m?.default ?? m) as Component | undefined, captured))
+      }).then(async (m: any) => {
+        // 边界检查顺序：先证伪导出形态（MFU-018），再证伪运行时身份（MFU-019）。
+        // 身份检查放在模块求值完成后——此时远程的共享门面已把实例收敛进作用域，可比。
+        const inner = (m?.default ?? m) as Component | undefined
+        if (!isVueRenderableComponent(inner)) throw noRenderableExportError(spec, inner)
+        const identity = vueRuntimeIdentityError(spec)
+        if (identity) throw identity
+        return applyPageProviders(inner, captured)
+      })
     }
     let initialApp: App | undefined
     const loader = async (): Promise<any> => {
@@ -363,9 +422,11 @@ export function createHostPages(
         const captured: { providers?: unknown[] } = {}
         const mod = await load(spec, { consumerApp: consumerRegistry(app, captured) })
         let inner = mod?.default ?? mod
-        if (!inner) {
+        if (!isVueRenderableComponent(inner)) {
           throw noRenderableExportError(spec, inner)
         }
+        const identity = vueRuntimeIdentityError(spec)
+        if (identity) throw identity
         if (keepAlivePage && inner && typeof inner === 'object') {
           // keepAlive 页（Vue 3.5 KeepAlive 语义）：include 对「已解析的异步组件」按
           // __asyncResolved.name 匹配，而非包装名——解析后若内层组件名与包装名不一致，

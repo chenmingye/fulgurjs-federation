@@ -128,9 +128,13 @@ describe('共用工具', () => {
     expect(defaultDeriveSpec('/remote-x')).toBe('')
   })
 
-  it('noRenderableExportError 报出当前值类型', () => {
+  it('noRenderableExportError 报 MFU-018 与实际导出形态（三段式保留）', () => {
     expect(noRenderableExportError('r/M', 42).message).toContain('number')
     expect(noRenderableExportError('r/M', null).message).toContain('null')
-    expect(noRenderableExportError('r/M', {}).message).toContain('MFU-006')
+    const err = noRenderableExportError('r/M', {}) as Error & { code?: string }
+    expect(err.code).toBe('MFU-018')
+    expect(err.message).toContain('现象')
+    expect(err.message).toContain('根因')
+    expect(err.message).toContain('修法')
   })
 })

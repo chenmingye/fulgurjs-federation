@@ -945,7 +945,7 @@ function createRuntime() {
       const err = new FgError(
         ErrorCodes.REMOTE_LOAD_FAILED,
         `远程应用 "${remote.name}" 连续加载失败，熔断器已开启；将在 ${new Date(b.openUntil).toISOString()} 后允许重试。请先检查远程入口服务和网络。`,
-        { remote: remote.name },
+        { remote: remote.name, stage: 'container' },
       )
       emitError({ remote: remote.name, error: err })
       throw err
@@ -1020,7 +1020,7 @@ function createRuntime() {
           ErrorCodes.REMOTE_LOAD_FAILED,
           `现象：无法从 ${shown} 加载远程应用 "${remote.name}"。\n` +
             `原因：${String((lastErr as Error)?.message ?? lastErr)}\n修法：\n${hints.join('\n')}`,
-          { remote: remote.name },
+          { remote: remote.name, stage: 'container' },
         )
       }
 
@@ -1070,6 +1070,7 @@ function createRuntime() {
       }
       const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, `远程应用 "${remote.name}" 加载失败。底层原因：${String((err as Error)?.message ?? err)}。请检查远程入口、网络及共享依赖。`, {
         remote: remote.name,
+        stage: 'container',
       })
       emitError({ remote: remote.name, error: wrapped })
       throw wrapped
@@ -1159,7 +1160,7 @@ function createRuntime() {
           throw new FgError(
             ErrorCodes.REMOTE_LOAD_FAILED,
             `无法从远程应用 "${name}" 加载模块 "${module}"。底层原因：${String((err as Error)?.message ?? err)}。请核对 exposes 键和远程构建产物。`,
-            { remote: name, module },
+            { remote: name, module, stage: 'expose' },
           )
         }),
       )
