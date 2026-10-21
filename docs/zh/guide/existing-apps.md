@@ -39,7 +39,7 @@ src/fulgurjs/
 - Vue 组件使用 `.vue`，新增组件推荐 `<script setup lang="ts">`。已有 `defineComponent` 组件可以继续使用；需要模块级共享状态时可额外保留普通 `<script lang="ts">`，不要把共享状态误放进每次执行的 setup。
 - React 组件使用 `.tsx`；配置、会话、上下文、主题等不包含模板/JSX 的逻辑使用 `.ts`。
 - `.d.ts` 是声明文件；`types/` 的远程声明由插件生成。组件 props 在提供方真实入口声明，消费方使用自动同步的类型，不维护第二份手写接口。
-- 文件名描述职责，例如 `RemoteApplication.vue`、`OrderForm.vue`、`FormProviders.vue`。避免用 `App1`、`App2`、`应用一/应用二` 作为说明，也不把所有文件都叫 `bridge.ts`。
+- 文件名描述职责，例如 `RemoteApplication.vue`、`OrderForm.vue`、`context.ts`。避免用 `App1`、`App2`、`应用一/应用二` 作为说明，也不把所有文件都叫 `bridge.ts`。
 
 ### 先说角色，再说运行方式
 

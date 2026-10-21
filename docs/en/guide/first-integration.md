@@ -131,6 +131,25 @@ For a fixed pair, expose original host forms and use remoteComponent in the chil
 
 **Ordinary remote components require no additional wrapper files.** Expose components directly when their dependencies are satisfied. Declare pageProviders only for missing ancestor injection. Reference a single existing Provider directly; create a wrapper only for real composition or parameter adaptation. Global tag registration is separate: a Provider does not copy app registries, and an entire UI-library registration list is not a default requirement.
 
+## Validate the integration design as well as the rendered page
+
+**A visible page does not establish that the integration design is acceptable.** Existing applications and new templates are different cases. A template may legitimately choose `defineApplication/start`; that choice does not require an existing application to rewrite its entry. Apply this checklist during initial integration, AI execution and regression review, recording source evidence and actual verification.
+
+| Check | Recommended behavior and acceptance | Reject |
+|---|---|---|
+| Original standalone entry | Preserve standalone startup; reuse existing initialization in place | Moving the whole main into federation code or requiring application.start without a demonstrated need |
+| No reusable boundary exists | Extract only shared creation/configuration into one business function; main mounts standalone and the bridge reuses unmounted instances | Moving all assembly into another helper merely to shorten the bridge, or adding forwarding-only files |
+| Business plugins and registration | Install actual dependencies for each new app; maintain one original registration source and reuse missing consumer dependencies | Assuming registries transfer between apps or copying another UI-library inventory |
+| Ordinary remote forms | Expose original business components; add props to the original URL page when needed and preserve its route entry | Wrappers that only forward props/slots, or full-application startup for two components |
+| Providers | Establish which injection is missing; reference a single existing Provider directly | Creating FormProviders.vue by default or assuming Providers copy registries |
+| Parameter types | Define precise fields once at the provider; infer consumer types from generated declarations and test invalid fields/types | Editing generated declarations, repeating consumer DTOs or replacing known fields with broad dictionaries |
+| Routing and side effects | Match standalone history to the actual deployment base; use controlled memory routing for bridges; install hooks/guards for each new router | Falling back to an incorrect root base or expecting repeated imports to rerun module side effects |
+| Async work and feature flags | Clear timers on leave, reject late writes to old forms, and avoid requests for disabled business features | Updating an unmounted form or requesting disabled tenant/extension functionality |
+
+`src/bootstrap.ts` is not mandatory. Keep an existing reusable function; extract business creation only when it must be shared and is currently coupled to a fixed mount. Business initialization remains necessary: the objective is clear ownership and one maintained installation source. One source does not mean one execution for the lifetime of the page: every new app must install its required dependencies, and different applications may use different UI libraries.
+
+Record evidence using the [maintainer acceptance rules](../../maintainers/testing.md#已有工程接入方案验收). Components do not need business application startup; complete applications must retain required registrations, guards and state mapping rather than optimizing for line count.
+
 ## 5. Preview and verify
 
 Manual wiring is supported. CLI init --plan previews; --write changes files. Component mode does not create application factories. Application mode may propose extracting supported minimal main entries: **this is a tool-selected rewrite plan, not a runtime prerequisite**. If unsuitable, preserve main and configure the actual bridge entry manually. The current CLI --application option recognizes explicit default defineApplication exports only, not arbitrary bridge contracts or self-mounting main files. Projects preserving standalone main with defineBridgeApp configure exposes manually without that option.

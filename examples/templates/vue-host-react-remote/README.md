@@ -1,6 +1,6 @@
 # vue-host-react-remote：完整子应用桥接模板
 
-> 本目录使用 `6.12.0-next.0` 源码候选新增的自动会话能力，尚未构建、测试或发布。当前模板的正式包依赖与锁文件仍是旧版本；验收人员须先构建本分支，在独立副本中安装候选 tarball 后验证。正式交付前再统一更新为已发布版本并重新生成真实 registry 锁文件。下面的冻结安装命令须在这一步完成后使用。
+> 本模板面向新建工程，选择 `defineApplication/start` 统一管理独立与嵌入启动。已有工程优先保留原入口，按[首次接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)复用业务初始化，不照搬本模板的 main。插件版本以 package.json 和锁文件为准，按下面命令安装 registry 正式包。
 
 
 `vue-host/` 是宿主，`react-remote/` 是子应用。复制整个模板目录，在根目录运行：

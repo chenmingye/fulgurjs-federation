@@ -47,7 +47,7 @@
 
 [打开完整 SVG](../../diagrams/lifecycle.zh.svg) · [高清 PNG](../../diagrams/lifecycle.zh.png)
 
-`defineApplication(factory)` / `defineBridgeApp(factory)` 先定义契约，不立即执行业务工厂。宿主加载契约后调用 `mount`；独立入口调用 `application.start`，内部进入对应独立模式的挂载。**业务工厂在 mount 内执行**，创建本次 app/root、router、store 与业务插件；插件不会替业务自动改写成隔离状态实例。
+`defineApplication(factory)` / `defineBridgeApp(factory)` 先定义契约，不立即执行业务工厂。宿主加载桥接契约后调用 `mount`。保留原 main 的工程由业务独立入口自行启动；只有选择 `defineApplication` 统一启动时，才调用 `application.start` 进入独立模式挂载。**业务工厂在 mount 内执行**，按业务定义创建本次 app/root 与 router，并安装或复用相应的 store 和业务插件；插件不会替业务自动改写成隔离状态实例。
 
 图中的会话换代/登出分支适用于启用了会话控制的宿主桥接；公开应用可以省略会话配置，独立运行由业务主动卸载。
 

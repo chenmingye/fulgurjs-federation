@@ -1,8 +1,8 @@
 # fulgurjs-federation 模板（examples/templates/）
 
-> **本分支为待验收源码候选**：Vue宿主自动会话示例需要本分支候选包。锁文件仍保留既有正式包作为发布前基线；验收先构建候选并在隔离副本安装覆盖，正式交付必须完成发布、模板升钉与干净冻结安装后移除此提示。不要把当前旧锁直接运行的结果记作新功能通过。
+> 本模板面向新建工程，选择 `defineApplication/start` 统一管理独立与嵌入启动。已有工程优先保留原入口，按[首次接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)复用业务初始化，不照搬本模板的 main。插件版本以 package.json 和锁文件为准，按下面命令安装 registry 正式包。
 
-> 五个模板统一使用 defineApplication 装配。按各模板 README 的冻结安装命令安装 registry 正式包。
+> 五个新建模板选择 defineApplication 装配；已有工程默认采用保留 main 的桥接路径。两者都是当前有效用法，适用场景不同。
 
 
 五个可独立复制、`pnpm install` 后直接运行的联邦接入模板。全部使用 **npm registry 正式包** `@fulgurjs/federation`（精确版本 + pnpm 锁文件，钉定版本见各模板 package.json；统一入口 /vue、/react、/runtime——模板代码即统一入口用法），不依赖本仓库源码、workspace 或父目录。

@@ -39,7 +39,7 @@ Use host/ and exposes/ for newly added consumption/provider wiring. New-project 
 - Vue components use `.vue`; prefer `<script setup lang="ts">` for new components. Existing `defineComponent` components remain valid. A separate normal `<script lang="ts">` may hold shared module state; do not accidentally recreate it inside each setup.
 - React components use `.tsx`. Configuration, sessions, context and theme logic without JSX/templates use `.ts`.
 - `.d.ts` files contain declarations. Remote declarations in `types/` are generated. Declare real props at the provider entry and use synchronized types at the consumer instead of copying interfaces.
-- Name files by responsibility: `RemoteApplication.vue`, `OrderForm.vue`, `FormProviders.vue`. Avoid vague `App1`/`App2` descriptions or naming every helper `bridge.ts`.
+- Name files by responsibility: `RemoteApplication.vue`, `OrderForm.vue`, `context.ts`. Avoid vague `App1`/`App2` descriptions or naming every helper `bridge.ts`.
 
 ### Distinguish roles from execution modes
 

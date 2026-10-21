@@ -47,7 +47,7 @@ This flow uses a complete module entry, loadRemote('remote/expose'). Bare loadRe
 
 [Open full SVG](../../diagrams/lifecycle.en.svg) · [High-resolution PNG](../../diagrams/lifecycle.en.png)
 
-defineApplication(factory) / defineBridgeApp(factory) defines a contract without immediately invoking the business factory. Hosts load the contract and call mount; standalone application.start enters the corresponding standalone mount internally. **The factory runs inside mount**, creating this app/root, router, stores and plugins; the plugin does not automatically rewrite business stores into isolated instances.
+defineApplication(factory) / defineBridgeApp(factory) defines a contract without immediately invoking the business factory. Hosts load a bridge contract and call mount. Projects preserving main keep their business-owned standalone startup; only projects choosing defineApplication call application.start for plugin-managed standalone mounting. **The factory runs inside mount**, creating this app/root and router as defined by the business and installing or reusing its stores and plugins; the plugin does not automatically rewrite business stores into isolated instances.
 
 The session-change/logout branches apply to host bridges with session control enabled. Public applications may omit session configuration; standalone applications are unmounted explicitly by business code.
 

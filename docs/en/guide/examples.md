@@ -2,6 +2,8 @@
 
 > This page is an index: choosing, running, and ports for templates/demos. Each project's full documentation (deployment details, capability lists) lives in its own README; it is not duplicated here.
 
+**New templates and existing applications follow different default paths.** Templates choose defineApplication/start for unified startup. Existing projects preserve main and reuse business initialization through defineBridgeApp. Template directories and main are not mandatory migration steps; see [first integration](first-integration.md).
+
 ## Five copyable templates (`examples/templates/`)
 
 All use the official npm registry package `@fulgurjs/federation` (exact version + pnpm lockfile; the version is pinned in each template's package.json) and do not depend on this repository's source code. Each template directory is a complete pnpm workspace and **must be copied/created as a whole directory**.

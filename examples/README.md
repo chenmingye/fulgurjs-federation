@@ -2,7 +2,7 @@
 
 所有公开示例统一放在本目录。先选一个模板运行；需要了解更多 API 时，再打开功能演示或展示门户。
 
-> 五个模板与 same-frame 统一使用 6.9.0 应用装配。各组合按自身 README 的安装命令使用 registry 正式包。
+> 新建模板选择 defineApplication/start 统一启动；已有工程按[首次接入](../docs/zh/guide/first-integration.md)保留原入口并复用初始化。模板展示的是所选方案，不是要求已有工程迁移 main。各组合按自己的 package.json、锁文件和 README 使用 registry 正式包。
 
 ## 选择要运行的工程
 
@@ -22,7 +22,7 @@
 
 五个模板均在自身根目录执行 `pnpm build` → `pnpm prod`；生产启动直接读 dist，不借用 dev server。生产脚本与 dev 脚本一样由 examples/scripts 的规范源统一同步。
 
-功能 Demo 在仓库根按 README 构建后运行 `node examples/scripts/serve-prod.mjs --scenario <id>`；生产场景、端口、挂载前缀只维护在 scenarios.json.production。支持 shared-runtime/errors/pages-cli/same-frame/jeecg，其余场景按自身说明运行。以上生产便利脚本为本轮未测试的源码改动，正式包复制出的模板以包内版本为准。
+功能 Demo 在仓库根按 README 构建后运行 `node examples/scripts/serve-prod.mjs --scenario <id>`；生产场景、端口、挂载前缀只维护在 scenarios.json.production。支持 shared-runtime/errors/pages-cli/same-frame/jeecg，其余场景按自身说明运行。正式包复制出的模板以包内文件与依赖锁为准；是否完成验证以本次真实运行结果为准。
 
 ## 下载后直接运行
 

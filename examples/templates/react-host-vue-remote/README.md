@@ -1,6 +1,6 @@
 # react-host-vue-remote：完整子应用桥接模板
 
-> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
+> 本模板面向新建工程，选择 `defineApplication/start` 统一管理独立与嵌入启动。已有工程优先保留原入口，按[首次接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)复用业务初始化，不照搬本模板的 main。插件版本以 package.json 和锁文件为准，按下面命令安装 registry 正式包。
 
 
 `react-host/` 是宿主，`vue-remote/` 是子应用。复制整个模板目录，在根目录运行：

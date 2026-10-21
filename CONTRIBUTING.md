@@ -35,6 +35,8 @@ pnpm test:prod  # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 6. **测试**：行为改动必须补测试并跑通。单测 + `--project=dev` + `--project=fault` 都要过；prod e2e 需 NGINX，本地按 `e2e/scripts/prod-setup.sh` 起。
 7. **配置项新增**：按[配置参考](docs/zh/reference/configuration.md)的体例写（配置项名 / 类型 / 默认值 / 配置位置 + 开/关/自定义三态示例）。
 
+已有工程接入类改动还必须满足[接入方案验收](docs/maintainers/testing.md#已有工程接入方案验收)：代码组织、注册/Provider 依据和生成类型同样是验收对象，不能只检查页面是否显示。
+
 ## 提交与 PR
 
 - 一个 PR 只做一件事；顺手重构与本主题无关的代码请拆成另一个 PR。

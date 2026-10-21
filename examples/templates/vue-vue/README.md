@@ -1,6 +1,6 @@
 # Vue 联邦示例：宿主 + 远程（可直接复制运行）
 
-> 本目录是 6.9.0 源码候选：已改用 defineApplication，尚未测试和发布。源码依赖已锁定 6.9.0；正式发布前不要拿旧 registry 包运行这份代码。验收先使用本次候选 tarball，发布后再按下列冻结安装命令验证正式包。
+> 本模板面向新建工程，选择 `defineApplication/start` 统一管理独立与嵌入启动。已有工程优先保留原入口，按[首次接入指南](https://github.com/chenmingye/fulgurjs-federation/blob/master/docs/zh/guide/first-integration.md)复用业务初始化，不照搬本模板的 main。插件版本以 package.json 和锁文件为准，按下面命令安装 registry 正式包。
 
 
 本目录是一对完整、可独立安装运行的 Vue 3 模块联邦演示：
@@ -10,7 +10,7 @@
 | [`remote/`](./remote/) | **Vue 远程**（被消费方） | 5213 | 暴露可点击按钮组件、普通 TS 工具模块、联邦首页与参数详情页 |
 | [`host/`](./host/) | **Vue 宿主**（消费方） | 5214 | 消费 vue-remote 的组件/模块/页面，提供导航与懒加载 |
 
-- 包管理器为 **pnpm**；复制整个模板目录，包含 workspace 和锁文件。插件精确依赖本轮 6.9.0；正式包是否可用见本页顶部状态。
+- 包管理器为 **pnpm**；复制整个模板目录，包含 workspace 和锁文件。插件精确版本以 package.json 和锁文件为准。
 
 ## 最快开始（从干净拷贝）
 

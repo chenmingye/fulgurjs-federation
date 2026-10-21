@@ -93,7 +93,7 @@ npm run test:examples
 ### 接入目录与术语
 
 - 新 Vue 组件推荐 `.vue` + `<script setup lang="ts">`；无模板逻辑使用 `.ts`，React JSX 使用 `.tsx`；生成声明不手写。模块级共享状态可以保留普通 script，不机械改写原 defineComponent。
-- 文件按职责命名，如 `host/RemoteApplication.vue`、`exposes/FormProviders.vue`；说明中区分宿主/远程/消费方与独立启动/嵌入运行，不用“应用一/应用二”代替实际角色。目录、格式与术语详见 `docs/zh/guide/existing-apps.md`。
+- 文件按职责命名，如 `host/RemoteApplication.vue`、`exposes/OrderForm.vue`；说明中区分宿主/远程/消费方与独立启动/嵌入运行，不用“应用一/应用二”代替实际角色。目录、格式与术语详见 `docs/zh/guide/existing-apps.md`。
 
 ### 新增接入文件的统一目录（宿主与远程都适用）
 
@@ -110,6 +110,12 @@ npm run test:examples
 - 不为一行对象创建、纯转发或复制常量新建session/helper文件。有共享职责时归入现有context/装配模块；纯声明setup不写空默认函数。不能按行数删除包含真实业务映射、Provider注入或必要副作用的文件。
 - 子应用需要自有认证缓存时保留一次业务映射；请求token通过宿主getter取最新值，不能靠token刷新触发整应用重挂来维持有效凭据。
 - “一小时首次接通”与“完整验收交付”分开计时；TS只归因新增/修改接入文件，不擅自全项目清零。明确说不测试时不跑测试、构建、类型检查或业务部署，保留候选和完整验收交接，不发布未验收版本。
+
+### 推荐接入用法也是交付条件
+
+- 首次接入和后续 AI 验收均以当前 `docs/zh/guide/first-integration.md` 为方案入口，以 `docs/maintainers/testing.md` 的“已有工程接入方案验收”为质量条件。历史任务书/副本与模板 main 不能覆盖当前默认路径；新建模板的 defineApplication/start 方案仍有效，但不能强制套给已有工程。
+- 交付必须列清原入口/初始化、两种启动的真实调用方、exposes 目标、唯一注册源、Provider 注入依据、提供方 props 与生成声明。页面跑通但重复注册清单、无职责包装或重复 DTO 未清理，不算接入方案合格。
+- 必须验证独立入口与刷新/base、原 URL 与远程 props、每次新 router 的动态菜单、真实迟到请求与离页清理。仅“登录页显示”不得写成“独立登录业务完成”；关闭的业务能力不应发对应请求。
 
 ### 注释技能与接入代码可读性
 
