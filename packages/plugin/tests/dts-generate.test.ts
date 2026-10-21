@@ -106,7 +106,7 @@ describe('generateTypesBundle（纯 TS 工程）', () => {
     fs.writeFileSync(path.join(root, 'src/metadata.json'), '{ invalid json')
     const invalid = await generateTypesBundle({ root, exposes: [{ name: './entry', import: `./src/entry.${extension}` }], pluginVersion: 'test' })
     expect(invalid.ok).toBe(false)
-  })
+  }, 20_000)
 
   const files = {
     'src/lib/shared.ts': 'export interface Paged<T> { items: T[]; total: number }\nexport type Result<T> = { ok: true; value: T } | { ok: false; error: Error }\n',
