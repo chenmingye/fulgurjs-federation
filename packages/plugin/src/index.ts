@@ -893,7 +893,7 @@ export function federation(options: FederationOptions): Plugin[] {
         }
         // V8-SYNC-FACADE：rolldown 构建用同步 pin 形态（TLA 会把 await 传播进消费方
         // 初始化包装，循环依赖互等死锁——见 genBindingFacadeSync 注）
-        if (state.rolldownBuild) {
+        if (state.rolldownBuild || (state.command === 'build' && state.normalized.exposes.length > 0 && !state.normalized.devSharedSelf)) {
           return genSharedNsFacadeSync(item, names, await resolveSharedImportTarget.call(this, item, state.normalized.root))
         }
         return genSharedNsFacade(item, serializeShareCallForFacade(item), names, state.facadeDynamic)
@@ -922,7 +922,10 @@ export function federation(options: FederationOptions): Plugin[] {
         if (!item || item.import === false) return null
         // V8-SYNC-FACADE：rolldown 构建用同步 pin 形态（消除插件注入的 TLA 及其在
         // 循环依赖里的互等死锁——见 genBindingFacadeSync 注）
-        if (state.rolldownBuild) {
+        // 显式不改写本地依赖的提供方也需要同步裁决，而不是直接返回 provider 本体。
+        // 同步门面保留 strictVersion/hook，并 pin 实际选中的本地实例，让后续远程消费
+        // 收敛到相同 Vue/reactivity；TLA 降级后的异步赋值不能被同步业务模块提前读取。
+        if (state.rolldownBuild || (state.command === 'build' && state.normalized.exposes.length > 0 && !state.normalized.devSharedSelf)) {
           return genBindingFacadeSync(item, entry.bindings, await resolveSharedImportTarget.call(this, item, state.normalized.root))
         }
         const opts = [
@@ -1012,22 +1015,30 @@ export function federation(options: FederationOptions): Plugin[] {
         // build：捕获入口模块路径，transform 阶段内联 init（见 pre.transform）
         const moduleScriptRe = /<script[^>]+type=["']module["'][^>]*>/g
         const srcRe = /src=["']([^"']+)["']/
+        // HTML 插件可以注入绝对文件路径（例如主题客户端）；它不是 root-relative URL。
+        // 保留已存在的物理路径，否则会重复拼接项目根，导致 bootstrap 的动态 import 失败。
+        const entryPath = (src: string) => {
+          const file = src.startsWith('/@fs/') ? src.slice(4) : src
+          return path.isAbsolute(file) && fs.existsSync(file)
+            ? file
+            : path.resolve(state.normalized!.root, src.startsWith('/') ? src.slice(1) : src)
+        }
         for (const tag of html.match(moduleScriptRe) ?? []) {
           const src = srcRe.exec(tag)?.[1]
-          if (!src || src.startsWith('http') || src.startsWith('//')) continue
-          const abs = path.resolve(state.normalized.root, src.startsWith('/') ? src.slice(1) : src)
+          if (!src || src.startsWith('http') || src.startsWith('//') || src.startsWith('virtual:') || src.startsWith('/virtual:') || src.startsWith('/@id/')) continue
+          const abs = entryPath(src)
           state.entryAbsPaths.add(abs)
         }
         debugLog('init-entry', { stage: 'capture', count: state.entryAbsPaths.size, entries: [...state.entryAbsPaths].map((p) => redactModulePath(p, state.normalized!.root)) })
-        if (state.normalized.runtimePlugins.length > 0) {
-          // 只有存在运行时插件的入口需要异步协商屏障。初始化留在屏障自身，
-          // 应用入口不重复注册插件（重复注册会清掉刚完成的快照）。
+        if (state.normalized.runtimePlugins.length > 0 || (state.normalized.exposes.length > 0 && !state.normalized.devSharedSelf)) {
+          // 同步门面的提供方也必须先注册并准备共享，再执行业务静态依赖。
+          // 初始化留在屏障自身，应用入口不重复注册插件或清除已完成的裁决。
           return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, (script) => {
             const tag = script.slice(0, script.indexOf('>') + 1)
             if (!/\btype=["']module["']/.test(tag)) return script
             const src = srcRe.exec(tag)?.[1]
-            if (!src || src.startsWith('http') || src.startsWith('//')) return script
-            const abs = path.resolve(state.normalized!.root, src.startsWith('/') ? src.slice(1) : src)
+            if (!src || src.startsWith('http') || src.startsWith('//') || src.startsWith('virtual:') || src.startsWith('/virtual:') || src.startsWith('/@id/')) return script
+            const abs = entryPath(src)
             state.bootstrapEntries.add(abs)
             const id = 'virtual:fulgurjs-bootstrap:' + encodeURIComponent(abs)
             return tag.replace(/\s+src=["'][^"']+["']/, '') + `import ${JSON.stringify(id)};</script>`

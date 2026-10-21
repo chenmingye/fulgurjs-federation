@@ -176,6 +176,8 @@ fulgurjs types [--config <path>] [--mode dev|prod] [--base <URL>] [--check]
 
 提供方声明检查保留 tsconfig 中显式 `compilerOptions.types` 的全局类型（如 `vite/client`）。这些已解析的声明文件不受 `exclude: ["node_modules"]` 再次过滤；业务源文件仍按原工程的包含/排除规则处理。类型依赖必须在提供方实际安装并可解析。
 
+静态闭包中的 JSON 模块参与语法和类型检查。公开类型引用 JSON 结构时，生成器通过提供方 TypeScript 取得其结构声明；不会要求 JSON 自身单独执行 declaration emit，也不会把运行时 JSON 内容复制进类型包。
+
 `--check`：只核对本地缓存与账本记录的代次（不联网，**不代表远程线上最新已核实**）。
 
 **大型应用与生成器内存**：含 `.vue` 暴露的提供方用 vue-tsc 子进程生成声明；暴露闭包达数 GB 的大型真实应用（如全量业务表单注册表）可能在 Node 默认堆下 V8 OOM。生成器检测到 OOM 会自动以 `--max-old-space-size=8192`（MB）重试一次并在成功结果里记录提示；仍不足时用环境变量 `FG_DTS_MAX_OLD_SPACE`（如 `16384`）提高上限后重跑。OOM 与闭包内编译错误的诊断分开——不会把内存不足误报成代码错误。单次生成有超时上限：默认堆 10 分钟、提堆重试 30 分钟（`FG_DTS_TIMEOUT_MS` 毫秒可覆盖）；超时被强杀会如实标识并自动以更长上限重试，仍超时给出 `FG_DTS_TIMEOUT_MS` 修法。若生成子进程被系统级终止（例如机器内存压力下被 OS 终止，无 V8 横幅与 TS 诊断），同样如实标识并重试，仍失败时给环境修法（释放内存后 dev 会按源码变化自动重跑）。

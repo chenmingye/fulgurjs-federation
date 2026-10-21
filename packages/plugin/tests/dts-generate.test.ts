@@ -49,6 +49,65 @@ function makeProject(name: string, files: Record<string, string>, tsconfigExtra:
 }
 
 describe('generateTypesBundle（纯 TS 工程）', () => {
+  it.each([
+    ['PRIVATE_ROOT_VALUE', 'string'],
+    [42, 'number'],
+    [true, 'boolean'],
+  ])('JSON 根字面量只生成类型，不复制值（%s）', async (value, shape) => {
+    const root = makeProject('json-root', {
+      'src/entry.ts': `import value from './value.json'; export default value;`,
+      'src/value.json': JSON.stringify(value),
+    }, { resolveJsonModule: true, esModuleInterop: true });
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' });
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true);
+    if (result.ok) {
+      const declaration = [...result.files.entries()].find(([file]) => file.endsWith('value.json.d.ts'))?.[1];
+      expect(declaration).toContain(`declare const value: ${shape};`);
+      expect(declaration).not.toContain('PRIVATE_ROOT_VALUE');
+    }
+  });
+
+  it.each(['ts', 'vue'])('JSON 公开类型依赖保留结构，不要求 JSON 自身 declaration emit（%s）', async (extension) => {
+    const source = extension === 'vue'
+      ? `<script setup lang="ts">import metadata from './metadata.json'; defineProps<{ metadata: typeof metadata }>();</script><template />`
+      : `import metadata from './metadata.json'; export type Metadata = typeof metadata; export const value: Metadata = metadata;`
+    const root = makeProject(`json-${extension}`, {
+      [`src/entry.${extension}`]: source,
+      'src/metadata.json': JSON.stringify({ displayName: 'PRIVATE_RUNTIME_VALUE', nested: { count: 2 }, tags: ['internal'] }),
+    }, { resolveJsonModule: true, esModuleInterop: true })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './entry', import: `./src/entry.${extension}` }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (result.ok) {
+      const jsonDeclaration = [...result.files.entries()].find(([file]) => file.endsWith('metadata.json.d.ts'))?.[1]
+      expect(jsonDeclaration).toContain('displayName: string')
+      expect(jsonDeclaration).toContain('count: number')
+      expect(jsonDeclaration).toContain('tags: string[]')
+      expect(jsonDeclaration).not.toContain('PRIVATE_RUNTIME_VALUE')
+      expect([...result.files.keys()].some(file => file.endsWith('/metadata.json'))).toBe(false)
+      const bundleDir = path.join(root, 'consumer-bundle')
+      const declarations: string[] = []
+      for (const [file, text] of result.files) {
+        if (!file.endsWith('.d.ts')) continue
+        const target = path.join(bundleDir, file)
+        fs.mkdirSync(path.dirname(target), { recursive: true })
+        fs.writeFileSync(target, text)
+        declarations.push(target)
+      }
+      const ts = await import('typescript')
+      const consumer = ts.createProgram(declarations, {
+        noEmit: true, strict: true, target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+        resolveJsonModule: true, skipLibCheck: false, types: [],
+      })
+      const consumerErrors = ts.getPreEmitDiagnostics(consumer).filter(item => item.category === ts.DiagnosticCategory.Error)
+      expect(consumerErrors.map(item => ts.flattenDiagnosticMessageText(item.messageText, '\n'))).toEqual([])
+    }
+    fs.writeFileSync(path.join(root, 'src/metadata.json'), '{ invalid json')
+    const invalid = await generateTypesBundle({ root, exposes: [{ name: './entry', import: `./src/entry.${extension}` }], pluginVersion: 'test' })
+    expect(invalid.ok).toBe(false)
+  })
+
   const files = {
     'src/lib/shared.ts': 'export interface Paged<T> { items: T[]; total: number }\nexport type Result<T> = { ok: true; value: T } | { ok: false; error: Error }\n',
     'src/exposes/math.ts': [

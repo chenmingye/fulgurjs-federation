@@ -41,7 +41,7 @@ if (!diagnostics.length) {
   });
   for (const file of sources) {
     diagnostics.push(...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file));
-    if (!file.isDeclarationFile) {
+    if (!file.isDeclarationFile && !file.fileName.endsWith('.json')) {
       // 官方 emit 保留真实 props、重载和推导结果，绝不以手写接口或 any 代替。
       const emitted = program.emit(file, undefined, undefined, true);
       diagnostics.push(...emitted.diagnostics);

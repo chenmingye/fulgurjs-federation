@@ -15,6 +15,22 @@ async function x(code: string, opts: FederationOptions = { name: 'host', shared:
 }
 
 describe('transform: shared 导入改写（绑定门面）', () => {
+  it('双向提供方显式关闭 devSharedSelf 时，build 仍保留命名导入的共享裁决门面', async () => {
+    const options = normalizeOptions({
+      name: 'bidirectional',
+      remotes: { other: '/other' },
+      exposes: { './Form': './src/Form.ts' },
+      shared: { vue: { singleton: true, strictVersion: true } },
+      devSharedSelf: false,
+    }, ROOT, 'build')
+    const result = await transformModule(`import { ref } from 'vue'\nexport const value = ref(0)\n`, '/src/Form.ts', {
+      options, rewriteShared: true,
+    })
+    // 是否提供 expose 不允许把消费路径降为无协商的本地副本：静态消费必须参与
+    // singleton/strictVersion/hook 裁决，并与动态 loadShare 收敛到同一实际实例。
+    expect(result?.code).toContain('?f=')
+  })
+
   it('默认导入：specifier 换为绑定门面（default）', async () => {
     const r = await x(`import Vue from 'vue'\nconsole.log(Vue)\n`)
     expect(r?.code).toMatch(/import Vue from 'virtual:fulgurjs-shared:vue(\?f=[\w-]+)?'/)

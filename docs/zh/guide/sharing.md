@@ -63,6 +63,7 @@ export default {
 
 ## 同步与异步裁决
 
+- **显式关闭自身依赖改写的提供方**：配置 `exposes` 且 `devSharedSelf: false` 时，生产构建的共享导入使用同步裁决门面，HTML 入口先完成共享注册再加载应用。该路径仍执行 singleton、strictVersion 和 hook，不会直接绕过协商绑定本地副本；静态导入与后续 `loadShare` 使用同一已选实例。
 - **默认（无 runtimePlugins）**：HTML 入口在执行应用前完成共享准备；远程容器在执行 expose 前完成裁决；同步门面复用同一决策。
 - **配置 `runtimePlugins` 且 hook 是异步的**：配置了 runtimePlugins 的 HTML 入口在执行应用前完成共享裁决与加载；远程容器也在执行 expose 前完成异步裁决。异步 hook 可以选择低版本或原表之外的条目，不会被本地副本覆盖。应用与 provider 之间保留动态导入边界，Vite 8 的消费方门面仍无 TLA。
 - **入口边界**：没有 HTML 入口的 library/自定义入口，或应用运行后才 `registerPlugins` 更改策略，需要先 `await loadShare(name, opts)`，再动态导入新的消费者；已经求值的静态绑定无法追溯改写。未准备的同步消费者遇到异步 hook 报 `MFU-004`（`details.syncUnsupported: true`）；`strictVersion` 冲突报 `MFU-003`。

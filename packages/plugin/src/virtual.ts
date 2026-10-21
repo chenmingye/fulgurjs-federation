@@ -256,7 +256,7 @@ export function genBindingFacadeSync(item: NormalizedShared, bindings: string[],
 }
 
 /**
- * 命名空间门面（同步形态，rolldown/vite 8 构建专用；V8-SYNC-FACADE）。
+ * 命名空间门面（同步形态，用于 rolldown 及关闭依赖改写的提供方构建）。
  * 协商语义与 genBindingFacadeSync 相同（loadShareSync：全注册版本选择 + strictVersion
  * 拒绝 + resolveShare 快照/同步决策参与），面向 `import * as ns from '<shared>'` 的
  * 命名空间消费。

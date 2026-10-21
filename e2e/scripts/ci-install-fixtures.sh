@@ -22,7 +22,17 @@ for app in host-vue remote-a remote-b remote-auto host-auto remote-react host-re
     if node -e 'process.exit(require("./"+process.argv[1]+"/package.json").devDependencies?.["@vitejs/plugin-react"] ? 0 : 1)' "$dir"; then
       deps+=("@vitejs/plugin-react@$react_plugin")
     fi
-    pnpm --dir "$dir" add -D "${deps[@]}"
+    # 矩阵声明的版本必须与实际执行版本一致，不能保存 caret 后在下一次安装漂移。
+    pnpm --dir "$dir" add -D --save-exact "${deps[@]}"
+    node --input-type=module - "$dir" "$VITE_VERSION" <<'NODE'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+const [dir, expected] = process.argv.slice(2)
+const req = createRequire(path.resolve(dir, 'package.json'))
+const actual = req('vite/package.json').version
+if (actual !== expected) throw new Error(`${dir}: expected Vite ${expected}, installed ${actual}`)
+console.log(`${dir}: verified Vite ${actual}`)
+NODE
   else
     pnpm --dir "$dir" install --no-frozen-lockfile
   fi

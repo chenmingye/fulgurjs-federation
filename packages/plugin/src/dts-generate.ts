@@ -655,10 +655,13 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       )
       return { ok: false, diagnostics }
     }
-    const emitResult = program.emit()
-    if (emitResult.emitSkipped) {
-      fs.rmSync(outDir, { recursive: true, force: true })
-      return { ok: false, diagnostics: ['TypeScript 声明 emit 失败（emitSkipped）。请检查 tsconfig 编译选项。'] }
+    for (const source of program.getSourceFiles()) {
+      if (source.isDeclarationFile || source.fileName.endsWith('.json') || !closure.has(path.resolve(source.fileName))) continue
+      const emitResult = program.emit(source, undefined, undefined, true)
+      if (emitResult.emitSkipped) {
+        fs.rmSync(outDir, { recursive: true, force: true })
+        return { ok: false, diagnostics: [`TypeScript 声明 emit 失败（emitSkipped）：${path.relative(root, source.fileName)}。请检查 tsconfig 编译选项。`] }
+      }
     }
     collectEmitted(ts, outDir, rootDir, emitted, closure)
     fs.rmSync(outDir, { recursive: true, force: true })
@@ -667,6 +670,27 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   // TypeScript does not emit existing declaration inputs; keep imported local contracts.
   for (const file of closure) {
     if (file.endsWith('.d.ts')) emitted.set(file, fs.readFileSync(file, 'utf8'))
+  }
+  // JSON 没有独立的 declaration emit，但它可以出现在公开类型中（typeof config）。
+  // 用提供方的 TypeScript checker 保留真实结构，不把它误判为 emitSkipped，
+  // 也不把 package.json 等运行时数据复制进公开类型包。
+  const jsonFiles = [...closure].filter(file => file.endsWith('.json'))
+  if (jsonFiles.length) {
+    const jsonProgram = ts.createProgram(jsonFiles, {
+      resolveJsonModule: true, module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeJs, types: [], skipLibCheck: true,
+    })
+    const checker = jsonProgram.getTypeChecker()
+    for (const file of jsonFiles) {
+      const source = jsonProgram.getSourceFile(file)
+      const first = source?.statements[0]
+      if (!first || !ts.isExpressionStatement(first)) continue
+      // JSON 根节点也可能是字符串/数字/布尔值；与对象字段一样展开为结构类型，
+      // 避免把根字面量的运行时值写入公开声明。
+      const type = checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(first.expression))
+      const shape = checker.typeToString(type, first, ts.TypeFormatFlags.NoTruncation)
+      emitted.set(file, `declare const value: ${shape};\nexport default value;\n`)
+    }
   }
 
   if (signal?.aborted) return { ok: false, diagnostics: ['声明生成被中止。'] }
