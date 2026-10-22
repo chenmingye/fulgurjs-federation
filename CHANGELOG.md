@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.13.1
+
+- **构建期共享门面支持通配符转发层展开（BI-FIX）**：`export * from '<shared>'` 形态的转发模块（vue-demi——pinia/@vueuse/vxe 等的常见传递依赖）进入 expose 门面改写闭包时，此前直接硬报错（`共享模块不支持 "export * from 'vue'"`），业务工程生产构建因此失败。现在构建期从被改写模块出发解析 shared 包的 ESM 入口（exports.import 优先、module/main 兜底；包名转发链如 vue → @vue/runtime-dom 递归解析），静态收集命名导出（不含 default——`export *` 语义本就不转出 default），把通配符改写为显式命名的门面转发；入口缺失或转发过深无法收集时保留原硬报错，不静默交付缺导出的产物。
+
 ## 6.13.0
 
 诊断通路补强（DEMES5.5 从零迁移轮 P01/P02/P03/P05）：

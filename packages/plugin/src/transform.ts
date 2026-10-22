@@ -12,6 +12,8 @@ import { init as initLexer, parse } from 'es-module-lexer'
 import MagicString from 'magic-string'
 import { transform as parseTypeScript } from 'esbuild'
 import path from 'node:path'
+import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import type { NormalizedOptions, NormalizedShared } from './options'
 import { SHARED_FACADE_PREFIX } from './options'
 import { INIT_MODULE_MARKER } from './virtual'
@@ -561,6 +563,17 @@ export async function transformModule(
         // export { a, b } from 'shared'
         const inner = clauseRaw.slice(clauseRaw.indexOf('{') + 1, clauseRaw.lastIndexOf('}'))
         if (/export\s+\*/.test(clauseRaw) && !clauseRaw.includes('{')) {
+          // 通配符转发层展开（vue-demi 等常见形态）：构建期从 shared 包入口静态收集导出名，
+          // 把 `export * from 'vue'` 改写为显式命名导出的门面转发。收集失败（入口缺失/
+          // 过深转发）保留原硬报错——宁可采用明确修法也不交付静默缺导出的产物。
+          const names = collectPackageExportNames(spec, id)
+          if (names && names.length > 0) {
+            const facadeSpec = shared
+              ? facadeSpecFor(ctx, shared, names)
+              : remoteFacadeSpecFor(ctx, remote!.name, exposeName!, names)
+            s.overwrite(stmtStart, stmtEnd, `export { ${names.join(', ')} } from ${JSON.stringify(facadeSpec)}`)
+            continue
+          }
           throw new Error(
             `[fulgurjs] 共享模块不支持 "export * from '${spec}'"：ESM 无法为动态协商的模块创建通配符导出绑定。` +
               `请改为明确列出名称："export { a, b } from '${spec}'"。`,
@@ -623,4 +636,117 @@ export async function transformModule(
   }
   // 不生成 sourcemap：hires 映射在 3 万模块级工程会占用数 GB 内存；本插件仅做语句级改写
   return { code: s.toString(), map: null }
+}
+
+// ── 通配符转发层展开（2026-10-22 构建 BI-FIX）：`export * from '<shared>'` 的静态展开 ──
+//
+// 背景：vue-demi 等转发包（pinia/@vueuse/vxe 等的传递依赖）用 `export * from 'vue'`
+// 转出全部 Vue API。此类模块进入 expose 门面改写闭包时，ESM 无法为动态协商的共享模块
+// 创建通配符绑定，此前直接硬报错（用户只能手工改第三方包）。构建期 shared 包的入口与
+// 导出面是静态已知的——这里从被改写模块出发解析 shared 包入口，收集其命名导出（不含
+// default：`export *` 语义本就不转出 default），把通配符改写为显式命名门面转发。
+// 收集失败时保留原硬报错（明确修法），不静默交付缺导出的产物。
+
+const packageExportNamesCache = new Map<string, string[] | null>()
+
+/** 解析包的 ESM 入口（package.json 的 exports.import 优先，module/main 兜底）；裸 resolve 走 require 条件会拿到 CJS，故必须经 package.json 判入口 */
+function resolveEsmEntryFrom(spec: string, fromFile: string): string | null {
+  try {
+    const req = createRequire(fromFile)
+    const pkgJsonPath = req.resolve(`${spec}/package.json`)
+    const pkgRoot = path.dirname(pkgJsonPath)
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
+    const exportsField = (pkg.exports as Record<string, unknown> | undefined)?.['.']
+    let entry: string | undefined
+    if (exportsField && typeof exportsField === 'object' && !Array.isArray(exportsField)) {
+      const cond = exportsField as { import?: unknown; module?: unknown; default?: unknown }
+      const picked = cond.import ?? cond.module ?? cond.default
+      if (typeof picked === 'string') entry = picked
+      else if (picked && typeof picked === 'object') {
+        const inner = picked as { node?: unknown; default?: unknown }
+        const leaf = inner.default ?? inner.node
+        if (typeof leaf === 'string') entry = leaf
+      }
+    }
+    if (!entry) entry = (pkg.module as string) || (pkg.main as string) || 'index.js'
+    return path.resolve(pkgRoot, entry)
+  } catch {
+    return null
+  }
+}
+
+/** 解析 shared 包入口文件路径（从被改写模块出发） */
+function resolvePackageEntry(spec: string, importerFile: string): string | null {
+  return resolveEsmEntryFrom(spec, importerFile)
+}
+
+/** 扫描单个 ESM 文件的命名导出；`export * from '...'`（相对与包名）递归收集 */
+function scanEsmNamedExports(file: string, depth: number, seen: Set<string>): { names: Set<string>; reExports: string[] } {
+  const names = new Set<string>()
+  const reExports: string[] = []
+  if (seen.has(file) || depth > 4) return { names, reExports }
+  seen.add(file)
+  let code: string
+  try {
+    code = fs.readFileSync(file, 'utf-8')
+  } catch {
+    return { names, reExports }
+  }
+  // export { a, b as c } [from ...]（无 from 时为本地导出，同样计入名字面）
+  for (const m of code.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const part of m[1].split(',')) {
+      const seg = part.trim()
+      if (!seg) continue
+      const asMatch = seg.match(/^(?:\w+|\$[\w$]+|default)\s+as\s+([\w$]+)$/)
+      if (asMatch) {
+        // import 语义的 "x as y"：对外名字是 y；default as X 需要排除（export * 不转出 default）
+        if (!/^default\s+as\s/.test(seg)) names.add(asMatch[1])
+      } else if (/^(?:\w+|\$[\w$]+|default)$/.test(seg) && seg !== 'default') {
+        names.add(seg)
+      } else if (/^default$/.test(seg)) {
+        // export { default } 本地形态不常见于转发层；忽略（default 不经通配符语义）
+      }
+    }
+  }
+  // export * from '...'：相对路径直接递归；包名转发（如 vue → @vue/runtime-dom）经
+  // createRequire 从当前文件解析后递归（同包内部转发链是 shared 本体的一部分）
+  for (const m of code.matchAll(/export\s*\*\s*from\s*['"]([^'"]+)['"]/g)) {
+    const spec = m[1]
+    if (spec.startsWith('.')) {
+      reExports.push(path.resolve(path.dirname(file), spec))
+    } else {
+      const esmEntry = resolveEsmEntryFrom(spec, file)
+      if (esmEntry) reExports.push(esmEntry)
+    }
+  }
+  // 声明式导出（dist 打包通常不用，兜底）
+  for (const m of code.matchAll(/export\s+(?:const|let|var|function|class)\s+([\w$]+)/g)) names.add(m[1])
+  return { names, reExports }
+}
+
+/** 收集 shared 包的命名导出（含 default:false 语义）；失败返回 null */
+function collectPackageExportNames(spec: string, importerFile: string): string[] | null {
+  const cacheKey = `${spec}|${importerFile}`
+  if (packageExportNamesCache.has(cacheKey)) return packageExportNamesCache.get(cacheKey) ?? null
+  let result: string[] | null = null
+  const entry = resolvePackageEntry(spec, importerFile)
+  if (entry) {
+    const seen = new Set<string>()
+    const all = new Set<string>()
+    let queue: string[] = [entry]
+    let depth = 0
+    while (queue.length && depth <= 4) {
+      const next: string[] = []
+      for (const f of queue) {
+        const { names, reExports } = scanEsmNamedExports(f, depth, seen)
+        for (const n of names) all.add(n)
+        next.push(...reExports)
+      }
+      queue = next
+      depth++
+    }
+    result = all.size > 0 ? [...all].sort() : null
+  }
+  packageExportNamesCache.set(cacheKey, result)
+  return result
 }
