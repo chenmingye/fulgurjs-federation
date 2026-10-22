@@ -45,4 +45,25 @@ export const ErrorCodes = {
   COMPONENT_EXPORT_INVALID: 'MFU-018',
   /** Vue 组件直渲染的渲染器与共享作用域实际收敛的 Vue 实例不一致（身份证据已证实） */
   VUE_RUNTIME_IDENTITY_MISMATCH: 'MFU-019',
+  /** 远程组件子树内部渲染错误（插件边界观测：setup/render/嵌套异步组件拒绝；原始异常保留在 cause） */
+  REMOTE_RENDER_ERROR: 'MFU-020',
 } as const
+
+/**
+ * 同一错误对象的全页面级「已报告」去重（P03 通路统一）。
+ *
+ * 一条失败可能流经多个边界（运行时抛出 → 适配器 UI 占位 → 业务 handler），每个边界都
+ * 有理由可见，但 fulgurjs:error / onRemoteError 对同一个错误对象只应报告一次。
+ * WeakSet 挂在 globalThis（惰性初始化，模块保持零顶层副作用以保住按需裁剪）：
+ * 运行时、Vue/React 适配器与各入口打包副本共享同一份标记
+ * （适配器 bundle 不静态引用运行时内核，经全局对象协作）。
+ * 非对象拒绝值（字符串/数字等）无法按身份去重，保持每次报告（罕见路径，接受重复）。
+ */
+export function markRemoteErrorReported(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const g = globalThis as { __FULGURJS_REPORTED_ERRORS__?: WeakSet<object> }
+  const reported = (g.__FULGURJS_REPORTED_ERRORS__ ??= new WeakSet())
+  if (reported.has(error)) return true
+  reported.add(error)
+  return false
+}

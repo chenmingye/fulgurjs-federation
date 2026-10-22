@@ -31,11 +31,15 @@ import {
 import type { LoadRemoteOptions } from './runtime/index'
 import type { PageRouteLike } from './pages'
 import { resolvePageProviderEntries } from './page-providers'
+import { ErrorCodes } from './runtime/errors'
 import {
   cleanCompName,
   createHostPagesCore,
   noRenderableExportError,
   readSessionKey,
+  remoteNameOf,
+  moduleNameOf,
+  reportRemoteObservation,
   shouldResetSessionCache,
   type HostPagesCoreOptions,
   type ResolvedHostPage,
@@ -283,13 +287,18 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
         if (timer !== undefined) clearTimeout(timer)
         const inner = (ns as any)?.default ?? ns
         if (!isValidComponentType(inner)) {
-          commit({ phase: 'error', error: noRenderableExportError(spec, inner) })
+          const err = noRenderableExportError(spec, inner)
+          reportRemoteObservation({ remote: remoteNameOf(spec), error: err })
+          commit({ phase: 'error', error: err })
           return
         }
         commit({ phase: 'ready', Comp: inner, providers })
       },
       (err: unknown) => {
         if (timer !== undefined) clearTimeout(timer)
+        // 加载失败进入 UI 错误态的同时纳入统一观测（P03）：运行时已报告的同一对象
+        // 经全页去重跳过；适配器自判错误在此首次可见
+        reportRemoteObservation({ remote: remoteNameOf(spec), error: err })
         commit({ phase: 'error', error: err })
       },
     )
@@ -320,7 +329,7 @@ function RemoteLoader({ spec, opts, loadRemote, beforeLoad, attempt, sessionKey,
 
 /** 渲染边界：捕获远程组件渲染异常；key=attempt 保证 retry 时重建（清掉边界错误态） */
 class RemoteRenderBoundary extends Component<
-  { onRetry: () => void; render: (error: unknown | null, retry: () => void) => ReactNode },
+  { spec: string; onRetry: () => void; render: (error: unknown | null, retry: () => void) => ReactNode },
   { error: unknown | null }
 > {
   override state = { error: null as unknown | null }
@@ -331,6 +340,17 @@ class RemoteRenderBoundary extends Component<
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error('[fulgurjs] 远程组件渲染异常（remoteComponent 内置边界）：', error, info?.componentStack ?? '')
+    // 渲染错误纳入统一观测（P01/P03）：MFU-020，原始异常保留在 cause（componentStack 见 console）
+    const spec = this.props.spec
+    const remote = remoteNameOf(spec)
+    reportRemoteObservation({
+      remote,
+      error: Object.assign(new Error(`远程组件 "${spec}" 子树渲染出错；原始异常在 cause。`), {
+        code: ErrorCodes.REMOTE_RENDER_ERROR,
+        details: { remote, module: moduleNameOf(spec), phase: 'render' },
+        cause: error,
+      }),
+    })
   }
 
   private readonly retry = (): void => {
@@ -368,6 +388,7 @@ function buildRemoteComponent<P>(
       RemoteRenderBoundary,
       {
         key: attempt,
+        spec,
         onRetry: retry,
         render: (boundaryError: unknown | null): ReactNode =>
           boundaryError !== null

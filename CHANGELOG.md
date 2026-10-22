@@ -1,5 +1,15 @@
 # 当前发布说明
 
+## 6.13.0
+
+诊断通路补强（DEMES5.5 从零迁移轮 P01/P02/P03/P05）：
+
+- **远程组件子树渲染错误可观测（MFU-020，P01）**：Vue `remoteComponent`/`createHostPages` 在组件边界以 `errorCaptured` 观测远程组件自身 setup/render/嵌套异步组件抛出的错误，经 `fulgurjs:error` 与 `onRemoteError` 上报（`details.phase='render'` 附 Vue 渲染阶段串，原始异常保留在 `cause`）——错误被业务 `errorHandler` 接管导致区域空白时不再完全不可见。默认不改变错误传播语义（业务 handler 照旧收到）；新增可选 `renderErrorComponent`：提供后本边界接管展示（收到 `error`/`retry` props，retry 重新挂载远程组件），错误不再向全局传播。React `remoteComponent` 内置渲染边界同步上报 MFU-020。
+- **MFU-001 重包装保留原始 cause（P02）**：container 获取失败与 expose 求值拒绝的运行时重包装现在 `wrapped.cause === original`（含非 Error 拒绝值原样保留）；此前仅消息合并底层文本。带 code 的领域错误仍原样透传（身份不变）。
+- **错误通知通路统一（P03）**：expose 拒绝（含 code 透传路径）、setup/onSession 执行失败（MFU-011/012）、onSession 缺 sessionKey（MFU-013）此前仅抛出不通知，现在统一进入 `fulgurjs:error`/`onRemoteError`。同一错误对象全页只报告一次（运行时与适配器 UI 占位跨边界去重，WeakSet 惰性挂 globalThis，不破坏按需裁剪）；每次新的加载/渲染尝试产生新错误对象，仍各自可见。
+- **错误提示不再把猜测写成事实（P05）**：默认错误占位的取证文案重写——按「已确认事实 / 可能原因 / 下一步」分层：前置校验类拒绝零网络请求属正常；零新请求只列「可能」是浏览器 import 失败缓存并给可执行判别步骤；外壳空白不再直接等同 shared.vue 实例分裂，改为列出候选原因与核对入口。
+- runtime.js gzip 阈值 10752B → 10912B（实测 10845B）、react-adapter.js 4224B → 4360B（实测 4338B）：P02/P03 的 cause 与通知为必要运行时增量，测量口径不变。
+
 ## 6.12.12
 
 - 五个可复制模板和包内模板统一精确依赖已发布的基础修复包 6.12.11，使用 registry 实际解析的锁文件；清理旧版本的安装年龄例外。

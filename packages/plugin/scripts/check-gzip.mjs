@@ -3,6 +3,7 @@
  * 阈值 10752B（zlib level9）：中文运行时诊断需要保留可操作的原因与修法。
  * 历史基线：4.3.0 英文 7547B → 中文化 8649B → 共享协商屏障 10273B（阈值 10496B）。
  * 6.6.0：setup pageProviders 契约（数组校验+消费方交付）实测 10597B，阈值上调至 10752B（CHANGELOG 已说明）。
+ * 6.13.0：P02 MFU-001 重包装保留 cause + P03 expose/setup 通知与全页去重实测 10845B，阈值上调至 10912B。
  * 超限 exit 1 —— runtime 体积是本插件核心卖点之一，防止无意膨胀。
  */
 import zlib from 'node:zlib'
@@ -10,13 +11,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const LIMIT = 10752 // 6.6.0：pageProviders 契约增量；实测 10597B，保留硬门禁余量
+const LIMIT = 10912 // 6.13.0：P02 cause 保留 + P03 统一通知与全页去重；实测 10845B，保留硬门禁余量
 const dist = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), 'dist')
 const file = path.join(dist, 'runtime.js')
 // React 适配器预算（5.1.0）：任务书建议 3072B，实测 3538B——差值全部来自两条中文三段式
 // 诊断文案（与 runtime.js 同一「中文诊断保留可操作性」口径）+ timeout/retry/代次守卫状态机。
 // 显式定档 4096B（zlib level9，external react 剔除后）；超限退出码 1，与 runtime 同级硬门禁。
-const REACT_ADAPTER_LIMIT = 4224 // 6.6.0：pageProviders 捕获/解析/包裹；实测 4130B（此前 4096B 预算已满）
+const REACT_ADAPTER_LIMIT = 4360 // 6.13.0：P01/P03 渲染错误观测上报（MFU-020）；实测 4318B，保留硬门禁余量
 const reactAdapter = path.join(dist, 'react-adapter.js')
 
 if (!fs.existsSync(file)) {

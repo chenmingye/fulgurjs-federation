@@ -11,7 +11,7 @@
  * - 自包含容器协议：remoteEntry 导出 { name, init(shareScopeMap), get(module) }，不 import 运行时。
  */
 import { satisfies, compareVersions } from '../semver'
-import { FgError, ErrorCodes } from './errors'
+import { FgError, ErrorCodes, markRemoteErrorReported } from './errors'
 import { RUNTIME_VERSION } from '../version'
 // 类型-only 包自引用（编译期擦除，无运行时导入）：远程类型注册表声明在公共 /runtime
 // 入口。必须用包名而非相对路径——各入口的 dts 打包会把相对引用内联成私有副本，
@@ -249,8 +249,11 @@ function createRuntime() {
     phase: 'setup' | 'onSession',
   ): Promise<void> {
     const wrap = (err: unknown): FgError => {
-      if (err instanceof FgError) return err
-      return new FgError(
+      if (err instanceof FgError) {
+        emitError({ remote: remoteName, error: err })
+        return err
+      }
+      const fgErr = new FgError(
         ErrorCodes.SETUP_RUN_FAILED,
         `现象：远程应用 "${remoteName}" 的 ${phase} 初始化失败。\n` +
           `原因：${String((err as Error)?.message ?? err)}\n` +
@@ -258,6 +261,8 @@ function createRuntime() {
         { remote: remoteName, phase },
         { cause: err },
       )
+      emitError({ remote: remoteName, error: fgErr })
+      return fgErr
     }
     lifecycleSyncRemote = remoteName
     let result: void | Promise<void>
@@ -348,6 +353,9 @@ function createRuntime() {
       remote.debug.setup = 'ready'
     } catch (err) {
       remote.debug.setup = 'failed'
+      // 统一通知（P03）：MFU-011 校验失败与 MFU-012 执行失败都在此边界可见；
+      // MFU-012 已在 invokeLifecycleFn 包装时报告过 → 同一对象去重跳过
+      if ((err as any)?.code) emitError({ remote: remote.name, error: err as FgError })
       // 只清应用级缓存：onSession 语义不存在，重试从 setup 重新开始
       st.setupExports = undefined
       st.globalComponents = undefined
@@ -361,13 +369,15 @@ function createRuntime() {
     const appContext = currentAppContext()
     const sessionKey = appContext?.sessionKey
     if (typeof sessionKey !== 'string' || sessionKey === '') {
-      throw new FgError(
+      const err = new FgError(
         ErrorCodes.SETUP_SESSION_KEY_MISSING,
         `现象：远程应用 "${remote.name}" 声明了 onSession，但宿主尚未提供有效的 AppContext.sessionKey。\n` +
           `原因：当前值为 ${sessionKey === undefined ? '缺失' : JSON.stringify(sessionKey)}。\n` +
           `修法：宿主每次登录或重登时生成新的非敏感登录代次 ID，并在加载远程页面前调用 provideAppContext({ ..., sessionKey: '登录代次 ID' })；不要使用 token 原文。`,
         { remote: remote.name },
       )
+      emitError({ remote: remote.name, error: err })
+      throw err
     }
     if (st.sessionPromise && st.sessionKey === sessionKey) return st.sessionPromise
     // 新登录代次：先作废旧信号（业务代码在 await 后写状态前检查 aborted），再串行衔接旧调用
@@ -426,7 +436,14 @@ function createRuntime() {
 
   const getScope = (name: string): ShareScope => (shareScopeMap[name] ??= Object.create(null))
 
+  /**
+   * 远程错误统一通知出口（P03）：onRemoteError hook + fulgurjs:error 窗口事件。
+   * 同一错误对象全页只报告一次（跨边界去重，见 errors.markRemoteErrorReported）：
+   * 一条失败流经多个边界（运行时抛出 → 适配器 UI 占位）不重复刷屏；
+   * 每次新尝试的新错误对象各自可见。hook 自身抛错被吞掉且不改变原失败语义。
+   */
   function emitError(info: { remote: string; error: FgError }) {
+    if (markRemoteErrorReported(info.error)) return
     try {
       hooks.onRemoteError?.(info)
     } catch {}
@@ -1021,6 +1038,7 @@ function createRuntime() {
           `现象：无法从 ${shown} 加载远程应用 "${remote.name}"。\n` +
             `原因：${String((lastErr as Error)?.message ?? lastErr)}\n修法：\n${hints.join('\n')}`,
           { remote: remote.name, stage: 'container' },
+          { cause: lastErr },
         )
       }
 
@@ -1071,7 +1089,7 @@ function createRuntime() {
       const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, `远程应用 "${remote.name}" 加载失败。底层原因：${String((err as Error)?.message ?? err)}。请检查远程入口、网络及共享依赖。`, {
         remote: remote.name,
         stage: 'container',
-      })
+      }, { cause: err })
       emitError({ remote: remote.name, error: wrapped })
       throw wrapped
     }
@@ -1156,12 +1174,19 @@ function createRuntime() {
         cacheKey,
         container.get(module).catch((err: unknown) => {
           loadedModules.delete(cacheKey)
-          if (err instanceof FgError || (err as any)?.code) throw err
-          throw new FgError(
+          if (err instanceof FgError || (err as any)?.code) {
+            // 带 code 的领域错误原样穿透，但同样纳入统一通知（P03：expose 拒绝可见）
+            emitError({ remote: name, error: err as FgError })
+            throw err
+          }
+          const wrapped = new FgError(
             ErrorCodes.REMOTE_LOAD_FAILED,
             `无法从远程应用 "${name}" 加载模块 "${module}"。底层原因：${String((err as Error)?.message ?? err)}。请核对 exposes 键和远程构建产物。`,
             { remote: name, module, stage: 'expose' },
+            { cause: err },
           )
+          emitError({ remote: name, error: wrapped })
+          throw wrapped
         }),
       )
     }
@@ -1380,6 +1405,8 @@ function createRuntime() {
     preloadRemote,
     parseSpec,
     clearSessionState,
+    /** 适配器边界的观测上报入口（P03）：与运行时内部 emitError 同一通路、hook 与全页去重 */
+    reportRemoteError: (info: { remote: string; error: unknown }) => { emitError(info as { remote: string; error: FgError }) },
   }
 }
 

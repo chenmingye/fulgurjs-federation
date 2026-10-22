@@ -212,7 +212,7 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 - **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
-**错误处理范围**：Vue remoteComponent 的 errorComponent 处理模块/初始化/Provider 加载失败，不捕获业务组件 setup/render 抛错；这类错误由组件自身或宿主 onErrorCaptured/app.config.errorHandler 处理。React remoteComponent 另带组件子树渲染错误边界，但同样不捕获事件处理器或任意异步回调异常。完整应用桥接的宿主错误边界也不覆盖另一 root 的内部错误。
+**错误处理范围**：Vue remoteComponent 的 errorComponent 处理模块/初始化/Provider 加载失败。远程组件**子树内部**的 setup/render/嵌套异步组件错误默认不改变传播语义（仍由业务 onErrorCaptured/app.config.errorHandler 处理），但插件在组件边界**观测上报**：`fulgurjs:error` 事件与 `onRemoteError` hook 收到 `MFU-020`（`details.phase='render'`，原始异常保留在 `cause`）——错误被业务 handler 吞掉导致区域空白时仍有事件可查。需要就地展示与恢复时，为 remoteComponent/createHostPages 传 `renderErrorComponent`（收到 `error`/`retry` props；接管后错误不再向全局传播，retry 重新挂载远程组件）。事件处理器或任意异步回调中的异常仍不归插件观测。React remoteComponent 自带组件子树渲染错误边界（同样上报 MFU-020），但不捕获事件处理器或任意异步回调异常。完整应用桥接的宿主错误边界也不覆盖另一 root 的内部错误。同一错误对象跨边界（运行时抛出 → UI 占位）只报告一次；每次新的加载/渲染尝试各自可见。
 
 ### 已有项目复用原组件注册源
 

@@ -101,6 +101,40 @@ export function noRenderableExportError(spec: string, inner: unknown): Error {
   )
 }
 
+/**
+ * 适配器边界的远程错误观测上报（P03 通路统一）。
+ *
+ * 优先经运行时单例 reportRemoteError（onRemoteError hook + fulgurjs:error 事件 +
+ * 同一错误对象的全页去重）；单例不可用（纯适配器单测等场景）时直接派发窗口事件，
+ * 不静默丢失。error 建议为带 code/details 的 Error（原始异常放 cause），
+ * remote/module/phase 等上下文放 details——报告不吞错、不改变原失败/成功语义。
+ */
+export function reportRemoteObservation(info: { remote: string; error: unknown }): void {
+  const rt = (globalThis as { __FULGURJS_RUNTIME__?: { reportRemoteError?: (i: { remote: string; error: unknown }) => void } }).__FULGURJS_RUNTIME__
+  if (typeof rt?.reportRemoteError === 'function') {
+    try {
+      rt.reportRemoteError(info)
+      return
+    } catch {
+      /* 上报自身异常不改变业务语义，落到窗口事件直发 */
+    }
+  }
+  try {
+    ;(globalThis as { dispatchEvent?: (e: Event) => boolean }).dispatchEvent?.(
+      new CustomEvent('fulgurjs:error', { detail: info }),
+    )
+  } catch {
+    /* 无事件循环环境（SSR/单测）静默跳过：观测失败不引入新异常 */
+  }
+}
+
+/** spec 拆出 remote 名（无分隔符时整体视为 remote） */
+export const remoteNameOf = (spec: string): string => spec.slice(0, spec.indexOf('/')) || spec
+
+/** spec 拆出 module 名（无分隔符时 undefined） */
+export const moduleNameOf = (spec: string): string | undefined =>
+  spec.includes('/') ? spec.slice(spec.indexOf('/') + 1) : undefined
+
 export function createHostPagesCore(options: HostPagesCoreOptions): HostPagesCore {
   const { pages, remotePrefixes, deriveSpec, schema, strict, base } = options
   // definePages 复用：剥参冲突（R1）/重复 spec（R2）/spec 存在性（R3，dev schema 可用时）/

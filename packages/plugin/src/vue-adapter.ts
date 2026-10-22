@@ -1,5 +1,5 @@
 /** Vue 适配层只接收加载函数，不静态引用运行时内核。 */
-import { defineAsyncComponent, defineComponent, getCurrentInstance, h, ref, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type PropType } from 'vue'
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onErrorCaptured, ref, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type PropType } from 'vue'
 import type { PageRouteLike, RemoteSchemaEntry } from './pages'
 import { ErrorCodes } from './runtime/errors'
 import {
@@ -7,6 +7,9 @@ import {
   createHostPagesCore,
   noRenderableExportError,
   readSessionKey,
+  remoteNameOf,
+  moduleNameOf,
+  reportRemoteObservation,
   shouldResetSessionCache,
   type HostPagesCoreOptions,
   type ResolvedHostPage,
@@ -66,6 +69,14 @@ function vueRuntimeIdentityError(spec: string): Error | undefined {
 export interface RemoteComponentOptions {
   loadingComponent?: Component
   errorComponent?: Component
+  /**
+   * 远程组件子树渲染错误占位（P01 可选接线）：提供后，本组件边界接管远程组件内部
+   * setup/render/嵌套异步组件的渲染错误——停止该错误向全局继续传播（本边界已消费），
+   * 渲染此组件（props：error 原始异常 + retry 重新挂载远程组件）。
+   * 未提供时仅观测上报（fulgurjs:error，错误码 MFU-020，原始异常保留在 cause），
+   * 不改变错误传播语义——业务 errorHandler / onErrorCaptured 行为与接入前完全一致。
+   */
+  renderErrorComponent?: Component
   retries?: number
   delay?: number
   timeout?: number
@@ -128,7 +139,7 @@ const RemoteErrorPlaceholder = /*#__PURE__*/ defineComponent({
         h('p', { style: 'margin:0 0 4px;font-weight:600' }, `远程组件加载失败（错误码 ${code}）`),
         h('p', { style: 'margin:0 0 8px;word-break:break-all' }, message),
         h('p', { style: 'margin:0 0 8px' }, '修法：① 核对 spec 的「远程名/expose 名」与远程应用 exposes 是否一致（MFU-006/008/018）；② 核对 remotes 地址端口与远程服务可达性、remoteEntry 是否可访问（MFU-001）；③ 查看 window 的 fulgurjs:error 事件与 console 同源错误定位根因。'),
-        h('p', { style: 'margin:0 0 8px' }, '网络取证：Network 面板看失败的具体 chunk——有红色请求（404/502）= 资源缺失或代理错误；零新请求且直接拒绝 = 浏览器已缓存上次 import 失败（同 URL 不再发请求），用「刷新页面重试」穿透；外壳正常而内部空白且无报错 = 优先核对 shared.vue 实例收敛（MFU-019）。'),
+        h('p', { style: 'margin:0 0 8px' }, '下一步取证（按事实区分，不预判结论）：① 本错误上方「原因」与 fulgurjs:error 事件的 details.stage 标明失败阶段——container=入口/网络，expose=模块求值/导出，setup=远程初始化，render=远程组件内部渲染；前置校验或配置类拒绝不发起网络请求，Network 面板零新请求也可能完全正常。② Network 面板确有红色请求时，读该请求实际 status 与响应内容（404/502=资源缺失或代理错误；200 但返回 HTML=入口被 SPA fallback 误回退）。③ Network 面板零新请求且消息含 import/Failed to fetch：可能是浏览器缓存了上次同 URL 的 import 失败（module map 对失败 URL 不再发请求），也可能是加载前的本地校验拒绝——先用「刷新页面重试」整页重试再判断。④ 外壳正常而内部空白：可能原因包括远程组件渲染错误被业务 handler 接管、合法空数据或依赖缺失，不等于已确认 shared.vue 实例分裂；核对 window 的 fulgurjs:error（含 MFU-020/019）与 __FULGURJS_SCOPE__ 后再定位。'),
         h('p', { style: 'margin:0 0 10px' }, '「重试加载」在当前页面重建加载；若浏览器已缓存失败的模块（如远程静态子依赖曾加载失败），请用「刷新页面重试」——它会整页刷新（保留当前地址），未保存的页面状态会丢失。'),
         h('div', { style: 'margin:0' }, buttons),
       ])
@@ -173,6 +184,9 @@ function createRecoverableErrorPlaceholder(
           if (!isVueRenderableComponent(inner)) throw noRenderableExportError(spec, inner)
           recovered.value = inner
         } catch (e) {
+          // 重试失败同样进入统一观测（P03）：新尝试的新错误对象各自可见；
+          // 运行时已报告过的同一对象经全页去重跳过
+          reportRemoteObservation({ remote: remoteNameOf(spec), error: e })
           retryError.value = e
         } finally {
           retrying.value = false
@@ -189,6 +203,53 @@ function createRecoverableErrorPlaceholder(
       }
     },
   })
+}
+
+/**
+ * 远程组件子树错误的观测包装（P01）：所有渲染路径（首载/重试/会话重建）共用。
+ *
+ * 两个职责严格分开：
+ * 1. 观测（默认，零行为变化）：errorCaptured 捕获远程组件子树内部的 setup/render/
+ *    嵌套异步组件错误，包装为 MFU-020（原始异常保留在 cause，details 带 remote/
+ *    module/phase=render 与 Vue 的 info 阶段串）经 reportRemoteObservation 上报；
+ *    不返回 false——错误继续沿原语义传播（业务 errorHandler/onErrorCaptured 照旧）。
+ * 2. 接管（仅消费方显式传入 renderErrorComponent）：本边界消费该错误（返回 false
+ *    停止继续传播），渲染消费方提供的占位（props：error/retry）；retry 通过
+ *    renderEpoch 变更 key 强制重挂远程组件（重跑 setup，等价「重试加载」的恢复语义）。
+ * 加载阶段错误不经此处（errorCaptured 只覆盖后代组件渲染期错误），仍由
+ * createRecoverableErrorPlaceholder 承担。
+ */
+function remoteRenderBoundary(
+  spec: string,
+  renderErrorComponent: Component | undefined,
+): { onErrorCaptured: (err: unknown, instance: unknown, info: string) => boolean | void; error: { value: unknown }; epoch: { value: number }; retry: () => void; view: Component | undefined } {
+  const error = shallowRef<unknown>(undefined)
+  const epoch = ref(0)
+  const retry = (): void => {
+    error.value = undefined
+    epoch.value += 1
+  }
+  const onErrorCaptured = (err: unknown, _instance: unknown, info: string): boolean | void => {
+    const reported = Object.assign(
+      new Error(
+        `现象：远程组件 "${spec}" 的子树内部抛出错误（渲染阶段：${info || '未知'}）。\n` +
+          `根因（已证实）：错误抛自远程组件自身的 setup/render/嵌套异步组件，与联邦的模块加载无关；原始异常保留在本错误的 cause 与事件 detail 中。\n` +
+          `修法：查看 cause 的原始调用栈定位远程组件内部代码。需要在本组件位置直接展示错误并提供恢复时，为 remoteComponent/createHostPages 传入 renderErrorComponent（本边界将接管展示，错误不再向全局传播）。`,
+      ),
+      {
+        code: ErrorCodes.REMOTE_RENDER_ERROR,
+        details: { remote: remoteNameOf(spec), module: moduleNameOf(spec), phase: 'render', renderInfo: info || undefined },
+        cause: err,
+      },
+    )
+    reportRemoteObservation({ remote: remoteNameOf(spec), error: reported })
+    if (renderErrorComponent) {
+      error.value = err
+      return false
+    }
+    return undefined
+  }
+  return { onErrorCaptured, error, epoch, retry, view: renderErrorComponent }
 }
 
 /** consumerApp 协议实现：globalComponents 注册 + pageProviders 捕获（runtime 经此交付） */
@@ -248,6 +309,7 @@ function sessionComponent(
   inner: Component, name: string | undefined, initialApp: App | undefined,
   initialSession: string | undefined, load: (app: App | undefined) => Promise<Component>,
   spec: string, loadingComponent?: Component, errorComponent?: Component,
+  renderErrorComponent?: Component,
 ): Component {
   return defineComponent({
     name, inheritAttrs: false,
@@ -255,6 +317,9 @@ function sessionComponent(
       const app = getCurrentInstance()?.appContext.app
       const current = shallowRef<Component>()
       const failure = shallowRef<unknown>()
+      // 远程子树渲染错误边界（P01）：默认仅观测上报；传入 renderErrorComponent 才接管展示
+      const boundary = remoteRenderBoundary(spec, renderErrorComponent)
+      onErrorCaptured(boundary.onErrorCaptured)
       let session = initialSession
       let generation = 0
       let disposed = false
@@ -266,6 +331,7 @@ function sessionComponent(
         const request = ++generation
         current.value = undefined
         failure.value = undefined
+        boundary.error.value = undefined
         try {
           const result = await load(app)
           if (disposed || request !== generation) return
@@ -276,7 +342,12 @@ function sessionComponent(
           session = requestedSession
           current.value = result
         } catch (error) {
-          if (!disposed && request === generation) failure.value = error
+          if (!disposed && request === generation) {
+            // 加载失败进入 UI 错误态的同时纳入统一观测（P03）：
+            // 运行时已报告的同一对象被去重；适配器自判的 MFU-018/019 在此首次可见
+            reportRemoteObservation({ remote: remoteNameOf(spec), error })
+            failure.value = error
+          }
         } finally {
           pending = false
         }
@@ -291,10 +362,18 @@ function sessionComponent(
       })
       onUnmounted(() => { disposed = true; generation++ })
       const ErrorView = createRecoverableErrorPlaceholder(() => load(app), spec, errorComponent)
-      return () => current.value
-        ? h(current.value, { ...attrs, key: generation }, slots)
-        : failure.value ? h(ErrorView, { ...attrs, error: failure.value }, slots)
-        : loadingComponent ? h(loadingComponent) : null
+      return () => {
+        // 接管态：远程子树渲染错误已由本边界消费，渲染消费方提供的占位（error/retry）
+        if (boundary.view && boundary.error.value !== undefined) {
+          return h(boundary.view, { error: boundary.error.value, retry: boundary.retry } as never)
+        }
+        const c = current.value
+        // key 拼入 renderEpoch：retry 后强制重挂远程组件（重跑 setup），实现渲染错误恢复
+        return c
+          ? h(c, { ...attrs, key: `${generation}-${boundary.epoch.value}` }, slots)
+          : failure.value ? h(ErrorView, { ...attrs, error: failure.value }, slots)
+          : loadingComponent ? h(loadingComponent) : null
+      }
     },
   })
 }
@@ -327,10 +406,19 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
       }).then(async (m: any) => {
         // 边界检查顺序：先证伪导出形态（MFU-018），再证伪运行时身份（MFU-019）。
         // 身份检查放在模块求值完成后——此时远程的共享门面已把实例收敛进作用域，可比。
+        // 适配器自判错误在抛出点纳入统一观测（P03）；sessionComponent/重试占位对同一
+        // 对象的再次上报经全页去重跳过。
         const inner = (m?.default ?? m) as Component | undefined
-        if (!isVueRenderableComponent(inner)) throw noRenderableExportError(spec, inner)
+        if (!isVueRenderableComponent(inner)) {
+          const err = noRenderableExportError(spec, inner)
+          reportRemoteObservation({ remote: remoteNameOf(spec), error: err })
+          throw err
+        }
         const identity = vueRuntimeIdentityError(spec)
-        if (identity) throw identity
+        if (identity) {
+          reportRemoteObservation({ remote: remoteNameOf(spec), error: identity })
+          throw identity
+        }
         return applyPageProviders(inner, captured)
       })
     }
@@ -340,7 +428,7 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
       initialApp = app
       const session = readSessionKey()
       const inner = await load(app)
-      return sessionComponent(inner, inner?.name, app, session, load, spec, opts.loadingComponent, opts.errorComponent)
+      return sessionComponent(inner, inner?.name, app, session, load, spec, opts.loadingComponent, opts.errorComponent, opts.renderErrorComponent)
     }
     return defineAsyncComponent({
       loader,
@@ -369,8 +457,10 @@ export interface HostPagesOptions extends HostPagesCoreOptions {
   beforeLoad?: () => void | Promise<void>
   /** 加载期占位组件（骨架屏） */
   loadingComponent?: Component
-  /** 错误占位组件（缺省 = 内置错误占位：错误码+根因+修法+重试加载/刷新页面重试；自定义时完全接管） */
+  /** 错误占位（缺省 = 内置错误占位：错误码+根因+修法+重试加载/刷新页面重试；自定义时完全接管） */
   errorComponent?: Component
+  /** 远程页面子树渲染错误占位（可选接管：提供后本边界消费渲染错误并展示 error/retry；缺省仅观测上报） */
+  renderErrorComponent?: Component
   /** 骨架屏延迟 ms（默认 200，防闪） */
   delay?: number
 }
@@ -390,7 +480,7 @@ export function createHostPages(
   options: HostPagesOptions,
   load: (spec: string, opts?: { retries?: number; consumerApp?: unknown }) => Promise<any>,
 ): HostPages {
-  const { beforeLoad, loadingComponent, errorComponent, delay } = options
+  const { beforeLoad, loadingComponent, errorComponent, renderErrorComponent, delay } = options
   const core = createHostPagesCore(options)
 
   // 会话感知的组件缓存：AppContext.sessionKey 变化（换账号/重登/退出）后清除组件缓存，
@@ -423,10 +513,15 @@ export function createHostPages(
         const mod = await load(spec, { consumerApp: consumerRegistry(app, captured) })
         let inner = mod?.default ?? mod
         if (!isVueRenderableComponent(inner)) {
-          throw noRenderableExportError(spec, inner)
+          const err = noRenderableExportError(spec, inner)
+          reportRemoteObservation({ remote: remoteNameOf(spec), error: err })
+          throw err
         }
         const identity = vueRuntimeIdentityError(spec)
-        if (identity) throw identity
+        if (identity) {
+          reportRemoteObservation({ remote: remoteNameOf(spec), error: identity })
+          throw identity
+        }
         if (keepAlivePage && inner && typeof inner === 'object') {
           // keepAlive 页（Vue 3.5 KeepAlive 语义）：include 对「已解析的异步组件」按
           // __asyncResolved.name 匹配，而非包装名——解析后若内层组件名与包装名不一致，
@@ -445,7 +540,7 @@ export function createHostPages(
         initialApp = app
         const session = readSessionKey()
         const inner = await loadPage(app)
-        return sessionComponent(inner, keepAlivePage ? name : inner.name, app, session, loadPage, spec, loadingComponent, errorComponent)
+        return sessionComponent(inner, keepAlivePage ? name : inner.name, app, session, loadPage, spec, loadingComponent, errorComponent, renderErrorComponent)
       }
       const asyncComp: Component = defineAsyncComponent({
         loader: pageLoader,
