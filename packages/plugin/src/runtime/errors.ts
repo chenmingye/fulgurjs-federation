@@ -1,10 +1,22 @@
+/** URL formatting shared by runtime errors and display adapters; never mutates the raw cause. */
+export function diagnosticUrl(text: string): string {
+  return text
+    .replace(/(https?:\/\/)(?:[^\s/@]+@)?([^\s?#"'<>，。；）)\]]+)(?:[?#][^\s"'<>，。；）)\]]*)?/g, '$1$2')
+}
+
+/** Display diagnostics without URL credentials/query/hash or explicitly labelled credentials. */
+export function diagnosticMessage(error: unknown): string {
+  return diagnosticUrl(String(error && typeof error === 'object' && 'message' in error ? error.message : error))
+    .replace(/\b(token|password|cookie|authorization)["']?\s*[:=]\s*["']?(?:Bearer\s+)?[^\s,;"'}]+/gi, '$1=[redacted]')
+}
+
 /** 统一错误码体系（对齐 webpack ScriptExternalLoadError 等运行时错误的可诊断性） */
 export class FgError extends Error {
   code: string
   details?: Record<string, unknown>
 
   constructor(code: string, message: string, details?: Record<string, unknown>, options?: ErrorOptions) {
-    super(`[fulgurjs:${code}] ${message}`, options)
+    super(`[fulgurjs:${code}] ${diagnosticUrl(message)}`, options)
     this.name = 'FgError'
     this.code = code
     this.details = details
@@ -43,7 +55,7 @@ export const ErrorCodes = {
   SETUP_RECURSION: 'MFU-014',
   /** 远程模块在组件消费边界导出的不是可渲染组件（适配器实测导出形态后报出） */
   COMPONENT_EXPORT_INVALID: 'MFU-018',
-  /** Vue 组件直渲染的渲染器与共享作用域实际收敛的 Vue 实例不一致（身份证据已证实） */
+  /** 当前编译 SFC 的 Vue 导入引用与消费方渲染器不一致（组件证据已证实） */
   VUE_RUNTIME_IDENTITY_MISMATCH: 'MFU-019',
   /** 远程组件子树内部渲染错误（插件边界观测：setup/render/嵌套异步组件拒绝；原始异常保留在 cause） */
   REMOTE_RENDER_ERROR: 'MFU-020',

@@ -22,12 +22,12 @@ const run = (cmd, args, opts = {}) => {
 }
 
 // 1) 临时工程初始化（存在则复用；首次需联网装最新包）
-if (!fs.existsSync(path.join(DIR, 'node_modules', 'typescript')) || !fs.existsSync(path.join(DIR, 'node_modules', 'vue-router'))) {
+if (!fs.existsSync(path.join(DIR, 'node_modules', 'typescript')) || !fs.existsSync(path.join(DIR, 'node_modules', 'vue-router')) || !fs.existsSync(path.join(DIR, 'node_modules', 'pinia'))) {
   fs.rmSync(DIR, { recursive: true, force: true })
   fs.mkdirSync(DIR, { recursive: true })
   fs.writeFileSync(path.join(DIR, 'package.json'), JSON.stringify({ private: true, type: 'module' }))
   // typescript 锁 5.x 最新线（@latest 已是 7.x Go 版，vue-tsc 尚未兼容其包导出；IDE 亦为 5.x 口径）
-  const install = run('npx', ['--yes', 'pnpm@latest', 'add', 'typescript@5', 'vue-tsc@latest', 'vue@latest', 'vue-router@latest', 'element-plus@latest'], { capture: true })
+  const install = run('npx', ['--yes', 'pnpm@latest', 'add', 'typescript@5', 'vue-tsc@latest', 'vue@latest', 'vue-router@latest', 'pinia@latest', 'element-plus@latest'], { capture: true })
   if (install.status !== 0) {
     console.error('[typecheck-latest] 依赖安装失败：\n' + install.stdout + install.stderr)
     process.exit(1)

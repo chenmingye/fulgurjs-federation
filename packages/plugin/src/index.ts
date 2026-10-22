@@ -7,6 +7,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import type { Plugin, ViteDevServer } from 'vite'
+import { tagVueRuntime } from './vue-runtime-evidence'
 import {
   normalizeOptions,
   readInstalledVersion,
@@ -1669,6 +1670,12 @@ export function federation(options: FederationOptions): Plugin[] {
       const isAppSource = clean.startsWith(state.normalized.root + path.sep) &&
         !clean.includes(`${path.sep}node_modules${path.sep}`) &&
         !clean.includes(`${path.sep}.vite${path.sep}`)
+      // Production SFC compilation may export the component from a script subrequest.
+      // Tag that actual default export as well; template/style requests carry no component.
+      const evidence = isAppSource && clean.endsWith('.vue') && (!id.includes('?') || /[?&]type=script(?:&|$)/.test(id))
+        ? tagVueRuntime(code, source => this.parse(source))
+        : null
+      if (evidence) code = evidence.code
       const entryRewrite = state.command === 'serve' && isAppSource
         ? await rewriteRuntimeEntryImports(code, isExposeTargetFile(clean, state.normalized.root, state.normalized.exposes))
         : null
@@ -1705,7 +1712,7 @@ export function federation(options: FederationOptions): Plugin[] {
       // D6（2026-09-23）：build 下的 post 兜底见 buildFallbackTransform（与 fulgurjs:post-last
       // 共享函数）——auto-import 类后置插件在 pre 之后注入的 shared 导入在此兜底门面化。
       if (state.command === 'build') {
-        return buildFallbackTransform(code, id)
+        return (await buildFallbackTransform(code, id)) ?? evidence ?? (entryRewrite === null ? null : { code, map: null })
       }
 
       // dev 改写范围 = devSharedSelf（默认：纯 remote 为 true，有 remotes 的宿主为 false，
@@ -1733,7 +1740,7 @@ export function federation(options: FederationOptions): Plugin[] {
         rewriteShared,
         sharedClosureRoots: state.sharedClosureRoots,
       })
-      return transformed ?? (entryRewrite === null ? null : { code, map: null })
+      return transformed ?? (entryRewrite === null ? evidence : { code, map: null })
     },
   }
 

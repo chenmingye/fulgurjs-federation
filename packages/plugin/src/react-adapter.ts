@@ -31,7 +31,7 @@ import {
 import type { LoadRemoteOptions } from './runtime/index'
 import type { PageRouteLike } from './pages'
 import { resolvePageProviderEntries } from './page-providers'
-import { ErrorCodes } from './runtime/errors'
+import { ErrorCodes, diagnosticMessage } from './runtime/errors'
 import {
   cleanCompName,
   createHostPagesCore,
@@ -89,7 +89,7 @@ const DefaultErrorView = function FulgurjsRemoteError({ error, retry, phase }: {
 }): ReactNode {
   const err = error as (Error & { code?: string }) | undefined
   const code = err?.code ?? 'UNKNOWN'
-  const message = err?.message ?? String(error ?? 'unknown error')
+  const message = diagnosticMessage(err ?? error ?? 'unknown error')
   return createElement('div', { style: ERROR_STYLE, 'data-fulgurjs-error': code }, [
     createElement('p', { key: 't', style: TITLE_STYLE },
       phase === 'load' ? `远程组件加载失败（错误码 ${code}）` : `远程组件渲染出错（错误码 ${code}）`),
@@ -176,7 +176,7 @@ export class RemoteErrorBoundary extends Component<RemoteErrorBoundaryProps, Bou
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     // 渲染异常与加载异常分开记录：这里只有渲染路径（加载错误不经 ErrorBoundary）
-    console.error('[fulgurjs] 远程组件渲染异常（RemoteErrorBoundary 捕获）：', error, info?.componentStack ?? '')
+    console.error('[fulgurjs] 远程组件渲染异常（RemoteErrorBoundary 捕获）：', diagnosticMessage(error), diagnosticMessage(info?.componentStack ?? ''))
     this.props.onError?.(error, info)
   }
 
@@ -339,7 +339,7 @@ class RemoteRenderBoundary extends Component<
   }
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
-    console.error('[fulgurjs] 远程组件渲染异常（remoteComponent 内置边界）：', error, info?.componentStack ?? '')
+    console.error('[fulgurjs] 远程组件渲染异常（remoteComponent 内置边界）：', diagnosticMessage(error), diagnosticMessage(info?.componentStack ?? ''))
     // 渲染错误纳入统一观测（P01/P03）：MFU-020，原始异常保留在 cause（componentStack 见 console）
     const spec = this.props.spec
     const remote = remoteNameOf(spec)

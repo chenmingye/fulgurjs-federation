@@ -202,7 +202,7 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
   if (Object.keys(options.remotes ?? {}).length && usesVue && !shared.includes('vue')) {
     add('shared.vue', 'WARN', '本地是 Vue 应用且配置了远程消费，但 shared 未声明 vue。',
       '组件直渲染要求远程组件与消费方渲染器使用同一 Vue 实例；本地未声明时无法从静态扫描确认是否收敛——这是接入风险，尚未证实存在重复实例（远程可能未共享 vue、或仅暴露纯 TS 模块）。',
-      '消费远程 Vue 组件的两侧都在 federation({ shared }) 声明 vue（建议 singleton），并核对 shareScope 一致；运行时若实例分裂，remoteComponent 边界会报 MFU-019。仅消费纯 TS 模块可忽略本项。')
+      '消费远程 Vue 组件的两侧都在 federation({ shared }) 声明 vue（建议 singleton），并核对 shareScope 一致；编译 SFC 有实际导入引用证据时，remoteComponent 可报 MFU-019；旧远程或普通 TS 组件缺少证据时不能据共享表自动确认冲突。仅消费纯 TS 模块可忽略本项。')
   }
   for (const [key, remote] of Object.entries(options.remotes ?? {})) {
     if (typeof remote === 'function') {

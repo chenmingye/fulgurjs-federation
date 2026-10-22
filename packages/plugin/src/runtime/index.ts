@@ -11,7 +11,7 @@
  * - 自包含容器协议：remoteEntry 导出 { name, init(shareScopeMap), get(module) }，不 import 运行时。
  */
 import { satisfies, compareVersions } from '../semver'
-import { FgError, ErrorCodes, markRemoteErrorReported } from './errors'
+import { FgError, ErrorCodes, markRemoteErrorReported, diagnosticUrl } from './errors'
 import { RUNTIME_VERSION } from '../version'
 // 类型-only 包自引用（编译期擦除，无运行时导入）：远程类型注册表声明在公共 /runtime
 // 入口。必须用包名而非相对路径——各入口的 dts 打包会把相对引用内联成私有副本，
@@ -514,7 +514,7 @@ function createRuntime() {
         breakerState: prev?.breakerState ?? { fails: 0, openUntil: 0 },
         entryInflight: prev?.entryInflight ?? new Map(),
         entryFailCounts: prev?.entryFailCounts ?? new Map(),
-        debug: prev?.debug ?? { entry: r.entry, status: 'idle', setup: 'none' },
+        debug: prev?.debug ?? { entry: sanitizeUrl(r.entry), status: 'idle', setup: 'none' },
       })
     }
   }
@@ -870,13 +870,8 @@ function createRuntime() {
   }
 
   /** WP6：错误信息用的 URL 脱敏——去凭证（user:pass@）与 query/hash */
-  function sanitizeUrl(u: string): string {
-    try {
-      const x = new URL(u, typeof location < 'u' ? location.href : 'http://f.invalid')
-      return x.protocol + '//' + x.host + x.pathname
-    } catch {
-      return String(u).replace(/[?#].*$/, '')
-    }
+  function sanitizeUrl(u = ''): string {
+    return diagnosticUrl(u).split(/[?#]/, 1)[0]
   }
 
   function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -1071,7 +1066,7 @@ function createRuntime() {
       remote.containerPromise = undefined
       remote.state = 'failed'
       remote.debug.status = 'failed'
-      remote.debug.error = String((err as Error)?.message ?? err)
+      remote.debug.error = diagnosticUrl(String((err as Error)?.message ?? err))
       b.fails += 1
       if (b.fails >= remote.breakerThreshold) {
         b.openUntil = Date.now() + remote.breakerResetMs

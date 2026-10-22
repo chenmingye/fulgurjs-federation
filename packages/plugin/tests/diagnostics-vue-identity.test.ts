@@ -2,8 +2,7 @@
  * 诊断补强回归（D03/D07/D09/D13）：
  * - MFU-018：远程模块导出形态不是可渲染组件时，在 remoteComponent/hostPages 组件消费
  *   边界报错（错误码可见、不渲染空白成功页）；合法选项组件不误报。
- * - MFU-019：Vue 直渲染的渲染器与共享作用域收敛实例身份不一致时在适配器边界报错，
- *   附双方版本；收敛一致与「作用域无实例（不可比）」都放行（D13：无元数据远程不误拒）。
+ * - MFU-019：当前组件编译证据与渲染器不同才拒绝；无元数据不从默认共享表猜测。
  * 身份证据 = 实际导出引用比较（ref 函数），不是版本字符串。
  */
 // @vitest-environment jsdom
@@ -58,50 +57,38 @@ describe('MFU-018 组件导出形态', () => {
   })
 })
 
-describe('MFU-019 Vue 运行时身份（组件直渲染边界）', () => {
-  const stubSharedVue = (ns: unknown) =>
-    vi.stubGlobal('__FULGURJS_RUNTIME__', { getLoadedShare: (name: string) => (name === 'vue' ? ns : undefined) })
+describe('MFU-019 当前组件的运行时证据', () => {
+  const withEvidence = (value: unknown) => Object.defineProperty(okComp(), Symbol.for('fulgurjs.vue-runtime'), {
+    value: { key: 'ref', value },
+  })
 
-  it('作用域收敛实例与渲染链 ref 不一致 → 报 MFU-019 并附双方版本', async () => {
-    stubSharedVue({ ref: () => {}, version: '9.9.9' })
-    const load = vi.fn().mockResolvedValue({ default: okComp() })
-    const RC = createRemoteComponent(load as never)('r/Split')
-    const el = await mount(RC)
+  it('当前 SFC 实际引用不同，在 remoteComponent 边界拒绝并给出证据', async () => {
+    const load = vi.fn().mockResolvedValue({ default: withEvidence(() => {}) })
+    const el = await mount(createRemoteComponent(load as never)('r/Split'))
     expect(el.textContent).toContain('MFU-019')
-    expect(el.textContent).toContain('9.9.9')
+    expect(el.textContent).toContain('当前 SFC')
     expect(el.textContent).toContain(vueVersion)
-    expect(el.textContent).not.toContain('remote-ok')
   })
 
-  it('收敛实例与渲染链一致（同一 ref 引用）→ 正常渲染，不误报', async () => {
-    stubSharedVue({ ref: vueRef, version: vueVersion })
+  it('当前组件引用相同，无关默认共享实例不造成误拦', async () => {
+    vi.stubGlobal('__FULGURJS_RUNTIME__', { getLoadedShare: () => ({ ref: () => {}, version: vueVersion }) })
+    const load = vi.fn().mockResolvedValue({ default: withEvidence(vueRef) })
+    const el = await mount(createRemoteComponent(load as never)('r/Shared'))
+    expect(el.textContent).toContain('remote-ok')
+    expect(el.textContent).not.toContain('MFU-019')
+  })
+
+  it('没有当前组件证据，不从无关共享表推断冲突', async () => {
+    vi.stubGlobal('__FULGURJS_RUNTIME__', { getLoadedShare: () => ({ ref: () => {}, version: vueVersion }) })
     const load = vi.fn().mockResolvedValue({ default: okComp() })
-    const RC = createRemoteComponent(load as never)('r/Shared')
-    const el = await mount(RC)
+    const el = await mount(createRemoteComponent(load as never)('r/Legacy'))
     expect(el.textContent).toContain('remote-ok')
   })
 
-  it('作用域无 vue 实例（双方未声明 shared / 旧远程无元数据）→ 不可比不判，正常渲染', async () => {
-    stubSharedVue(undefined)
-    const load = vi.fn().mockResolvedValue({ default: okComp() })
-    const RC = createRemoteComponent(load as never)('r/Legacy')
-    const el = await mount(RC)
-    expect(el.textContent).toContain('remote-ok')
-  })
-
-  it('hostPages 路径同样执行身份检查', async () => {
-    stubSharedVue({ ref: () => {}, version: '8.8.8' })
-    const load = vi.fn().mockResolvedValue({ default: okComp() })
+  it('hostPages 使用相同的当前组件证据', async () => {
+    const load = vi.fn().mockResolvedValue({ default: withEvidence(() => {}) })
     const pages = createHostPages({ pages: [{ route: '/x', spec: 'Split' }], remotePrefixes: { '/x': 'r' } }, load as never)
     const el = await mount(pages.component('r/Split'))
     expect(el.textContent).toContain('MFU-019')
-  })
-
-  it('作用域条目缺 ref/version（不可信信号）→ 跳过比较不误报', async () => {
-    stubSharedVue({ somethingElse: true })
-    const load = vi.fn().mockResolvedValue({ default: okComp() })
-    const RC = createRemoteComponent(load as never)('r/Odd')
-    const el = await mount(RC)
-    expect(el.textContent).toContain('remote-ok')
   })
 })

@@ -303,7 +303,7 @@ describe('D6: post 阶段 auto-import 兜底（源码契约）', () => {
   )
   it('post.transform 在 build 下委托 buildFallbackTransform（非 .vue 文件不跳过）', () => {
     expect(src).toContain("if (state.command === 'build') {")
-    expect(src).toContain('return buildFallbackTransform(code, id)')
+    expect(src).toContain('await buildFallbackTransform(code, id)')
     // 兜底函数覆盖非 .vue 文件（isJsLike 含 .ts/.js），且带 import/require 快速预检
     const fnStart = src.indexOf('async function buildFallbackTransform')
     expect(fnStart).toBeGreaterThan(-1)

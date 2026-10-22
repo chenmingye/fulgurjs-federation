@@ -1,7 +1,7 @@
 /** Vue 适配层只接收加载函数，不静态引用运行时内核。 */
-import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onErrorCaptured, ref, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type PropType } from 'vue'
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onErrorCaptured, ref, openBlock, createVNode, createElementVNode, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type PropType } from 'vue'
 import type { PageRouteLike, RemoteSchemaEntry } from './pages'
-import { ErrorCodes } from './runtime/errors'
+import { ErrorCodes, diagnosticMessage } from './runtime/errors'
 import {
   cleanCompName,
   createHostPagesCore,
@@ -32,36 +32,27 @@ function isVueRenderableComponent(inner: unknown): inner is Component {
 }
 
 /**
- * Vue 运行时身份检查（MFU-019，组件直渲染边界）。
- *
- * 证据链：组件直渲染要求「实际驱动渲染的 Vue」（本适配器闭包里的 vue 导入，随消费方
- * 模块图解析）与「远程组件内部实际使用的 Vue」（远程声明 shared.vue 时，其门面收敛到
- * 共享作用域的实例）是同一实例，否则 provide/inject、Pinia、getCurrentInstance 会跨实例
- * 断链，典型现象是外壳渲染成功、内部空白且没有 pageerror。
- *
- * 比较对象是可信的实际导出引用（scope 实例的 ref 函数 vs 渲染链的 ref 函数），
- * 不是版本号字符串——同版本号不证明同实例。仅当作用域确有已加载的 vue 实例
- * （双方至少一方声明了 shared.vue）时才可比：
- * - 一致 → 收敛证实，放行；
- * - 不一致 → 已证实违反组件消费契约，抛 MFU-019（附双方版本与修法）；
- * - 作用域无实例（双方都未声明 shared / 自定义 shareScope / 旧远程无元数据）→
- *   无法自动确认，不判（配置风险由 doctor 预检与文档说明，D02/D13 边界）。
- * 合法例外：完整应用桥接走独立 renderer 与独立运行时，不经本适配器，不受此检查约束。
+ * MFU-019 只比较当前 SFC 实际导入的 Vue 函数，不从默认 scope 猜远程依赖。
+ * 构建器在已编译 SFC 上保留非枚举引用证据；旧远程/普通 TS 模块没有证据时不判。
+ * 桥接应用有自己的 renderer，不经过普通组件消费检查。
  */
-function vueRuntimeIdentityError(spec: string): Error | undefined {
-  const sharedVue = (globalThis as { __FULGURJS_RUNTIME__?: { getLoadedShare?: (name: string) => any } })
-    .__FULGURJS_RUNTIME__?.getLoadedShare?.('vue')
-  if (!sharedVue || typeof sharedVue.ref !== 'function' || typeof sharedVue.version !== 'string') return undefined
-  if (sharedVue.ref === ref) return undefined
+function vueRuntimeIdentityError(spec: string, component: Component): Error | undefined {
+  const bindings = { ref, openBlock, createVNode, createElementVNode, defineComponent, h }
+  const evidence = (component as Record<symbol, unknown>)[Symbol.for('fulgurjs.vue-runtime')] as
+    { key?: keyof typeof bindings; value?: unknown } | undefined
+  const key = evidence?.key
+  if (!key || !Object.hasOwn(bindings, key) || typeof evidence?.value !== 'function') return undefined
+  if (bindings[key] === evidence.value) return undefined
   return Object.assign(
     new Error(
-      `现象：消费方直渲染远程组件 "${spec}" 时，检测到渲染器使用的 Vue 与共享作用域实际收敛的 Vue 不是同一实例（渲染链 ${vueRuntimeVersion}，共享实例 ${sharedVue.version}；版本号相同也不代表实例相同）。\n` +
-        `根因（已证实）：双方至少一方声明了 shared.vue，但消费方自身的 vue 导入没有收敛到同一实例——常见于消费方未声明 shared.vue、dev 预构建/optimizeDeps 绕过共享门面、或 shareScope 不一致。实例分裂时 inject/provide/Pinia/getCurrentInstance 跨实例断链，页面常表现为外壳在、内部空白且无 pageerror。\n` +
-        `修法：① 消费方与远程都在 federation({ shared }) 声明 vue（singleton 建议开启）并使用同一 shareScope；② dev 下确认插件版本一致、未用 optimizeDeps 把 vue 预构建成第二份副本；③ 需要独立 Vue 运行时的完整子应用不要用 remoteComponent 直渲染，改用应用桥接（defineBridgeApp/createVueBridgeApp）。核实手段：window.__FULGURJS_SCOPE__.default.vue 查看实际收敛条目与来源。`,
+      `现象：消费方直渲染远程组件 "${spec}" 时，当前组件实际导入的 Vue ${key} 与渲染器不是同一引用（渲染器版本 ${vueRuntimeVersion}）。\n` +
+        `根因（已证实）：编译后的当前 SFC 导入引用与消费方渲染器不一致；此判断不使用默认共享作用域，也不把版本号相同当作实例相同。\n` +
+        `修法：核对该组件与消费方的 shared.vue、shareScope 和 dev 依赖解析，使同一渲染链收敛到同一 Vue；需要独立运行时的完整子应用应使用 defineBridgeApp/createVueBridgeApp。组件运行时的版本若未取得可靠证据，不据共享表猜测。`,
     ),
     {
       code: ErrorCodes.VUE_RUNTIME_IDENTITY_MISMATCH,
-      details: { remote: spec.slice(0, spec.indexOf('/')) || spec, module: spec.slice(spec.indexOf('/') + 1) || undefined, rendererVueVersion: vueRuntimeVersion, sharedVueVersion: sharedVue.version },
+      details: { remote: remoteNameOf(spec), module: moduleNameOf(spec), stage: 'adapter',
+        rendererVueVersion: vueRuntimeVersion, runtimeBinding: key, evidenceSource: 'compiled-sfc-import' },
     },
   )
 }
@@ -122,7 +113,7 @@ const RemoteErrorPlaceholder = /*#__PURE__*/ defineComponent({
     return () => {
       const err = props.error as (Error & { code?: string }) | undefined
       const code = err?.code ?? 'UNKNOWN'
-      const message = err?.message ?? String(props.error ?? 'unknown error')
+      const message = diagnosticMessage(err ?? props.error ?? 'unknown error')
       const buttons = [
         props.retry
           ? h('button', {
@@ -414,7 +405,7 @@ export function createRemoteComponent(loadRemote: (spec: string, opts?: { retrie
           reportRemoteObservation({ remote: remoteNameOf(spec), error: err })
           throw err
         }
-        const identity = vueRuntimeIdentityError(spec)
+        const identity = vueRuntimeIdentityError(spec, inner)
         if (identity) {
           reportRemoteObservation({ remote: remoteNameOf(spec), error: identity })
           throw identity
@@ -517,7 +508,7 @@ export function createHostPages(
           reportRemoteObservation({ remote: remoteNameOf(spec), error: err })
           throw err
         }
-        const identity = vueRuntimeIdentityError(spec)
+        const identity = vueRuntimeIdentityError(spec, inner)
         if (identity) {
           reportRemoteObservation({ remote: remoteNameOf(spec), error: identity })
           throw identity

@@ -7,7 +7,7 @@
 import { defineApplication, bindStoreToApp, type Application, type ApplicationHandle } from '@fulgurjs/federation/vue'
 import { createApp } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { defineStore } from 'pinia'
+import { createPinia, defineStore } from 'pinia'
 
 interface OptionalProps { label?: string }
 interface RequiredProps { label: string; count: number }
@@ -44,8 +44,18 @@ void typed
 
 // bindStoreToApp：保留 useStore 的参数/返回类型与 $id 属性
 const useCounterStore = defineStore('counter', { state: () => ({ count: 0 }) })
-const pinia = { install: () => {} } as never
+const pinia = createPinia()
 const useBound = bindStoreToApp(useCounterStore, pinia)
+const useLazyBound = bindStoreToApp(useCounterStore, () => pinia)
+const useInline = bindStoreToApp(defineStore('inline', { state: () => ({ value: 1 }) }), () => pinia)
+const inlineValue: number = useInline(pinia).value
+void inlineValue
+// @ts-expect-error 内联 store 同样必须保留字段约束
+useInline().nonexistent
+const lazyCount: number = useLazyBound().count
+void lazyCount
+// @ts-expect-error 绑定容器必须符合提供方 store 的 Pinia 参数类型
+bindStoreToApp(useCounterStore, { invalidContainer: true })
 const store = useBound()
 const id: string = store.$id
 const count: number = store.count

@@ -74,7 +74,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'MFU-013', stage: 'MFU', title: '远程声明 onSession 但宿主 AppContext 缺 sessionKey（登录代次）' },
   { code: 'MFU-014', stage: 'MFU', title: 'setup/onSession 同步段内递归 loadRemote 同一远程（自等待死锁防线）' },
   { code: 'MFU-018', stage: 'MFU', title: '远程模块在组件消费边界导出的不是可渲染组件（适配器实测导出形态后报出）' },
-  { code: 'MFU-019', stage: 'MFU', title: 'Vue 组件直渲染的渲染器与共享作用域实际收敛的 Vue 实例不一致（身份证据已证实）' },
+  { code: 'MFU-019', stage: 'MFU', title: '当前 Vue SFC 的实际导入引用与消费方渲染器不一致（组件证据已证实）' },
   { code: 'MFU-020', stage: 'MFU', title: '远程组件子树内部渲染错误（插件边界观测：setup/render/嵌套异步组件拒绝；原始异常保留在 cause，Vue 可经 renderErrorComponent 接管展示）' },
   { code: 'MFU-015', stage: 'MFU', title: '桥接契约非法（./bridge 默认导出缺 mount/unmount 或非函数；定义于 bridge-errors.ts）' },
   { code: 'MFU-016', stage: 'MFU', title: '桥接准备或生命周期失败（details.phase 区分 getContext/mount/unmount；定义于 bridge-errors.ts）' },
