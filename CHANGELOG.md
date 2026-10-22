@@ -1,5 +1,12 @@
 # 当前发布说明
 
+## 6.13.2
+
+构建期 chunk 分组两处修复（DEMES5.5 从零迁移轮 BI-FIX，均含业务工程生产构建/运行实测回归）：
+
+- **构建期共享门面支持通配符转发层展开**：`export * from '<shared>'` 形态的转发模块（vue-demi——pinia/@vueuse/vxe 等的常见传递依赖）进入 expose 门面改写闭包时，此前直接硬报错（`共享模块不支持 "export * from 'vue'"`），业务工程生产构建因此失败。现在构建期解析 shared 包的 ESM 入口（exports.import 优先、包名转发链递归），静态收集命名导出（不含 default——`export *` 语义本就不转出 default），把通配符改写为显式命名的门面转发；收集失败时保留原硬报错。
+- **preload-helper 分组注入条件放宽**：vite 预载助手（__vitePreload）此前仅在「应用开启 devSharedSelf 且用户已配置 manualChunks」时才被强制独立成组；未配置 manualChunks 的提供方（BPM 实测）助手被 rollup 提升进某个 provider chunk，TLA 协商门面（fulgurjs-shared-*）为取助手对 provider 形成静态边、provider 又静态依赖门面导出的绑定 → 「门面 ⇄ provider」chunk 环，浏览器报 `Cannot access 'e' before initialization`（TDZ）且整应用挂载失败。现在凡有 exposes/remotes 的应用都注入插件分组包装（preload-helper/门面/运行时独立成组），非插件模块返回 undefined 交还 rollup 自动分包，不改变既有分包行为。
+
 ## 6.13.1
 
 - **构建期共享门面支持通配符转发层展开（BI-FIX）**：`export * from '<shared>'` 形态的转发模块（vue-demi——pinia/@vueuse/vxe 等的常见传递依赖）进入 expose 门面改写闭包时，此前直接硬报错（`共享模块不支持 "export * from 'vue'"`），业务工程生产构建因此失败。现在构建期从被改写模块出发解析 shared 包的 ESM 入口（exports.import 优先、module/main 兜底；包名转发链如 vue → @vue/runtime-dom 递归解析），静态收集命名导出（不含 default——`export *` 语义本就不转出 default），把通配符改写为显式命名的门面转发；入口缺失或转发过深无法收集时保留原硬报错，不静默交付缺导出的产物。

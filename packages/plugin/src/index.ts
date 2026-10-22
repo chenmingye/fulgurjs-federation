@@ -502,8 +502,17 @@ export function federation(options: FederationOptions): Plugin[] {
         // D6：双向宿主（devSharedSelf）build 下的门面动态化 + manualChunks 包装注入——
         // 门面/运行时虚拟模块隔离进插件专属 chunk，防用户强制分组与门面静态边互锁成环
         // （见 facadeChunkOf 注）。纯 remote（remotes 为空）不启用，产物行为保持 2.0.0（硬约束）。
+        // BI-FIX-3（20261022 DEMES5.5 迁移轮）：包装注入条件从「devSharedSelf 且用户已有
+        // manualChunks」放宽为「凡有 remotes 的应用」——preload-helper 独立成组是防
+        // 「TLA 门面 ⇄ provider chunk」初始化环的关键；用户未配置 manualChunks 时 rollup
+        // 自由归组会把助手提升进某个 provider chunk（BPM prod 实测：helper 落入
+        // provider-pinia，入口与门面为取助手对 provider 形成静态边 → TDZ
+        // "Cannot access 'e' before initialization"）。包装对非插件模块返回
+        // undefined（交还 rollup 自动分包）/用户函数，不改变既有分包行为。
         if (normalized.remotes.length > 0 && normalized.devSharedSelf) {
           state.facadeDynamic = true
+        }
+        if (normalized.remotes.length > 0 && (normalized.devSharedSelf || normalized.exposes.length > 0)) {
           const userMc = (userConfig.build?.rollupOptions?.output as { manualChunks?: unknown } | undefined)?.manualChunks
           debugLog('facade', {
             stage: 'config',
@@ -552,9 +561,17 @@ export function federation(options: FederationOptions): Plugin[] {
               }
               const extraBuild = ((extra as any).build ??= {})
               extraBuild.rollupOptions = { ...(extraBuild.rollupOptions ?? {}), output: { manualChunks: wrapped } }
+            } else if (userManualChunks === undefined) {
+              // 未配置 manualChunks：仍注入插件分组包装（facadeChunkOf 含 preload-helper
+              // 独立成组），非插件模块返回 undefined 交还 rollup 自动分包（BI-FIX-3）
+              const extraBuild = ((extra as any).build ??= {})
+              extraBuild.rollupOptions = { ...(extraBuild.rollupOptions ?? {}), output: { manualChunks: (id: string, meta?: unknown) => {
+                const facade = facadeChunkOf(id)
+                if (facade) return facade
+                if (isOwnPackageModule(id)) return 'fulgurjs-internal'
+                return providerChunkOfWithClosure(id, state.providerRoots, meta, state.providerEntrySeeds)
+              } } }
             }
-            // 未配置 manualChunks：仅门面动态化生效，不注入包装（自动分包下门面归组交给
-            // rollup；配合闭包静态化已无静态互锁边）
           }
         }
       }
@@ -1425,6 +1442,21 @@ export function federation(options: FederationOptions): Plugin[] {
           entryChunk.code = `${helper}\n${entryChunk.code}`
           debugLog('manifest', { stage: 'generateBundle', retryBust: 'remoteEntry loaders wrapped' })
         }
+        // 合成 remoteEntry 的预载助手自持（20261022 BI-FIX-2）：rollup 可能把 vite 的
+        // __vitePreload 助手提升到某个共享 provider chunk（provider-pinia 实测），入口为取
+        // 助手而静态导入该 chunk → provider 链（含 TLA 共享门面）在入口求值期被迫先行完成，
+        // 助手绑定出现 TDZ（"Cannot access 'e'/'__vitePreload' before initialization"，
+        // BPM prod 实测，expose 闭包越大越易触发）。联邦 manifest 自管 expose 的 CSS/JS
+        // 预载（preloadRemote 按 expose css 注入），入口不需要 vite 预载助手：剥掉包装
+        // （保留内部加载箭头，__fgR 重试语义不变）+ 移除助手导入；残余调用注入提升的
+        // 本地空实现兜底（函数声明无 TDZ 面）。provider chunk 恢复懒求值。
+        // BI-FIX-2（续）：助手自持不止入口。消费方工程若自定义 manualChunks（含 undefined
+        // 覆盖，BPM prod 实测），插件注册的 preload-helper 独立分组失效 → 助手落进某个
+        // provider chunk；TLA 协商门面（fulgurjs-shared-*）动态导入 runtime 被 vite 包上
+        // 助手 → 「门面 ⇄ provider」静态边成环，求值期助手绑定 TDZ。对所有 fulgurjs-*
+        // 合成 chunk：识别「导入绑定以 (箭头, 数组|true) 两参调用」的助手用法 → 剥包装
+        // （保留内部箭头，__fgR 重试/动态 import 语义不变）→ 删除该助手导入边（成环边）。
+        // minified 产物下绑定名任意，按调用样式识别而非字面名。
         // ---- 类型资源随构建输出（6.5.0）：声明 bundle → fulgurjs-types/ 资产 + manifest 定位 ----
         // 生成失败（闭包编译错误等）不中断构建——manifest 不带 types、构建 WARN 明示；
         // 严格门禁走 `npx @fulgurjs/federation types`（失败非零退出）
