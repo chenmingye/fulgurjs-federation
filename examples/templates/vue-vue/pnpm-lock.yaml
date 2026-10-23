@@ -11,8 +11,8 @@ importers:
   host:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 6.13.4
-        version: 6.13.4(vite@6.4.4)(vue-router@4.6.4(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
+        specifier: 6.13.6
+        version: 6.13.6(vite@6.4.4)(vue-router@4.6.4(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
       vue:
         specifier: ^3.5.13
         version: 3.5.44(typescript@5.9.3)
@@ -36,8 +36,8 @@ importers:
   remote:
     dependencies:
       '@fulgurjs/federation':
-        specifier: 6.13.4
-        version: 6.13.4(vite@6.4.4)(vue-router@4.6.4(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
+        specifier: 6.13.6
+        version: 6.13.6(vite@6.4.4)(vue-router@4.6.4(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
       vue:
         specifier: ^3.5.13
         version: 3.5.44(typescript@5.9.3)
@@ -386,8 +386,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fulgurjs/federation@6.13.4':
-    resolution: {integrity: sha512-o+qhyzU5ZW1qzjBdQGyXXnnzXMjVYVcgIEP31lYKbDKC0yDo0qJDusKtyWW3dW9UeQHEODEtDySZ38HDCiAqZA==}
+  '@fulgurjs/federation@6.13.6':
+    resolution: {integrity: sha512-8AjFupAiWjv1mJQfP0IVZn5ealpbjBrwtZTkPyAV11QvcWRqOU7Pqi7YiwQcq7aenh9oPa1tmCaWuZTPll4/vg==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -955,7 +955,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@fulgurjs/federation@6.13.4(vite@6.4.4)(vue-router@4.6.4(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))':
+  '@fulgurjs/federation@6.13.6(vite@6.4.4)(vue-router@4.6.4(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))':
     dependencies:
       es-module-lexer: 1.7.0
       esbuild: 0.27.7
