@@ -6,7 +6,7 @@
  * 做「源码定义 ⊆ 登记表 = README 错误码总表」三方一致性校验。
  * 三段式口径与 runtime/context 一致：现象 → 根因 → 修法。
  */
-import { FgError } from './runtime/errors'
+import { FgError, diagnosticMessage } from './runtime/errors'
 
 export const BridgeErrorCodes = {
   /** 桥接契约非法（./bridge 默认导出缺 mount/unmount 或不是函数） */
@@ -57,7 +57,7 @@ export function bridgeLifecycleError(
   cause: unknown,
   extra?: Record<string, unknown>,
 ): FgError {
-  const raw = cause instanceof Error ? cause.message : String(cause ?? 'unknown')
+  const raw = diagnosticMessage(cause)
   const fixes: Record<BridgePhase, string> = {
     getContext:
       '修法: ① getContext 必须是同步、无副作用的 getter（不得返回 Promise/thenable）；\n' +
@@ -92,7 +92,7 @@ export function bridgeLifecycleError(
  */
 export function bridgeHostError(phase: BridgePhase, spec: string, cause: unknown): FgError {
   if (cause instanceof FgError) return cause
-  return bridgeLifecycleError(phase, spec, cause instanceof Error ? cause : String(cause))
+  return bridgeLifecycleError(phase, spec, cause)
 }
 
 /** MFU-017：受控 sessionKey 与当前 AppContext / 活跃桥接会话不一致 */

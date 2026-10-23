@@ -34,6 +34,7 @@ import {
   withBridgeTimeout,
   type BridgeApp,
 } from './bridge-core'
+import { diagnosticMessage } from './runtime/errors'
 import { bridgeHostError } from './bridge-errors'
 import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
 import type { FgBridgeEntry, FgBridgeAppProps } from './remote-types'
@@ -85,7 +86,7 @@ const SECONDARY_BUTTON_STYLE = {
 function DefaultBridgeErrorView({ error, retry, blocked }: { error: unknown; retry: () => void; blocked?: boolean }): ReactNode {
   const err = error as (Error & { code?: string }) | undefined
   const code = err?.code ?? 'UNKNOWN'
-  const message = err?.message ?? String(error ?? 'unknown error')
+  const message = diagnosticMessage(error ?? 'unknown error')
   return createElement('div', { style: ERROR_STYLE, 'data-fulgurjs-error': code }, [
     createElement('p', { key: 't', style: { margin: '0 0 4px', fontWeight: 600 } }, `桥接应用加载失败（错误码 ${code}）`),
     createElement('p', { key: 'm', style: MESSAGE_STYLE }, message),
@@ -237,7 +238,7 @@ export function createReactBridgeAppWithLoader(loadRemote: LoadRemoteFn) {
               // MFU-016（phase: unmount，单点包装，5.5.0）：已是插件诊断的错误原样保留，
               // 不再出现 spec 占位 'bridge' 或 cause 双重包装
               const err = bridgeHostError('unmount', spec, e)
-              console.error('[fulgurjs] 桥接应用卸载失败：', err)
+              console.error('[fulgurjs] 桥接应用卸载失败：', diagnosticMessage(err))
               blockedRef.current = true
               setError(err)
               setStatus('error')

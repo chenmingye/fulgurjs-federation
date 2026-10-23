@@ -532,3 +532,26 @@ describe('React 宿主 createReactBridgeApp', () => {
     expect(() => vueFactory('r/bridge', { retries: 11 })).toThrowError(/retries/)
   })
 })
+
+// 默认提示和卸载日志只展示摘要，自定义观察方仍可读取真实 cause。
+it.each(['Vue', 'React'])('%s 桥接默认提示脱敏，原始错误保留', async (framework) => {
+  const original = new Error('token=SYNTHETIC_TOKEN cookie=SYNTHETIC_COOKIE https://user:pass@example.test/a.js?key=SYNTHETIC_QUERY#SYNTHETIC_HASH')
+  const load = async () => ({ default: { mount() { throw original }, unmount() {} } })
+  let dispose: () => void
+  let root: HTMLElement
+  if (framework === 'Vue') {
+    const Remote = createVueBridgeAppWithLoader(load)('diagnostic/App', { getContext: () => ({}) })
+    root = document.createElement('div');document.body.appendChild(root)
+    const app = createApp({render:()=>h(Remote) });app.mount(root)
+    dispose = () => {app.unmount();root.remove()}
+  } else {
+    const Remote = createReactBridgeAppWithLoader(load)('diagnostic/App', { getContext: () => ({}) })
+    const rendered = render(createElement(Remote));root = rendered.container;dispose = rendered.unmount
+  }
+  try {
+    await waitFor(() => expect(root.textContent).toContain('MFU-016'))
+    expect(root.textContent).not.toContain('SYNTHETIC_')
+    expect(root.textContent).not.toContain('user:pass')
+    expect(original.message).toContain('SYNTHETIC_TOKEN')
+  } finally { dispose() }
+})

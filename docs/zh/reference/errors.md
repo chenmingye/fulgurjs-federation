@@ -94,3 +94,6 @@
 - 按症状（不看码）：[排错目录](../troubleshooting/README.md)
 - 配置期错误先跑 `npx @fulgurjs/federation explain`；部署面问题先跑 `npx @fulgurjs/federation doctor`
 - 运行时诊断：`window.__FULGURJS_INFO__`（各 remote 状态与 setup 阶段）、`window.__FULGURJS_SCOPE__`（shared 协商结果）、`fulgurjs:error` 事件
+
+
+默认组件/桥接占位、插件日志摘要和 `__FULGURJS_INFO__.remotes` 会清理 HTTP 地址凭据、query/hash 及标注的 token/password/cookie/authorization。真实异常（包括非 Error 拒绝值）保留在 `cause`，自定义错误组件/业务观察方仍可读取；这些原始对象和 `details` 不应直接序列化或展示，需按实际字段脱敏。桥接生命周期错误通过默认占位、自定义 `errorComponent` 和卸载日志观察；不要假设所有桥接错误都触发运行时 `fulgurjs:error`。

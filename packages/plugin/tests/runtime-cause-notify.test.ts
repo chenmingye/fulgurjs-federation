@@ -169,3 +169,16 @@ describe('P03：错误通知通路完整（expose/setup/会话）', () => {
     off()
   })
 })
+
+describe('调试摘要不会重新泄露原入口', () => {
+  it('entry 和失败摘要脱敏，原始 cause 不变', async () => {
+    const rt = await fresh()
+    const cause = new Error('token=SYNTHETIC_TOKEN cookie=SYNTHETIC_COOKIE')
+    rt.registerRemote({name:'redaction',entry:'https://user:pass@example.test/entry.js?token=SYNTHETIC_QUERY#SYNTHETIC_HASH',retries:0,promise:async()=>{throw cause}})
+    const error = await rt.loadRemote('redaction/page' as never).catch(e=>e)
+    const summary = (window as any).__FULGURJS_INFO__.remotes.redaction
+    expect(summary.entry).toBe('https://example.test/entry.js')
+    expect(summary.error).not.toContain('SYNTHETIC_')
+    expect(error.cause).toBe(cause)
+  })
+})

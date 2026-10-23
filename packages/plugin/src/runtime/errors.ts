@@ -1,12 +1,12 @@
-/** URL formatting shared by runtime errors and display adapters; never mutates the raw cause. */
+/** Shared URL formatting: remove credentials/query/hash without mutating the raw cause. */
 export function diagnosticUrl(text: string): string {
   return text
     .replace(/(https?:\/\/)(?:[^\s/@]+@)?([^\s?#"'<>，。；）)\]]+)(?:[?#][^\s"'<>，。；）)\]]*)?/g, '$1$2')
 }
 
-/** Display diagnostics without URL credentials/query/hash or explicitly labelled credentials. */
+/** Read structural/cross-realm messages without exposing the original error or payload. */
 export function diagnosticMessage(error: unknown): string {
-  return diagnosticUrl(String(error && typeof error === 'object' && 'message' in error ? error.message : error))
+  return diagnosticUrl(String((error as { message?: unknown })?.message ?? error))
     .replace(/\b(token|password|cookie|authorization)["']?\s*[:=]\s*["']?(?:Bearer\s+)?[^\s,;"'}]+/gi, '$1=[redacted]')
 }
 

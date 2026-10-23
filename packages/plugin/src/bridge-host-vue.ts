@@ -26,6 +26,7 @@ import {
   withBridgeTimeout,
   type BridgeApp,
 } from './bridge-core'
+import { diagnosticMessage } from './runtime/errors'
 import { bridgeHostError } from './bridge-errors'
 import { RoutingChannel, assertBridgeRoutingProtocol, type BridgeHostRouting } from './bridge-router-core'
 import type { FgBridgeEntry, FgBridgeAppProps } from './remote-types'
@@ -94,7 +95,7 @@ const BridgeErrorPlaceholder = /*#__PURE__*/ defineComponent({
     return () => {
       const err = props.error as (Error & { code?: string }) | undefined
       const code = err?.code ?? 'UNKNOWN'
-      const message = err?.message ?? String(props.error ?? 'unknown error')
+      const message = diagnosticMessage(props.error ?? 'unknown error')
       return h('div', { style: ERROR_STYLE, 'data-fulgurjs-error': code }, [
         h('p', { style: 'margin:0 0 4px;font-weight:600' }, `桥接应用加载失败（错误码 ${code}）`),
         h('p', { style: 'margin:0 0 8px;word-break:break-all' }, message),
@@ -208,7 +209,7 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn, automatic
               // 后续重试与 sessionKey 变化都不得在清理状态不明的 el 上重挂（BN09）
               const err = bridgeHostError('unmount', spec, e)
               containerBlocked = true
-              console.error('[fulgurjs] 桥接应用卸载失败，该容器已封锁（同页只能刷新恢复）：', err)
+              console.error('[fulgurjs] 桥接应用卸载失败，该容器已封锁（同页只能刷新恢复）：', diagnosticMessage(err))
               error.value = err
               status.value = 'error'
               return false

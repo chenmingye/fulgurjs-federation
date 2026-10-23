@@ -11,7 +11,7 @@
  * - 自包含容器协议：remoteEntry 导出 { name, init(shareScopeMap), get(module) }，不 import 运行时。
  */
 import { satisfies, compareVersions } from '../semver'
-import { FgError, ErrorCodes, markRemoteErrorReported, diagnosticUrl } from './errors'
+import { FgError, ErrorCodes, markRemoteErrorReported, diagnosticUrl, diagnosticMessage } from './errors'
 import { RUNTIME_VERSION } from '../version'
 // 类型-only 包自引用（编译期擦除，无运行时导入）：远程类型注册表声明在公共 /runtime
 // 入口。必须用包名而非相对路径——各入口的 dts 打包会把相对引用内联成私有副本，
@@ -218,13 +218,18 @@ function createRuntime() {
   const stylesheetLoads = new WeakMap<HTMLLinkElement, Promise<void>>()
   const containerInitScopes = new WeakMap<object, string>()
 
+  // 观测钩子失败仅输出脱敏摘要，不改变业务加载结果。
+  const warnObserver = (name: string, error: unknown): void => {
+    console.warn(`[fulgurjs] ${name} 钩子失败（不影响加载），请检查：`, diagnosticMessage(error))
+  }
+
   const hooks: RuntimeHooks = {}
   const applyPlugins = () => {
     for (const p of plugins) {
       try {
         p.init?.(hooks)
       } catch (err) {
-        console.warn('[fulgurjs] 运行时扩展初始化失败，该扩展将不可用：', p.name, err)
+        console.warn('[fulgurjs] 扩展初始化失败，请检查：', p.name, diagnosticMessage(err))
       }
     }
   }
@@ -256,7 +261,7 @@ function createRuntime() {
       const fgErr = new FgError(
         ErrorCodes.SETUP_RUN_FAILED,
         `现象：远程应用 "${remoteName}" 的 ${phase} 初始化失败。\n` +
-          `原因：${String((err as Error)?.message ?? err)}\n` +
+          `原因：${diagnosticMessage(err)}\n` +
           `修法：检查并修复该 ${phase} 函数后重新加载；失败缓存已清除，可以直接重试。`,
         { remote: remoteName, phase },
         { cause: err },
@@ -1031,7 +1036,7 @@ function createRuntime() {
         throw new FgError(
           ErrorCodes.REMOTE_LOAD_FAILED,
           `现象：无法从 ${shown} 加载远程应用 "${remote.name}"。\n` +
-            `原因：${String((lastErr as Error)?.message ?? lastErr)}\n修法：\n${hints.join('\n')}`,
+            `原因：${diagnosticMessage(lastErr)}\n修法：\n${hints.join('\n')}`,
           { remote: remote.name, stage: 'container' },
           { cause: lastErr },
         )
@@ -1066,7 +1071,7 @@ function createRuntime() {
       remote.containerPromise = undefined
       remote.state = 'failed'
       remote.debug.status = 'failed'
-      remote.debug.error = diagnosticUrl(String((err as Error)?.message ?? err))
+      remote.debug.error = diagnosticMessage(err)
       b.fails += 1
       if (b.fails >= remote.breakerThreshold) {
         b.openUntil = Date.now() + remote.breakerResetMs
@@ -1081,7 +1086,7 @@ function createRuntime() {
         emitError({ remote: remote.name, error: err as FgError })
         throw err
       }
-      const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, `远程应用 "${remote.name}" 加载失败。底层原因：${String((err as Error)?.message ?? err)}。请检查远程入口、网络及共享依赖。`, {
+      const wrapped = new FgError(ErrorCodes.REMOTE_LOAD_FAILED, `远程应用 "${remote.name}" 加载失败。底层原因：${diagnosticMessage(err)}。请检查远程入口、网络及共享依赖。`, {
         remote: remote.name,
         stage: 'container',
       }, { cause: err })
@@ -1122,7 +1127,7 @@ function createRuntime() {
     try {
       hooks.beforeLoadRemote?.({ remote: name, module })
     } catch (hookErr) {
-      console.warn('[fulgurjs] beforeLoadRemote 观测钩子执行失败；模块加载将继续。请检查该钩子：', hookErr)
+      warnObserver('beforeLoadRemote', hookErr)
     }
     const remote = remotes.get(name)
     if (!remote) {
@@ -1138,7 +1143,7 @@ function createRuntime() {
       ;[container] = await Promise.all([acquireContainer(remote, { retries: opts?.retries }), stylesReady])
     } catch (err) {
       if (opts?.fallbackModule) {
-        console.error(`[fulgurjs] 远程模块 "${spec}" 加载失败，正在使用显式配置的 fallbackModule；原始错误：`, err)
+        console.error(`[fulgurjs] 远程模块 "${spec}" 加载失败；使用配置的 fallbackModule。摘要：`, diagnosticMessage(err))
         emitError({ remote: name, error: err as FgError })
         return await opts.fallbackModule()
       }
@@ -1176,7 +1181,7 @@ function createRuntime() {
           }
           const wrapped = new FgError(
             ErrorCodes.REMOTE_LOAD_FAILED,
-            `无法从远程应用 "${name}" 加载模块 "${module}"。底层原因：${String((err as Error)?.message ?? err)}。请核对 exposes 键和远程构建产物。`,
+            `无法从远程应用 "${name}" 加载模块 "${module}"。底层原因：${diagnosticMessage(err)}。请核对 exposes 键和远程构建产物。`,
             { remote: name, module, stage: 'expose' },
             { cause: err },
           )
@@ -1190,7 +1195,7 @@ function createRuntime() {
       ns = await loadedModules.get(cacheKey)
     } catch (err) {
       if (opts?.fallbackModule) {
-        console.error(`[fulgurjs] 远程模块 "${spec}" 加载失败，正在使用显式配置的 fallbackModule；原始错误：`, err)
+        console.error(`[fulgurjs] 远程模块 "${spec}" 加载失败；使用配置的 fallbackModule。摘要：`, diagnosticMessage(err))
         emitError({ remote: name, error: err as FgError })
         return await opts.fallbackModule()
       }
@@ -1199,7 +1204,7 @@ function createRuntime() {
     try {
       hooks.afterLoadRemote?.({ remote: name, module, module_ns: ns })
     } catch (hookErr) {
-      console.warn('[fulgurjs] afterLoadRemote 观测钩子执行失败；已加载模块仍可使用。请检查该钩子：', hookErr)
+      warnObserver('afterLoadRemote', hookErr)
     }
     // MFU-009：加载到的模块没有任何导出——exposes 指向了不导出内容的文件（误导出/空文件）。
     // 仅告警不抛错：命名空间为空对调用方必然不可用，但保留返回值避免破坏既有容错路径
@@ -1358,7 +1363,7 @@ function createRuntime() {
       // 预加载失败不阻断业务，仅上报
       emitError({
         remote: name,
-        error: new FgError(ErrorCodes.PRELOAD_FAILED, `远程应用 "${name}" 预加载失败。底层原因：${String((err as Error)?.message ?? err)}。请检查 manifest 和资源地址。`, {
+        error: new FgError(ErrorCodes.PRELOAD_FAILED, `远程应用 "${name}" 预加载失败。底层原因：${diagnosticMessage(err)}。请检查 manifest 和资源地址。`, {
           remote: name,
         }),
       })
@@ -1373,7 +1378,7 @@ function createRuntime() {
       get remotes() {
         const out: Record<string, RemoteDebugInfo> = {}
         for (const [k, v] of remotes) {
-          out[k] = { ...v.debug, entry: v.entry }
+          out[k] = { ...v.debug, entry: sanitizeUrl(v.entry) }
         }
         return out
       },

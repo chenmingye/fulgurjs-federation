@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { bridgeHostError } from '../src/bridge-errors'
 import { diagnosticMessage, FgError } from '../src/runtime/errors'
 
 describe('诊断展示脱敏与原始异常分别保留', () => {
@@ -21,4 +22,18 @@ describe('诊断展示脱敏与原始异常分别保留', () => {
       .toBe('Authorization=[redacted]')
     expect(diagnosticMessage('合法空数据，不应推断错误')).toBe('合法空数据，不应推断错误')
   })
+})
+
+it.each([{ reason: '业务拒绝' }, 42, null, undefined])('桥接保留非 Error 拒绝值：%s', (cause) => {
+  const error = bridgeHostError('mount', 'remote/App', cause)
+  expect(error.cause).toBe(cause)
+  expect(bridgeHostError('mount', 'remote/App', error)).toBe(error)
+})
+
+it('包装摘要脱敏而 cause 保留原始文本', () => {
+  const cause = new Error('token=SYNTHETIC_TOKEN Authorization: Bearer SYNTHETIC_AUTH')
+  const error = bridgeHostError('unmount', 'remote/App', cause)
+  expect(error.message).not.toContain('SYNTHETIC_')
+  expect(error.cause).toBe(cause)
+  expect(cause.message).toContain('SYNTHETIC_TOKEN')
 })

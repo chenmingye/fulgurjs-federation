@@ -95,3 +95,6 @@
 - By symptom (ignore the codes): [troubleshooting index](../troubleshooting/README.md)
 - For config-stage errors run `npx @fulgurjs/federation explain` first; for deployment-side problems run `npx @fulgurjs/federation doctor` first
 - Runtime diagnostics: `window.__FULGURJS_INFO__` (per-remote status and setup stage), `window.__FULGURJS_SCOPE__` (shared negotiation results), the `fulgurjs:error` event
+
+
+Default component/bridge placeholders, plugin log summaries and `__FULGURJS_INFO__.remotes` remove HTTP URL credentials, query/hash and labelled token/password/cookie/authorization values. The original rejection (including non-Error values) remains in `cause` for custom error components and business observers. Do not directly serialize or display these raw objects or `details`; redact the fields you expose. Observe bridge lifecycle failures through placeholders, custom `errorComponent` and unmount logs; do not assume every bridge failure emits the runtime `fulgurjs:error` event.
