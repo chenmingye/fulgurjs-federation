@@ -58,7 +58,7 @@
 |---|---|---|---|
 | `MFU-001` | 运行时报远程容器/模块加载失败（含网络/超时/重试耗尽/熔断） | 远程不可达、入口地址错、超时后重试耗尽、或连续失败触发熔断 | 核对 remote 地址与可用性；配置 `fallback` 备用入口或调 `timeout`/`retries`；上线前用 `fulgurjs doctor` 体检部署面 |
 | `MFU-002` | 运行时报 remoteEntry 自报名与配置名不一致 | 容器自报的 name 与 `remotes` 键/配置期望不一致（重命名未对齐） | 改 remotes 键对齐自报名，或用字符串 `'自报名@url'` 写法显式声明重命名 |
-| `MFU-003` | 运行时抛 strictVersion 版本不满足 | `strictVersion: true`（或缺省规则命中）且协商到的版本不满足 `requiredVersion` | 对齐各应用依赖版本；或放宽 strictVersion/requiredVersion（确认兼容后） |
+| `MFU-003` | strictVersion 已生效，版本不满足，拒绝当前加载 | `strictVersion: true`（或缺省规则命中）且协商到的版本不满足 `requiredVersion` | 对齐各应用依赖版本；或放宽 strictVersion/requiredVersion（确认兼容后） |
 | `MFU-004` | 运行时报共享模块缺失且无本地 fallback | 请求的 shared 键没有任何提供方，且本应用未提供本地副本（`import: false`）；或未准备的同步消费者遇到异步 resolveShare hook（`details.syncUnsupported: true`） | 确认提供方 shared 声明与本端加载顺序；自定义入口先 `await loadShare(name, opts)` 再动态导入新消费者 |
 | `MFU-005` | 运行时报同一容器用不同 share scope 重复 init | 同一容器被以两个不同 shareScope 初始化（协商状态歧义） | 统一该远程的 shareScope（remotes 配置与运行时注册保持一致） |
 | `MFU-006` | 运行时报请求的模块未被该远程 exposes | spec 的 expose 键与远程 exposes 清单对不上 | 核对 `远程名/exposes 键`（spec 不要重复加远程名前缀；`fulgurjs check-pages` 可批量核对） |

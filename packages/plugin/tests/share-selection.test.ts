@@ -64,6 +64,15 @@ describe('runtime: 同步共享查询（getLoadedShare 补修回归）', () => {
     expect(rt.getLoadedShare('react', { shareKey: 'react', requiredVersion: '^19.0.0', singleton: true })).toBe(only)
     expect(warnSpy).toHaveBeenCalledTimes(1)
     expect(warnSpy.mock.calls[0][0]).toContain('MFU-010')
+    expect(warnSpy.mock.calls[0][0]).toContain('结果：复用此单例')
+    // 严格拒绝不能沿用宽松复用的诊断，也不能让用户再次启用已生效的 strictVersion。
+    const strictError = await rt.loadShare('react', {
+      shareKey: 'react', requiredVersion: '^19.0.0', singleton: true, strictVersion: true,
+    }).catch(error => error)
+    expect(strictError.code).toBe('MFU-003')
+    expect(strictError.message).toContain('strictVersion 已开启，本次加载已拒绝')
+    expect(strictError.message).not.toContain('结果：复用')
+    expect(strictError.message).not.toContain('请启用 strictVersion')
     // strictVersion：同步路径与异步路径同样拒绝
     await expect(
       rt.loadShare('react', { shareKey: 'react', requiredVersion: '^19.0.0', singleton: true, strictVersion: true }),

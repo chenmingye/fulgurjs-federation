@@ -563,9 +563,11 @@ function createRuntime() {
       if (!satisfying.includes(pick!)) {
         const entry0 = byName[pick!]
         const msg = `现象：共享单例 "${shareKey}" 的实际版本不满足当前应用要求。\n` +
-          `原因：应用要求 ${req ?? '任意版本'}，作用域中有 ${versions.join('、')}；为保证全页只使用一个实例，最终复用 ${entry0.from} 提供的 ${pick}。\n` +
-          `影响：可能出现状态不一致或运行错误，具体取决于两端 API 是否兼容。\n` +
-          `修法：统一宿主与远程的依赖版本，或核对后调整 shared.requiredVersion；若必须拒绝不兼容版本，请启用 strictVersion。`
+          `原因：要求 ${req ?? '任意版本'}，作用域中有 ${versions.join('、')}；单例候选为 ${entry0.from} 提供的 ${pick}。\n` +
+          (opts.strictVersion
+            ? `结果：strictVersion 已开启，本次加载已拒绝，未交付不兼容实例。\n`
+            : `结果：复用此单例；请确认两端 API 兼容。\n`) +
+          `修法：统一宿主与远程的依赖版本，或核对后调整 shared.requiredVersion。`
         if (opts.strictVersion) {
           const err = new FgError(ErrorCodes.SHARE_STRICT_VERSION, msg, {
             shareKey,
