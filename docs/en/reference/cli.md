@@ -289,6 +289,8 @@ $ npx @fulgurjs/federation check-pages --site http://your-site
 
 Deployment/config layer automatic checkup. Checks the 200/no-cache/JS-shape of remoteEntry/manifest/index.html under `<base>/<app>/`, CORS, hashed chunk sampling reachability, and a version skew rehearsal.
 
+Diagnostic output (including the `base` field of `--json` and every symptom line) redacts URLs: credentials (userinfo), query, and hash are never echoed back; the protocol and host:port are kept for troubleshooting.
+
 ### Syntax
 
 ```bash

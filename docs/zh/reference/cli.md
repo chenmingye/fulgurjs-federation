@@ -291,6 +291,8 @@ $ npx @fulgurjs/federation check-pages --site http://your-site
 
 部署/配置层自动体检。检查 `<base>/<app>/` 下的 remoteEntry/manifest/index.html 的 200/no-cache/JS 形态、CORS、chunk 抽样可达、版本 skew 预演。
 
+诊断输出（含 `--json` 的 `base` 字段与全部现象行）中的 URL 一律脱敏：凭据（userinfo）、query 与 hash 不回显，保留协议与 host:port 便于定位。
+
 ### 语法
 
 ```bash

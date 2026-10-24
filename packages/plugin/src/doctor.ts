@@ -17,6 +17,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import { parseManifest, type ProdFederationManifest } from './manifest'
+import { diagnosticUrl } from './runtime/errors'
 
 export interface DoctorCheck {
   app: string
@@ -93,7 +94,7 @@ async function checkStatus(
         app,
         item,
         level: 'FAIL',
-        symptom: `${item} 不可达：${url}（${String((e as Error).message ?? e)}）`,
+        symptom: `${item} 不可达：${diagnosticUrl(url)}（${diagnosticUrl(String((e as Error).message ?? e))}）`,
         cause: '静态资源未部署、nginx 站点未起或路径错位',
         fix: '核对部署目录（rsync dist/{app}/）与 nginx location 回退规则；curl 该 URL 确认可达',
       },
@@ -105,7 +106,7 @@ async function checkStatus(
         app,
         item,
         level: 'FAIL',
-        symptom: `${item} 返回 ${res.status}：${url}`,
+        symptom: `${item} 返回 ${res.status}：${diagnosticUrl(url)}`,
         cause: '文件缺失（未部署/已被清）或 nginx 回退到了宿主 index.html（深链回退过宽）',
         fix: '重新部署该应用产物；核对 nginx location 精确匹配 remoteEntry 的规则',
       },
@@ -121,7 +122,7 @@ async function checkStatus(
           app,
           item,
           level: 'FAIL',
-          symptom: `${item} 返回的是 HTML 而非 JS：${url}`,
+          symptom: `${item} 返回的是 HTML 而非 JS：${diagnosticUrl(url)}`,
           cause: 'nginx try_files/深链回退把入口请求兜到了 index.html（联邦宿主会把它当模块解析直接失败）',
           fix: '为 remoteEntry/入口增加精确 location 原样返回 JS',
         },
@@ -137,7 +138,7 @@ async function checkStatus(
           app,
           item,
           level: 'FAIL',
-          symptom: `${item} 的 Cache-Control=${cc}（immutable）：${url}`,
+          symptom: `${item} 的 Cache-Control=${cc}（immutable）：${diagnosticUrl(url)}`,
           cause: '文件名固定而内容每次构建变化——浏览器会长期持有旧版本，重部署后旧 hash chunk 被清理即全 404（2026-09-17 用户实测踩坑）',
           fix: 'nginx 改为 Cache-Control "no-cache"（协商缓存）；带 hash 的 assets 才配长缓存',
         },
@@ -150,7 +151,7 @@ async function checkStatus(
           app,
           item,
           level: 'WARN',
-          symptom: `${item} 缺少 no-cache 缓存头（Cache-Control=${cc || '无'}）：${url}`,
+          symptom: `${item} 缺少 no-cache 缓存头（Cache-Control=${cc || '无'}）：${diagnosticUrl(url)}`,
           cause: '浏览器/中间层可能持有旧版本，重部署后行为不可预期',
           fix: 'nginx 为 remoteEntry/manifest/index.html 显式 add_header Cache-Control "no-cache"',
         },
@@ -331,7 +332,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
               app,
               item: `chunk 可达：${ref}`,
               level: 'FAIL',
-              symptom: `入口/manifest 引用的 chunk 返回 ${r.status}：${url}`,
+              symptom: `入口/manifest 引用的 chunk 返回 ${r.status}：${diagnosticUrl(url)}`,
               cause: '产物不完整或部署后 partial 清理——浏览器持旧 remoteEntry 时典型症状（immutable 坑）',
               fix: '重新完整部署该应用（rsync -a --delete dist/<app>/）；确认缓存头为 no-cache',
             })
@@ -340,7 +341,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
               app,
               item: `chunk 可达：${ref}`,
               level: 'FAIL',
-              symptom: `chunk 请求返回 200 但内容是 HTML（nginx 深链回退掩盖了资源缺失）：${url}`,
+              symptom: `chunk 请求返回 200 但内容是 HTML（nginx 深链回退掩盖了资源缺失）：${diagnosticUrl(url)}`,
               cause: 'try_files 回退过宽：缺失的静态资源被兜到宿主 index.html，浏览器把它当模块解析直接报错',
               fix: '为静态 assets 目录增加精确匹配（try_files $uri =404 或独立 location），避免 JS 请求被回退成 HTML',
             })
@@ -352,7 +353,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
             app,
             item: `chunk 可达：${ref}`,
             level: 'FAIL',
-            symptom: `chunk 请求失败：${url}（${String((e as Error).message ?? e)}）`,
+            symptom: `chunk 请求失败：${diagnosticUrl(url)}（${diagnosticUrl(String((e as Error).message ?? e))}）`,
             cause: '网络/部署面异常',
             fix: 'curl 复核该 URL；核对部署完整性',
           })
@@ -368,7 +369,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<{ checks: DoctorCh
               app,
               item: `chunk 可达：${ref}`,
               level: 'FAIL',
-              symptom: `chunk 引用返回 ${r.status}：${url}`,
+              symptom: `chunk 引用返回 ${r.status}：${diagnosticUrl(url)}`,
               cause: '产物不完整或部署后 partial 清理',
               fix: '重新完整部署该应用（rsync -a --delete dist/<app>/）',
             })

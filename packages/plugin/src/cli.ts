@@ -15,6 +15,7 @@
  */
 import { resolve } from 'node:path'
 import { runDoctor, formatDoctorReport } from './doctor'
+import { diagnosticUrl } from './runtime/errors'
 
 const HELP = `fulgurjs — Vite Module Federation CLI (@fulgurjs/federation)
 
@@ -430,7 +431,8 @@ async function main(): Promise<number> {
     })
     if (has('--json')) {
       console.log(JSON.stringify({
-        base,
+        // D16：JSON 顶层 base 与现象行同口径脱敏 userinfo/query/hash，不回显原始输入
+        base: diagnosticUrl(base),
         apps,
         dev: has('--dev'),
         mode: {
