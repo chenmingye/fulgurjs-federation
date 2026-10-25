@@ -136,6 +136,41 @@ const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
 
 组件参数变化是否重新查询由业务组件负责；离页取消定时器和迟到回写。共享 Vue/Pinia 包不等于共享业务状态，状态归属见[状态绑定](existing-apps.md#pinia库单例与业务实例分别管理)。Provider 也不隔离 CSS，视觉验收比较真实数据、回显完成后的标签、只读与布局。
 
+#### 嵌套 params 也必须检查内部字段
+
+当原页面接收一个 params 对象时，不能只给对象本身一个类型。先在原提供方组件声明已知字段，再生成并同步声明：
+
+```vue
+<!-- 提供方原 BusinessForm.vue：URL 入口保留时根 params 可选，传入时字段仍受约束。 -->
+<script setup lang="ts">
+interface BusinessFormParams {
+  id: string
+  formId: string
+  disabled?: boolean
+}
+defineProps<{ params?: BusinessFormParams }>()
+</script>
+```
+
+```ts
+// 消费方真实业务文件；不重复声明 BusinessFormParams。
+import { ref } from 'vue'
+import { remoteComponent } from '@fulgurjs/federation/vue'
+const BusinessForm = remoteComponent('admin/business-form')
+type Params = NonNullable<InstanceType<typeof BusinessForm>['$props']['params']>
+const params = ref<Params>({ id: 'order-1', formId: 'schema-1', disabled: false })
+
+// 放在实际包含同步声明的有效 TS 测试项目中：这些指令都必须命中真实错误。
+// @ts-expect-error 缺少必填 formId
+const missing: Params = { id: 'order-1' }
+// @ts-expect-error disabled 是 boolean，不能沿用 URL 的字符串
+const wrongType: Params = { id: 'order-1', formId: 'schema-1', disabled: 'false' }
+// @ts-expect-error 字段拼错不能静默进入宽字典
+const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
+```
+
+验收时先运行带 expect-error 的正向项目（包括上述预期错误，且不得出现未使用指令），再临时去掉指令确认原始 TS 错误确实出现。只证明 params='text' 失败，仍可能放过 Record<string, unknown>。后端数据如果是 any，也要在赋值边界核对/转换真实字段，不能用 any、类型断言或重复 DTO 绕过约束。`fulgurjs types` 成功证明生成/同步链通过，不证明提供方业务合同准确。URL 参数在独立入口解析为字符串或布尔业务值；远程 props 不应重新从宿主 URL 猜同名字段。
+
 ### 何时改用 `getContext` 注入
 
 如果 workflow 不应该知道 admin 的名称或地址，例如同一个 workflow 分别被采购、生产两个宿主使用，就由每个宿主在桥接 `getContext` 中提供同一业务契约，例如 `loadBusinessForm`、`loadSchemaForm`。子应用调用当前宿主提供的装载器，而不是硬编码某个宿主的远程 spec。
@@ -216,11 +251,106 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
 ### 已有项目复用原组件注册源
 
-已有统一 `registerComponents(app)` 的工程，不要为了注册再造 Provider，也不要在 setup 模块手抄另一份组件库清单。消费方原初始化已经能使用同一注册源时，在原位置复用即可；已有注册映射也可直接作为 globalComponents 导出。要先核实模块实际可访问与导出形态，不假设插件会从别的 main 自动提取注册表。表单内层的选人框、上传器也可能使用全局标签，扫描最外层模板容易漏。仅当本来就需要祖先 Provider 时，也可在它的 setup 中取得实际消费方 `getCurrentInstance()?.appContext.app`，调用原注册函数；用模块级 `WeakSet<App>` 对同一 app 幂等，注册成功后才加入集合。桥接创建新 app 时会重新安装，不能仅用容器级一次性标记。保留原项目定制组件，同名冲突先确定归属，不能盲覆盖。
+#### 为什么必须检查内部控件，而不只看表单是否出现
 
-这仍然是在消费方注册组件，并非 provide/inject 自动复制注册表。复用整套注册函数会带入它的依赖；需要更小的暴露面时，从原注册源抽出表单真正需要的公共子集，独立入口与 Provider 共用该子集，而不是维护两份清单。
+Vue 的全局组件注册表属于 **app 实例**，不属于浏览器窗口，也不属于共享的 Vue 包。设管理宿主创建 app A，桥接流程应用创建 app B，流程应用又加载管理宿主提供的表单：这个表单实际处于 **app B 的组件树**。即使 app A 已经执行 `app.component()` / `app.use()`，并且两个应用共享同一个 Vue，app B 也不会继承 app A 的注册表。
 
-主题也应复用同一份配置：把独立根组件的字体、文字色、圆角和主题色配置提取成共享函数，独立入口与远程 Provider 都调用它；只复制亮暗算法仍可能让表单外观不同。模块联邦直渲染共享同一份 DOM，全局 CSS 仍可能互相影响。遇到文字变淡等差异，检查实际生效的选择器、`color` 与 `-webkit-text-fill-color`，将修复限制在所属组件范围，不用全局覆盖或堆叠 `!important`。验收应比较真实控件、数据、只读状态和计算样式，不能仅以“CSS 请求成功”判断一致。
+这会产生容易误判的“半正常”页面：局部导入的 Input、Form 正常显示，依赖全局标签的字典框、选人框、按钮或上传器却失效。下拉框的所有选项可能直接连成文字，按钮只剩标签文字，行列布局消失。此时接口可以成功、真实数据可以出现、CSS 可以加载成功，甚至没有异常抛给错误边界。**这些事实不能证明组件完整渲染。** 开发模式的 `Failed to resolve component` 是线索，生产构建可能没有同样的警告；不能用“控制台没有错误”代替实际控件检查。
+
+需要逐层检查，是因为业务表单经常通过 schema/componentMap 选择组件，而字典、选人、上传等组件内部还会引用另一层全局标签。只扫描最外层 `.vue` 或看到 schema 中组件名已登记，仍然可能漏掉内部的 SelectOption、Button、Row/Col 等依赖。普通组件复用不运行提供方 main，所以这些依赖必须显式解决。
+
+#### 第一步：列出渲染位置和真实依赖
+
+在改接线前记录：
+
+1. 谁创建实际消费方 app；独立运行与桥接重建是否创建不同 app。
+2. expose 指向的原业务文件，以及它经 schema、动态组件和弹窗加载的内部控件。
+3. 每个异常标签的来源：局部 import、现有全局注册函数、已有注册映射、祖先 inject，还是 CSS。
+4. 真实注册名称及实现，包括 Select 的 Option/OptGroup 等子组件。注册父组件不等于调用它的 install，也不保证子组件已注册。
+5. 原工程是否替换了库组件，例如自定义 AButton 的权限、图标、颜色或 loading 行为。修复时保留原实现，不能用库默认组件偷偷替代。
+
+不要直接导入提供方 main 来补注册：main 可能创建第二个 app、安装路由、启动登录流程或执行 mount。也不要把整个 UI 库清单抄进 setup，或创建只为注册而存在的 Provider 包装。
+
+#### 第二步：按依赖性质选择实现
+
+| 实际情况 | 做法 |
+|---|---|
+| 原组件已有局部 import，或消费方已经注册同一实现 | 保留，不额外注册 |
+| 原注册源已有组件映射 | 提供方 setup 将需要的映射导出为 globalComponents |
+| 只有原 registerComponents(app) 函数，没有映射 | 在原注册模块中提取实际需要的映射，让原函数和远程 setup 共用；不要复制第二份组件清单 |
+| 组件确实缺少祖先 inject/context | 复用真实 Provider，按 pageProviders 安装；注册与注入分别处理 |
+| 必须调用已有注册函数，且本来就需要 Provider | 可在该 Provider 的 setup 取得实际消费方 app，幂等调用原函数；不要为注册专门制造 Provider |
+| 已正确生成组件 DOM，只是颜色、宽度或布局不同 | 再检查所属 CSS、主题和容器样式；不要用 CSS 掩盖未解析的标签 |
+
+以下是**已有注册源提取映射**的完整接线。示例假定项目已经使用 Ant Design Vue，已有 `src/components/registerComponents.ts` 和业务按钮 `src/components/BusinessButton.vue`；按真实工程替换，不创建假模块。清单只是示例控件的依赖，不是所有工程必抄的组件大全。
+
+```ts
+// src/components/registerComponents.ts：原注册源，同时服务独立入口和远程消费。
+import type { App, Component } from 'vue'
+import { Select, Row, Col } from 'ant-design-vue'
+import BusinessButton from './BusinessButton.vue'
+
+export const formComponents = {
+  ASelect: Select,
+  ASelectOption: Select.Option,
+  ASelectOptGroup: Select.OptGroup,
+  ARow: Row,
+  ACol: Col,
+  AButton: BusinessButton, // 保留项目原有按钮行为。
+} satisfies Record<string, Component>
+
+export function registerComponents(app: App) {
+  for (const [name, component] of Object.entries(formComponents)) {
+    app.component(name, component)
+  }
+  // 原有其他注册保持真实职责；上述同一批组件不再另维护一份清单。
+}
+```
+
+```ts
+// src/fulgurjs/setup.ts：仅声明所需注册，不启动提供方 app。
+export { formComponents as globalComponents } from '../components/registerComponents'
+```
+
+```ts
+// fulgurjs.config.ts：合并进已有配置，保留原 exposes/remotes/shared。
+import type { FederationOptions } from '@fulgurjs/federation'
+export default {
+  name: 'admin',
+  setup: './src/fulgurjs/setup.ts',
+  exposes: { './business-form': './src/components/forms/BusinessForm.vue' },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+原独立入口继续调用原 `registerComponents(app)`，不再增加第二次启动。消费方仍使用 `remoteComponent('admin/business-form')`；它将 setup 的 globalComponents 注册到**当次实际消费方 app**。不需要把 UI 库改成 shared，也不需要安装一整套提供方应用。生成配置文件后必须真正接到 Vite 并重建提供方，不能只改源码却验证旧 dist。
+
+globalComponents 的键是实际 Vue 注册名，值是组件实现或零参组件 loader；它不是 app.use 插件列表，不能传整个 UI 库插件代替组件。声明式注册可随每次远程加载向新 app 交付；不要使用容器级 `installed=true`，否则桥接卸载再建 app 后会漏注册。手动调用注册函数时，以实际 App 为键使用 WeakSet，并仅在成功后记入。
+
+同名注册也要核对。消费方已有同名不同实现时先确定项目要求的归属，不能静默替换导致原有页面行为变化。组件注册不复制自定义指令、router、Pinia 实例或主题；这些依赖仍需分别核实。手动 `loadRemote` 后自行渲染的路径，也不能默认拥有 remoteComponent 的消费方注册交付行为。
+
+#### 第三步：用实际控件验收，不能只检查页面壳
+
+开发环境和生产构建分别验证，至少包括：
+
+- 同一组件的原独立 URL 与远程 props 入口都显示真实数据，必填参数、只读状态和布局一致。
+- 字典框是实际 combobox/select，选项在展开层中出现；不是把全部选项文字直接排在页面上。
+- 选人控件的输入框、按钮和布局存在；允许编辑的测试模式中打开弹窗并取消，不能为了验证向后端保存。只读模式确认实际按钮和输入均被禁用。
+- 上传、富文本工具栏、schema 动态组件以及条件渲染后才出现的内部控件也检查；隐藏状态没有死标签不代表打开后正确。
+- 离开再进入、桥接卸载后重新挂载，确认新 app 仍能解析这些组件；也检查消费方原有同名控件没有被破坏。
+- 页面实际 DOM 中不得残留本应由 Vue 解析的 `<a-select>`、`<a-select-option>`、`<a-button>` 等标签。可在浏览器检查下例，再结合控件结构/角色断言；真实 Web Components、SVG 和编辑器 iframe 按各自实现判断，不能把所有带连字符的标签一概判错。
+
+```js
+// 浏览器 DOM 诊断示例：只针对本项目已知应由 Vue 解析的标签。
+const unresolved = [...document.querySelectorAll(
+  'a-select,a-select-option,a-select-opt-group,a-button,a-row,a-col'
+)]
+console.table(unresolved.map(el => ({ tag: el.tagName, text: el.textContent })))
+```
+
+将检查结果、实际控件截图、生产构建身份、重新挂载结果与注册源路径一起交付。仅“HTTP 200”“CSS 已加载”“表单输入框数量正确”“没有 MFU 错误”或“截图里有数据”均不足以判定通过。发现死标签先修注册；不要先补 CSS、盲加 Provider、重复挂载整个 app，或把组件占位文本当成无样式控件。
+
+主题也应复用原配置：独立根组件的字体、文字色、圆角和主题色由同一配置源提供。Provider 不隔离 CSS，联邦直渲染共享 DOM；若组件结构已正确但颜色变淡，检查实际选择器、color、-webkit-text-fill-color 及禁用态。将样式修复限制在所属组件范围，不全局覆盖或堆叠 !important。
 
 **React**（`@fulgurjs/federation/react`）：
 

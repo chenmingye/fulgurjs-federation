@@ -136,6 +136,41 @@ This does not maintain another interface. Do not redeclare known fields as broad
 
 Business components own reload-on-prop-change behavior and timer/late-write cleanup. Shared Vue/Pinia packages do not share business state; see [store ownership](existing-apps.md#pinia-ownership). Providers do not isolate CSS. Compare real data, resolved labels, readonly behavior and layout after asynchronous echo completes.
 
+#### Nested params require field-level checks
+
+For a page receiving one params object, define known fields at the original provider before generating and syncing declarations. An optional root for a standalone URL entry does not make its supplied fields optional.
+
+```vue
+<!-- Original provider BusinessForm.vue. -->
+<script setup lang="ts">
+interface BusinessFormParams {
+  id: string
+  formId: string
+  disabled?: boolean
+}
+defineProps<{ params?: BusinessFormParams }>()
+</script>
+```
+
+```ts
+// Actual consumer; do not duplicate the provider interface.
+import { ref } from 'vue'
+import { remoteComponent } from '@fulgurjs/federation/vue'
+const BusinessForm = remoteComponent('admin/business-form')
+type Params = NonNullable<InstanceType<typeof BusinessForm>['$props']['params']>
+const params = ref<Params>({ id: 'order-1', formId: 'schema-1', disabled: false })
+
+// Run in an effective TS project containing the synced registry.
+// @ts-expect-error required formId is missing
+const missing: Params = { id: 'order-1' }
+// @ts-expect-error boolean required, not a URL string
+const wrongType: Params = { id: 'order-1', formId: 'schema-1', disabled: 'false' }
+// @ts-expect-error misspelled field must fail
+const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
+```
+
+First check the project with expected errors (unused directives must fail), then temporarily remove directives and confirm actual TS diagnostics. Rejecting only params='text' can still accept Record<string, unknown>. Normalize/validate any backend values at the assignment boundary; do not bypass checks with any, assertions or a duplicate DTO. Successful fulgurjs types proves generation/sync, not an accurate business contract. Parse URL strings at the standalone boundary; remote props must not guess missing fields from the host URL.
+
 ### When to inject through `getContext`
 
 If workflow must not know admin's name or address—for example, procurement and production hosts use the same workflow—each host supplies the same business contract through bridge `getContext`, such as `loadBusinessForm` and `loadSchemaForm`. The child invokes the current host's loader instead of hardcoding a host remote spec.
@@ -216,13 +251,104 @@ Semantics:
 
 ### Reuse an existing component registration source
 
-Do not create a Provider just for registration. Reuse an accessible registration source in existing consumer initialization when possible, or export an existing registry map as globalComponents. Verify actual module access and export shape; the plugin does not extract registries from another main automatically. Installation through a Provider is an option only when that Provider is already required.
+#### Why checking the outer form is insufficient
 
-If a project already has `registerComponents(app)`, do not copy a second component-library list into setup. Nested user pickers and uploaders may also use global tags, so scanning only the outer form misses dependencies. An ancestor Provider can obtain the actual consumer app through `getCurrentInstance()?.appContext.app` in setup and call the existing registration function. Use a module-level `WeakSet<App>` for idempotence and mark the app only after successful registration. A new bridge app needs its own installation; a one-time container flag is insufficient. Preserve project-specific components and resolve ownership before overwriting names.
+Vue's global component registry belongs to an **app instance**, not the window or the shared Vue package. Suppose a management host creates app A, a bridged workflow creates app B, and B loads a form provided by A. The form renders in **B's component tree**. Registrations made with app.component/app.use on A do not transfer to B, even when both use the same Vue instance.
 
-This explicitly registers components in the consumer; provide/inject does not copy the registry. Reusing the entire registration function also brings its dependencies. If a smaller expose is needed, extract the required public subset from the original source and share it between the standalone entry and Provider, rather than maintaining two lists.
+This produces a misleading partial success: locally imported Input/Form controls work, but globally resolved dictionary selectors, user pickers, buttons or uploaders fail. All dropdown options may appear as ordinary adjacent text, a button becomes its label alone, and row/column layout disappears. Requests, real data and CSS can all load successfully without an exception reaching the error boundary. **None of those facts proves complete component rendering.** Development may report Failed to resolve component; production may omit that warning. An empty console is not sufficient evidence.
 
-Share theme configuration as well: extract font, text color, border radius, and primary color into one function used by both the standalone root and remote Provider. Copying only the light/dark algorithm can still change the form appearance. Direct federation rendering shares the DOM, so global CSS can affect other components. For faded text, inspect matching selectors, `color`, and `-webkit-text-fill-color`; scope the fix to the owning component instead of adding global overrides or layers of `!important`. Compare real controls, data, read-only behavior, and computed styles; successful CSS requests alone do not establish visual equivalence.
+Inspect nested controls because schema/componentMap resolution is only one layer. The selected dictionary, picker or upload component may itself use global SelectOption, Button or Row/Col tags. Finding the outer component in a map does not prove that its internal dependencies resolve. Ordinary remote component reuse does not execute the provider's main.
+
+#### Step 1: identify the actual rendering app and dependencies
+
+Before changing wiring, record:
+
+1. Who creates the consumer app, including standalone startup and each bridge remount.
+2. The original expose target and its schema-driven, dynamic and dialog components.
+3. Whether each failing dependency comes from a local import, existing registry/function, ancestor injection or CSS.
+4. Exact registration names and implementations, including Select Option/OptGroup. Registering a parent component does not call its install function or register its children.
+5. Project-specific replacements such as AButton with custom icon, permission, color or loading behavior. Preserve the real implementation instead of silently substituting the library default.
+
+Do not import the provider's main to obtain registrations: it may create another app, install routing, start authentication or mount. Do not copy an entire UI library inventory into setup or create a Provider solely for registration.
+
+#### Step 2: choose wiring by dependency type
+
+| Actual situation | Implementation |
+|---|---|
+| Local import or matching existing consumer registration | Keep it; add nothing |
+| Existing component map | Export the required map as globalComponents from provider setup |
+| Only registerComponents(app) exists | Extract the required map in its original module; share it with that function and remote setup |
+| Actual missing ancestor inject/context | Reuse the real Provider through pageProviders; handle registration separately |
+| Existing registration function must run and a Provider is already required | Obtain the actual consumer app in that Provider and install idempotently |
+| Correct component DOM, wrong color/size/layout | Inspect CSS, theme and container rules; do not hide unresolved tags with CSS |
+
+The following complete wiring assumes the project already uses Ant Design Vue and has src/components/registerComponents.ts plus its real BusinessButton.vue. Adapt actual paths; do not create fake modules. This list is an example's dependency subset, not a mandatory UI inventory.
+
+```ts
+// src/components/registerComponents.ts: the existing registration source.
+import type { App, Component } from 'vue'
+import { Select, Row, Col } from 'ant-design-vue'
+import BusinessButton from './BusinessButton.vue'
+
+export const formComponents = {
+  ASelect: Select,
+  ASelectOption: Select.Option,
+  ASelectOptGroup: Select.OptGroup,
+  ARow: Row,
+  ACol: Col,
+  AButton: BusinessButton, // Preserve the project's button behavior.
+} satisfies Record<string, Component>
+
+export function registerComponents(app: App) {
+  for (const [name, component] of Object.entries(formComponents)) {
+    app.component(name, component)
+  }
+  // Preserve unrelated existing registrations; do not duplicate this list.
+}
+```
+
+```ts
+// src/fulgurjs/setup.ts: declare registrations without starting another app.
+export { formComponents as globalComponents } from '../components/registerComponents'
+```
+
+```ts
+// fulgurjs.config.ts: merge with the actual existing configuration.
+import type { FederationOptions } from '@fulgurjs/federation'
+export default {
+  name: 'admin',
+  setup: './src/fulgurjs/setup.ts',
+  exposes: { './business-form': './src/components/forms/BusinessForm.vue' },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+The original standalone entry still calls registerComponents(app). The consumer keeps remoteComponent('admin/business-form'), which delivers setup's globalComponents to the **current consumer app**. No UI-library sharing or second application startup is required. Connect the configuration to Vite and rebuild the provider; validating old dist does not validate source edits.
+
+globalComponents maps actual registration names to components or zero-argument component loaders. It is not an app.use plugin list. Declaration delivery works for newly created consumer apps; a container-level installed=true flag would skip bridge remounts. When manually calling an installer, use a WeakSet keyed by the actual App and mark only after success.
+
+Resolve same-name conflicts before replacing existing consumer components. Registration does not copy directives, router, Pinia instances or theme. Inspect each separately. Manual loadRemote followed by custom rendering must not assume remoteComponent's consumer registration delivery.
+
+#### Step 3: verify real controls in development and production
+
+- Test the original standalone URL and remote-props entry with real data, required parameters, readonly state and layout.
+- Assert real combobox/select structure and an actual option popup, rather than all option labels appearing as inline text.
+- Verify picker input, button and layout. In an editable test mode open and cancel the dialog without saving to the backend; in readonly mode verify actual controls are disabled.
+- Inspect uploaders, editor toolbars, schema-driven and conditional controls after they appear. Hidden controls cannot prove correct resolution.
+- Leave/reenter and destroy/remount the bridge. The new app must still resolve components, and existing consumer controls must retain their behavior.
+- Reject raw tags that should have been Vue components. Use known project tags, not every hyphenated tag: actual Web Components, SVG and editor iframes have their own valid structures.
+
+```js
+// Read-only browser DOM diagnostic for known Vue component tags.
+const unresolved = [...document.querySelectorAll(
+  'a-select,a-select-option,a-select-opt-group,a-button,a-row,a-col'
+)]
+console.table(unresolved.map(el => ({ tag: el.tagName, text: el.textContent })))
+```
+
+Deliver control assertions/screenshots, production build identity, remount evidence and the shared registry source path. HTTP 200, loaded CSS, input counts, no MFU error or visible data alone are insufficient. Fix unresolved components before CSS; do not add arbitrary Providers, mount a whole app again or accept placeholder text as a working control.
+
+Reuse the existing theme source for fonts, text colors, radius and tokens. Providers do not isolate CSS. If DOM is correct but text is faint, inspect actual selectors, color, -webkit-text-fill-color and disabled rules. Limit changes to the owning component; avoid global overrides or stacked !important.
 
 **React** (`@fulgurjs/federation/react`):
 

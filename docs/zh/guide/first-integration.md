@@ -129,6 +129,8 @@ Vue 宿主使用已有认证状态提供 getIdentity/getContext；这些是上�
 
 固定配套组件推荐宿主 expose 原表单，子应用 `remoteComponent`。多个宿主提供不同实现时可用 getContext 注入装载器。完整示例、准确 props 和可选环境适配见[组件与模块](components-and-modules.md#宿主向子应用提供组件推荐方式与选择依据)。
 
+**内部控件注册是必验项。** 表单有数据不代表字典框、选人框、上传器已正确渲染。先按[原注册源复用与逐层验收](components-and-modules.md#已有项目复用原组件注册源)确认实际消费方 app、内部全局标签、子组件及原自定义实现，再接 globalComponents；生产 DOM 残留 a-select/a-button 等应解析标签时不得判为完成。完整接线、原入口保留、重挂与只读验证见该节。
+
 **普通远程组件不要求新增包装组件。** 原组件可直接渲染且依赖齐全时，保持原文件。只有缺少特定祖先注入才按需配置 pageProviders；一个已有 Provider 可直接引用，仅组合多个 Provider 或确有参数适配时再写包装组件。全局标签注册是另一件事，不能靠 Provider 自动复制注册表，也不能默认复制整套 UI 库清单。
 
 ## 接入方案本身也必须验收
