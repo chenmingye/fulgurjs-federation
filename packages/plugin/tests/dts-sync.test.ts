@@ -75,6 +75,17 @@ const typesRoot = () => path.join(tmp, 'types')
 const manifestUrl = 'http://remote.test/@fulgurjs-manifest.json'
 
 describe('syncRemoteTypes', () => {
+
+  it('完整同步：externals 含 *.vue 时 modules.d.ts 注入 SFC 通配声明（ISS-14 回归）', async () => {
+    const bundle = makeBundle({ widget: 'export declare const w: number\n' })
+    bundle.index.externals = ['*.vue', 'vue']
+    const f = fetchRouter(bundle)
+    const result = await syncRemoteTypes({ alias: 'wild', manifestUrl, typesRoot: typesRoot(), source: 'dev-entry', fetchJsonImpl: f.json, fetchTextImpl: f.text })
+    expect(result.status).toBe('synced')
+    const mod = fs.readFileSync(path.join(typesRoot(), 'wild/modules.d.ts'), 'utf8')
+    expect(mod, 'modules.d.ts 应含注入的 SFC 通配声明').toContain("declare module '*.vue'")
+  })
+
   it('完整同步：写入 modules/registry/metadata；revision 与来源入账本', async () => {
     const bundle = makeBundle({ math: 'export declare function sum(a: number, b: number): number\n' })
     const f = fetchRouter(bundle)
