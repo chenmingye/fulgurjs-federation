@@ -118,14 +118,15 @@ export const pageProviders = [
 
 在**原表单组件**明确声明真实字段，例如 `defineProps<{ recordId: string; readonly?: boolean }>()`。插件同步的是该公开合同；如果提供方写成 Record<string, unknown>，生成结果也只能是宽泛字典，不会凭字段名猜业务约束。
 
-消费端无需手工 import 生成的 d.ts；类型目录被 tsconfig 包含后，注册表会让 remoteComponent 得到对应组件的 props/events。需要给本地表单参数状态标注类型时，从远程组件推导：
+消费端无需手工 import 生成的 d.ts；类型目录被 tsconfig 包含后，注册表会让 remoteComponent 得到对应组件的 props/events。需要给本地表单参数状态标注类型时，用 `FgVueRemoteProps` 从远程入口直接取真实 props——比经 `InstanceType` 取 `$props` 更短，悬停与跳转也更直接：
 
 ```ts
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
+import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
 
 const BusinessForm = remoteComponent('admin/business-form')
-type BusinessFormProps = InstanceType<typeof BusinessForm>['$props']
+type BusinessFormProps = FgVueRemoteProps<'admin/business-form'>
 const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
   recordId: '',
   readonly: true,
@@ -156,8 +157,9 @@ defineProps<{ params?: BusinessFormParams }>()
 // 消费方真实业务文件；不重复声明 BusinessFormParams。
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
+import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
 const BusinessForm = remoteComponent('admin/business-form')
-type Params = NonNullable<InstanceType<typeof BusinessForm>['$props']['params']>
+type Params = NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>
 const params = ref<Params>({ id: 'order-1', formId: 'schema-1', disabled: false })
 
 // 放在实际包含同步声明的有效 TS 测试项目中：这些指令都必须命中真实错误。

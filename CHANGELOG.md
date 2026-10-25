@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.14.0
+
+- `/vue` 新增 type-only 公开类型 `FgVueRemoteProps<S>`：按远程类型注册表直接提取远程组件真实 props（构造型组件取实例 `$props`，函数组件取首参签名），与 `/react` 的 `FgReactRemoteProps<S>` 对应，用于消费方给本地参数状态标注类型，替代 `InstanceType<typeof 组件>['$props']` 链。非组件入口得 `never`，未同步/动态入口得 `Record<string, unknown>`（与 remoteComponent 放行语义一致）；不产生运行时代码。补 types-repro 字段级与边界回归、真实同步声明的负例矩阵（12 条指令全命中/去指令原始诊断全出现）与 client-types 批准清单。
+
 ## 6.13.10
 
 - `fulgurjs types` 宿主依赖检查豁免 `*.vue` 通配名：该通配由类型包 modules.d.ts 注入标准 SFC 模块声明（6.13.9 起），无需安装包；此前恒报 TYP-005“请安装 *.vue”。补 CLI 回归。

@@ -135,7 +135,7 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
       'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeHostRouting', 'BridgeSession',
       'DefineVueBridgeAppOptions',
       'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
-      'FgRemoteVueComponent', 'FgRuntime', 'FgVueBridgeWrapper',
+      'FgRemoteVueComponent', 'FgRuntime', 'FgVueBridgeWrapper', 'FgVueRemoteProps',
       'HostPages', 'HostPagesOptions',
       'LoadRemoteOptions', 'LoadShareOptions',
       'PageRouteLike', 'PageViolation', 'PagesOptions', 'PreloadRemoteOptions',

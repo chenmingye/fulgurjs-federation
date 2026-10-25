@@ -118,14 +118,15 @@ GlobalComponents, pageProviders and business application startup have separate r
 
 Declare accurate fields in the **original form**, for example defineProps<{ recordId: string; readonly?: boolean }>(). The plugin synchronizes that contract. A provider Record<string, unknown> remains a broad dictionary after generation; the plugin cannot guess business constraints.
 
-Consumers do not import generated d.ts files manually. Once tsconfig includes the type directory, the registry gives remoteComponent the corresponding props/events. Derive local parameter state from the remote component:
+Consumers do not import generated d.ts files manually. Once tsconfig includes the type directory, the registry gives remoteComponent the corresponding props/events. Derive local parameter state with `FgVueRemoteProps`, which reads the real props straight from the remote entry — shorter than going through `InstanceType` and `$props`, and clearer in hovers and go-to-definition:
 
 ```ts
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
+import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
 
 const BusinessForm = remoteComponent('admin/business-form')
-type BusinessFormProps = InstanceType<typeof BusinessForm>['$props']
+type BusinessFormProps = FgVueRemoteProps<'admin/business-form'>
 const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
   recordId: '',
   readonly: true,
@@ -156,8 +157,9 @@ defineProps<{ params?: BusinessFormParams }>()
 // Actual consumer; do not duplicate the provider interface.
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
+import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
 const BusinessForm = remoteComponent('admin/business-form')
-type Params = NonNullable<InstanceType<typeof BusinessForm>['$props']['params']>
+type Params = NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>
 const params = ref<Params>({ id: 'order-1', formId: 'schema-1', disabled: false })
 
 // Run in an effective TS project containing the synced registry.

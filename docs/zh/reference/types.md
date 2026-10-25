@@ -282,7 +282,7 @@ setup/onSession 收到的上下文.
 | `FgStaticEntry<S>` | 字符串 API 参数面的静态检查（空注册表/动态放行；已登记收敛为字面量；未登记得到带修法文案的错误类型，调用点报错） |
 | `FgRemoteModule<S>` | 入口对应的模块类型：已登记 → 模块命名空间；未同步/动态 → `unknown` |
 
-框架入口的扩展检查类型（`/vue`、`/react` 再导出）：`FgComponentEntry<S>`（remoteComponent 只接受默认导出为组件的暴露项）、`FgBridgeEntry<S>`（桥接工厂接受带类型的桥接契约默认导出，包括 defineBridgeApp 与 defineApplication 的返回值）、`FgBridgeAppProps<S>`（从提供方声明提取的桥接 props）、`FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>`（远程组件真实类型/props）、`FgVueBridgeWrapper<S>`（Vue 桥接包装组件）。语义与限制见 [API 参考 · 字符串 API 的入口检查](api.md#字符串-api-的入口检查类型注册表)。
+框架入口的扩展检查类型（`/vue`、`/react` 再导出）：`FgComponentEntry<S>`（remoteComponent 只接受默认导出为组件的暴露项）、`FgBridgeEntry<S>`（桥接工厂接受带类型的桥接契约默认导出，包括 defineBridgeApp 与 defineApplication 的返回值）、`FgBridgeAppProps<S>`（从提供方声明提取的桥接 props）、`FgRemoteVueComponent<S>` / `FgReactRemoteProps<S>` / `FgVueRemoteProps<S>`（远程组件真实类型 / React props / Vue props 提取）、`FgVueBridgeWrapper<S>`（Vue 桥接包装组件）。语义与限制见 [API 参考 · 字符串 API 的入口检查](api.md#字符串-api-的入口检查类型注册表)。
 
 ## RemoteSchema
 

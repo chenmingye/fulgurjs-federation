@@ -382,6 +382,26 @@ export type FgRemoteVueComponent<S extends string> = S extends keyof FgRemoteTyp
   ? (FgModuleDefault<FgRemoteTypes[S]> extends FgComponentLike ? FgModuleDefault<FgRemoteTypes[S]> : never)
   : DefineComponent<{}, {}, unknown>
 
+/**
+ * remoteComponent 组件的 props 提取（与 /react 的 FgReactRemoteProps 对应）：
+ * 已同步的组件暴露 → 远程组件真实 props——构造型组件（DefineComponent/选项组件）取
+ * 实例 $props（必填/可选、readonly、联合、嵌套与事件回调语义与提供方声明一致，
+ * 不 Omit VNodeProps/AllowedComponentProps，避免误删同名业务字段）；函数组件按
+ * 首参（props）签名提取。非组件入口 → never（无 props 合同可言，调用点另行由
+ * FgComponentEntry 报入口错误）；未同步/动态入口 → 宽松对象面（与 remoteComponent
+ * 的放行语义一致，不伪造字段）。type-only，不产生运行时代码。
+ */
+export type FgVueRemoteProps<S extends string> = S extends keyof FgRemoteTypes
+  ? (FgModuleDefault<FgRemoteTypes[S]> extends FgComponentLike ? FgVueComponentPropsOf<FgModuleDefault<FgRemoteTypes[S]>> : never)
+  : Record<string, unknown>
+
+/** Vue 组件形态 → props 类型：构造签名 $props 优先；函数组件取首参；无可证明合同 → unknown */
+type FgVueComponentPropsOf<C> = C extends new (...args: any) => { $props: infer P }
+  ? P
+  : C extends (props: infer P, ...rest: any) => any
+    ? P
+    : unknown
+
 export function createRemoteComponent(loadRemote: (spec: string, opts?: { retries?: number; consumerApp?: unknown }) => Promise<any>) {
   return function remoteComponent<S extends string>(spec: S & FgComponentEntry<S>, opts: RemoteComponentOptions = {}): FgRemoteVueComponent<S> {
     // consumerApp：当前渲染远程组件的 app 实例（异步包装组件 setup 内同步可得）。

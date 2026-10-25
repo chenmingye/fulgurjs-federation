@@ -559,6 +559,8 @@ Remote types are on by default (`dts: true`). The chain is **provider generates 
 
 Bridge `appProps`: props declared by the provider as `defineBridgeApp<{ userId: string }>(factory)` survive the declaration closure into the host wrapper component (checked in Vue templates and JSX); remotes without a concrete declaration get an honest `Record<string, unknown>` — the tooling never invents business fields.
 
+Direct extraction of remote component props (Vue): `FgVueRemoteProps<S>` (re-exported by `/vue`, matching `FgReactRemoteProps<S>` on `/react`) reads the real props of a remote component from the same registry — constructor-shaped components expose their instance `$props`, function components their first parameter signature; required/optional markers, readonly, unions and nested shapes keep the provider's semantics. Non-component entries yield `never` (an honest refusal); unsynced/dynamic entries yield `Record<string, unknown>` (matching remoteComponent's permissive boundary, never inventing fields). Prefer it over the `InstanceType<typeof Component>['$props']` chain when annotating local parameter state.
+
 ### CI and offline checks (`fulgurjs types`)
 
 Run `npx @fulgurjs/federation types` before typecheck (see the [CLI reference](cli.md)): providers validate declaration generation (closure compile errors → **non-zero exit**), hosts sync declarations per `--mode dev|prod` and verify external type dependencies resolve (missing ones list the package and install command, TYP-005). A fresh clone in CI does not need a browser or dev server first. `--check` only verifies the local cache against its recorded generation — it does not go online and does not attest the remote's latest.

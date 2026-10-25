@@ -555,6 +555,8 @@ export const bridgeSession = createBridgeSession()
 
 桥接 `appProps`：提供方 `defineBridgeApp<{ userId: string }>(工厂)` 声明的 props 经声明闭包保留到宿主包装组件（Vue 模板/JSX 均可检查）；未声明具体类型的远程得到诚实的 `Record<string, unknown>`——工具不会凭空推导业务字段。
 
+远程组件 props 的直接提取（Vue）：`FgVueRemoteProps<S>`（`/vue` 再导出，与 `/react` 的 `FgReactRemoteProps<S>` 对应）按同一注册表取远程组件真实 props——构造型组件取实例 `$props`，函数组件取首参签名；必填/可选、readonly、联合与嵌套语义与提供方声明一致。非组件入口得 `never`（诚实拒绝）；未同步/动态入口得 `Record<string, unknown>`（与 remoteComponent 的放行语义一致，不伪造字段）。给本地参数状态标注类型时优先用它，替代 `InstanceType<typeof 组件>['$props']` 链。
+
 ### CI 与离线检查（`fulgurjs types`）
 
 在 typecheck 前运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](cli.md)）：提供方验证声明生成（闭包编译错误 → **非零退出**），宿主按 `--mode dev|prod` 同步声明并校验外部类型依赖可解析（缺失列出包名与安装命令，TYP-005）。全新 clone 的 CI 不需要先启动浏览器或 dev server。`--check` 只核对本地缓存与已记录代次——不联网，不代表远程线上最新已核实。
