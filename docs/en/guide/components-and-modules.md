@@ -137,6 +137,38 @@ This does not maintain another interface. Do not redeclare known fields as broad
 
 Business components own reload-on-prop-change behavior and timer/late-write cleanup. Shared Vue/Pinia packages do not share business state; see [store ownership](existing-apps.md#pinia-ownership). Providers do not isolate CSS. Compare real data, resolved labels, readonly behavior and layout after asynchronous echo completes.
 
+#### Complete provider-to-IDE integration and acceptance sequence
+
+For typed Vue remote integration, **an accurate provider contract, updated type resources, correct consumer checking and readable actual IDE output are four separate requirements**. Do not combine partial evidence into “types complete.” File existence or a successful CLI exit alone is insufficient.
+
+1. **Trace the real expose to its original SFC.** Inspect defineProps, named contracts, events, slots and public instances. Known params fields must not be any or broad dictionaries. Normalize standalone URL strings at that boundary; remote props must not guess host query values. Do not add forwarding shells or duplicate DTOs.
+2. **Verify actual installed official packages on both sides.** Check each application's package.json, lockfile and resolved package path, not only repository source. Source links, manual node_modules replacement and historical versions are not final published-package evidence.
+3. **Publish new provider resources in reality.** In development, run the real provider and verify type generation. In production, run its existing build and deploy the resulting manifest, type index and declarations with dist. The provider phase of fulgurjs types validates generation; **it does not rebuild/deploy production dist or write newly validated declarations into the deployed site**. Downloading the unchanged site still returns old declarations.
+4. **Inspect actual HTTP resources.** Follow manifest.types.index rather than guessing a path; verify revision, generator package version and entry declarations. Recognized concrete SFCs should have an expose-named interface inheriting the original type. Keeping the long DefineComponent declaration is intentional: do not delete its inheritance source. Preserve unrecognized advanced wrappers and report their display limits honestly.
+5. **Sync in the consumer application directory.** Use its own package manager and replace the example origin with the actual site; relative production remotes need this base:
+
+   ```bash
+   pnpm exec fulgurjs types --mode prod --base https://portal.example.com
+   ```
+
+   Use actual dev configuration for development. Verify metadata source/revision, tsconfig inclusion and a single physical plugin registry. Do not hand-edit modules.d.ts or registry.d.ts.
+6. **Handle both reading targets.** Keep the actual remoteComponent type and derive local parameters with FgVueRemoteProps. When direct inherited-field display is required, use the [homomorphic field view](#showing-fields-directly-in-parameter-state-hovers) or a verified equivalent without copying fields. Changing the extraction tool or adding JSDoc alone does not prove a better component-tag hover.
+7. **Run real-project positive and negative checks.** Cover nested missing fields, misspellings, wrong scalars and union values. Verify expected errors, then remove directives to observe actual diagnostics. Check events, slots and ref/expose when changing component representation. OOM, an incompatible checker or a broad fallback cannot count as success; record historical errors separately.
+8. **Verify the user's actual IDE.** Check the Vue template tag, params attribute, parameter value and fields, plus completion/docs/navigation. Capture real template output. Plain TS quickInfo, a successful vue-tsc run or declaration-file screenshots do not replace it. If an upgrade leaves a static entry with empty props in the IDE despite correct CLI checks, inspect resolution and refresh Vue/TS services as described below; do not accept fallback as a shorter display.
+9. **Regress actual behavior and deliver four evidence categories.** Check real data, readonly state, nested controls and reentry as affected. Report the provider contract, deployed version/revision, positive/negative checks and IDE screenshots separately. Do not relabel previous/candidate evidence as final official-package verification.
+
+| Observation | Decision and next action |
+|---|---|
+| dts:false makes the command exit successfully | Type support was explicitly disabled; this cannot pass a task requiring types |
+| Provider params are a broad dictionary, but types exits successfully | Invalid contract; fix the provider rather than adding a consumer DTO |
+| Only consumer upgraded; provider HTTP revision is unchanged | New generation has not been delivered; rebuild/deploy the provider and sync |
+| Only InstanceType replaced with FgVueRemoteProps | Extraction changed; display and field constraints still need verification |
+| Registered static entry has empty props / unknown fallback | Registry chain is not ready; not a display improvement |
+| Recognized concrete SFC still expands and only a comment was added | Named display is unverified; inspect resources, sync and IDE resolution instead of lowering acceptance |
+| Field display is required but only an opaque parameter name is visible | Field readability is incomplete; verify the mapped view and exact hover position |
+| Terminal checks without actual IDE evidence | IDE result unverified; report tool/lock-screen blockers honestly, never PASS |
+| Original DefineComponent retained, hover named and constraints intact | Correct; keep the original signatures as the source of truth |
+
 #### Nested params require field-level checks
 
 For a page receiving one params object, define known fields at the original provider before generating and syncing declarations. An optional root for a standalone URL entry does not make its supplied fields optional.
