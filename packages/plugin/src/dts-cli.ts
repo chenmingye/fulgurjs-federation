@@ -130,6 +130,9 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
       const meta = readMetadata(path.join(typesRoot, remote.key))
       if (meta) {
         for (const ext of meta.externals) {
+          // '*.vue' 通配由类型包自身的 modules.d.ts 注入标准 SFC 模块声明（dts-ambient），
+          // 不需要宿主安装任何包——不豁免会恒报 TYP-005（不可安装的通配名）
+          if (ext === '*.vue') continue
           if (!resolvePackage(root, ext)) {
             if (ext.startsWith('virtual:') || ext.startsWith('\0')) {
               virtualTypes ??= resolveVirtualTypes(root)

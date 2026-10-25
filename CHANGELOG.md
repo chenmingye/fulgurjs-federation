@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.13.10
+
+- `fulgurjs types` 宿主依赖检查豁免 `*.vue` 通配名：该通配由类型包 modules.d.ts 注入标准 SFC 模块声明（6.13.9 起），无需安装包；此前恒报 TYP-005“请安装 *.vue”。补 CLI 回归。
+
 ## 6.13.9
 
 - 修复宿主侧远程声明两处消费端类型退化（ISS-14）：vue-tsc 声明输出的 `globalThis.ExtractPropTypes/Component/Ref` 等全局引用在宿主 TS 工程不可解析，dts-ambient 现重写为 `import("vue").X` 完整引用；`import('*.vue')` 通配（路由动态组件惯例）被 externals 登记但宿主无通配声明导致 TYP-005，随类型包注入标准 SFC 通配模块声明。补 dts 回归；运行时行为不变。
