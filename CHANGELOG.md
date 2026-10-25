@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.13.9
+
+- 修复宿主侧远程声明两处消费端类型退化（ISS-14）：vue-tsc 声明输出的 `globalThis.ExtractPropTypes/Component/Ref` 等全局引用在宿主 TS 工程不可解析，dts-ambient 现重写为 `import("vue").X` 完整引用；`import('*.vue')` 通配（路由动态组件惯例）被 externals 登记但宿主无通配声明导致 TYP-005，随类型包注入标准 SFC 通配模块声明。补 dts 回归；运行时行为不变。
+
 ## 6.13.8
 
 - 修复 `doctor --base` CLI 输出泄露 URL 敏感信息：现象行与 `--json` 的 `base` 字段此前原样回显 userinfo/query/hash，现与运行时诊断同口径脱敏（保留协议与 host:port）；新增 doctor URL 脱敏回归测试。

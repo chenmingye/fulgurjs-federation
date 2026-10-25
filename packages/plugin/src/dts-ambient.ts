@@ -106,8 +106,51 @@ export function buildAmbientDeclarations(input: AmbientBundleInput): AmbientBund
     `// 本文件由插件管理（dev 自动同步 / npx @fulgurjs/federation types），手动修改会被覆盖。\n` +
     `// 外部类型依赖（宿主需可解析）：${index.externals.length > 0 ? index.externals.join(', ') : '无'}。\n`
 
+  // vue-tsc 的 SFC 声明输出把 vue 公开类型简写为 globalThis.X（ExtractPropTypes /
+  // Component / Ref / ComputedRef 等——由 Volar 全局虚拟文件承载）。宿主 TS 工程
+  // 无法解析该形态，组件 props 退化为 error 类型、消费端检查失效。vue 本身导出
+  // 这些类型——文本重写为 import("vue").X 的完整可移植引用（类型完全保真）。
+  const vueGlobalTypes = [
+    'ExtractPropTypes',
+    'Component',
+    'Ref',
+    'ComputedRef',
+    'WritableComputedRef',
+    'ShallowRef',
+    'UnwrapRef',
+    'UnwrapRefSimple',
+    'DefineComponent',
+    'PropType',
+    'CSSProperties',
+    'VNodeChild',
+    'VNode',
+    'ComponentPublicInstance',
+    'ComponentOptionsMixin',
+    'ComponentProvideOptions',
+    'GlobalComponents',
+  ]
+  const rewriteVueGlobals = (text: string): string =>
+    text.replace(
+      /globalThis\.(ExtractPropTypes|Component|Ref|ComputedRef|WritableComputedRef|ShallowRef|UnwrapRef|UnwrapRefSimple|DefineComponent|PropType|CSSProperties|VNodeChild|VNode|ComponentPublicInstance|ComponentOptionsMixin|ComponentProvideOptions|GlobalComponents)\b/g,
+      'import("vue").$1',
+    )
+
+  // `*.vue` 通配 ambient（jeecg/路由类型惯例：import('*.vue') 动态组件引用）——
+  // vue-tsc 声明输出会把它登记为 external；宿主无同款声明时 TYP-005 且类型退化。
+  // 随类型包注入标准 SFC 通配声明（与 vue-cli/volar 惯例一致）。
+  const sfcWildcard = index.externals.includes('*.vue')
+    ? [
+        `// SFC 通配模块声明（提供方路由类型 import('*.vue') 的 ambient 依赖）`,
+        `declare module '*.vue' {`,
+        `  const component: import("vue").DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>;`,
+        `  export default component;`,
+        `}`,
+        ``,
+      ].join('\n')
+    : ''
+
   const files = new Map<string, string>()
-  files.set('modules.d.ts', `${header}${bodies.join('\n\n')}\n`)
+  files.set('modules.d.ts', `${header}${sfcWildcard}${rewriteVueGlobals(bodies.join('\n\n'))}\n`)
   files.set(
     'registry.d.ts',
     [
