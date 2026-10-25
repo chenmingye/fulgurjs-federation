@@ -20,6 +20,7 @@ import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
 import { TYPES_SCHEMA_VERSION, type DtsBundleIndex } from './dts-shared'
+import { nameVueDeclaration } from './dts-vue-display'
 
 export interface DtsGenerateExpose {
   /** './Button'（公开暴露；内部 setup 入口由调用方过滤，不进 bundle） */
@@ -696,6 +697,17 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   if (signal?.aborted) return { ok: false, diagnostics: ['声明生成被中止。'] }
   if (emitted.size === 0) {
     return { ok: false, diagnostics: ['声明 emit 未产出任何文件。请检查暴露入口与 tsconfig include 是否覆盖。'] }
+  }
+
+  // 只为实际暴露的具体 SFC 保留组件名。完整原类型仍是继承源，内部模块和泛型函数不改。
+  const namedVueSources = new Set<string>()
+  for (const [name, srcAbs] of entryMap) {
+    if (!srcAbs.endsWith('.vue') || namedVueSources.has(srcAbs)) continue
+    const declaration = emitted.get(srcAbs)
+    if (declaration !== undefined) {
+      emitted.set(srcAbs, nameVueDeclaration(ts, declaration, name))
+      namedVueSources.add(srcAbs)
+    }
   }
 
   // ---- 重写 pass：alias/相对 → bundle 内相对；裸包名 → externals ----

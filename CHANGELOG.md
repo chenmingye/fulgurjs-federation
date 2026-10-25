@@ -1,5 +1,9 @@
 # 当前发布说明
 
+## 6.14.1
+
+- 提供方类型生成对直接暴露的具体 Vue SFC 追加有名称的组件接口，继承完整原始 DefineComponent 签名；消费方组件悬停显示 expose 对应名称，不再展开全部框架泛型。原声明、props、事件、实例方法仍保留；泛型函数、带额外 slots 包装等未识别声明保持原样，不压平类型。不改变浏览器运行时行为。补真实 SFC→ambient→消费检查、实例等价及 quickInfo 回归。
+
 ## 6.14.0
 
 - `/vue` 新增 type-only 公开类型 `FgVueRemoteProps<S>`：按远程类型注册表直接提取远程组件真实 props（构造型组件取实例 `$props`，函数组件取首参签名），与 `/react` 的 `FgReactRemoteProps<S>` 对应，用于消费方给本地参数状态标注类型，替代 `InstanceType<typeof 组件>['$props']` 链。非组件入口得 `never`，未同步/动态入口得 `Record<string, unknown>`（与 remoteComponent 放行语义一致）；不产生运行时代码。补 types-repro 字段级与边界回归、真实同步声明的负例矩阵（12 条指令全命中/去指令原始诊断全出现）与 client-types 批准清单。

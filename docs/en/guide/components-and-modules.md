@@ -118,7 +118,7 @@ GlobalComponents, pageProviders and business application startup have separate r
 
 Declare accurate fields in the **original form**, for example defineProps<{ recordId: string; readonly?: boolean }>(). The plugin synchronizes that contract. A provider Record<string, unknown> remains a broad dictionary after generation; the plugin cannot guess business constraints.
 
-Consumers do not import generated d.ts files manually. Once tsconfig includes the type directory, the registry gives remoteComponent the corresponding props/events. Derive local parameter state with `FgVueRemoteProps`, which reads the real props straight from the remote entry — shorter than going through `InstanceType` and `$props`, and clearer in hovers and go-to-definition:
+Consumers do not import generated d.ts files manually. Once tsconfig includes the type directory, the registry gives remoteComponent the corresponding props/events. Derive local parameter state with `FgVueRemoteProps`, which reads the real props straight from the remote entry — reducing extraction code without changing the component-tag hover representation itself:
 
 ```ts
 import { ref } from 'vue'
@@ -172,6 +172,14 @@ const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
 ```
 
 First check the project with expected errors (unused directives must fail), then temporarily remove directives and confirm actual TS diagnostics. Rejecting only params='text' can still accept Record<string, unknown>. Normalize/validate any backend values at the assignment boundary; do not bypass checks with any, assertions or a duplicate DTO. Successful fulgurjs types proves generation/sync, not an accurate business contract. Parse URL strings at the standalone boundary; remote props must not guess missing fields from the host URL.
+
+#### Component names and business fields are separate hover targets
+
+Provider generation adds an expose-named interface, such as `ApprovalForm`, for directly exposed concrete Vue SFC declarations whose official type is `import("vue").DefineComponent<…>`. The interface inherits the complete original declaration instead of reconstructing `$props`. Consumer component hovers can therefore show `ApprovalForm` while keeping the original signatures, events and instance methods in the declaration closure.
+
+This is neither a second hand-maintained DTO nor an effect of `FgVueRemoteProps`. No wrapper component or return-type cast is required. Regenerate/publish the provider's type resources and sync the consumer; upgrading only the consumer plugin while downloading old declarations does not change their display.
+
+Inspect template `params`, assigned fields or the provider's named interface to read the business contract. Maintain field documentation at that source. Verify component and field hovers separately in the actual IDE. Generic function components, additional slots wrappers and other unrecognized advanced declarations retain their original representation to preserve exact signatures; short names are not promised for every component/editor. When exposes share a declaration, the first expose supplies the name; identifier conflicts are avoided without changing runtime component names.
 
 ### When to inject through `getContext`
 

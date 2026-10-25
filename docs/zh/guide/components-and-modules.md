@@ -118,7 +118,7 @@ export const pageProviders = [
 
 在**原表单组件**明确声明真实字段，例如 `defineProps<{ recordId: string; readonly?: boolean }>()`。插件同步的是该公开合同；如果提供方写成 Record<string, unknown>，生成结果也只能是宽泛字典，不会凭字段名猜业务约束。
 
-消费端无需手工 import 生成的 d.ts；类型目录被 tsconfig 包含后，注册表会让 remoteComponent 得到对应组件的 props/events。需要给本地表单参数状态标注类型时，用 `FgVueRemoteProps` 从远程入口直接取真实 props——比经 `InstanceType` 取 `$props` 更短，悬停与跳转也更直接：
+消费端无需手工 import 生成的 d.ts；类型目录被 tsconfig 包含后，注册表会让 remoteComponent 得到对应组件的 props/events。需要给本地表单参数状态标注类型时，用 `FgVueRemoteProps` 从远程入口直接取真实 props——减少提取代码；它本身不负责改变组件标签的悬停表示：
 
 ```ts
 import { ref } from 'vue'
@@ -172,6 +172,14 @@ const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
 ```
 
 验收时先运行带 expect-error 的正向项目（包括上述预期错误，且不得出现未使用指令），再临时去掉指令确认原始 TS 错误确实出现。只证明 params='text' 失败，仍可能放过 Record<string, unknown>。后端数据如果是 any，也要在赋值边界核对/转换真实字段，不能用 any、类型断言或重复 DTO 绕过约束。`fulgurjs types` 成功证明生成/同步链通过，不证明提供方业务合同准确。URL 参数在独立入口解析为字符串或布尔业务值；远程 props 不应重新从宿主 URL 猜同名字段。
+
+#### 组件悬停名称与业务字段是两个层次
+
+提供方类型生成会为直接 expose 的具体 Vue SFC（官方声明为 `import("vue").DefineComponent<…>`）追加一个以 expose 命名的接口，例如 `ApprovalForm`。该接口继承完整原声明，不重建 `$props`，因此消费方组件名悬停可以显示 `ApprovalForm`，而不是展开全部框架泛型。原始签名仍留在声明闭包，事件、实例方法等沿原类型流动。
+
+这不是手工维护第二份 DTO，也不是 `FgVueRemoteProps` 的效果。使用者无需加包装组件或改返回类型。提供方重新生成/发布类型资源，消费方同步后由 IDE 读取新声明；只升级消费方插件却继续下载旧类型资源，不会得到新展示。
+
+查看业务字段时，悬停模板 `params`、具体赋值字段或跳转到提供方命名接口；字段注释在原接口维护。组件名提示和字段提示分别验证，不能用类型检查通过代替真实 IDE 效果。泛型函数组件、额外 slots 包装或其他未识别的高级声明保持原始表示，以保留其精确签名；不保证所有 Vue 组件或编辑器都显示相同短名称。多个 expose 指向同一声明时使用首次遇到的 expose 名称；同名标识符自动避让，不修改运行时组件名。
 
 ### 何时改用 `getContext` 注入
 

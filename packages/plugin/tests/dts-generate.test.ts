@@ -8,6 +8,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { generateTypesBundle } from '../src/dts-generate'
 import { parseDtsIndex } from '../src/dts-shared'
+import { buildAmbientDeclarations } from '../src/dts-ambient'
+import ts from 'typescript'
 
 let tmp = ''
 const pluginRoot = path.resolve(__dirname, '..')
@@ -49,6 +51,75 @@ function makeProject(name: string, files: Record<string, string>, tsconfigExtra:
 }
 
 describe('generateTypesBundle（纯 TS 工程）', () => {
+  it('真实 SFC 的命名声明经宿主转换后保留 props、事件和 expose', async () => {
+    const root = makeProject('vue-readable-display', {
+      'src/entry.vue': `<script setup lang="ts">
+defineProps<{ id: string; disabled?: boolean }>();
+defineEmits<{ save: [id: string] }>();
+defineExpose({ focus: (index: number): string => String(index) });
+</script><template />`,
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './ApprovalForm', import: './src/entry.vue' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    const declaration = result.files.get(result.index.exposes['./ApprovalForm']!.declaration)!
+    expect(declaration).toContain('interface ApprovalForm extends')
+    const ambient = buildAmbientDeclarations({ alias: 'remote', index: result.index, source: 'test', readFile: rel => result.files.get(rel)! })
+    fs.writeFileSync(path.join(root, 'remote.d.ts'), ambient.files.get('modules.d.ts')!)
+    const consumer = path.join(root, 'consumer.ts')
+    fs.writeFileSync(consumer, `
+import Form from 'remote/ApprovalForm';
+type Props = InstanceType<typeof Form>['$props'];
+const ok: Props = { id: '1', disabled: false, onSave: (id: string) => {} };
+// @ts-expect-error 必填属性不能丢失
+const missing: Props = {};
+// @ts-expect-error 业务字段类型不能丢失
+const wrong: Props = { id: '1', disabled: 'false' };
+// @ts-expect-error 事件参数不能丢失
+const event: Props = { id: '1', onSave: (id: number) => {} };
+declare const instance: InstanceType<typeof Form>;
+const result: string = instance.focus(1);
+// @ts-expect-error expose 参数不能丢失
+instance.focus('x');
+`)
+    const program = ts.createProgram([consumer, path.join(root, 'remote.d.ts')], {
+      strict: true, noEmit: true, skipLibCheck: false, types: [], target: ts.ScriptTarget.ESNext,
+      module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    })
+    expect(ts.getPreEmitDiagnostics(program).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
+  }, 30000)
+
+  it('带显式 slots 的 SFC 保留原高级签名，不强行改造成简化组件', async () => {
+    const root = makeProject('vue-readable-slots', {
+      'src/entry.vue': `<script setup lang="ts">
+defineProps<{ id: string }>();
+defineSlots<{ default(props: { count: number }): any }>();
+</script><template />`,
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './SlottedForm', import: './src/entry.vue' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    const declaration = result.files.get(result.index.exposes['./SlottedForm']!.declaration)!
+    expect(declaration).not.toContain('__FgOriginalComponent')
+    const ambient = buildAmbientDeclarations({ alias: 'remote', index: result.index, source: 'test', readFile: rel => result.files.get(rel)! })
+    fs.writeFileSync(path.join(root, 'remote.d.ts'), ambient.files.get('modules.d.ts')!)
+    const consumer = path.join(root, 'consumer.ts')
+    fs.writeFileSync(consumer, `
+import Form from 'remote/SlottedForm';
+declare const instance: InstanceType<typeof Form>;
+instance.$slots.default({ count: 1 });
+// @ts-expect-error slot 参数仍然严格
+instance.$slots.default({ count: 'x' });
+`)
+    const program = ts.createProgram([consumer, path.join(root, 'remote.d.ts')], {
+      strict: true, noEmit: true, skipLibCheck: false, types: [], target: ts.ScriptTarget.ESNext,
+      module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    })
+    expect(ts.getPreEmitDiagnostics(program).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
+  }, 30000)
+
   it.each([
     ['PRIVATE_ROOT_VALUE', 'string'],
     [42, 'number'],
