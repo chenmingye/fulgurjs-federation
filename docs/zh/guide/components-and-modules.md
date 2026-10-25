@@ -193,6 +193,8 @@ const params = ref<Params>()
 
 查看业务字段时，悬停模板 `params`、具体赋值字段或跳转到提供方命名接口；字段注释在原接口维护。组件名提示和字段提示分别验证，不能用类型检查通过代替真实 IDE 效果。泛型函数组件、额外 slots 包装或其他未识别的高级声明保持原始表示，以保留其精确签名；不保证所有 Vue 组件或编辑器都显示相同短名称。多个 expose 指向同一声明时使用首次遇到的 expose 名称；同名标识符自动避让，不修改运行时组件名。
 
+已登记的静态组件入口若在升级后显示 `DefineComponent<{}, {}, unknown>`，这是未命中真实注册表的回退，不是命名展示修复成功。先核对生成声明是否被 tsconfig 包含、metadata 来源/revision及 IDE 实际解析的插件物理路径；CLI 正确而 IDE 仍缓存旧依赖时，可执行命令面板的 `Vue: Restart Vue and TS servers` 后重新检查。不要通过删除类型、放宽合同或盲目重装来掩盖注册表失效。
+
 ### 何时改用 `getContext` 注入
 
 如果 workflow 不应该知道 admin 的名称或地址，例如同一个 workflow 分别被采购、生产两个宿主使用，就由每个宿主在桥接 `getContext` 中提供同一业务契约，例如 `loadBusinessForm`、`loadSchemaForm`。子应用调用当前宿主提供的装载器，而不是硬编码某个宿主的远程 spec。

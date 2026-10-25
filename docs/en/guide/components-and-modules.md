@@ -193,6 +193,8 @@ This is neither a second hand-maintained DTO nor an effect of `FgVueRemoteProps`
 
 Inspect template `params`, assigned fields or the provider's named interface to read the business contract. Maintain field documentation at that source. Verify component and field hovers separately in the actual IDE. Generic function components, additional slots wrappers and other unrecognized advanced declarations retain their original representation to preserve exact signatures; short names are not promised for every component/editor. When exposes share a declaration, the first expose supplies the name; identifier conflicts are avoided without changing runtime component names.
 
+For a registered static component entry, `DefineComponent<{}, {}, unknown>` after an upgrade is a fallback without the real registry, not a successful short-name display. Check tsconfig inclusion, metadata source/revision and the package's physical path resolved by the IDE. If CLI checks are correct but the IDE retains old dependency resolution, run `Vue: Restart Vue and TS servers` and verify again. Do not hide registry failure by deleting declarations, loosening contracts or blindly reinstalling dependencies.
+
 ### When to inject through `getContext`
 
 If workflow must not know admin's name or address—for example, procurement and production hosts use the same workflow—each host supplies the same business contract through bridge `getContext`, such as `loadBusinessForm` and `loadSchemaForm`. The child invokes the current host's loader instead of hardcoding a host remote spec.
