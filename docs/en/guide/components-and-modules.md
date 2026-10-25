@@ -173,6 +173,18 @@ const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
 
 First check the project with expected errors (unused directives must fail), then temporarily remove directives and confirm actual TS diagnostics. Rejecting only params='text' can still accept Record<string, unknown>. Normalize/validate any backend values at the assignment boundary; do not bypass checks with any, assertions or a duplicate DTO. Successful fulgurjs types proves generation/sync, not an accurate business contract. Parse URL strings at the standalone boundary; remote props must not guess missing fields from the host URL.
 
+#### Showing fields directly in parameter-state hovers
+
+A named interface identifies the contract source. To inspect its inherited fields directly, add a homomorphic view in the existing consumer file instead of duplicating the fields:
+
+```ts
+type VisibleFields<T> = { [K in keyof T]: T[K] } & {}
+type Params = VisibleFields<NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>>
+const params = ref<Params>()
+```
+
+This expands one level and preserves optional/readonly modifiers without changing runtime data or recursively rewriting arrays/functions. Fields still come from the same generated contract. Parameter-value hovers can show id/name/disabled directly; component-name hovers use the named declarations below. Verify both effects independently and retain field-level negative tests; a mapped view alone does not fix component-tag display.
+
 #### Component names and business fields are separate hover targets
 
 Provider generation adds an expose-named interface, such as `ApprovalForm`, for directly exposed concrete Vue SFC declarations whose official type is `import("vue").DefineComponent<…>`. The interface inherits the complete original declaration instead of reconstructing `$props`. Consumer component hovers can therefore show `ApprovalForm` while keeping the original signatures, events and instance methods in the declaration closure.

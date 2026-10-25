@@ -173,6 +173,18 @@ const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
 
 验收时先运行带 expect-error 的正向项目（包括上述预期错误，且不得出现未使用指令），再临时去掉指令确认原始 TS 错误确实出现。只证明 params='text' 失败，仍可能放过 Record<string, unknown>。后端数据如果是 any，也要在赋值边界核对/转换真实字段，不能用 any、类型断言或重复 DTO 绕过约束。`fulgurjs types` 成功证明生成/同步链通过，不证明提供方业务合同准确。URL 参数在独立入口解析为字符串或布尔业务值；远程 props 不应重新从宿主 URL 猜同名字段。
 
+#### 需要在参数状态悬停中直接查看字段时
+
+命名接口适合表达合同来源；需要直接看到其继承字段时，可在原消费文件增加一层同态映射视图，不手写另一份字段接口：
+
+```ts
+type VisibleFields<T> = { [K in keyof T]: T[K] } & {}
+type Params = VisibleFields<NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>>
+const params = ref<Params>()
+```
+
+它只展开一层并保留 optional/readonly 修饰，不转换运行时数据、不递归改写数组或函数；字段仍来自同一生成合同。此时参数值悬停可以直接展示 id/name/disabled 等字段，组件名悬停则由下节的命名声明解决。两种效果要分别实测，不能把映射视图当成组件名展示修复；业务字段正反例仍须通过。
+
 #### 组件悬停名称与业务字段是两个层次
 
 提供方类型生成会为直接 expose 的具体 Vue SFC（官方声明为 `import("vue").DefineComponent<…>`）追加一个以 expose 命名的接口，例如 `ApprovalForm`。该接口继承完整原声明，不重建 `$props`，因此消费方组件名悬停可以显示 `ApprovalForm`，而不是展开全部框架泛型。原始签名仍留在声明闭包，事件、实例方法等沿原类型流动。
