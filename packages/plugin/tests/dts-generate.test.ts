@@ -168,7 +168,7 @@ export interface ApprovalParams extends Context { name: string; mode?: 'view' | 
     if (!result.ok) return
     expect(result.fileCount).toBe(2)
     const declaration = result.files.get(result.index.exposes['./ApprovalForm']!.declaration)!
-    expect(declaration).toContain('export type { ApprovalParams }')
+    expect(declaration).toContain('as ApprovalParams }')
     const ambient = buildAmbientDeclarations({ alias: 'remote', index: result.index, source: 'test', readFile: rel => result.files.get(rel)! })
     expect(ambient.warnings).toEqual([])
     fs.writeFileSync(path.join(root, 'remote.d.ts'), ambient.files.get('modules.d.ts')!)
@@ -196,6 +196,42 @@ ok.id = '2';
     expect(diagnostics(text).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
     const raw = diagnostics(text.replace(/^\/\/ @ts-expect-error.*$/gm, ''))
     expect(raw.map(d => d.code)).toEqual([2741, 2322, 2322, 2540])
+  }, 30000)
+
+  it('SFC 内联导出的数据接口经字段视图和ambient后仍与组件params精确一致', async () => {
+    const root = makeProject('vue-inline-public-view', {
+      'src/entry.vue': `<script lang="ts">
+/** 内联合同说明 */
+export interface Params { readonly id: string; disabled?: boolean }
+</script>
+<script setup lang="ts">
+defineProps<{ params?: Params }>();
+</script><template />`,
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './Inline', import: './src/entry.vue' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    expect(result.fileCount).toBe(1)
+    const ambient = buildAmbientDeclarations({ alias: 'remote', index: result.index, source: 'test', readFile: rel => result.files.get(rel)! })
+    fs.writeFileSync(path.join(root, 'remote.d.ts'), ambient.files.get('modules.d.ts')!)
+    const consumer = path.join(root, 'consumer.ts')
+    fs.writeFileSync(consumer, `import Component, { type Params } from 'remote/Inline';
+const value: Params = { id: '1', disabled: false };
+type Canonical = NonNullable<InstanceType<typeof Component>['$props']['params']>;
+type Equal<A,B> = (<T>()=>T extends A?1:2) extends (<T>()=>T extends B?1:2) ? true : false;
+const same: Equal<Params, Canonical> = true;
+const props: InstanceType<typeof Component>['$props'] = { params: value };
+// @ts-expect-error 只读字段保留
+value.id = '2';
+// @ts-expect-error 内部标量约束保留
+const wrong: Params = { id: '1', disabled: 'false' };
+`)
+    const program = ts.createProgram([consumer, path.join(root, 'remote.d.ts')], {
+      strict: true, noEmit: true, skipLibCheck: false, types: [], target: ts.ScriptTarget.ESNext,
+      module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    })
+    expect(ts.getPreEmitDiagnostics(program).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
   }, 30000)
 
   it('带显式 slots 的 SFC 保留原高级签名，不强行改造成简化组件', async () => {

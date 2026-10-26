@@ -216,9 +216,31 @@ Public names require native provider export interface / export type declarations
 
 First check the project with expected errors (unused directives must fail), then temporarily remove directives and confirm actual TS diagnostics. Rejecting only params='text' can still accept Record<string, unknown>. Normalize/validate any backend values at the assignment boundary; do not bypass checks with any, assertions or a duplicate DTO. Successful fulgurjs types proves generation/sync, not an accurate business contract. Parse URL strings at the standalone boundary; remote props must not guess missing fields from the host URL.
 
-#### Parameter-state names and field readability
+#### Direct imports must also show fields on hover
 
-Use public business types directly. IDEs decide whether inherited interfaces, aliases and outer Ref types expand; do not require a mapping helper in every consumer to repair hovers. Verify the business contract name, params.value field completion, field types/docs and definition navigation. Inspect definitions or field completion for inherited members. Component-tag hovers still need separate checks below. Preserve optional/readonly modifiers, unions, events and instance capabilities; a short name alone does not prove correctness.
+Keep the consumer's two lines: `import type { BusinessFormParams } from 'admin/business-form'` and `ref<BusinessFormParams>()`. **The provider generator creates expandable views for named data objects automatically. Business files need no VisibleFields, NonNullable or duplicate DTO.** It uses the provider's TypeScript checker to verify the public type shape and adds a declaration-only view. Original contracts and complete component signatures remain; runtime JS is unchanged.
+
+For supported data contracts, verify these targets independently in the actual IDE:
+
+1. Hover BusinessFormParams: show field names, types, required/optional markers and inherited fields, rather than just an interface name.
+2. Hover the parameter variable or template parameter value: show the same field structure. Vue's outer Ref may remain; an alias name alone is insufficient.
+3. Check field hovers, completion and semantic diagnostics: preserve provider JSDoc, readonly, optionality, unions and required fields. Better display with weakened checking is a failure.
+
+Example hover information (generated from the provider, not copied into consumer code):
+
+```ts
+{
+  id: string
+  formId: string
+  disabled?: boolean
+}
+```
+
+Changing imports, enabling definition navigation or showing a contract name alone does not complete field readability. Capture real editor/Vue-template results; ordinary TS quickInfo is a regression layer, not a substitute for GUI acceptance.
+
+Only confirmed non-generic data objects get these views. Generic types, unions, arrays/tuples, callable/constructable types, classes/private brands, polymorphic this, methods/accessors and other advanced contracts retain their original declarations to preserve signatures and identity. Function, array and nested-object field types are not recursively rewritten.
+
+This happens during **provider declaration generation**. Run the provider with the current plugin for dev resources, or rebuild and deploy its production manifest, index and declarations. Consumers must synchronize the new revision. Upgrading only the consumer while downloading old resources does not produce a new view; never edit generated caches to pretend it does.
 
 #### Component names and business fields are separate hover targets
 

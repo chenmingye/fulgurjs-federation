@@ -21,6 +21,7 @@ import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
 import { TYPES_SCHEMA_VERSION, type DtsBundleIndex } from './dts-shared'
 import { nameVueDeclaration } from './dts-vue-display'
+import { displayPublicDataTypes } from './dts-type-display'
 
 export interface DtsGenerateExpose {
   /** './Button'（公开暴露；内部 setup 入口由调用方过滤，不进 bundle） */
@@ -266,7 +267,7 @@ function commonDirOf(files: string[]): string {
 
 interface TsConfigContext {
   ts: TsModule
-  compilerOptions: Record<string, unknown>
+  compilerOptions: import('typescript').CompilerOptions
   /** tsconfig 文件里的**原始** compilerOptions JSON——vue-tsc 临时配置必须写它：
    * 解析后的 parsed.options 含枚举数值（target: 99）与内部键（pathsBasePath），直接
    * 序列化会让 vue-tsc 报 TS5023/TS5024（原型外实测）。 */
@@ -322,7 +323,7 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
   const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, path.dirname(tsconfigFile), undefined, undefined, undefined, [
     { extension: '.vue', isMixedContent: true, scriptKind: ts.ScriptKind.Deferred },
   ])
-  const co: Record<string, unknown> = { ...parsed.options }
+  const co: import('typescript').CompilerOptions = { ...parsed.options }
   if (typeof co.baseUrl === 'string' && !path.isAbsolute(co.baseUrl)) {
     co.baseUrl = path.resolve(path.dirname(tsconfigFile), co.baseUrl)
   }
@@ -755,7 +756,6 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       leaked = true
     }
     files.set(rel, text)
-    filesDigest[rel] = crypto.createHash('sha256').update(text, 'utf8').digest('hex')
   }
   if (leaked) return { ok: false, diagnostics }
 
@@ -767,6 +767,14 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       return { ok: false, diagnostics }
     }
     exposesMap[name] = { declaration: declRel }
+  }
+
+  displayPublicDataTypes(ts, files, Object.values(exposesMap).map(entry => entry.declaration), root, ctx.compilerOptions)
+  for (const [rel, text] of files) {
+    if (text.includes(root)) {
+      return { ok: false, diagnostics: [...diagnostics, `声明文件包含本机绝对路径（${rel}），已拒绝产出。`] }
+    }
+    filesDigest[rel] = crypto.createHash('sha256').update(text, 'utf8').digest('hex')
   }
 
   const index: Omit<DtsBundleIndex, 'revision'> = {

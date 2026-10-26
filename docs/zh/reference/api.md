@@ -546,6 +546,8 @@ export const bridgeSession = createBridgeSession()
 
 本地 dev 消费已部署远程时，类型来自 `remotes[别名].dev` 指定的完整生产 `.js` 入口对应的 manifest，与模块使用同一提供方；不要求提供方启动 dev。JS 由浏览器加载，声明由消费方 Node 开发进程下载，网络权限分别核对。详见[配置与完整流程](../guide/components-and-modules.md#本地开发消费已部署远程)。
 
+提供方对公开的非泛型数据对象自动生成可展开字段视图，消费方直接 import type 后，类型名和参数变量悬停可展示继承字段；readonly、可选项和字段说明保留。高级签名不强行改写，适用范围与双位置 IDE 验收见[直接导入的字段展示](../guide/components-and-modules.md#直接导入时悬停也应能看到字段)。
+
 ### 字符串 API 的入口检查（类型注册表）
 
 `loadRemote`、`remoteComponent`、`createVueBridgeApp`、`createReactBridgeApp` 与普通 import 共用同一份注册表类型（`FgRemoteTypes`，由同步产物登记）：

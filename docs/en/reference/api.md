@@ -550,6 +550,8 @@ Remote types are on by default (`dts: true`). The chain is **provider generates 
 
 When local dev consumes a deployed remote, types come from the manifest beside the complete production `.js` entry configured in `remotes[alias].dev`, using the same provider as the module. No provider dev server is required. The browser loads JS; the consumer Node development process downloads declarations, so verify network access for each. See the [complete configuration and workflow](../guide/components-and-modules.md#local-development-against-a-deployed-remote).
 
+Providers automatically generate expandable views for exported non-generic data objects. Direct type imports can show inherited fields in both type-name and parameter-variable hovers while retaining readonly, optionality and field documentation. Advanced signatures are preserved. See [direct-import field display](../guide/components-and-modules.md#direct-imports-must-also-show-fields-on-hover) for scope and acceptance.
+
 ### Entry checks for the string APIs (type registry)
 
 `loadRemote`, `remoteComponent`, `createVueBridgeApp` and `createReactBridgeApp` share one registry (`FgRemoteTypes`, populated by the synced output) with plain imports:
