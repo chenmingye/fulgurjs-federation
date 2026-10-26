@@ -229,8 +229,8 @@ const typo: BusinessFormParams = { id: 'order-1', formId: 'schema-1', disabeld: 
 
 示意（实际字段来自提供方，不手写到消费方）：
 
-```ts
-// 悬停 BusinessFormParams 的期望信息
+```text
+悬停 BusinessFormParams 的期望信息（编辑器输出，不复制到业务代码）：
 {
   id: string
   formId: string

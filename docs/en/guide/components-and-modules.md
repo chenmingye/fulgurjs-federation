@@ -226,9 +226,9 @@ For supported data contracts, verify these targets independently in the actual I
 2. Hover the parameter variable or template parameter value: show the same field structure. Vue's outer Ref may remain; an alias name alone is insufficient.
 3. Check field hovers, completion and semantic diagnostics: preserve provider JSDoc, readonly, optionality, unions and required fields. Better display with weakened checking is a failure.
 
-Example hover information (generated from the provider, not copied into consumer code):
+Example hover information (editor output generated from the provider, not copied into consumer code):
 
-```ts
+```text
 {
   id: string
   formId: string
