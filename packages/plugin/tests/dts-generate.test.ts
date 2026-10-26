@@ -149,6 +149,55 @@ instance.focus('x');
     expect(ts.getPreEmitDiagnostics(program).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
   }, 30000)
 
+  it('SFC 直接公开同一参数合同，消费方无需提取工具即可 import type 使用', async () => {
+    const root = makeProject('vue-public-named-params', {
+      'src/entry.vue': `<script lang="ts">
+export type { ApprovalParams } from '@/contract';
+</script>
+<script setup lang="ts">
+import type { ApprovalParams } from '@/contract';
+defineProps<{ params?: ApprovalParams }>();
+</script><template />`,
+      'src/contract.ts': `export interface Context { /** 业务标识 */ readonly id: string; disabled?: boolean }
+/** 审批表单参数，提供方与消费方共用。 */
+export interface ApprovalParams extends Context { name: string; mode?: 'view' | 'edit' }`,
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const result = await generateTypesBundle({ root, exposes: [{ name: './ApprovalForm', import: './src/entry.vue' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    expect(result.fileCount).toBe(2)
+    const declaration = result.files.get(result.index.exposes['./ApprovalForm']!.declaration)!
+    expect(declaration).toContain('export type { ApprovalParams }')
+    const ambient = buildAmbientDeclarations({ alias: 'remote', index: result.index, source: 'test', readFile: rel => result.files.get(rel)! })
+    expect(ambient.warnings).toEqual([])
+    fs.writeFileSync(path.join(root, 'remote.d.ts'), ambient.files.get('modules.d.ts')!)
+    const consumer = path.join(root, 'consumer.ts')
+    const text = `import Form, { type ApprovalParams } from 'remote/ApprovalForm';
+const ok: ApprovalParams = { id: '1', name: 'Ncr', disabled: false, mode: 'view' };
+const props: InstanceType<typeof Form>['$props'] = { params: ok };
+// @ts-expect-error 缺少真实必填字段
+const missing: ApprovalParams = { id: '1' };
+// @ts-expect-error 布尔字段不能退化
+const wrong: ApprovalParams = { id: '1', name: 'Ncr', disabled: 'false' };
+// @ts-expect-error 联合值不能放宽
+const mode: ApprovalParams = { id: '1', name: 'Ncr', mode: 'other' };
+// @ts-expect-error readonly 修饰不能丢失
+ok.id = '2';
+`
+    const diagnostics = (source: string) => {
+      fs.writeFileSync(consumer, source)
+      const program = ts.createProgram([consumer, path.join(root, 'remote.d.ts')], {
+        strict: true, noEmit: true, skipLibCheck: false, types: [], target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+      })
+      return ts.getPreEmitDiagnostics(program)
+    }
+    expect(diagnostics(text).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([])
+    const raw = diagnostics(text.replace(/^\/\/ @ts-expect-error.*$/gm, ''))
+    expect(raw.map(d => d.code)).toEqual([2741, 2322, 2322, 2540])
+  }, 30000)
+
   it('带显式 slots 的 SFC 保留原高级签名，不强行改造成简化组件', async () => {
     const root = makeProject('vue-readable-slots', {
       'src/entry.vue': `<script setup lang="ts">

@@ -120,20 +120,20 @@ export const pageProviders = [
 
 在**原表单组件**明确声明真实字段，例如 `defineProps<{ recordId: string; readonly?: boolean }>()`。插件同步的是该公开合同；如果提供方写成 Record<string, unknown>，生成结果也只能是宽泛字典，不会凭字段名猜业务约束。
 
-消费端无需手工 import 生成的 d.ts；类型目录被 tsconfig 包含后，注册表会让 remoteComponent 得到对应组件的 props/events。需要给本地表单参数状态标注类型时，用 `FgVueRemoteProps` 从远程入口直接取真实 props——减少提取代码；它本身不负责改变组件标签的悬停表示：
+消费端无需按生成目录路径导入 `.d.ts`。类型目录被 tsconfig 包含后，`remoteComponent` 会自动获得组件 props/events；需要给本地参数状态标注类型时，**优先从远程组件入口直接导入提供方公开的具名业务类型**：
 
 ```ts
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
-import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
+import type { BusinessFormParams } from 'admin/business-form'
 
 const BusinessForm = remoteComponent('admin/business-form')
-type BusinessFormProps = FgVueRemoteProps<'admin/business-form'>
-const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
-  recordId: '',
-  readonly: true,
-})
+const params = ref<BusinessFormParams>()
 ```
+
+消费方不需要 `VisibleFields`、`NonNullable`、`InstanceType` 或另一份 DTO。这个 `import type` 在编译时擦除，不会额外加载远程 JS。提供方只定义一次合同并将它公开；生成器保留原生具名类型导出，消费方同步后直接使用。完整提供方写法和字段负例见[下方示例](#嵌套-params-也必须检查内部字段)。
+
+提供方没有公开业务类型、只需要通用组件 props 推导时，仍可用公开工具 `FgVueRemoteProps<'admin/business-form'>`。它用于提取合同，不负责改变组件标签的悬停表示；不要把多层工具组合当作每个业务页面的必写接线。
 
 这不是维护第二份接口。已知业务字段不应重新声明为宽泛对象或 any；真正开放扩展的数据可单列扩展字段。类型验收需要同时验证错误字段类型和缺少必填字段会失败，不能只测试“整个参数传字符串报错”。
 
@@ -154,7 +154,7 @@ const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
    ```
 
    开发环境按真实 dev 配置执行。同步后核对 metadata 的来源/revision与实际提供方一致，确认 tsconfig 覆盖生成目录、同一物理插件注册表被使用；不手改 modules.d.ts/registry.d.ts。
-6. **按两种查看目标消费。** remoteComponent 保留真实组件类型；本地参数用 FgVueRemoteProps 推导。任务要求参数值直接显示继承字段时，采用[同态字段视图](#需要在参数状态悬停中直接查看字段时)或实际验证等效的方式，不复制字段。只增加类型工具调用或 JSDoc，不代表组件标签展示已改善。
+6. **直接消费公开合同并检查两种展示。** remoteComponent 保留真实组件类型；本地参数优先 import type 提供方公开的具名合同，直接 ref<业务类型>()。提供方已有命名接口时应从原 SFC 重新导出同一类型，不让消费页面各写映射/多层提取或复制 DTO。只改导入语法不代表 IDE 已改善，仍分别检查组件标签和参数/字段。
 7. **运行实际项目的正反例。** 必须覆盖嵌套字段缺必填、错字段、错标量和联合值；带 expect-error 通过后，去指令确认真实诊断。改到组件表示时还要检查事件、slots、ref/expose。不把错误检查器、OOM或全局回退记成通过；历史错误分开记录。
 8. **检查用户实际 IDE。** 分别悬停模板组件标签、`:params` 属性、参数值和字段，检查补全、说明与跳转。以真实 Vue 模板效果留图；普通 TS quickInfo、vue-tsc退出0、生成文件截图均不能替代。升级后若 CLI 正常但 IDE 的静态入口退回空 props，按下文核对解析并刷新 Vue/TS 服务，不接受回退形态作为“提示变短”。
 9. **回归实际页面并交付四类证据。** 真实数据、只读、内部控件和离页重进按影响检查；报告分别列出提供方合同、在线资源版本/revision、正反例结果、IDE截图。前一轮/候选包证据不得改名成最终正式包验证。
@@ -173,51 +173,53 @@ const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
 
 #### 嵌套 params 也必须检查内部字段
 
-当原页面接收一个 params 对象时，不能只给对象本身一个类型。先在原提供方组件声明已知字段，再生成并同步声明：
+当原页面接收一个 params 对象时，公开的业务参数类型与 `defineProps` 必须是同一合同，不能只给整个对象宽泛类型。下面直接在原 SFC 声明并导出，无需额外包装组件或转发文件：
 
 ```vue
-<!-- 提供方原 BusinessForm.vue：URL 入口保留时根 params 可选，传入时字段仍受约束。 -->
-<script setup lang="ts">
-interface BusinessFormParams {
+<!-- 提供方原 BusinessForm.vue；普通 script 管模块级类型导出。 -->
+<script lang="ts">
+/** 表单业务参数：使用已有单据和已发布的 schema。 */
+export interface BusinessFormParams {
+  /** 业务单据编号 */
   id: string
+  /** 已发布 schema 编号 */
   formId: string
+  /** 详情只读；不是 URL 的字符串 */
   disabled?: boolean
 }
+</script>
+<script setup lang="ts">
+// 原 URL 入口保留时根 params 可选，传入时字段仍受约束。
 defineProps<{ params?: BusinessFormParams }>()
 </script>
 ```
 
+如果合同已在原业务 `.ts` 文件定义，**不移动或复制字段**：在原 SFC 的普通 `<script lang="ts">` 中写 `export type { BusinessFormParams } from './原合同模块'`；在 setup 中继续 `import type` 同一个类型供 defineProps 使用。`<script setup>` 不允许直接写模块 export，类型公开放在普通 script 中。已有普通 script 时合并进去，不再新增第二个普通 script。只公开约定的业务类型，不将内部实现类型全部暴露。
+
 ```ts
-// 消费方真实业务文件；不重复声明 BusinessFormParams。
+// 消费方：导入远程公开类型后直接使用。
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
-import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
+import type { BusinessFormParams } from 'admin/business-form'
 const BusinessForm = remoteComponent('admin/business-form')
-type Params = NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>
-const params = ref<Params>({ id: 'order-1', formId: 'schema-1', disabled: false })
+const params = ref<BusinessFormParams>({ id: 'order-1', formId: 'schema-1', disabled: false })
 
 // 放在实际包含同步声明的有效 TS 测试项目中：这些指令都必须命中真实错误。
 // @ts-expect-error 缺少必填 formId
-const missing: Params = { id: 'order-1' }
+const missing: BusinessFormParams = { id: 'order-1' }
 // @ts-expect-error disabled 是 boolean，不能沿用 URL 的字符串
-const wrongType: Params = { id: 'order-1', formId: 'schema-1', disabled: 'false' }
+const wrongType: BusinessFormParams = { id: 'order-1', formId: 'schema-1', disabled: 'false' }
 // @ts-expect-error 字段拼错不能静默进入宽字典
-const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
+const typo: BusinessFormParams = { id: 'order-1', formId: 'schema-1', disabeld: true }
 ```
+
+公开类型不会凭业务名自动产生：提供方必须有对应的原生 `export interface` / `export type`。组件 expose 目标不变，默认组件导出与具名类型导出共用同一个远程入口；插件负责生成声明和同步，而不是让业务维护手写 `.d.ts`。缺少类型导出时先修提供方，不在消费方补同名 ambient 占位。开发等待自动生成同步；生产重新构建部署该提供方的类型资源，不能只改消费文件后继续读取旧站点。
 
 验收时先运行带 expect-error 的正向项目（包括上述预期错误，且不得出现未使用指令），再临时去掉指令确认原始 TS 错误确实出现。只证明 params='text' 失败，仍可能放过 Record<string, unknown>。后端数据如果是 any，也要在赋值边界核对/转换真实字段，不能用 any、类型断言或重复 DTO 绕过约束。`fulgurjs types` 成功证明生成/同步链通过，不证明提供方业务合同准确。URL 参数在独立入口解析为字符串或布尔业务值；远程 props 不应重新从宿主 URL 猜同名字段。
 
-#### 需要在参数状态悬停中直接查看字段时
+#### 参数状态的类型名称与字段可读性
 
-命名接口适合表达合同来源；需要直接看到其继承字段时，可在原消费文件增加一层同态映射视图，不手写另一份字段接口：
-
-```ts
-type VisibleFields<T> = { [K in keyof T]: T[K] } & {}
-type Params = VisibleFields<NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>>
-const params = ref<Params>()
-```
-
-它只展开一层并保留 optional/readonly 修饰，不转换运行时数据、不递归改写数组或函数；字段仍来自同一生成合同。此时参数值悬停可以直接展示 id/name/disabled 等字段，组件名悬停则由下节的命名声明解决。两种效果要分别实测，不能把映射视图当成组件名展示修复；业务字段正反例仍须通过。
+业务状态直接使用公开类型。接口继承、别名名称和 `Ref` 外层是否展开由 IDE 决定，不能要求每个消费文件再写同态映射来“修”提示。分别验证参数状态能辨识业务合同、`params.value` 的字段补全、字段类型/说明及定义跳转；需要看完整继承字段时查看定义或字段补全。组件标签悬停仍按下节单独验证，不能以简短名称替代字段约束检查。公共合同的 optional/readonly、联合值和事件/实例等原有能力必须保留。
 
 #### 组件悬停名称与业务字段是两个层次
 
@@ -518,7 +520,7 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 
 - 普通模块、Vue/React 组件 props、桥接 `appProps` 都来自远程真实声明（vue-tsc/TypeScript 官方工具链产出，非宽松占位）；
 - 宿主不需要手工 tsconfig `paths`，也不需要远程源码或软链接；跨机器联调同样工作；
-- 提供方源码修改后会自动更新声明；生成器的临时配置和宿主下载的声明不会反过来触发生成。临时配置在本次生成结束或中止后自动清理，无需加入项目或手工维护；
+- 提供方源码修改后会自动更新声明；生成器临时配置及同步过程中的逐文件写入不会触发源码 watcher 重生成；完整新代次同步成功后，对外提供类型的本地应用会重新检查一次。临时配置在本次生成结束或中止后自动清理，无需加入项目或手工维护；
 - 提供方重新启动、声明尚在编译时，会保留宿主已有的类型快照；新声明完成后自动替换。严格类型验收要等到同步成功，不能把旧快照当成本轮通过。
 - 远程未提供类型（旧版本/`dts: false`）：页面正常运行，入口按动态边界放行（`unknown`）；严格类型检查在 CI 运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](../reference/cli.md#fulgurjs-types)）；
 - `dts: false` 完全关闭（不生成、不下载）；细节与已知限制见 [API 参考 · 远程类型](../reference/api.md#远程类型自动生成与同步)。
@@ -589,6 +591,8 @@ export default {
 | 线上类型已更新，本地修改却没反映出来 | 当前配置指向已部署站点，读取的就是已部署版本；要验证未部署源码，切换到对应提供方 dev 服务地址 |
 
 消费方自己的生产构建/CI 仍按[严格类型同步流程](../reference/cli.md#fulgurjs-types)处理：先从目标站点同步再做类型检查，不能把普通 dev 的自动同步解释为所有构建模式都会自动下载类型。
+
+消费/提供双角色应用直接导入上游具名类型时，首次编译可能早于同步；新的完整声明同步成功后会自动重新生成本地对外类型。只有实际同步了新代次才触发，未变化轮询和失败不会触发生成循环。
 
 ### 为什么声明可能超过入口数量
 

@@ -3,12 +3,14 @@
  * 覆盖：完整同步/unchanged/stale/absent/校验拒绝（摘要、越界、超限）/原子切换/
  * 孤儿清理/metadata 账本/并发取消边界。
  */
-import { describe, expect, it, beforeAll, afterAll } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { syncRemoteTypes, removeGeneratedTypes, manifestUrlFromEntry, readMetadata } from '../src/dts-sync'
+import { syncRemoteTypes, removeGeneratedTypes, manifestUrlFromEntry, readMetadata, startRemoteTypesSyncLoop } from '../src/dts-sync'
+import { createDevTypesServer } from '../src/dts-serve'
+import type { NormalizedOptions } from '../src/options'
 import { TYPES_SCHEMA_VERSION } from '../src/dts-shared'
 
 let tmp = ''
@@ -225,6 +227,64 @@ describe('syncRemoteTypes', () => {
     expect(removeGeneratedTypes(typesRoot(), 'not-owned')).toBe(false)
     expect(fs.existsSync(path.join(dir2, 'anything.d.ts'))).toBe(true)
   })
+
+  it('上游具名类型迟到：同步后自动恢复本地声明生成，同代次轮询不反复生成', async () => {
+    const root = path.join(tmp, 'late-public-contract')
+    const output = path.join(root, 'src/fulgurjs/types')
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+    fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true })
+    fs.symlinkSync(path.resolve(__dirname, '../node_modules/typescript'), path.join(root, 'node_modules/typescript'), 'dir')
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
+      target: 'ES2022', module: 'ESNext', moduleResolution: 'bundler', strict: true, skipLibCheck: true, types: [],
+    }, include: ['src'] }))
+    fs.writeFileSync(path.join(root, 'src/entry.ts'), `import type { Contract } from 'upstream/contract';
+export interface Result { value: Contract }`)
+    const warnings: string[] = []
+    const messages: string[] = []
+    const provider = createDevTypesServer({ root, exposes: [{ name: './result', import: './src/entry.ts' }], pluginVersion: 'test' } as NormalizedOptions,
+      { warn: message => warnings.push(message), log: message => messages.push(message) })
+    let stop: (() => void) | undefined
+    let notifications = 0
+    let manifestRequests = 0
+    const bundle = makeBundle({ contract: 'export interface Contract { readonly id: string }\n' })
+    const router = fetchRouter(bundle)
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('@fulgurjs-manifest.json')) manifestRequests++
+      const isJson = url.endsWith('.json')
+      return new Response(isJson ? JSON.stringify(await router.json(url)) : await router.text(url), { status: 200 })
+    })
+    try {
+      await vi.waitFor(() => expect(warnings.join('\n')).toContain('upstream/contract'))
+      expect(provider.revision()).toBeNull()
+      stop = startRemoteTypesSyncLoop({ root, typesRoot: output,
+        remotes: [{ key: 'upstream', devEntry: 'http://remote.test/@fulgurjs-entry.js' }], pollMs: 20,
+        log: () => {}, warn: () => {}, onSynced: () => { notifications++; provider.invalidate() },
+      })
+      await vi.waitFor(() => expect(provider.revision()).not.toBeNull(), { timeout: 5000 })
+      expect(provider.servePath('/@fulgurjs-types/files/entry.d.ts')?.body).toContain('value: Contract')
+      await vi.waitFor(() => expect(manifestRequests).toBeGreaterThanOrEqual(3))
+      expect(notifications).toBe(1)
+      expect(messages.filter(message => message.includes('类型资源已生成'))).toHaveLength(1)
+      // 实际新代次会再次通知；失败/陈旧状态不触发重新编译。
+      bundle.index.revision = 'b1b2c3d4e5f60718'
+      bundle.manifest.types.revision = bundle.index.revision
+      await vi.waitFor(() => expect(notifications).toBe(2), { timeout: 5000 })
+      await vi.waitFor(() => expect(provider.isGenerating()).toBe(false))
+      const snapshot = notifications
+      fetchMock.mockImplementation(async () => { throw new Error('受控断网') })
+      await new Promise(resolve => setTimeout(resolve, 70))
+      expect(notifications).toBe(snapshot)
+      stop()
+      const afterStop = notifications
+      await new Promise(resolve => setTimeout(resolve, 70))
+      expect(notifications).toBe(afterStop)
+    } finally {
+      stop?.()
+      provider.dispose()
+      fetchMock.mockRestore()
+    }
+  }, 15000)
 
   it('manifestUrlFromEntry：dev 入口换 manifest 端点；prod 入口取同目录', () => {
     expect(manifestUrlFromEntry('http://h:5101/base/@fulgurjs-entry.js')).toBe('http://h:5101/base/@fulgurjs-manifest.json')

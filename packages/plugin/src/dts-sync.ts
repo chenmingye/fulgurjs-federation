@@ -319,6 +319,8 @@ export interface TypesLoopOptions {
   typesRoot: string
   remotes: { key: string; devEntry: string }[]
   pollMs?: number
+  /** 新代次已完整写入后通知本地提供方重检；unchanged/失败不触发，避免轮询生成循环。 */
+  onSynced?: () => void
   log?: (message: string) => void
   warn?: (message: string) => void
   signal?: AbortSignal
@@ -354,6 +356,7 @@ export function startRemoteTypesSyncLoop(opts: TypesLoopOptions): () => void {
       typesRoot: opts.typesRoot,
       source: devEntry,
     })
+    if (result.status === 'synced' && !controller.signal.aborted) opts.onSynced?.()
     if (result.status === 'synced' || (result.status === 'absent' && !announced.has(alias))) {
       log(`[fulgurjs] 类型同步：${result.message}`)
       announced.add(alias)

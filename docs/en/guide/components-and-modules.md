@@ -120,20 +120,20 @@ GlobalComponents, pageProviders and business application startup have separate r
 
 Declare accurate fields in the **original form**, for example defineProps<{ recordId: string; readonly?: boolean }>(). The plugin synchronizes that contract. A provider Record<string, unknown> remains a broad dictionary after generation; the plugin cannot guess business constraints.
 
-Consumers do not import generated d.ts files manually. Once tsconfig includes the type directory, the registry gives remoteComponent the corresponding props/events. Derive local parameter state with `FgVueRemoteProps`, which reads the real props straight from the remote entry — reducing extraction code without changing the component-tag hover representation itself:
+Consumers do not import generated `.d.ts` files by filesystem path. The synchronized registry supplies remoteComponent props/events. For local parameter state, **prefer importing the provider's named business type directly from the remote component entry**:
 
 ```ts
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
-import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
+import type { BusinessFormParams } from 'admin/business-form'
 
 const BusinessForm = remoteComponent('admin/business-form')
-type BusinessFormProps = FgVueRemoteProps<'admin/business-form'>
-const form = ref<Pick<BusinessFormProps, 'recordId' | 'readonly'>>({
-  recordId: '',
-  readonly: true,
-})
+const params = ref<BusinessFormParams>()
 ```
+
+Consumers need no VisibleFields, NonNullable, InstanceType or duplicate DTO. `import type` is erased and does not load remote JS. Define and export the contract once at the provider; the plugin preserves native named exports through generation and synchronization. See the [provider example and field checks](#nested-params-require-field-level-checks).
+
+The public `FgVueRemoteProps<'admin/business-form'>` helper remains available for generic props extraction when the provider does not export a business type. It is not mandatory boilerplate for every business page and does not change component-tag hovers.
 
 This does not maintain another interface. Do not redeclare known fields as broad objects or any; truly open extension data can be modeled separately. Verify both missing required fields and wrong field types, not only rejection of a string in place of the whole object.
 
@@ -154,7 +154,7 @@ For typed Vue remote integration, **an accurate provider contract, updated type 
    ```
 
    Use actual dev configuration for development. Verify metadata source/revision, tsconfig inclusion and a single physical plugin registry. Do not hand-edit modules.d.ts or registry.d.ts.
-6. **Handle both reading targets.** Keep the actual remoteComponent type and derive local parameters with FgVueRemoteProps. When direct inherited-field display is required, use the [homomorphic field view](#showing-fields-directly-in-parameter-state-hovers) or a verified equivalent without copying fields. Changing the extraction tool or adding JSDoc alone does not prove a better component-tag hover.
+6. **Consume the public contract directly and check both views.** Keep the real remoteComponent type. Prefer import type of the provider contract and ref<BusinessType>() for local state. Re-export an existing contract from the original SFC instead of making consumers write mapping helpers, layered extraction or duplicate DTOs. Verify component-tag and parameter/field behavior separately; shorter imports alone do not prove better IDE output.
 7. **Run real-project positive and negative checks.** Cover nested missing fields, misspellings, wrong scalars and union values. Verify expected errors, then remove directives to observe actual diagnostics. Check events, slots and ref/expose when changing component representation. OOM, an incompatible checker or a broad fallback cannot count as success; record historical errors separately.
 8. **Verify the user's actual IDE.** Check the Vue template tag, params attribute, parameter value and fields, plus completion/docs/navigation. Capture real template output. Plain TS quickInfo, a successful vue-tsc run or declaration-file screenshots do not replace it. If an upgrade leaves a static entry with empty props in the IDE despite correct CLI checks, inspect resolution and refresh Vue/TS services as described below; do not accept fallback as a shorter display.
 9. **Regress actual behavior and deliver four evidence categories.** Check real data, readonly state, nested controls and reentry as affected. Report the provider contract, deployed version/revision, positive/negative checks and IDE screenshots separately. Do not relabel previous/candidate evidence as final official-package verification.
@@ -173,51 +173,52 @@ For typed Vue remote integration, **an accurate provider contract, updated type 
 
 #### Nested params require field-level checks
 
-For a page receiving one params object, define known fields at the original provider before generating and syncing declarations. An optional root for a standalone URL entry does not make its supplied fields optional.
+The exported params type and defineProps must use the same contract. Declare and export it in the original SFC without adding a wrapper or forwarding file:
 
 ```vue
-<!-- Original provider BusinessForm.vue. -->
-<script setup lang="ts">
-interface BusinessFormParams {
+<!-- Original provider BusinessForm.vue. Ordinary script owns module-level exports. -->
+<script lang="ts">
+/** Existing business record and published schema. */
+export interface BusinessFormParams {
+  /** Business record identifier */
   id: string
+  /** Published schema identifier */
   formId: string
+  /** Readonly detail mode, not a URL string */
   disabled?: boolean
 }
+</script>
+<script setup lang="ts">
+// An optional URL-entry root does not make supplied fields optional.
 defineProps<{ params?: BusinessFormParams }>()
 </script>
 ```
 
+If the contract already lives in a business `.ts` module, do not move or duplicate fields. Add `export type { BusinessFormParams } from './existing-contract'` to the original SFC's ordinary script, and continue importing that same type in setup for defineProps. Script setup does not allow module exports. Merge into an existing ordinary script instead of adding a second one. Export intended business contracts rather than all implementation types.
+
 ```ts
-// Actual consumer; do not duplicate the provider interface.
 import { ref } from 'vue'
 import { remoteComponent } from '@fulgurjs/federation/vue'
-import type { FgVueRemoteProps } from '@fulgurjs/federation/vue'
+import type { BusinessFormParams } from 'admin/business-form'
 const BusinessForm = remoteComponent('admin/business-form')
-type Params = NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>
-const params = ref<Params>({ id: 'order-1', formId: 'schema-1', disabled: false })
+const params = ref<BusinessFormParams>({ id: 'order-1', formId: 'schema-1', disabled: false })
 
-// Run in an effective TS project containing the synced registry.
+// Run in an effective TS project containing synchronized declarations.
 // @ts-expect-error required formId is missing
-const missing: Params = { id: 'order-1' }
+const missing: BusinessFormParams = { id: 'order-1' }
 // @ts-expect-error boolean required, not a URL string
-const wrongType: Params = { id: 'order-1', formId: 'schema-1', disabled: 'false' }
+const wrongType: BusinessFormParams = { id: 'order-1', formId: 'schema-1', disabled: 'false' }
 // @ts-expect-error misspelled field must fail
-const typo: Params = { id: 'order-1', formId: 'schema-1', disabeld: true }
+const typo: BusinessFormParams = { id: 'order-1', formId: 'schema-1', disabeld: true }
 ```
+
+Public names require native provider export interface / export type declarations; the plugin does not guess business names. Default components and named types share the same existing expose target. The plugin generates and syncs declarations rather than requiring hand-maintained `.d.ts`. Fix a missing export at the provider instead of adding a consumer ambient placeholder. Wait for dev generation/sync, or rebuild and deploy provider resources in production; editing only the consumer while fetching an old site is insufficient.
 
 First check the project with expected errors (unused directives must fail), then temporarily remove directives and confirm actual TS diagnostics. Rejecting only params='text' can still accept Record<string, unknown>. Normalize/validate any backend values at the assignment boundary; do not bypass checks with any, assertions or a duplicate DTO. Successful fulgurjs types proves generation/sync, not an accurate business contract. Parse URL strings at the standalone boundary; remote props must not guess missing fields from the host URL.
 
-#### Showing fields directly in parameter-state hovers
+#### Parameter-state names and field readability
 
-A named interface identifies the contract source. To inspect its inherited fields directly, add a homomorphic view in the existing consumer file instead of duplicating the fields:
-
-```ts
-type VisibleFields<T> = { [K in keyof T]: T[K] } & {}
-type Params = VisibleFields<NonNullable<FgVueRemoteProps<'admin/business-form'>['params']>>
-const params = ref<Params>()
-```
-
-This expands one level and preserves optional/readonly modifiers without changing runtime data or recursively rewriting arrays/functions. Fields still come from the same generated contract. Parameter-value hovers can show id/name/disabled directly; component-name hovers use the named declarations below. Verify both effects independently and retain field-level negative tests; a mapped view alone does not fix component-tag display.
+Use public business types directly. IDEs decide whether inherited interfaces, aliases and outer Ref types expand; do not require a mapping helper in every consumer to repair hovers. Verify the business contract name, params.value field completion, field types/docs and definition navigation. Inspect definitions or field completion for inherited members. Component-tag hovers still need separate checks below. Preserve optional/readonly modifiers, unions, events and instance capabilities; a short name alone does not prove correctness.
 
 #### Component names and business fields are separate hover targets
 
@@ -516,7 +517,7 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 
 - Plain modules, Vue/React component props and bridge `appProps` all come from the remote's real declarations (produced by the official vue-tsc/TypeScript toolchain, not loose placeholders);
 - Hosts need no hand-written tsconfig `paths`, no remote source and no symlinks; cross-machine development works the same;
-- Provider source changes update declarations automatically. Temporary compiler configs and downloaded declarations do not trigger generation again. Temporary configs are removed when generation finishes or is aborted; do not add them to the project or maintain them manually;
+- Provider source changes update declarations automatically. Temporary compiler configs and individual synchronized-file writes do not retrigger the source watcher; a complete newly synchronized generation triggers one local provider recheck. Temporary configs are removed when generation finishes or is aborted; do not add them to the project or maintain them manually;
 - When a provider restarts and declarations are still compiling, hosts retain their existing snapshot and replace it once generation finishes. Strict type acceptance must wait for a successful sync; an old snapshot is not a current pass.
 - A remote without type resources (older version / `dts: false`): pages run normally and entries follow the dynamic boundary (`unknown`); run `npx @fulgurjs/federation types` in CI for strict checks (see the [CLI reference](../reference/cli.md#fulgurjs-types));
 - `dts: false` disables everything (no generation, no download); details and known limits in the [API reference · remote types](../reference/api.md#remote-types-generation-and-sync).
@@ -590,6 +591,8 @@ Declarations in the provider's deployed dist are downloadable resources for cons
 | Local provider edits do not appear | The configuration consumes a deployed build; switch to the provider's dev-server address to test undeployed source |
 
 The consumer's own production build/CI still follows [strict synchronization](../reference/cli.md#fulgurjs-types): synchronize from the intended site before typechecking. Dev automation does not mean every build mode automatically downloads types.
+
+For consumer/provider applications importing upstream named types, initial generation may precede synchronization. A newly synchronized complete generation triggers local provider regeneration automatically. Unchanged polls and failed syncs do not trigger a generation loop.
 
 ### Why declarations can outnumber exposed entries
 

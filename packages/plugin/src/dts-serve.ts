@@ -19,7 +19,8 @@ import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
  * 只响应可能改变声明的源码和配置。Vite watcher 同时观察日志、截图和文档；
  * 把这些事件排进 vue-tsc 会让一次耗时生成结束后立即再跑一轮。
  * JSON 仍是输入（resolveJsonModule 可从数据推导类型），不能一并过滤。
- * 类型输出不是输入：临时配置和宿主同步声明必须排除，避免生成自循环。
+ * 不逐文件观察类型输出：临时配置和宿主同步声明必须排除；上游新代次完整同步
+ * 后由显式回调统一 invalidate，避免写入过程和未变化轮询触发生成自循环。
  */
 export function isTypesInputChange(root: string, id: string, outputDir: string): boolean {
   const relative = path.relative(root, id)

@@ -1620,6 +1620,9 @@ export function federation(options: FederationOptions): Plugin[] {
             root: n.root,
             typesRoot,
             remotes: syncable.map((r) => ({ key: r.key, devEntry: r.devEntry })),
+            // 消费/提供双角色的公开源码可能直接 import 上游具名类型。
+            // 首轮编译早于同步时会失败；仅在新类型原子写入后重检，普通轮询不触发。
+            onSynced: () => typesServer?.invalidate(),
           })
           server.httpServer?.once('close', stop)
         })
