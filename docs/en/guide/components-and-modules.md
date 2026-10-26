@@ -522,6 +522,16 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 The first generation follows the dependencies of exposed entries to infer their real types. Even two entries may reference many files, so entry count alone does not predict compile time. Generation follows the toolchain’s supported API: tools with a per-file program API check the exposed closure; CLI-based tools reuse that dev server’s incremental cache. Changed props are still checked; logs, screenshots and Markdown do not trigger generation. The cache stays inside `node_modules` and is removed after the dev server closes. No configuration or commit is needed. One-off builds and CLI runs use independent output.
 
 
+### Why declarations can outnumber exposed entries
+
+The provider first uses TypeScript/vue-tsc to analyze the sources needed for correct inference. Distribution then starts from the emitted public entry declarations and follows only their declaration dependencies. Implementation-only tables, editors and request utilities are omitted when their types do not appear in public signatures. Externals are recalculated from retained declarations, so implementation-only packages are not required in the consumer.
+
+One file per entry is not a safe limit. Shared props interfaces, inferred return types, re-exports, `import("./types")`, `import = require(...)`, declaration side-effect imports and `reference path` dependencies may require additional files. Shared dependencies are retained once and cycles terminate. Do not delete required files or substitute `any`, `Record<string, unknown>` or copied DTOs to reduce the count.
+
+Pruning reduces distributed files, download size and consumer input. The compiler may still analyze many source files for inference, so file-count reductions do not imply proportional cold-generation speedups. The rule applies automatically in dev/build without an extra command or setting; production consumers still follow the strict synchronization steps above.
+
+Measure exposed entries, `index.json.files` count, bundle bytes, cold generation time and consumer synchronization separately. Validate real props, events and instance members with accepted and rejected inputs. Fewer files with missing fields or weakened error checking is a failure, even when the build succeeds.
+
 ## Runtime imports inside remote pages
 
 Expose target files (remote pages/components loaded cross-origin by the host) can **statically import** the runtime APIs directly — the plugin automatically rewrites such imports into a lazy singleton proxy, so host and remote code look identical:

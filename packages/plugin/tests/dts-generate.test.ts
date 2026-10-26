@@ -51,6 +51,65 @@ function makeProject(name: string, files: Record<string, string>, tsconfigExtra:
 }
 
 describe('generateTypesBundle（纯 TS 工程）', () => {
+  it('只分发公共声明闭包，擦除实现依赖并重新计算 externals', async () => {
+    const root = makeProject('public-declaration-closure', {
+      'src/entry.ts': `import { calculate } from './implementation';
+import type { Contract } from '@/contract';
+export function run(value: Contract): number { return calculate(value.id); }`,
+      'src/implementation.ts': `import type { Internal } from 'internal-only';
+export function calculate(value: string): number { const detail: Internal = { value }; return detail.value.length; }`,
+      'src/contract.ts': `export interface Contract { id: string; next?: import('./contract').Contract }`,
+      'node_modules/internal-only/index.d.ts': `export interface Internal { value: string }`,
+    })
+    const result = await generateTypesBundle({ root, exposes: [{ name: './api', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    expect(result.fileCount).toBe(2)
+    expect([...result.files.keys()]).not.toContain('files/implementation.d.ts')
+    expect(result.index.externals).toEqual([])
+    expect(result.files.get(result.index.exposes['./api']!.declaration)).toContain('value: Contract')
+    expect([...result.files.values()].join('\n')).toContain('id: string')
+  })
+
+  it('保留推导返回值、重导出、import equals、声明副作用和依赖环', async () => {
+    const root = makeProject('public-inferred-closure', {
+      'src/entry.ts': `import './augment';
+import factory = require('./factory');
+export { Entity } from './barrel';
+export const inferred = factory();`,
+      'src/factory.ts': `import type { Entity } from './barrel';
+declare function factory(): Entity;
+export = factory;`,
+      'src/barrel.ts': `export { Entity } from './entity';`,
+      'src/entity.ts': `export interface Entity { peer?: import('./peer').Peer; id: string }`,
+      'src/peer.ts': `import type { Entity } from './entity'; export interface Peer { entity: Entity }`,
+      'src/augment.ts': `export {}; declare global { interface PublicAugmentation { enabled: boolean } }`,
+    }, { module: 'Node16', moduleResolution: 'Node16' })
+    const result = await generateTypesBundle({ root, exposes: [{ name: './api', import: './src/entry.ts' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    // factory 的实现导入被擦除，但推导出的 Entity 和副作用声明仍必须保留。
+    expect(result.fileCount).toBe(5)
+    expect([...result.files.keys()]).toContain('files/augment.d.ts')
+    expect([...result.files.values()].join('\n')).toContain('PublicAugmentation')
+    expect([...result.files.values()].join('\n')).toContain('inferred:')
+  })
+
+  it('手写声明的 reference path 与 import equals 仍属于公共闭包', async () => {
+    const root = makeProject('public-reference-closure', {
+      'src/entry.d.ts': `/// <reference path="./global.d.ts" />
+import Contract = require('./contract');
+export = Contract;`,
+      'src/global.d.ts': `interface ReferencedGlobal { id: string }`,
+      'src/contract.d.ts': `declare const value: ReferencedGlobal; export = value;`,
+    })
+    const result = await generateTypesBundle({ root, exposes: [{ name: './api', import: './src/entry.d.ts' }], pluginVersion: 'test' })
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    expect(result.fileCount).toBe(3)
+    expect(result.files.get(result.index.exposes['./api']!.declaration)).toContain('path="./global.d.ts"')
+  })
+
   it('真实 SFC 的命名声明经宿主转换后保留 props、事件和 expose', async () => {
     const root = makeProject('vue-readable-display', {
       'src/entry.vue': `<script setup lang="ts">
@@ -364,7 +423,9 @@ instance.$slots.default({ count: 'x' });
     expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
     if (result.ok) {
       expect(result.tool).toBe('vue-tsc')
-      expect([...result.files.keys()].some(x => x.endsWith('Child.vue.d.ts'))).toBe(true)
+      // 模板内部组件仍参与编译诊断，但不进入公开 props 的发布闭包。
+      expect([...result.files.keys()].some(x => x.endsWith('Child.vue.d.ts'))).toBe(false)
+      expect([...result.files.keys()].some(x => x.endsWith('models/user.d.ts'))).toBe(true)
       expect([...result.files.values()].join('\n')).not.toMatch(/#ui\/|#models\//)
     }
     fs.writeFileSync(path.join(root, 'src/ui/Child.vue'), '<script setup lang="ts">defineProps<{ name: MissingName }>();</script><template />')

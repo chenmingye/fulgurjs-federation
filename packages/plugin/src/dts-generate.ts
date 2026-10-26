@@ -150,7 +150,7 @@ function computeStaticClosure(
       if (descriptor.script?.src) text += `\nimport ${JSON.stringify(descriptor.script.src)}`
     }
     const sfile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
-    const imports: string[] = []
+    const imports: string[] = sfile.referencedFiles.map(ref => ref.fileName)
     const visitType = (node: import('typescript').Node): void => {
       if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) imports.push(node.argument.literal.text)
       ts.forEachChild(node, visitType)
@@ -160,7 +160,9 @@ function computeStaticClosure(
       const specNode: import('typescript').StringLiteral | null =
         ((ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt)) && stmt.moduleSpecifier && ts.isStringLiteral(stmt.moduleSpecifier))
           ? stmt.moduleSpecifier
-          : null
+          : (ts.isImportEqualsDeclaration(stmt) && ts.isExternalModuleReference(stmt.moduleReference) && ts.isStringLiteral(stmt.moduleReference.expression))
+            ? stmt.moduleReference.expression
+            : null
       if (specNode) imports.push(specNode.text)
     }
     for (const spec of imports) {
@@ -722,17 +724,31 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       : `files/${rel.replace(/\.(mts|cts|ts|tsx|jsx|js)$/, '')}.d.ts`
     srcToRel.set(srcAbs, declRel)
   }
-  for (const [srcAbs, text] of emitted) {
-    const rewritten = rewriteSpecifiers(ts, text, srcAbs, srcToRel, resolver, externals, root, diagnostics)
+  // 源码闭包用于编译、推导和诊断；发布闭包只沿实际声明依赖遍历。
+  // 运行时实现 import 被编译器擦除后，不应继续向消费方分发该实现的声明或 externals。
+  // 复用重写器的解析结果建图，避免 alias、import type 与常规 import 使用两套解析规则。
+  const relToSrc = new Map([...srcToRel].map(([src, rel]) => [rel, src]))
+  const pending = [...entryMap.values()]
+  const reachable = new Map<string, string>()
+  while (pending.length > 0) {
+    const srcAbs = pending.pop()!
+    if (reachable.has(srcAbs)) continue
+    const text = emitted.get(srcAbs)
+    if (text === undefined) {
+      diagnostics.push(`公开声明依赖未产出：${path.relative(root, srcAbs)}。`)
+      return { ok: false, diagnostics }
+    }
+    const rewritten = rewriteSpecifiers(ts, text, srcAbs, srcToRel, resolver, externals, root, diagnostics,
+      rel => { pending.push(relToSrc.get(rel)!) })
     if (rewritten === null) return { ok: false, diagnostics }
-    emitted.set(srcAbs, rewritten)
+    reachable.set(srcAbs, rewritten)
   }
 
   // ---- 组装 bundle ----
   const files = new Map<string, string>()
   const filesDigest: Record<string, string> = {}
   let leaked = false
-  for (const [srcAbs, text] of emitted) {
+  for (const [srcAbs, text] of reachable) {
     const rel = srcToRel.get(srcAbs)!
     if (text.includes(root)) {
       diagnostics.push(`声明文件包含本机绝对路径（${path.relative(root, srcAbs)}），已拒绝产出。请检查该文件的类型是否引用了字面路径。`)
@@ -809,9 +825,12 @@ function rewriteSpecifiers(
   externals: Set<string>,
   root: string,
   diagnostics: string[],
+  onDependency: (declaration: string) => void,
 ): string | null {
   const declRel = srcToRel.get(srcAbs)!
+  let failed = false
   const fail = (spec: string): null => {
+    failed = true
     diagnostics.push(
       `声明依赖不完整：${path.relative(root, srcAbs)} 的导入 "${spec}" 无法解析到工程内文件。` +
       '请检查 tsconfig paths/include 是否覆盖该依赖。',
@@ -827,7 +846,10 @@ function rewriteSpecifiers(
         const candidates = [resolved.replace(/\.d\.ts$/, '.ts'), resolved.replace(/\.d\.ts$/, '.tsx'), resolved.replace(/\.d\.ts$/, '.vue')]
         resolved = candidates.find((c) => srcToRel.has(c)) ?? resolved
       }
-      return srcToRel.get(resolved) ?? null
+      const target = srcToRel.get(resolved)
+      if (!target) return fail(spec)
+      onDependency(target)
+      return target
     }
     const r = resolver(spec, srcAbs)
     if (!r || r.fromNodeModules) return fail(spec)
@@ -836,7 +858,10 @@ function rewriteSpecifiers(
       const candidates = [resolved.replace(/\.d\.ts$/, '.ts'), resolved.replace(/\.d\.ts$/, '.tsx'), resolved.replace(/\.d\.ts$/, '.vue')]
       resolved = candidates.find((c) => srcToRel.has(c)) ?? resolved
     }
-    return srcToRel.get(resolved) ?? fail(spec)
+    const target = srcToRel.get(resolved)
+    if (!target) return fail(spec)
+    onDependency(target)
+    return target
   }
   // bundle 内相对导入：说明符去 .d.ts 后缀（bundler/NodeNext 均按声明解析规则命中）
   const rewriteTo = (targetRel: string): string => {
@@ -848,6 +873,19 @@ function rewriteSpecifiers(
   }
 
   const sfile = ts.createSourceFile(declRel, text, ts.ScriptTarget.Latest, true)
+  // reference path 是声明依赖；它的路径不能沿用源码位置。
+  const referenceEdits: Array<{ start: number; end: number; text: string }> = []
+  for (const ref of sfile.referencedFiles) {
+    const spec = ref.fileName.startsWith('.') ? ref.fileName : `./${ref.fileName}`
+    const target = resolveTarget(spec)
+    if (!target) return fail(spec)
+    referenceEdits.push({ start: ref.pos, end: ref.end, text: rewriteTo(target) + '.d.ts' })
+  }
+  for (const ref of sfile.typeReferenceDirectives) {
+    const spec = ref.fileName
+    externals.add(spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0]!)
+  }
+  // 先保持节点偏移不变完成 import 重写，最后单独改文件头的 reference。
   let out = ''
   let pos = 0
   const emitRange = (node: { getStart(s: unknown): number; getEnd(): number }, replacement?: string): void => {
@@ -913,9 +951,13 @@ function rewriteSpecifiers(
     ts.forEachChild(node, visit)
   }
   visit(rewrittenFile)
+  if (failed) return null
   for (const edit of edits.sort((a, b) => b.start - a.start)) {
     out = out.slice(0, edit.start) + edit.text + out.slice(edit.end)
   }
 
+  for (const edit of referenceEdits.sort((a, b) => b.start - a.start)) {
+    out = out.slice(0, edit.start) + edit.text + out.slice(edit.end)
+  }
   return out
 }
