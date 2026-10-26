@@ -193,7 +193,7 @@ function joinUrl(base: string, file: string): string {
  * 解析 remote 地址（webpack `name@url` 语法 + 单地址自动切换）：
  * - `shop@http://host/entry.js` → 自报名 shop（键可重命名）
  * - `http://host:port/base` → dev 拼 `@fulgurjs-entry.js`，prod 拼 filename
- * - 以 .js 结尾 → prod 原样使用；dev 仍按 base 拼 `@fulgurjs-entry.js`
+ * - 以 .js 结尾 → dev/prod 均原样使用（本地 dev 可消费已部署远程）
  */
 function normalizeRemoteValue(
   key: string,

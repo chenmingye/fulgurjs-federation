@@ -55,6 +55,15 @@ export default {
 
 Omitted dev/prod slots fall back only to external, not to each other: a dev-only configuration does not establish a production address. Complete .js URLs are used verbatim in both environments; directory URLs receive an entry filename. Backup fallback values must be actual entry-file URLs, not site directories.
 
+dev / prod refer to the consumer's execution mode, not the provider's environment. Local dev can target a deployed production remote: use a complete `.js` entry, such as `dev: 'https://assets.example.com/admin/fulgurjs-remoteEntry.js'`. A production directory alone receives the dev endpoint `@fulgurjs-entry.js` instead.
+
+| Target of consumer local dev | Example dev value | Resolved entry |
+|---|---|---|
+| Provider Vite dev server | `http://localhost:5174/admin` | `http://localhost:5174/admin/@fulgurjs-entry.js` |
+| Deployed provider build | `https://assets.example.com/admin/fulgurjs-remoteEntry.js` | Complete URL used verbatim |
+
+Type synchronization follows that same dev entry, reading its sibling fulgurjs-manifest.json and declarations from manifest.types. The deployed site must serve these resources. This does not expose unpublished local provider edits through the deployed module or types. See [local development against a deployed remote](../guide/components-and-modules.md#local-development-against-a-deployed-remote) for steps, resource locations and troubleshooting.
+
 remotes.fallback means backup container entries; loadRemote fallbackModule means an explicit replacement business module; loadShare fallback means a local shared-dependency copy. These are distinct contracts, not interchangeable options.
 
 `timeout` semantics: a timeout only means "the caller stops waiting" — the browser does not cancel an already-issued dynamic import; later calls reuse the same in-flight record and never re-initialize the same container.

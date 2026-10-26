@@ -54,6 +54,15 @@ export default {
 
 对象 dev/prod 槽位省略时只回落到 external，不互相回落；例如只有 dev 的配置不能保证生产可用。完整 .js URL 在 dev/prod 都原样使用，目录 URL 才拼入口文件名。备用 fallback 填实际入口文件 URL，不填站点目录。
 
+`dev` / `prod` 指消费方的运行模式，不限制提供方的环境。本地 dev 可以指向已部署的生产远程，必须提供完整 `.js` 入口，例如 `dev: 'https://assets.example.com/admin/fulgurjs-remoteEntry.js'`。不能只写生产目录 `/admin` 或域名目录，否则 dev 会补成开发端点 `@fulgurjs-entry.js`。
+
+| 消费方本地 dev 的目标 | dev 值示例 | 实际入口 |
+|---|---|---|
+| 提供方 Vite 开发服务 | `http://localhost:5174/admin` | `http://localhost:5174/admin/@fulgurjs-entry.js` |
+| 已部署的提供方构建 | `https://assets.example.com/admin/fulgurjs-remoteEntry.js` | 该完整 URL 原样使用 |
+
+类型同步跟随同一 dev 入口，在其目录查 `fulgurjs-manifest.json`，再按 manifest.types 下载声明；生产站点必须同时部署这些资源。配置不会让本地未部署源码出现在生产模块或类型里。完整步骤、资源路径与失败排查见[本地开发消费已部署远程](../guide/components-and-modules.md#本地开发消费已部署远程)。
+
 这里的 remotes.fallback 是“备用容器入口”；loadRemote 的 fallbackModule 是“显式替代业务模块”；loadShare 的 fallback 是“本地共享依赖副本”。三者不是同一个开关，不能互换参数。
 
 `timeout` 语义：超时只代表「调用方不再等待」，浏览器不会取消已发出的动态 import——后续调用复用同一 in-flight 记录，不会重复初始化同一容器。

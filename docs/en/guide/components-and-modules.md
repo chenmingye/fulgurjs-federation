@@ -55,6 +55,8 @@ export default {
 
 Replace these illustrative addresses with the provider's actual development root URL and production mount path, including any Vite base. Both projects must register `federation(fulgurjsConfig)` in their Vite configurations; creating this file alone is insufficient. See [getting started](getting-started.md). Production `/admin` must serve the admin build.
 
+To load deployed components and their types during local development, see [local development against a deployed remote](#local-development-against-a-deployed-remote): dev can point to a production entry, using its complete `.js` URL.
+
 **3. Render inside the child's existing business view.** This example assumes both entries declare `recordId: string` and `readonly?: boolean`; use the actual provider-generated props in your application.
 
 ```vue
@@ -521,6 +523,73 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 
 The first generation follows the dependencies of exposed entries to infer their real types. Even two entries may reference many files, so entry count alone does not predict compile time. Generation follows the toolchain’s supported API: tools with a per-file program API check the exposed closure; CLI-based tools reuse that dev server’s incremental cache. Changed props are still checked; logs, screenshots and Markdown do not trigger generation. The cache stays inside `node_modules` and is removed after the dev server closes. No configuration or commit is needed. One-off builds and CLI runs use independent output.
 
+
+### Local development against a deployed remote
+
+**A consumer running a local dev server can load both modules and types from a provider's deployed production build.** Different computers means the consumer does not need the provider's source or local files: reachable remote resources are sufficient. The provider does not have to run a Vite dev server just because the consumer does.
+
+#### 1. Configure the entry the consumer actually uses
+
+`remotes.<alias>.dev` selects the address when the **consumer runs its development server**; `prod` selects it for the consumer's production build. Neither field restricts the target to a development, staging or production environment. The plugin uses the configured address; it does not discover a production site or select the provider's local source automatically.
+
+```ts
+// Consumer fulgurjs.config.ts: merge into the existing config; preserve other remotes/exposes.
+import type { FederationOptions } from '@fulgurjs/federation'
+
+export default {
+  name: 'workflow',
+  remotes: {
+    admin: {
+      // Local workflow development consumes the deployed admin build.
+      dev: 'https://assets.example.com/admin/fulgurjs-remoteEntry.js',
+      // The workflow production build uses the same site; change to its real target if different.
+      prod: 'https://assets.example.com/admin/fulgurjs-remoteEntry.js',
+    },
+  },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+Replace the domain, base and filename with real provider values. Both projects must still register `federation(fulgurjsConfig)` in their Vite configurations; creating this file alone is insufficient. React projects keep their appropriate shared configuration rather than copying the Vue setting above.
+
+**Use the complete entry `.js` URL in dev when consuming a deployed remote.** A directory such as `https://assets.example.com/admin` becomes `/admin/@fulgurjs-entry.js` in dev, which is a development-server endpoint that ordinary static production deployments do not serve. A complete `/admin/fulgurjs-remoteEntry.js` is used verbatim. Use the actual filename when the provider customizes `filename`.
+
+`dev` and `prod` do not fall back to each other. A dev-only address does not establish a production-build address; each omitted slot falls back only to `external`. See the [configuration reference](../reference/configuration.md#the-four-forms-of-remotes).
+
+#### 2. Modules and types have different readers
+
+| Resource | Reader | Example address / local location |
+|---|---|---|
+| Remote JS entry and its JS/CSS dependencies | Browser, when the page loads the remote module | `https://assets.example.com/admin/fulgurjs-remoteEntry.js` and referenced assets |
+| Manifest | Type synchronizer in the consumer's development process | Sibling `https://assets.example.com/admin/fulgurjs-manifest.json` |
+| Type index and declarations | Synchronizer, following and verifying manifest.types | Usually `/admin/fulgurjs-types/index.json` and its listed declarations; the manifest is authoritative |
+| Combined declarations and entry registry | Local IDE and TypeScript/vue-tsc | Default `src/fulgurjs/types/admin/modules.d.ts` and `registry.d.ts`; metadata.json records the synchronized generation |
+
+Declarations in the provider's deployed dist are downloadable resources for consumer development tools, not browser executable code. Synchronization does not require opening the remote page first. The consumer needs neither provider source nor its complete node_modules, and should not copy declarations into business files.
+
+#### 3. Provider deployment and consumer startup
+
+1. Keep provider `dts` enabled by default, accurately declare public props/events or module signatures, and run the normal production build.
+2. Deploy JS, CSS, `fulgurjs-manifest.json` and `fulgurjs-types/` from the same build. All declarations listed in index.json must be reachable. Deploying JS alone can leave a working page without types. Provider `fulgurjs types` validates generation; it does not update deployed dist.
+3. Configure the actual production entry as above, keep consumer `dts` enabled, and start the consumer's normal dev server. No provider dev server or manual type-generation command is required for ordinary dev use.
+4. Wait for successful synchronization in the logs, confirm the real tsconfig includes generated declarations, then inspect actual parameters in the IDE. Background type synchronization does not block page startup; a visible page does not prove synchronization has finished.
+5. Rebuild and deploy after changing the provider contract. Consumer dev polling detects the new revision and updates declarations. Unpublished local provider changes are not visible. Refresh the page as required by the browser's module cache; a type update does not hot-replace already running production modules.
+
+#### 4. Conditions and troubleshooting
+
+- **Check both network paths:** the browser must load cross-origin JS/CSS, and the consumer's Node development process must fetch the manifest and declarations. If static resources require login or special network access, confirm the development process can reach them too. Browser login does not give the type synchronizer that browser's cookies.
+- **Shared dependencies and business context keep their contracts:** Vue/React versions, share scopes, Providers, authentication and backend API addresses do not become correct merely because types download successfully. The remote entry address does not rewrite backend API addresses inside the component.
+- **Deploy consistent, refreshable resources:** do not pin fixed entry, manifest or type-index URLs behind stale long-lived caches. Declaration digests must match the manifest revision. Never edit generated declarations or index/revision values to silence errors.
+
+| Symptom | Check and action |
+|---|---|
+| Local dev requests `@fulgurjs-entry.js` from the production site and gets 404 | The dev value is a directory; use the complete actual production `.js` entry |
+| Page works but types are absent | Check manifest.types, deployed declarations, both dts settings and sync logs; an unknown fallback is not precise-type success |
+| Types still contain old fields | Verify new declarations/revision were deployed and synchronization succeeded; failures retain an old snapshot, which is not current verification |
+| Types are correct but loading/rendering fails | Check browser errors, cross-origin assets, shared negotiation and component runtime context separately; type success does not prove runtime success |
+| Local provider edits do not appear | The configuration consumes a deployed build; switch to the provider's dev-server address to test undeployed source |
+
+The consumer's own production build/CI still follows [strict synchronization](../reference/cli.md#fulgurjs-types): synchronize from the intended site before typechecking. Dev automation does not mean every build mode automatically downloads types.
 
 ### Why declarations can outnumber exposed entries
 

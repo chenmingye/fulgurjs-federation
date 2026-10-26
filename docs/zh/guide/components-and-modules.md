@@ -55,6 +55,8 @@ export default {
 
 示例地址是假设的部署位置：用提供方真实的开发根 URL 和生产挂载路径替换；有 Vite base 时必须包含该 base。双方继续在各自 Vite 配置中通过 `federation(fulgurjsConfig)` 注册，不是仅创建这个文件即可生效，接线见[快速上手](getting-started.md#已有项目接入)。生产 `/admin` 必须确实服务 admin 的构建文件。
 
+本地开发需要直接使用已部署的组件和类型时，见[本地开发消费已部署远程](#本地开发消费已部署远程)：`dev` 可指向生产入口，但必须填写完整 `.js` 地址。
+
 **3. 子应用在真实业务视图渲染。** 下面假定两个入口都声明了 `recordId: string` 和 `readonly?: boolean`；实际使用以提供方生成的 props 类型为准。
 
 ```vue
@@ -520,6 +522,73 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 - 提供方重新启动、声明尚在编译时，会保留宿主已有的类型快照；新声明完成后自动替换。严格类型验收要等到同步成功，不能把旧快照当成本轮通过。
 - 远程未提供类型（旧版本/`dts: false`）：页面正常运行，入口按动态边界放行（`unknown`）；严格类型检查在 CI 运行 `npx @fulgurjs/federation types`（详见 [CLI 参考](../reference/cli.md#fulgurjs-types)）；
 - `dts: false` 完全关闭（不生成、不下载）；细节与已知限制见 [API 参考 · 远程类型](../reference/api.md#远程类型自动生成与同步)。
+
+### 本地开发消费已部署远程
+
+**消费方在本地运行 dev、提供方使用已部署的生产构建时，组件与类型都可以来自这个已部署站点。** “不同电脑”是指消费方不必拥有提供方的源码或本地文件：只要能访问远程资源，就能加载模块并同步类型。插件不会因为消费方运行 dev，就要求提供方也运行 Vite dev server。
+
+#### 1. 为消费方指定真正要使用的入口
+
+`remotes.<别名>.dev` 是**消费方运行开发服务时选择的地址**；`prod` 是消费方生产构建选择的地址。字段名不限制目标站点属于开发、测试还是生产环境。插件按配置取地址，不自动寻找生产站点，也不会自动选择提供方的本地源码。
+
+```ts
+// 消费方 fulgurjs.config.ts：合并到已有配置，不覆盖其他 remotes/exposes。
+import type { FederationOptions } from '@fulgurjs/federation'
+
+export default {
+  name: 'workflow',
+  remotes: {
+    admin: {
+      // 本地启动 workflow 时，直接使用已经部署的 admin。
+      dev: 'https://assets.example.com/admin/fulgurjs-remoteEntry.js',
+      // workflow 生产构建也使用这个站点；需要其他目标时改成真实入口。
+      prod: 'https://assets.example.com/admin/fulgurjs-remoteEntry.js',
+    },
+  },
+  shared: { vue: { singleton: true } },
+} satisfies FederationOptions
+```
+
+将域名、base 和入口文件名换成提供方真实值；双方仍需完成各自 Vite 配置中的 `federation(fulgurjsConfig)` 接线，不能只创建配置文件。React 项目沿用自己的共享依赖配置，上例的 Vue 配置不直接套用于 React。
+
+**消费已部署远程时，dev 中写完整的入口 `.js` URL。** 例如 `https://assets.example.com/admin` 是目录地址，插件在 dev 中会将它补成 `/admin/@fulgurjs-entry.js`，这是开发服务端点；普通静态生产站点没有这个端点。写完整的 `/admin/fulgurjs-remoteEntry.js` 才会原样使用生产入口。入口自定义了 `filename` 时使用实际文件名。
+
+`dev` 与 `prod` 不互相回落。只配置 `dev` 不代表消费方生产构建也有可用地址；两者省略时只分别回落 `external`。完整规则见[配置参考](../reference/configuration.md#remotes-的四种形态)。
+
+#### 2. 模块和类型分别由谁读取
+
+| 资源 | 使用者 | 本例地址 / 本地位置 |
+|---|---|---|
+| 远程 JS 入口及其 JS/CSS 依赖 | 浏览器，在页面实际加载远程模块时使用 | `https://assets.example.com/admin/fulgurjs-remoteEntry.js` 及其引用资源 |
+| manifest | 消费方开发进程中的类型同步器 | 同目录的 `https://assets.example.com/admin/fulgurjs-manifest.json` |
+| 类型索引和声明 | 类型同步器按 manifest.types 下载并校验 | 本例通常为 `/admin/fulgurjs-types/index.json` 及索引登记的声明，实际以 manifest 为准 |
+| 合并声明与入口注册 | 本地 IDE、TypeScript/vue-tsc | 默认 `src/fulgurjs/types/admin/modules.d.ts`、`registry.d.ts`；`metadata.json` 记录同步代次 |
+
+`.d.ts` 随提供方 dist 部署，是供消费方开发工具下载的资源，不是浏览器执行的代码；类型同步不需要先打开远程页面。消费方无需下载提供方源码或完整 node_modules，也不需要把声明复制进业务文件。
+
+#### 3. 提供方部署与消费方启动步骤
+
+1. 提供方保留 `dts` 默认开启，确保公开入口准确声明 props/事件或模块签名，运行正常生产构建。
+2. 将同次构建的 JS、CSS、`fulgurjs-manifest.json` 和 `fulgurjs-types/` 一起部署。`index.json` 登记的声明必须全部可访问；只部署 JS 可能让页面能运行却拿不到类型。仅执行提供方 `fulgurjs types` 验证生成，不会写入或更新已部署 dist。
+3. 消费方按上例配置实际生产入口，保留消费侧 `dts` 开启，然后正常启动自己的开发环境。无需启动提供方开发服务，也无需为普通 dev 流程先手动执行类型生成命令。
+4. 等待日志确认类型同步成功，检查生成目录被实际 tsconfig 包含，再在 IDE 中查看真实参数。类型同步在后台进行，不阻塞页面启动；页面能打开不等于类型已同步完毕。
+5. 改动提供方接口后重新构建并部署。消费方 dev 轮询检测新 revision 后自动更新声明；还未部署的本地源码改动不会出现在消费方。浏览器中已加载的模块需要按实际缓存状态刷新页面，类型刷新本身不会热替换已运行的生产模块。
+
+#### 4. 必须核对的条件与失败现象
+
+- **两条网络路径分别可达**：浏览器能跨源加载 JS/CSS；消费方的 Node 开发进程能请求 manifest 与声明。静态资源需要登录或特殊网络访问时，必须确认开发进程也可访问；浏览器已经登录不代表类型同步器会继承浏览器 Cookie。
+- **共享与业务上下文仍按原合同配置**：Vue/React 版本、共享作用域、Provider、认证和业务接口地址不会因“能下载类型”而自动正确。远程入口地址不会自动改写组件内部的后端 API 地址。
+- **部署保持同批且可更新**：固定 manifest、类型索引及入口不应被长期旧缓存锁住，声明摘要必须与 manifest 的 revision 配套。不要手改 index/revision 或生成声明来消除错误。
+
+| 现象 | 检查与处理 |
+|---|---|
+| 本地 dev 请求生产站点的 `@fulgurjs-entry.js` 并 404 | `dev` 填成了目录；改为完整的实际生产 `.js` 入口 |
+| 页面正常，类型没有生成 / 同步 | 检查提供方 manifest 是否有 `types`、类型目录是否部署、双方 dts 是否开启，以及同步日志；不能把 unknown 回退当成精确类型成功 |
+| 类型仍是旧字段 | 检查部署是否包含新声明及新 revision、同步是否成功；失败时旧快照会被保留，不能当作本轮最新结果 |
+| 类型提示正确，但页面加载或渲染失败 | 分别检查浏览器错误、资源跨域、共享协商和组件运行环境；类型通过不证明运行时链路通过 |
+| 线上类型已更新，本地修改却没反映出来 | 当前配置指向已部署站点，读取的就是已部署版本；要验证未部署源码，切换到对应提供方 dev 服务地址 |
+
+消费方自己的生产构建/CI 仍按[严格类型同步流程](../reference/cli.md#fulgurjs-types)处理：先从目标站点同步再做类型检查，不能把普通 dev 的自动同步解释为所有构建模式都会自动下载类型。
 
 ### 为什么声明可能超过入口数量
 

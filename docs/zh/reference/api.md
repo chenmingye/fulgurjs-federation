@@ -544,6 +544,8 @@ export const bridgeSession = createBridgeSession()
 - **宿主**：dev 启动后台同步（不阻塞页面服务；远程晚启动有界重试，恢复后自动更新；源码变化按摘要代次自动刷新）。同步做完整性校验（逐文件摘要、路径边界、大小/数量上限），完整下载后**原子替换**——中断/失败保留上一代完整声明并明确陈旧状态。产物写入 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`，`dts.dir` 可覆盖）：`<远程名>/modules.d.ts`（环境模块声明）+ `<远程名>/registry.d.ts`（类型注册表）+ `metadata.json`（生成器账本——清理只动账本内自有文件，绝不碰用户文件）。
 - **TypeScript 发现**：生成目录默认落在 `src` 下，常规 `include: ["src/**/*"]` 零配置生效；生成代码不含相对导入，宿主 `moduleResolution`（bundler/NodeNext/…）不影响发现。目录被 exclude 或严格 `files` 白名单排除时，dev 与 `fulgurjs types` 给出 TYP-006（含具体配置文件与最小修法）。插件**绝不**在 dev 启动时改写你的 tsconfig。
 
+本地 dev 消费已部署远程时，类型来自 `remotes[别名].dev` 指定的完整生产 `.js` 入口对应的 manifest，与模块使用同一提供方；不要求提供方启动 dev。JS 由浏览器加载，声明由消费方 Node 开发进程下载，网络权限分别核对。详见[配置与完整流程](../guide/components-and-modules.md#本地开发消费已部署远程)。
+
 ### 字符串 API 的入口检查（类型注册表）
 
 `loadRemote`、`remoteComponent`、`createVueBridgeApp`、`createReactBridgeApp` 与普通 import 共用同一份注册表类型（`FgRemoteTypes`，由同步产物登记）：
