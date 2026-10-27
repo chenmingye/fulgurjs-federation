@@ -548,6 +548,8 @@ export const bridgeSession = createBridgeSession()
 
 提供方对公开的非泛型数据对象自动生成可展开字段视图，消费方直接 import type 后，类型名和参数变量悬停可展示继承字段；readonly、可选项和字段说明保留。高级签名不强行改写，适用范围与双位置 IDE 验收见[直接导入的字段展示](../guide/components-and-modules.md#直接导入时悬停也应能看到字段)。
 
+dev提供方会在输入和声明摘要校验成功后复用跨重启快照，缓存位于node_modules/.cache/fulgurjs/types；停止服务保留成功快照、释放独占编译临时目录。输入变化/损坏缓存重新生成，build/CLI始终独立验证。详见[缓存生命周期及失效条件](../guide/components-and-modules.md#重启开发环境时复用类型缓存)。
+
 ### 字符串 API 的入口检查（类型注册表）
 
 `loadRemote`、`remoteComponent`、`createVueBridgeApp`、`createReactBridgeApp` 与普通 import 共用同一份注册表类型（`FgRemoteTypes`，由同步产物登记）：

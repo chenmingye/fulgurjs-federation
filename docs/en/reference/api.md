@@ -552,6 +552,8 @@ When local dev consumes a deployed remote, types come from the manifest beside t
 
 Providers automatically generate expandable views for exported non-generic data objects. Direct type imports can show inherited fields in both type-name and parameter-variable hovers while retaining readonly, optionality and field documentation. Advanced signatures are preserved. See [direct-import field display](../guide/components-and-modules.md#direct-imports-must-also-show-fields-on-hover) for scope and acceptance.
 
+Provider dev can restore successful cross-restart snapshots after validating inputs and declaration digests. Snapshots live under node_modules/.cache/fulgurjs/types and survive shutdown; private compiler temporary directories do not. Changed inputs or invalid snapshots regenerate. Build/CLI always verify independently. See [cache lifecycle and invalidation](../guide/components-and-modules.md#reusing-types-across-dev-server-restarts).
+
 ### Entry checks for the string APIs (type registry)
 
 `loadRemote`, `remoteComponent`, `createVueBridgeApp` and `createReactBridgeApp` share one registry (`FgRemoteTypes`, populated by the synced output) with plain imports:

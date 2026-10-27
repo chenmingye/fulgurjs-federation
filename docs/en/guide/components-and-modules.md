@@ -544,7 +544,7 @@ const mod = await loadRemote('remote-a/shared/user-badge')
 - A remote without type resources (older version / `dts: false`): pages run normally and entries follow the dynamic boundary (`unknown`); run `npx @fulgurjs/federation types` in CI for strict checks (see the [CLI reference](../reference/cli.md#fulgurjs-types));
 - `dts: false` disables everything (no generation, no download); details and known limits in the [API reference · remote types](../reference/api.md#remote-types-generation-and-sync).
 
-The first generation follows the dependencies of exposed entries to infer their real types. Even two entries may reference many files, so entry count alone does not predict compile time. Generation follows the toolchain’s supported API: tools with a per-file program API check the exposed closure; CLI-based tools reuse that dev server’s incremental cache. Changed props are still checked; logs, screenshots and Markdown do not trigger generation. The cache stays inside `node_modules` and is removed after the dev server closes. No configuration or commit is needed. One-off builds and CLI runs use independent output.
+The first generation follows the dependencies of exposed entries to infer their real types. Even two entries may reference many files, so entry count alone does not predict compile time. Generation follows the toolchain’s supported API: tools with a per-file program API check the exposed closure; CLI-based tools reuse that dev server’s incremental cache. Changed props are still checked; logs, screenshots and Markdown do not trigger generation. Per-server compiler temporary directories are removed on shutdown; successful declaration resources have a separate cross-restart cache below. One-off builds and CLI runs always generate independently, rather than using dev snapshots for strict verification.
 
 
 ### Local development against a deployed remote
@@ -615,6 +615,31 @@ Declarations in the provider's deployed dist are downloadable resources for cons
 The consumer's own production build/CI still follows [strict synchronization](../reference/cli.md#fulgurjs-types): synchronize from the intended site before typechecking. Dev automation does not mean every build mode automatically downloads types.
 
 For consumer/provider applications importing upstream named types, initial generation may precede synchronization. A newly synchronized complete generation triggers local provider regeneration automatically. Unchanged polls and failed syncs do not trigger a generation loop.
+
+### Reusing types across dev-server restarts
+
+Input capture, content validation, and snapshot compression run in a Node worker thread to keep large scans off the Vite main thread. Page startup does not wait for types; IDE use still requires a cache-hit or generation-success message followed by consumer synchronization.
+
+Provider dev automatically saves successful declaration resources. On the next startup it validates inputs and declaration digests. **When source, configuration, dependencies and tools are unchanged and the cache is complete, it restores the same revision without running vue-tsc/TypeScript compilation.** Normal startup requires neither a manual generation command nor an additional cache setting.
+
+The cache is one compressed snapshot under project `node_modules/.cache/fulgurjs/types/`. It contains input fingerprints and generated declarations, not hundreds of additional business types, and stays out of Git/SVN. Shutdown preserves successful snapshots while releasing each server's private compiler directory. Mutable tsbuildinfo is never shared between processes.
+
+| Situation | Behavior |
+|---|---|
+| First startup, deleted cache or plugin/tool upgrade | Generate normally and build the input inventory; initial bookkeeping can add cold cost |
+| Unchanged inputs after stopping and restarting | Validate and restore successful declarations; logs report a cache hit and validation time |
+| Source, inherited tsconfig, exposes, lockfiles, dependency declarations or link targets change | Invalidate and regenerate; new directory members and higher-priority resolution candidates are checked too |
+| Corrupt cache, mismatched digests or generation failure | Never advertise stale output as newly successful; ignore bad caches or retain failure diagnostics, writing only successful snapshots |
+| Cache cannot be written | Current generation and page serving continue with a cache warning; the next startup may compile again |
+| Custom Vue compiler plugins, external templates or other incompletely modeled inputs | Use normal compilation rather than guessing reuse is safe |
+
+Validation uses contents and resolution observations, not mtime alone. Same-length edits, imports outside include, JS/JSDoc external types, declaration dependencies and symlinks invalidate appropriately. Inputs changing during generation prevent that result from being persisted; a recheck is queued. Concurrent servers keep private compiler directories and atomically replace successful snapshots.
+
+**A hit is not free and does not guarantee total Vite startup time.** Input reads and hashing still cost time, particularly in large projects. Cold generation or changed inputs may still take tens of seconds; Vite dependency prebundling has its own cost. Measure cold generation, cross-process restoration, dev readiness and consumer synchronization separately.
+
+Delete this cache directory (or node_modules) and restart dev normally to rebuild the cache. Deleting consumer `src/fulgurjs/types/` is separate: dev downloads declarations again, while provider input validation decides whether compilation is needed. When missing upstream types initially prevent local provider generation, wait for automatic sync and generation rechecks instead of adding placeholder declarations.
+
+Restoration validates the local inputs and successful snapshot, not an upstream update that has not synchronized yet. New upstream declarations still trigger local checking. Strict CI/production workflows continue generation and synchronization as documented; build and CLI never reuse these dev snapshots.
 
 ### Why declarations can outnumber exposed entries
 

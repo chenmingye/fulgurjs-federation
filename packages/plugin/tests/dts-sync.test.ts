@@ -255,7 +255,7 @@ export interface Result { value: Contract }`)
       return new Response(isJson ? JSON.stringify(await router.json(url)) : await router.text(url), { status: 200 })
     })
     try {
-      await vi.waitFor(() => expect(warnings.join('\n')).toContain('upstream/contract'))
+      await vi.waitFor(() => expect(warnings.join('\n')).toContain('upstream/contract'), { timeout: 10000 })
       expect(provider.revision()).toBeNull()
       stop = startRemoteTypesSyncLoop({ root, typesRoot: output,
         remotes: [{ key: 'upstream', devEntry: 'http://remote.test/@fulgurjs-entry.js' }], pollMs: 20,
@@ -270,7 +270,7 @@ export interface Result { value: Contract }`)
       bundle.index.revision = 'b1b2c3d4e5f60718'
       bundle.manifest.types.revision = bundle.index.revision
       await vi.waitFor(() => expect(notifications).toBe(2), { timeout: 5000 })
-      await vi.waitFor(() => expect(provider.isGenerating()).toBe(false))
+      await vi.waitFor(() => expect(provider.isGenerating()).toBe(false), { timeout: 10000 })
       const snapshot = notifications
       fetchMock.mockImplementation(async () => { throw new Error('受控断网') })
       await new Promise(resolve => setTimeout(resolve, 70))

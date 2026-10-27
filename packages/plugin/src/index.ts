@@ -1532,6 +1532,7 @@ export function federation(options: FederationOptions): Plugin[] {
           : path.join(n.root, fs.existsSync(path.join(n.root, 'src')) ? 'src/fulgurjs/types' : '.fulgurjs/types')
         const scheduleRegen = (id: string): void => {
           if (!isTypesInputChange(n.root, id, syncedTypesDir)) return
+          typesServer?.markInputChanged()
           if (regenTimer) clearTimeout(regenTimer)
           regenTimer = setTimeout(() => {
             regenTimer = null

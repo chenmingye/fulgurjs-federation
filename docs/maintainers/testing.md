@@ -106,3 +106,7 @@ pnpm test:prod   # 需 NGINX；脚本会清理它自己启动的隔离测试实�
 - 配置类问题先跑 `npx @fulgurjs/federation doctor`（部署面）与 `npx @fulgurjs/federation explain`（有效配置），多数问题能直接定位；
 - 报错按错误码查[错误码总表](../zh/reference/errors.md)；
 - dev 下改了插件源码要重启 dev server（缓存自动清，但仍需重启进程）。
+
+## 提供方跨重启类型缓存验收
+
+必须用独立Node/dev进程证明命中，不把同进程内存、Vite预构建或消费方unchanged当提供方缓存命中。记录冷生成、输入校验恢复、HTTP类型代次与生成器调用次数；首次建账成本如实说明。缓存要覆盖继承配置、root/include成员、目录外/链接依赖、JSDoc类型引用、锁/工具/插件变化以及同大小同mtime的内容修改；损坏/丢失/不可写、失败不复用、编译中变动重检与关闭取消均需验证。多个实例不共享可变编译目录，成功快照原子发布；生产build和CLI不得用dev缓存冒充严格生成通过。
