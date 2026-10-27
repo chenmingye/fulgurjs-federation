@@ -651,6 +651,19 @@ Restoration validates the local inputs and successful snapshot, not an upstream 
 
 For startup performance acceptance, compare dts disabled with its default enabled behavior in the same project and dependency-prebuild state. Record Vite ready, first HTTP, type readiness, and compiler invocations separately. Different projects or warmup states cannot substantiate a seconds-level startup claim.
 
+### Type dependency boundaries also affect cold generation
+
+`import type` removes the runtime import, but TypeScript still reads its target and re-exports to resolve types. A utility importing one form type through a barrel that also exports many Vue components can pull unrelated components, pages, and UI libraries into the program. Pruning the final declaration files does not recover that parsing/checking time.
+
+Within a business project, prefer the existing type's definition module for type-only dependencies. Verify the original re-export resolves to the same definition before changing the path. Do not duplicate DTOs, handwrite generated declarations, or add empty forwarding files. Third-party packages still follow their public exports; SDK imports remain on `@fulgurjs/federation`, `/vue`, or `/react`.
+
+```ts
+// Business-internal path: reuse the existing type definition.
+import type { FormSchema } from '../components/Form/types'
+```
+
+Validate unchanged public declarations and field diagnostics, with no new caller errors. Measure cold generation, real props edits, error feedback, and recovery separately. Providers, registrations, initialization, and checks must not be removed to improve a timing. A large dependency graph still has real compilation costs; there is no universal fixed-seconds guarantee.
+
 ### Why declarations can outnumber exposed entries
 
 The provider first uses TypeScript/vue-tsc to analyze the sources needed for correct inference. Distribution then starts from the emitted public entry declarations and follows only their declaration dependencies. Implementation-only tables, editors and request utilities are omitted when their types do not appear in public signatures. Externals are recalculated from retained declarations, so implementation-only packages are not required in the consumer.
