@@ -27,7 +27,13 @@ const recordFile = file => {
   try { const previous=snapshot.files[file];const stat=fs.statSync(file);const same=previous&&previous.ctime===stat.ctimeMs&&previous.mtime===stat.mtimeMs&&previous.ino===stat.ino&&previous.size===stat.size; const next = same ? previous : readStamp(file); if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash)) { traceValid = false; inputChanged = true; } snapshot.files[file] = next; const real = fs.realpathSync(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
   catch { traceValid = false; }
 };
+// 同一次解析会反复询问相同目录，缺失目录还会反复向上找父目录。
+// 首次记录已保存存在父级的时间戳；发布前照常校验查询结果与目录变化。
+// 这里只去重记录，不缓存fileExists/directoryExists的实际结果，避免遮住生成中的变化。
+const recordedDirectories = new Set();
 const recordDirectory = directory => {
+  if (recordedDirectories.has(directory)) return;
+  recordedDirectories.add(directory);
   directory = path.resolve(directory);
   if (!traceFile || ignoredInput(directory) || snapshot.directoryStats[directory]) return;
   for (;;) {
