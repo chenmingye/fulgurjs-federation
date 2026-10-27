@@ -201,3 +201,21 @@ it('不把无关业务实现和工具测试依赖纳入输入，实际导入的�
   fs.writeFileSync(path.join(tool, 'test-runtime.js'), 'exports.enabled = false')
   expect(validateTypesInputs(snapshot, root)).not.toBeNull()
 }, 15000)
+
+
+it('插件同步声明仅元数据首行变化不重新编译，业务文档和类型修改仍失效',()=>{
+  const {root,input,result}=project()
+  const source=path.join(root,'src/modules.d.ts')
+  const header=(rev:string)=>`// 自动生成：fulgurjs-federation 远程类型（remote: demo，来源: http://test/${rev}，revision: ${rev}）。\n`
+  const body='/** 业务说明 */\nexport interface Model { readonly id: string }\n'
+  fs.writeFileSync(source,header('old')+body)
+  fs.writeFileSync(path.join(root,'src/entry.ts'),`export type {Model} from './modules'`)
+  const snapshot=captureTypesInputs(input)!
+  writeTypesCache(input,snapshot,result)
+  fs.writeFileSync(source,header('new-and-longer')+body)
+  expect(readTypesCache(input)).not.toBeNull()
+  fs.writeFileSync(source,header('new-and-longer')+body.replace('业务说明','更新业务说明'))
+  expect(readTypesCache(input)).toBeNull()
+  fs.writeFileSync(source,header('new')+body.replace('id: string','id: number'))
+  expect(readTypesCache(input)).toBeNull()
+},15000)

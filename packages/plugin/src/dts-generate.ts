@@ -13,6 +13,8 @@
  * 管理器的安装命令。本模块只在 Node 侧运行，产物不进入浏览器运行时。
  */
 import fs from 'node:fs'
+import { typeInputBytes } from './dts-input-hash'
+import type { VueCompilerSession } from './dts-vue-session'
 import path from 'node:path'
 import { formatDeclarationDiagnostics } from './dts-diagnostics'
 import { genVueDeclarationProgram } from './dts-vue-program'
@@ -39,6 +41,8 @@ export interface DtsGenerateInput {
   signal?: AbortSignal
   /** dev 服务独占的临时缓存目录；同一服务串行复用，关闭后由服务删除，不进入类型包。 */
   incrementalDir?: string
+  /** dev独占的内存编译会话；一次性CLI/build不传入。 */
+  vueCompiler?: VueCompilerSession
 }
 
 export interface DtsGenerateOk {
@@ -353,11 +357,12 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[], readFi
 }
 
 /** 解析入口/依赖说明符到绝对源文件（paths alias / 相对 / node_modules 都走 TS 语义） */
-function makeResolver(ts: TsModule, co: Record<string, unknown>, readFile = ts.sys.readFile, observedHost: Partial<import('typescript').ModuleResolutionHost> = {}) {
+function makeResolver(ts: TsModule, co: Record<string, unknown>, readFile = ts.sys.readFile, observedHost: Partial<import('typescript').ModuleResolutionHost> = {}, root = ts.sys.getCurrentDirectory()) {
+  const cache = ts.createModuleResolutionCache(root, file => ts.sys.useCaseSensitiveFileNames ? file : file.toLowerCase(), co as import('typescript').CompilerOptions)
   return (spec: string, fromFile: string): { resolved: string; fromNodeModules: boolean } | null => {
     const exists = observedHost.fileExists ?? ts.sys.fileExists
     const host = { ...ts.sys, ...observedHost, readFile, fileExists: (file: string) => exists(file) || (file.endsWith('.vue.ts') && exists(file.slice(0, -3))) }
-    const r = ts.resolveModuleName(spec, fromFile, co as never, host)
+    const r = ts.resolveModuleName(spec, fromFile, co as never, host, cache)
     let resolved = r.resolvedModule?.resolvedFileName
     if (resolved?.endsWith('.vue.ts') && ts.sys.fileExists(resolved.slice(0, -3))) resolved = resolved.slice(0, -3)
     if (!resolved) return null
@@ -405,7 +410,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       if (text === undefined) return undefined
       const bytes = fs.readFileSync(file)
       const after = fs.statSync(file)
-      const value = { hash: crypto.createHash('sha256').update(bytes).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
+      const value = { hash: crypto.createHash('sha256').update(typeInputBytes(file,bytes)).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
       const previous = parentInputs[path.resolve(file)]
       if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size
         || (previous && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
@@ -431,7 +436,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   if (!ctx) return { ok: false, diagnostics }
 
   // 入口解析：exposes.import 相对 root；alias 形态（@/x）经 TS resolver 解析
-  const resolver = makeResolver(ts, ctx.compilerOptions, readGenerationFile, observedHost)
+  const resolver = makeResolver(ts, ctx.compilerOptions, readGenerationFile, observedHost, root)
   const entryMap = new Map<string, string>() // expose 名 → 绝对源文件
   for (const expose of exposes) {
     const raw = expose.import.replace(/^\.?\//, '')
@@ -590,8 +595,16 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     }
     try {
       /** 运行一次 vue-tsc；extraNodeArgs 为 node 与脚本间的 V8 参数（提堆重试用） */
-      const attempt = (extraNodeArgs: string[]): Promise<{ err: import('node:child_process').ExecFileException | null; stdout: string; stderr: string }> =>
-        new Promise((resolve) => {
+      const attempt = (extraNodeArgs: string[]): Promise<{ err: import('node:child_process').ExecFileException | null; stdout: string; stderr: string }> => {
+        if (input.vueCompiler && traceFile) {
+          const request = { root, script: genVueDeclarationProgram(), args: [tmpCfg,programInputFile], nodeArgs: extraNodeArgs, timeout: timeoutFor(extraNodeArgs.length > 0), signal }
+          return input.vueCompiler.run(request).then(result => {
+            if (result.err?.code !== 'FG_COMPILER_TOOL_CHANGED') return result
+            diagnostics.push('检测到编译工具代码变化，已重建隔离编译进程后重新检查。')
+            return input.vueCompiler!.run(request)
+          })
+        }
+        return new Promise((resolve) => {
           if (signal?.aborted) {
             resolve({ err: Object.assign(new Error('声明生成已取消'), { code: 'ABORT_ERR' }), stdout: '', stderr: '' })
             return
@@ -611,6 +624,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           signal?.addEventListener('abort', abort, { once: true })
           if (signal?.aborted) abort()
         })
+      }
       // 已确认需要大堆的同一 dev 服务不再每轮先 OOM 一次。记录仅存在于独占缓存，
       // 不改变其他工程/一次性构建的内存设置，也不把机器相关信息写入公开类型资源。
       const heapMarker = cacheDir ? path.join(cacheDir, 'raised-heap') : undefined

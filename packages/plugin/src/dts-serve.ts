@@ -14,6 +14,7 @@
 import type { NormalizedOptions } from './options'
 import path from 'node:path'
 import fs from 'node:fs'
+import { createVueCompilerSession } from './dts-vue-session'
 import { createRequire } from 'node:module'
 import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
 import { createTypesCacheWorker, type TypesCacheHandle } from './dts-cache-worker-client'
@@ -62,6 +63,7 @@ export function createDevTypesServer(
   const warn = hooks.warn ?? ((m: string) => console.warn(m))
   const log = hooks.log ?? ((m: string) => console.log(m))
   const controller = new AbortController()
+  const vueCompiler = createVueCompilerSession()
   let files: Map<string, string> | null = null
   let revision: string | null = null
   let generating: Promise<void> | null = null
@@ -145,11 +147,12 @@ export function createDevTypesServer(
           incrementalDir = fs.mkdtempSync(path.join(cacheRoot, '.fulgurjs-types-cache-'))
         }
         result = await generateTypesBundle({ root: options.root, exposes: publicExposes,
-          pluginVersion: options.pluginVersion, signal: controller.signal, incrementalDir })
+          pluginVersion: options.pluginVersion, signal: controller.signal, incrementalDir, vueCompiler })
       } catch (e) {
         result = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截）：${(e as Error).stack ?? (e as Error).message}`] }
       }
       if (disposed) return
+      if (result.ok) for (const notice of result.notices) warn(`[fulgurjs] 类型生成提示：${notice}`)
       if (result.ok && result.cacheTraceFile && !handle) {
         try {
           handle = await cache.capture(cacheInput, result.cacheTraceFile)
@@ -253,6 +256,7 @@ export function createDevTypesServer(
     dispose(): void {
       disposed = true
       controller.abort()
+      vueCompiler.dispose()
       cache.dispose()
       if (!generating) clearCache()
     },

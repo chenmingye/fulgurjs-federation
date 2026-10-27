@@ -35,27 +35,73 @@ const formatHost = {
 };
 const diagnostics = [...(raw.error ? [raw.error] : []), ...parsed.errors];
 if (!diagnostics.length) {
-  // vue-tsc 2/3使用同一官方Vue语言插件与Volar公开Program代理，仍保留原始诊断映射。
-  const createProgram = typeof vue.createProgram === 'function' ? vue.createProgram : (() => {
+  const legacyProgram = typeof vue.createProgram === 'function';
+  const reusableState = !legacyProgram && typeof __fulgurjsProgramState === 'object' ? __fulgurjsProgramState : undefined;
+  let factory = vue.createProgram;
+  let vueOptions, core, volar;
+  if (!legacyProgram) {
     const toolReq = createRequire(req.resolve('vue-tsc'));
-    const { proxyCreateProgram } = toolReq('@volar/typescript');
-    const core = toolReq('@vue/language-core');
-    return proxyCreateProgram(ts, ts.createProgram, (ts, options) => {
-      const vueOptions = core.createParsedCommandLine(ts, ts.sys, configFile).vueOptions;
-      if (vueOptions.plugins?.length || vueOptions.hooks?.length) traceValid = false;
-      return { languagePlugins: [core.createVueLanguagePlugin(ts, options.options, vueOptions, id => id)] };
-    });
-  })();
-  const host = ts.createCompilerHost(parsed.options);
+    volar = toolReq('@volar/typescript'); core = toolReq('@vue/language-core');
+    vueOptions = core.createParsedCommandLine(ts, ts.sys, configFile).vueOptions;
+    if (vueOptions.plugins?.length || vueOptions.hooks?.length) { traceValid = false; if(reusableState)reusableState.reusable=false; }
+  }
+  let state = reusableState;
+  if (state) {
+    if(state.packageInputs)for(const [file,before]of state.packageInputs){try{const now=fs.statSync(file);if(now.ctimeMs===before.ctime&&now.mtimeMs===before.mtime&&now.size===before.size&&now.ino===before.ino)continue}catch{}state.key=undefined;break;}
+    const packages = Object.entries(parentInputs.files).filter(([file]) => path.basename(file)==='package.json' || /(?:lock|workspace)\.(?:json|ya?ml|lock)$/.test(file)).map(([file,value])=>[file,value.hash]);
+    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,parentInputs.links,packages]);
+    if (state.key !== key) { state.key=key;state.files=new Map();state.program=undefined;state.packageInputs=undefined;state.factory=undefined;state.host=undefined;state.resolution=undefined;state.options=undefined; }
+    else state.resolution?.clear();
+    parsed.options = state.options ?? parsed.options;
+    state.options = parsed.options;
+  }
+  if (!factory) {
+    factory = state?.factory ?? volar.proxyCreateProgram(ts, ts.createProgram, (ts, options) => ({
+      languagePlugins: [core.createVueLanguagePlugin(ts, options.options, vueOptions, id => id)],
+    }));
+    if (state) state.factory=factory;
+  }
+  const freshHost = ts.createCompilerHost(parsed.options);
+  const host = state?.host ?? freshHost;
+  if (state) { Object.assign(host,freshHost);state.host=host; }
+  const baseGetSourceFile=host.getSourceFile;
+  const stampEqual=(a,b)=>a.ctimeMs===b.ctimeMs&&a.mtimeMs===b.mtimeMs&&a.size===b.size&&a.ino===b.ino;
+  if (state) {
+    // 缓存原始AST；Volar仍负责生成/更新SFC映射，诊断不跨进程序列化。
+    host.getSourceFile=(file,...args)=>{
+      const key=path.resolve(file);let before;
+      try{before=fs.statSync(file)}catch{state.files.delete(key);return baseGetSourceFile(file,...args)}
+      const cached=state.files.get(key);
+      if(cached&&stampEqual(cached.stat,before)&&cached.real===fs.realpathSync(file)){
+        if(cached.input)snapshot.files[key]={...cached.input};
+        snapshot.links[key]=cached.real;
+        return cached.source;
+      }
+      const source=baseGetSourceFile(file,...args);
+      if(source){
+        source.version=crypto.createHash('sha256').update(source.text).digest('hex');
+        try{const after=fs.statSync(file);if(stampEqual(before,after))state.files.set(key,{source,stat:after,real:fs.realpathSync(file),input:snapshot.files[key]});else state.files.delete(key)}catch{state.files.delete(key)}
+      }
+      return source;
+    };
+    // 每轮重新裁决解析，不能因AST复用忽略新出现的优先文件或package.json变化。
+    host.hasInvalidatedResolutions=()=>true;
+  }
   const writeFile = host.writeFile;
   host.writeFile = (fileName, text, ...args) => {
     const sources = args[2];
-    if (sources?.length === 1 && sources[0].fileName.endsWith('.vue') && fileName.endsWith('.d.ts') && !fileName.endsWith('.vue.d.ts')) {
-      fileName = fileName.slice(0, -5) + '.vue.d.ts';
-    }
-    return writeFile(fileName, text, ...args);
+    if (sources?.length === 1 && sources[0].fileName.endsWith('.vue') && fileName.endsWith('.d.ts') && !fileName.endsWith('.vue.d.ts')) fileName=fileName.slice(0,-5)+'.vue.d.ts';
+    return writeFile(fileName,text,...args);
   };
-  const program = createProgram({ rootNames: parsed.fileNames, options: parsed.options, host });
+  const request={rootNames:parsed.fileNames,options:parsed.options,host,...(state?.program?{oldProgram:state.program}:{})};
+  const program=factory(request);
+  if(state){
+    state.program=program;state.resolution=request.host.getModuleResolutionCache?.();
+    const packageInputs=new Map(state.packageInputs||[]);
+    for(const [file,value]of packageInputs)if(!snapshot.files[file])snapshot.files[file]={...value};
+    for(const [file,value]of Object.entries(snapshot.files))if(path.basename(file)==='package.json')packageInputs.set(file,value);
+    state.packageInputs=packageInputs;
+  }
   diagnostics.push(...program.getOptionsDiagnostics(), ...program.getGlobalDiagnostics());
   const sources = program.getSourceFiles().filter(file => {
     const original = file.fileName.replace(/(\.vue)\.[cm]?[jt]sx?$/, '$1');
@@ -67,7 +113,6 @@ if (!diagnostics.length) {
   }
   const normalize = file => path.resolve(file.replace(/(\.vue)\.[cm]?[jt]sx?$/, '$1'));
   const sourceMap = new Map(sources.map(source => [normalize(source.fileName), source]));
-  const legacyProgram = typeof vue.createProgram === 'function';
   const pending = legacyProgram ? [...sourceMap.keys()] : generationInput.entries.map(normalize);
   const emittedFiles = new Set();
   const resolutionHost = { ...ts.sys, fileExists: file => ts.sys.fileExists(file) || (file.endsWith('.vue.ts') && ts.sys.fileExists(file.slice(0, -3))) };
@@ -103,6 +148,7 @@ if (!diagnostics.length) {
 }
 const errors = diagnostics.filter(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error);
 if (!errors.length) finishInputTrace();
+if (!errors.length && typeof __fulgurjsProgramState === 'object' && traceFile && !fs.existsSync(traceFile)) __fulgurjsProgramState.reusable=false;
 if (errors.length) {
   process.stdout.write(ts.formatDiagnostics(errors, formatHost));
   process.exitCode = 1;

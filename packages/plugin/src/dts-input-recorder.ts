@@ -1,32 +1,37 @@
 /** 在隔离的Vue编译进程内记录实际输入，避免dev冷生成前再运行一套依赖扫描。 */
+import { genTypeInputBytes } from './dts-input-hash'
+
 export function genTypesInputRecorder(): string {
   return String.raw`
 const crypto = require('node:crypto');
+${genTypeInputBytes()}
 const traceFile = generationInput.traceFile;
 const toolStarted = Date.now() - process.uptime() * 1000;
 const traceStarted = Number(generationInput.started) || toolStarted;
 const parentInputs = generationInput.parentInputs || { files: {} };
 const snapshot = { caseSensitive: ts.sys.useCaseSensitiveFileNames, directoryStats: {}, files: parentInputs.files, probes: parentInputs.probes || {}, fileQueries: parentInputs.fileQueries || {}, directories: parentInputs.directories || [], links: parentInputs.links || {}, resolutions: [], runtimeTools: [] };
-const ignoredInput = file => path.resolve(file).split(path.sep).some(name => name.startsWith('.fulgurjs-types-'));
+const ignoredPaths=new Map();
+const ignoredInput = file => { if(ignoredPaths.has(file))return ignoredPaths.get(file);const value=path.resolve(file).split(path.sep).some(name=>name.startsWith('.fulgurjs-types-'));ignoredPaths.set(file,value);return value; };
 const readStamp = file => {
   const before = fs.statSync(file);
   const bytes = fs.readFileSync(file);
   const after = fs.statSync(file);
   if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size) throw Error('类型输入读取期间发生变化');
-  return { hash: crypto.createHash('sha256').update(bytes).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino };
+  return { hash: crypto.createHash('sha256').update(typeInputBytes(file,bytes)).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino };
 };
 let traceValid = !parentInputs.changed;
 let inputChanged = !!parentInputs.changed;
 const recordFile = file => {
   file = path.resolve(file);
   if (!traceFile || ignoredInput(file)) return;
-  try { const next = readStamp(file); const previous = snapshot.files[file]; if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash)) { traceValid = false; inputChanged = true; } snapshot.files[file] = next; const real = fs.realpathSync(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
+  try { const previous=snapshot.files[file];const stat=fs.statSync(file);const same=previous&&previous.ctime===stat.ctimeMs&&previous.mtime===stat.mtimeMs&&previous.ino===stat.ino&&previous.size===stat.size; const next = same ? previous : readStamp(file); if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash)) { traceValid = false; inputChanged = true; } snapshot.files[file] = next; const real = fs.realpathSync(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
   catch { traceValid = false; }
 };
 const recordDirectory = directory => {
   directory = path.resolve(directory);
   if (!traceFile || ignoredInput(directory) || snapshot.directoryStats[directory]) return;
   for (;;) {
+    if(snapshot.directoryStats[directory])return;
     try { const stat = fs.statSync(directory); if (stat.isDirectory()) snapshot.directoryStats[directory] = { mtime: stat.mtimeMs, ctime: stat.ctimeMs, ino: stat.ino }; return; }
     catch { const parent = path.dirname(directory); if (parent === directory) return; directory = parent; }
   }

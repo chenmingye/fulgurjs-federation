@@ -626,6 +626,10 @@ Input recording, digest validation, and compression run in the isolated compiler
 
 Provider dev automatically saves successful declaration resources. On the next startup it validates inputs and declaration digests. **When source, configuration, dependencies and tools are unchanged and the cache is complete, it restores the same revision without running vue-tsc/TypeScript compilation.** Normal startup requires neither a manual generation command nor an additional cache setting.
 
+**Saving source changes also reuses the in-memory program.** Each provider dev server owns one isolated compiler session. Unchanged files retain their AST and official Vue mappings; changed files are read and processed again. Every generation still runs real diagnostics over the complete static closure rather than reusing potentially stale diagnostics. Imported type changes, global declarations, and shifted error locations must be reflected. Compiler settings, dependency structure, or incompatible tools rebuild the state. Timeout, cancellation, and shutdown terminate the owned process. CLI/build do not reuse this memory, and compiler dependency changes still require a full dev-process restart.
+
+The first generated line of synchronized modules.d.ts/registry.d.ts records source/revision only. Updating that ledger line no longer triggers compilation on its own. Declaration bodies, field types, business JSDoc, and all remaining bytes still invalidate appropriately; distributed output digests continue to cover the full content. Restoring a deleted consumer types directory can reuse a successful provider result when the recovered declaration bodies are unchanged.
+
 The cache is one compressed snapshot under project `node_modules/.cache/fulgurjs/types/`. It contains input fingerprints and generated declarations, not hundreds of additional business types, and stays out of Git/SVN. Shutdown preserves successful snapshots while releasing each server's private compiler directory. Mutable tsbuildinfo is never shared between processes.
 
 | Situation | Behavior |

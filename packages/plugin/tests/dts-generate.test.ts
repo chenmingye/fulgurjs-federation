@@ -6,6 +6,7 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { createVueCompilerSession } from '../src/dts-vue-session'
 import { generateTypesBundle } from '../src/dts-generate'
 import { captureCompilerInputs, validateTypesInputs } from '../src/dts-cache'
 import { parseDtsIndex } from '../src/dts-shared'
@@ -631,6 +632,55 @@ defineProps<{ title: string }>(); const result = calculate('x');</script><templa
     expect(failed.ok).toBe(false)
     if (!failed.ok) expect(failed.diagnostics.join('\n')).toMatch(/implementation\.ts.*TS2322/s)
   }, 30000)
+
+  it('dev内存程序响应依赖类型、源位置和配置变化，不复用旧诊断', async () => {
+    const root=makeProject('vue-live-program', {
+      'src/entry.vue': `<script lang="ts">export type {Model} from './model';</script><script setup lang="ts">import type {Model} from './model';defineProps<{params:Model}>();</script><template>{{params.id.toUpperCase()}}</template>`,
+      'src/model.ts': 'export interface Model { readonly id: string }',
+    })
+    for(const pkg of ['vue','vue-tsc'])fs.symlinkSync(path.join(pluginRoot,'node_modules',pkg),path.join(root,'node_modules',pkg),'dir')
+    const session=createVueCompilerSession()
+    const input={root,exposes:[{name:'./entry',import:'./src/entry.vue'}],pluginVersion:'test',incrementalDir:path.join(root,'node_modules/.fulgurjs-types-cache-live'),vueCompiler:session}
+    const run=()=>generateTypesBundle(input)
+    try {
+      const initial=await run();expect(initial.ok,initial.ok?'':initial.diagnostics.join('\n')).toBe(true)
+      fs.writeFileSync(path.join(root,'src/model.ts'),'export interface Model { readonly id: number }')
+      const bad=await run();expect(bad.ok).toBe(false);if(!bad.ok)expect(bad.diagnostics.join('\n')).toMatch(/entry\.vue.*TS2339/s)
+      const source=fs.readFileSync(path.join(root,'src/entry.vue'),'utf8')
+      fs.writeFileSync(path.join(root,'src/entry.vue'),'\n'.repeat(20)+source)
+      const shifted=await run();expect(shifted.ok).toBe(false);if(!shifted.ok)expect(shifted.diagnostics.join('\n')).toMatch(/entry\.vue\(21,/)
+      fs.writeFileSync(path.join(root,'src/model.ts'),'export interface Model { readonly id: string }')
+      const recovered=await run();expect(recovered.ok,recovered.ok?'':recovered.diagnostics.join('\n')).toBe(true)
+      if(initial.ok&&recovered.ok)expect(recovered.index.files).toEqual(initial.index.files)
+      // 编译选项变化也要重新建立Vue环境，不套用旧options对象。
+      const cfg=JSON.parse(fs.readFileSync(path.join(root,'tsconfig.json'),'utf8'))
+      cfg.compilerOptions.strictNullChecks=false;fs.writeFileSync(path.join(root,'tsconfig.json'),JSON.stringify(cfg))
+      fs.writeFileSync(path.join(root,'src/entry.vue'),`<script setup lang="ts">const p=defineProps<{maybe?:string}>();const required:string=p.maybe;</script><template/>`)
+      expect((await run()).ok).toBe(true)
+      cfg.compilerOptions.strictNullChecks=true;fs.writeFileSync(path.join(root,'tsconfig.json'),JSON.stringify(cfg))
+      const strict=await run();expect(strict.ok).toBe(false);if(!strict.ok)expect(strict.diagnostics.join('\n')).toContain('TS2322')
+    } finally {session.dispose()}
+  },30000)
+
+  it('外部声明依赖变化会更新内存程序并留下完整输入记录',async()=>{
+    const root=makeProject('vue-live-library',{'src/entry.vue':`<script setup lang="ts">import type {Model} from 'contract-lib';defineProps<{value:Model}>();</script><template>{{value.id.toUpperCase()}}</template>`,'node_modules/contract-lib/package.json':'{"types":"index.d.ts"}','node_modules/contract-lib/index.d.ts':'export interface Model {id:string}'})
+    for(const pkg of ['vue','vue-tsc'])fs.symlinkSync(path.join(pluginRoot,'node_modules',pkg),path.join(root,'node_modules',pkg),'dir')
+    const session=createVueCompilerSession(),input={root,exposes:[{name:'./entry',import:'./src/entry.vue'}],pluginVersion:'test',incrementalDir:path.join(root,'node_modules/.fulgurjs-types-cache-library'),vueCompiler:session}
+    try{
+      const first=await generateTypesBundle(input);expect(first.ok).toBe(true)
+      const second=await generateTypesBundle(input);expect(second.ok).toBe(true)
+      if(second.ok){const snapshot=captureCompilerInputs(input,second.cacheTraceFile!)!;expect(validateTypesInputs(snapshot,root,true)).toBeNull();expect(Object.keys(snapshot.files).some(file=>file.endsWith('/contract-lib/index.d.ts'))).toBe(true)}
+      fs.writeFileSync(path.join(root,'node_modules/contract-lib/index.d.ts'),'export interface Model {id:number}')
+      const bad=await generateTypesBundle(input);expect(bad.ok).toBe(false);if(!bad.ok)expect(bad.diagnostics.join('\n')).toContain('TS2339')
+    }finally{session.dispose()}
+  },20000)
+
+  it('内存程序不忽略新出现的优先解析模块', async () => {
+    const root=makeProject('vue-live-resolve', {'src/entry.vue':`<script setup lang="ts">import {value} from './model';</script><template>{{value.toUpperCase()}}</template>`,'src/model/index.ts':`export const value:string='ok'`})
+    for(const pkg of ['vue','vue-tsc'])fs.symlinkSync(path.join(pluginRoot,'node_modules',pkg),path.join(root,'node_modules',pkg),'dir')
+    const session=createVueCompilerSession(),input={root,exposes:[{name:'./entry',import:'./src/entry.vue'}],pluginVersion:'test',incrementalDir:path.join(root,'node_modules/.fulgurjs-types-cache-resolve'),vueCompiler:session}
+    try{expect((await generateTypesBundle(input)).ok).toBe(true);fs.writeFileSync(path.join(root,'src/model.ts'),'export const value:number=1');const bad=await generateTypesBundle(input);expect(bad.ok).toBe(false);if(!bad.ok)expect(bad.diagnostics.join('\n')).toContain('TS2339')}finally{session.dispose()}
+  },20000)
 
   it('同进程并发 Vue 声明生成各自使用独立配置且清理不互相干扰', async () => {
     const root = makeProject('vue-concurrent', {

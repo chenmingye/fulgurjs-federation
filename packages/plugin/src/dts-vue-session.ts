@@ -1,0 +1,111 @@
+/**
+ * 单个dev服务独占的Vue编译进程。请求串行，保留官方Program的内存状态；
+ * 关闭/取消直接终止自有子进程，CLI/build不使用本会话。
+ */
+import { spawn, type ChildProcess, type ExecFileException } from 'node:child_process'
+export interface VueCompileResult { err: ExecFileException | null; stdout: string; stderr: string }
+export interface VueCompileRequest { root: string; script: string; args: string[]; nodeArgs: string[]; timeout: number; signal?: AbortSignal }
+export interface VueCompilerSession { run(request: VueCompileRequest): Promise<VueCompileResult>; dispose(): void }
+
+const bootstrap = String.raw`
+const fs = require('node:fs');
+const path = require('node:path');
+const {createRequire} = require('node:module');
+const req = createRequire(path.join(process.cwd(), 'package.json'));
+const ts = req('typescript');
+const sys = {...ts.sys};
+const state = {};
+const same = (a,b) => a.ctimeMs===b.ctimeMs && a.mtimeMs===b.mtimeMs && a.ino===b.ino && a.size===b.size;
+let tools = new Map();
+process.on('disconnect', () => process.exit(0));
+process.on('message', message => {
+  // require.cache中的已加载代码不会因磁盘变化而热替换；必须换进程。
+  for (const [file,before] of tools) {
+    try { if (same(before,fs.statSync(file))) continue; } catch {}
+    process.send({id:message.id,restart:true}); return;
+  }
+  Object.assign(ts.sys,sys);
+  process.argv=[process.execPath,...message.args];
+  process.exitCode=undefined;
+  let stdout='',stderr='',bytes=0,error;
+  const originals=[process.stdout.write,process.stderr.write];
+  const capture = target => (chunk,encoding,callback) => {
+    const text=typeof chunk==='string'?chunk:chunk.toString(typeof encoding==='string'?encoding:'utf8');
+    bytes+=Buffer.byteLength(text); if(bytes>64*1024*1024)throw Error('类型编译输出超过64MB');
+    if(target==='stdout')stdout+=text;else stderr+=text;
+    const done=typeof encoding==='function'?encoding:callback;if(done)queueMicrotask(done);
+    return true;
+  };
+  process.stdout.write=capture('stdout');process.stderr.write=capture('stderr');
+  try { new Function('require','__fulgurjsProgramState',message.script)(require,state); }
+  catch (e) { error=e.stack||String(e); }
+  finally {
+    process.stdout.write=originals[0];process.stderr.write=originals[1];
+    Object.assign(ts.sys,sys);
+  }
+  tools=new Map();
+  for(const file of Object.keys(require.cache)){try{tools.set(file,fs.statSync(file))}catch{}}
+  const code=error?1:Number(process.exitCode||0);process.exitCode=undefined;
+  process.send({id:message.id,code,stdout,stderr:stderr+(error?'\n'+error:''),reusable:state.reusable!==false});
+});
+`
+
+export function createVueCompilerSession(): VueCompilerSession {
+  let child: ChildProcess | null = null
+  let identity = ''
+  let disposed = false
+  let reusable = true
+  let serial = 0
+  let active: { id: number; resolve(result: VueCompileResult): void; stdout: string; stderr: string; aborted: boolean; timedOut: boolean; toolChanged?: boolean; cleanup(): void } | null = null
+  const finish = (result: VueCompileResult): void => { const request = active; active = null; if (request) { request.cleanup(); request.resolve(result) } }
+  return {
+    run(request) {
+      if (disposed || request.signal?.aborted) return Promise.resolve({ err: Object.assign(new Error('Vue编译会话已取消'), { code: 'ABORT_ERR' }), stdout: '', stderr: '' })
+      if (active) return Promise.reject(new Error('Vue编译会话请求必须串行'))
+      const key = JSON.stringify([request.root, request.nodeArgs, request.script])
+      if (child && (key !== identity || !reusable)) { child.kill('SIGKILL'); child = null }
+      identity = key
+      if (!child) {
+        const running = spawn(process.execPath, [...request.nodeArgs, '--eval', bootstrap], { cwd: request.root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+        child = running
+        reusable = true
+        running.stdout!.setEncoding('utf8').on('data', (value: string) => { if (child === running && active) active.stdout += value })
+        running.stderr!.setEncoding('utf8').on('data', (value: string) => { if (child === running && active) active.stderr += value })
+        running.on('message', (message: { id: number; restart?: boolean; code?: number; stdout?: string; stderr?: string; reusable?: boolean }) => {
+          if (child !== running || active?.id !== message.id) return
+          if (message.restart) {
+            // 标记为受控失败，生成器下一次尝试会以新进程加载工具。
+            reusable = false
+            active.toolChanged = true
+            running.kill('SIGTERM')
+            return
+          }
+          reusable = message.reusable !== false
+          const err = message.code ? Object.assign(new Error('Vue声明编译失败'), { code: message.code }) as ExecFileException : null
+          finish({ err, stdout: active.stdout + (message.stdout ?? ''), stderr: active.stderr + (message.stderr ?? '') })
+        })
+        running.on('error', error => { if (child === running) { child = null; finish({ err: error as ExecFileException, stdout: active?.stdout ?? '', stderr: active?.stderr ?? '' }) } })
+        running.on('close', (code, signal) => {
+          if (child !== running) return
+          child = null
+          if (!active) return
+          const err = Object.assign(new Error(active.aborted ? 'Vue声明编译已取消' : active.timedOut ? 'Vue声明编译超时' : 'Vue编译进程已退出'), {
+            code: active.aborted ? 'ABORT_ERR' : active.toolChanged ? 'FG_COMPILER_TOOL_CHANGED' : code ?? undefined, signal, killed: active.aborted || active.timedOut,
+          }) as ExecFileException
+          finish({ err, stdout: active.stdout, stderr: active.stderr })
+        })
+      }
+      return new Promise(resolve => {
+        const id = ++serial
+        const running = child!
+        const abort = (): void => { if (active?.id === id) { active.aborted = true; running.kill('SIGKILL') } }
+        const timer = setTimeout(() => { if (active?.id === id) { active.timedOut = true; running.kill('SIGTERM') } }, request.timeout)
+        active = { id, resolve, stdout: '', stderr: '', aborted: false, timedOut: false, cleanup() { clearTimeout(timer); request.signal?.removeEventListener('abort', abort) } }
+        request.signal?.addEventListener('abort', abort, { once: true })
+        if (request.signal?.aborted) { abort(); return }
+        running.send({ id, script: request.script, args: request.args }, error => { if (error && active?.id === id) { running.kill('SIGKILL'); finish({ err: error as ExecFileException, stdout: active.stdout, stderr: active.stderr }) } })
+      })
+    },
+    dispose() { if (disposed) return; disposed = true; if (active) active.aborted = true; child?.kill('SIGKILL') },
+  }
+}

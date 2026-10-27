@@ -4,6 +4,7 @@
  * 编译临时目录仍由每个服务独占；本模块只原子发布一个不可分割的成功快照。
  */
 import fs from 'node:fs'
+import { typeInputBytes } from './dts-input-hash'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -40,7 +41,7 @@ const temporary = (file: string): boolean => path.basename(file).startsWith('.fu
 const stamp = (file: string): FileStamp => {
   const data = fs.readFileSync(file)
   const stat = fs.statSync(file)
-  return { hash: hash(data), size: stat.size, mtime: stat.mtimeMs, ctime: stat.ctimeMs, ino: stat.ino }
+  return { hash: hash(typeInputBytes(file,data)), size: stat.size, mtime: stat.mtimeMs, ctime: stat.ctimeMs, ino: stat.ino }
 }
 const resolve = (from: string, request: string): string | null => {
   try { return createRequire(from).resolve(request) } catch { return null }
@@ -141,7 +142,7 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
     if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.size !== after.size || before.ino !== after.ino) throw new Error('输入在读取过程中变化')
     const real = fs.realpathSync(absolute)
     snapshot.links[absolute] = real
-    snapshot.files[absolute] = { hash: hash(data), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
+    snapshot.files[absolute] = { hash: hash(typeInputBytes(absolute,data)), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
     const text = data.toString('utf8')
     sourceCache.set(absolute, text)
     return text
