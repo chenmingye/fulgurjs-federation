@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { generateTypesBundle } from '../src/dts-generate'
+import { captureCompilerInputs, validateTypesInputs } from '../src/dts-cache'
 import { parseDtsIndex } from '../src/dts-shared'
 import { buildAmbientDeclarations } from '../src/dts-ambient'
 import ts from 'typescript'
@@ -519,7 +520,7 @@ instance.$slots.default({ count: 'x' });
     if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toContain('MissingName')
   }, 30000)
 
-  it('Vue 增量生成保留未变化的声明，更新 props 后重新检查且错误不能沿用旧成功', async () => {
+  it('Vue 重复生成保留未变化的声明，更新 props 后重新检查且错误不能沿用旧成功', async () => {
     const root = makeProject('vue-incremental', {
       'src/entry.vue': '<script setup lang="ts">defineProps<{ title: string }>();</script><template>{{ title }}</template>',
     })
@@ -531,7 +532,6 @@ instance.$slots.default({ count: 'x' });
     expect(first.ok, first.ok ? "" : first.diagnostics.join("\n")).toBe(true)
     expect(unchanged.ok, unchanged.ok ? "" : unchanged.diagnostics.join("\n")).toBe(true)
     if (first.ok && unchanged.ok) expect(unchanged.index.revision).toBe(first.index.revision)
-    expect(fs.existsSync(path.join(incrementalDir, 'state.tsbuildinfo'))).toBe(true)
     fs.writeFileSync(path.join(root, 'src/entry.vue'), '<script setup lang="ts">defineProps<{ title: number }>();</script><template>{{ title }}</template>')
     const changed = await generateTypesBundle(input)
     expect(changed.ok).toBe(true)
@@ -585,6 +585,51 @@ instance.$slots.default({ count: 'x' });
     const invalid = await generateTypesBundle(input)
     expect(invalid.ok).toBe(false)
     if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toMatch(/entry\.ts.*TS2322/s)
+  }, 30000)
+
+  it('现代Vue按公开声明图emit并记录真实输入，仍拒绝静态实现错误和新全局声明', async () => {
+    const root = makeProject('vue-public-emit-inputs', {
+      'src/entry.vue': `<script setup lang="ts">import { calculate } from './implementation';
+export type { Contract } from './contract';
+defineProps<{ title: string }>(); const result = calculate('x');</script><template>{{ result }}</template>`,
+      'src/implementation.ts': 'export function calculate(value: string): number { return value.length; }',
+      'src/contract.ts': 'export interface Contract { readonly id: string }',
+    })
+    // script setup不接受普通export；公开合同由同文件普通script原生导出。
+    fs.writeFileSync(path.join(root, 'src/entry.vue'), `<script lang="ts">export type { Contract } from './contract';</script><script setup lang="ts">import { calculate } from './implementation';defineProps<{ title: string }>();const result=calculate('x');</script><template>{{ result }}</template>`)
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const incrementalDir = path.join(root, 'node_modules/.fulgurjs-types-cache-trace')
+    fs.mkdirSync(path.join(incrementalDir, 'emit'), { recursive: true })
+    fs.writeFileSync(path.join(incrementalDir, 'emit/implementation.d.ts'), 'export declare const STALE: any;')
+    const input = { root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test', incrementalDir }
+    const result = await generateTypesBundle(input)
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    expect(result.cacheTraceFile).toBeDefined()
+    expect(fs.existsSync(path.join(incrementalDir, 'emit/implementation.d.ts'))).toBe(false)
+    expect(result.fileCount).toBe(2)
+    const snapshot = captureCompilerInputs(input, result.cacheTraceFile!)!
+    expect(snapshot).not.toBeNull()
+    expect(validateTypesInputs(snapshot, root, true)).toBeNull()
+    fs.writeFileSync(path.join(root, 'src/new-global.d.ts'), 'interface AddedGlobal { id: string }')
+    expect(validateTypesInputs(snapshot, root)).toContain('全局声明成员变化')
+    fs.unlinkSync(path.join(root, 'src/new-global.d.ts'))
+    const newPackage = path.join(root, 'node_modules/new-type-package')
+    fs.mkdirSync(newPackage)
+    expect(validateTypesInputs(snapshot, root)).not.toBeNull()
+    fs.rmdirSync(newPackage)
+    const vueLink = path.join(root, 'node_modules/vue')
+    const originalTarget = fs.readlinkSync(vueLink)
+    fs.unlinkSync(vueLink)
+    fs.symlinkSync(path.join(pluginRoot, 'node_modules/typescript'), vueLink, 'dir')
+    expect(validateTypesInputs(snapshot, root)).not.toBeNull()
+    fs.unlinkSync(vueLink)
+    fs.symlinkSync(originalTarget, vueLink, 'dir')
+    fs.writeFileSync(path.join(root, 'src/implementation.ts'), 'export function calculate(value: string): number { const bad: string = 123; return value.length; }')
+    expect(validateTypesInputs(snapshot, root)).not.toBeNull()
+    const failed = await generateTypesBundle(input)
+    expect(failed.ok).toBe(false)
+    if (!failed.ok) expect(failed.diagnostics.join('\n')).toMatch(/implementation\.ts.*TS2322/s)
   }, 30000)
 
   it('同进程并发 Vue 声明生成各自使用独立配置且清理不互相干扰', async () => {

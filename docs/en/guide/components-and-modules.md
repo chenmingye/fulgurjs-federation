@@ -618,7 +618,11 @@ For consumer/provider applications importing upstream named types, initial gener
 
 ### Reusing types across dev-server restarts
 
-Input capture, content validation, and snapshot compression run in a Node worker thread to keep large scans off the Vite main thread. Page startup does not wait for types; IDE use still requires a cache-hit or generation-success message followed by consumer synchronization.
+**Vite availability and type readiness are separate events.** The type task is not a prerequisite for the dev server to listen. Do not report the declaration generation time as Vite startup, or treat an open page as proof that types are available. IDE use still requires a cache-hit or generation-success message followed by consumer synchronization.
+
+With supported modern Vue Program APIs, the isolated compiler records the source, configuration, and dependencies it actually reads. The cache reuses that record instead of performing another full-project scan before cold compilation. Diagnostics still cover the complete static closure, while declaration emit follows only public declaration dependencies. Actual tool modules and logical links are recorded without walking unrelated tool tests/examples or their test-only dependencies. Older tools retain an available conservative path; incomplete tracking disables persistence explicitly.
+
+Input recording, digest validation, and compression run in the isolated compiler/Node worker, keeping heavy scans off the Vite main thread. The provider's official compiler still infers props, events, slots, expose, and return values. No any, handwritten replacement interfaces, noCheck, or skipped error gates are used for speed.
 
 Provider dev automatically saves successful declaration resources. On the next startup it validates inputs and declaration digests. **When source, configuration, dependencies and tools are unchanged and the cache is complete, it restores the same revision without running vue-tsc/TypeScript compilation.** Normal startup requires neither a manual generation command nor an additional cache setting.
 
@@ -626,7 +630,7 @@ The cache is one compressed snapshot under project `node_modules/.cache/fulgurjs
 
 | Situation | Behavior |
 |---|---|
-| First startup, deleted cache or plugin/tool upgrade | Generate normally and build the input inventory; initial bookkeeping can add cold cost |
+| First startup, deleted cache or plugin/tool upgrade | Generate normally; supported Vue tools reuse the actual compiler input record |
 | Unchanged inputs after stopping and restarting | Validate and restore successful declarations; logs report a cache hit and validation time |
 | Source, inherited tsconfig, exposes, lockfiles, dependency declarations or link targets change | Invalidate and regenerate; new directory members and higher-priority resolution candidates are checked too |
 | Corrupt cache, mismatched digests or generation failure | Never advertise stale output as newly successful; ignore bad caches or retain failure diagnostics, writing only successful snapshots |
@@ -640,6 +644,8 @@ Validation uses contents and resolution observations, not mtime alone. Same-leng
 Delete this cache directory (or node_modules) and restart dev normally to rebuild the cache. Deleting consumer `src/fulgurjs/types/` is separate: dev downloads declarations again, while provider input validation decides whether compilation is needed. When missing upstream types initially prevent local provider generation, wait for automatic sync and generation rechecks instead of adding placeholder declarations.
 
 Restoration validates the local inputs and successful snapshot, not an upstream update that has not synchronized yet. New upstream declarations still trigger local checking. Strict CI/production workflows continue generation and synchronization as documented; build and CLI never reuse these dev snapshots.
+
+For startup performance acceptance, compare dts disabled with its default enabled behavior in the same project and dependency-prebuild state. Record Vite ready, first HTTP, type readiness, and compiler invocations separately. Different projects or warmup states cannot substantiate a seconds-level startup claim.
 
 ### Why declarations can outnumber exposed entries
 

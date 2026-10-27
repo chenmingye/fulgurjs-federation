@@ -14,8 +14,9 @@ import type { DtsGenerateInput, DtsGenerateOk } from './dts-generate'
 import { parseDtsIndex, DTS_FILE_COUNT_MAX, DTS_FILE_MAX_BYTES, DTS_TOTAL_MAX_BYTES } from './dts-shared'
 
 type FileStamp = { hash: string; size: number; mtime: number; ctime: number; ino: number }
-type DirectoryQuery = { kind: 'files' | 'dirs' | 'entries'; root: string; recurse?: boolean; extensions?: readonly string[]; excludes?: readonly string[]; includes?: readonly string[]; depth?: number; result: string[] }
+type DirectoryQuery = { kind: 'files' | 'dirs' | 'entries'; root: string; recurse?: boolean; tools?: boolean; nodePackages?: boolean; extensions?: readonly string[]; excludes?: readonly string[]; includes?: readonly string[]; depth?: number; result: string[] }
 export interface TypesInputSnapshot {
+  ambient?: { configFile: string; files: string[] }
   caseSensitive: boolean
   directoryStats: Record<string, { mtime: number; ctime: number; ino: number }>
   files: Record<string, FileStamp>
@@ -177,9 +178,10 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
     },
     readDirectory: (dir, extensions, excludes, includes, depth) => {
       observeDirectory(dir)
-      const result = sorted(ts.sys.readDirectory(dir, extensions, excludes, includes, depth).filter(file => !temporary(file)))
-      snapshot.directories.push({ kind: 'files', root: dir, extensions, excludes, includes, depth, result })
-      return result
+      const observedExtensions = extensions?.filter(extension => /\.d\.[cm]?ts$/.test(extension)) ?? ['.d.ts', '.d.mts', '.d.cts']
+      const result = sorted(ts.sys.readDirectory(dir, observedExtensions, excludes, includes, depth).filter(file => !temporary(file)))
+      snapshot.directories.push({ kind: 'files', root: dir, extensions: observedExtensions, excludes, includes, depth, result })
+      return ts.sys.readDirectory(dir, extensions, excludes, includes, depth).filter(file => !temporary(file))
     },
     getDirectories: dir => {
       observeDirectory(dir)
@@ -198,8 +200,9 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
   const walkCode = (dir: string, recurse: boolean, tools: boolean, inspect?: (file: string, text: string) => void): void => {
     observeDirectory(dir)
     const entries = fs.readdirSync(dir, { withFileTypes: true }).filter(e => !['node_modules', '.git', '.svn', '.cache'].includes(e.name)
+      && !(tools && (/^(?:tests?|__tests__|fixtures?|examples?|bench(?:marks?)?)$/i.test(e.name) || /(?:^test[-_.]|[-_.](?:test|spec)\.[cm]?[jt]sx?$)/i.test(e.name)))
       && (e.isDirectory() ? recurse : /\.(?:[cm]?js|[cm]?tsx?|json|vue|node|wasm)$/.test(e.name)))
-    snapshot.directories.push({ kind: 'entries', root: dir, recurse, result: sorted(entries.map(e => e.name)) })
+    snapshot.directories.push({ kind: 'entries', root: dir, recurse, tools, result: sorted(entries.map(e => e.name)) })
     for (const entry of entries) {
       const file = path.join(dir, entry.name)
       if (entry.isDirectory()) { if (recurse) walkCode(file, true, tools, inspect); continue }
@@ -209,17 +212,27 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
       if (text !== undefined && /\.[cm]?js$/.test(file)) inspect?.(file, text)
     }
   }
+  const toolFiles = new Set<string>()
+  const inspectTool = (file: string, text: string): void => {
+    if (toolFiles.has(file)) return
+    toolFiles.add(file)
+    for (const imported of ts.preProcessFile(text, true, true).importedFiles) {
+      const dependency = requirePath(file, imported.fileName)
+      if (dependency) tool(dependency)
+    }
+  }
   const tool = (file: string): void => {
     if (!path.isAbsolute(file)) return
     const directory = packageRoot(file)
-    if (!directory || toolPackages.has(directory)) return
+    if (!directory) return
+    const fresh = !toolPackages.has(directory)
     toolPackages.add(directory)
-    walkCode(directory, true, true, (source, text) => {
-      for (const imported of ts.preProcessFile(text, true, true).importedFiles) {
-        const dependency = requirePath(source, imported.fileName)
-        if (dependency) tool(dependency)
-      }
-    })
+    // 即使真实入口叫test.js也必须跟踪；排除的是无关测试目录遍历，不能忽略实际导入。
+    const text = read(file)
+    if (!/\.d\.[cm]?ts$/.test(file)) toolRuntime.add(file)
+    if (text !== undefined && /\.[cm]?js$/.test(file)) inspectTool(file, text)
+    if (!fresh) return
+    walkCode(directory, true, true, inspectTool)
     const json = JSON.parse(read(path.join(directory, 'package.json')) ?? '{}') as { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }
     for (const name of Object.keys({ ...json.dependencies, ...json.peerDependencies })) {
       const dependency = requirePath(path.join(directory, 'package.json'), `${name}/package.json`)
@@ -227,6 +240,7 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
       if (dependency) tool(dependency)
     }
   }
+
   try {
     requirePath(from, 'typescript')
     tool(tsFile)
@@ -252,7 +266,8 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
         [{ extension: '.vue', isMixedContent: true, scriptKind: ts.ScriptKind.Deferred }])
       if (parsed.errors.some(d => d.category === ts.DiagnosticCategory.Error)) return null
       options = parsed.options
-      for (const file of parsed.fileNames) add(file)
+      // 与实际声明程序一致：工程全局声明作为根输入，普通源码只从exposes依赖进入。
+      for (const file of parsed.fileNames) if (/\.d\.[cm]?ts$/.test(file)) add(file)
     }
     const resolutionCache = ts.createModuleResolutionCache(root, file => ts.sys.useCaseSensitiveFileNames ? file : file.toLowerCase(), options)
     const module = (name: string, containing: string): void => {
@@ -391,11 +406,19 @@ export function validateTypesInputs(snapshot: TypesInputSnapshot, root: string, 
     const tsPath = resolve(path.join(root, 'package.json'), 'typescript')
     if (!tsPath) return 'TypeScript工具不可用'
     const ts = createRequire(path.join(root, 'package.json'))('typescript') as typeof TS
+    if (snapshot.ambient) {
+      const config = ts.readConfigFile(snapshot.ambient.configFile, ts.sys.readFile)
+      if (config.error) return '全局声明配置不可读取'
+      const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, path.dirname(snapshot.ambient.configFile))
+      const ambient = parsed.fileNames.filter(file => file.endsWith('.d.ts') && !file.split(path.sep).includes('node_modules'))
+      if (JSON.stringify(sorted(ambient)) !== JSON.stringify(sorted(snapshot.ambient.files))) return '全局声明成员变化'
+    }
     for (const query of snapshot.directories) {
       const result = query.kind === 'files'
         ? ts.sys.readDirectory(query.root, query.extensions, query.excludes, query.includes, query.depth).filter(file => !temporary(file))
-        : query.kind === 'dirs' ? ts.sys.getDirectories(query.root)
+        : query.kind === 'dirs' ? ts.sys.getDirectories(query.root).filter(name => !query.nodePackages || !path.basename(name).startsWith('.'))
         : fs.readdirSync(query.root, { withFileTypes: true }).filter(entry => !['node_modules', '.git', '.svn', '.cache'].includes(entry.name)
+          && !(query.tools && (/^(?:tests?|__tests__|fixtures?|examples?|bench(?:marks?)?)$/i.test(entry.name) || /(?:^test[-_.]|[-_.](?:test|spec)\.[cm]?[jt]sx?$)/i.test(entry.name)))
           && (entry.isDirectory() ? query.recurse : /\.(?:[cm]?js|[cm]?tsx?|json|vue|node|wasm)$/.test(entry.name))).map(entry => entry.name)
       if (JSON.stringify(sorted(result)) !== JSON.stringify(query.result)) return `输入目录成员变化：${path.relative(root, query.root)}`
     }
@@ -403,10 +426,20 @@ export function validateTypesInputs(snapshot: TypesInputSnapshot, root: string, 
       const stat = fs.statSync(dir)
       if (stat.mtimeMs !== before.mtime || stat.ctimeMs !== before.ctime || stat.ino !== before.ino) {
         // 父目录可能只新增了不相关的兄弟工程；只重查真实解析候选，不能因此重编译。
-        for (const [name, expected] of Object.entries(snapshot.fileQueries[dir] ?? {})) {
+        for (const [candidateDir, queries] of Object.entries(snapshot.fileQueries)) {
+          if (candidateDir !== dir && !candidateDir.startsWith(`${dir}${path.sep}`)) continue
+          for (const [name, expected] of Object.entries(queries)) {
+            let actual = false
+            try { actual = fs.statSync(path.join(candidateDir, name)).isFile() } catch { /* 缺失 */ }
+            if (actual !== expected) return `校验期间解析候选变化：${path.relative(root, path.join(candidateDir, name))}`
+          }
+        }
+        for (const [probe, expected] of Object.entries(snapshot.probes)) {
+          const candidate = probe.slice(2)
+          if (candidate !== dir && !candidate.startsWith(`${dir}${path.sep}`)) continue
           let actual = false
-          try { actual = fs.statSync(path.join(dir, name)).isFile() } catch { /* 缺失 */ }
-          if (actual !== expected) return `校验期间解析候选变化：${path.relative(root, path.join(dir, name))}`
+          try { actual = fs.statSync(candidate).isDirectory() } catch { /* 缺失 */ }
+          if (actual !== expected) return `校验期间目录候选变化：${path.relative(root, candidate)}`
         }
         if (snapshot.directories.some(query => query.root === dir)) return `校验期间输入目录变化：${path.relative(root, dir)}`
       }
@@ -462,4 +495,57 @@ export function writeTypesCache(input: TypesCacheInput, snapshot: TypesInputSnap
   const temporaryFile = `${file}.${process.pid}.${temporaryId ?? crypto.randomUUID()}.tmp`
   try { fs.writeFileSync(temporaryFile, gzipSync(text)); fs.renameSync(temporaryFile, file) }
   finally { fs.rmSync(temporaryFile, { force: true }) }
+}
+
+
+/** 使用编译器实际读入记录建快照，不在冷生成前重复解析整棵源码和工具测试目录。 */
+export function captureCompilerInputs(input: TypesCacheInput, traceFile: string): TypesInputSnapshot | null {
+  const root = path.resolve(input.root)
+  const temporaryRoot = path.dirname(traceFile)
+  if (path.dirname(temporaryRoot) !== path.join(root, 'node_modules') || !path.basename(temporaryRoot).startsWith('.fulgurjs-types-cache-')) return null
+  const trace = JSON.parse(fs.readFileSync(traceFile, 'utf8')) as { format: number; changed?: boolean; root: string; started: number; ambientInputs: string[]; snapshot: TypesInputSnapshot }
+  if (trace.format !== 1 || fs.realpathSync(trace.root) !== fs.realpathSync(root) || !trace.snapshot?.files || !Array.isArray(trace.ambientInputs)) return null
+  const snapshot = trace.snapshot
+  if (trace.changed) throw new Error('输入已变化：编译期间输入变化，重新检查')
+  const addFile = (file: string): void => {
+    file = path.resolve(file)
+    const directory = path.dirname(file)
+    let exists = false
+    try { exists = fs.statSync(file).isFile() } catch { /* 缺失也属于解析观察 */ }
+    ;(snapshot.fileQueries[directory] ??= {})[path.basename(file)] = exists
+    if (exists) {
+      const value = stamp(file)
+      // 父进程生成器/锁文件不由TS host读取，必须确认期间没有修改。
+      const previous = snapshot.files[file]
+      if (previous ? JSON.stringify(previous) !== JSON.stringify(value) : value.ctime > trace.started) throw new Error('输入已变化：生成期间工具或锁文件变化')
+      snapshot.files[file] = value
+      snapshot.links[file] = fs.realpathSync(file)
+    }
+  }
+  for (let directory = root;; directory = path.dirname(directory)) {
+    for (const name of ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb']) addFile(path.join(directory, name))
+    if (path.dirname(directory) === directory) break
+  }
+  const own = path.dirname(ownModule())
+  // 插件自身拆分后的所有可执行chunk均参与身份校验，不包括README/模板等资产。
+  const ownFiles = (directory: string): void => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && ownModule().endsWith('.ts')) ownFiles(path.join(directory, entry.name))
+      else if (entry.isFile() && /\.[cm]?[jt]sx?$/.test(entry.name)) addFile(path.join(directory, entry.name))
+    }
+  }
+  ownFiles(own)
+  const req = createRequire(path.join(root, 'package.json'))
+  const ts = req('typescript') as typeof TS
+  const configFile = ts.findConfigFile(root, ts.sys.fileExists)
+  if (configFile) snapshot.ambient = { configFile, files: trace.ambientInputs }
+  // 记录逻辑链接，而不是只记录Node已经规范化的.pnpm实际文件。
+  for (const resolution of snapshot.resolutions) {
+    const name = resolution.request.startsWith('@') ? resolution.request.split('/').slice(0, 2).join('/') : resolution.request.split('/')[0]!
+    for (const directory of createRequire(resolution.from).resolve.paths(resolution.request) ?? []) {
+      const candidate = path.join(directory, name)
+      if (fs.existsSync(candidate)) { snapshot.links[candidate] = fs.realpathSync(candidate); break }
+    }
+  }
+  return snapshot
 }

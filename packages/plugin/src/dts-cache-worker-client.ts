@@ -11,7 +11,7 @@ export interface TypesCacheHandle { token: string; externalInputs: string[] }
 interface CacheHit extends TypesCacheHandle { result: DtsGenerateOk }
 export interface TypesCacheWorker {
   read(input: TypesCacheInput): Promise<CacheHit | null>
-  capture(input: TypesCacheInput): Promise<TypesCacheHandle | null>
+  capture(input: TypesCacheInput, traceFile?: string): Promise<TypesCacheHandle | null>
   validate(input: TypesCacheInput, handle: TypesCacheHandle, stable: boolean): Promise<string | null>
   write(input: TypesCacheInput, handle: TypesCacheHandle, result: DtsGenerateOk): Promise<boolean>
   release(input: TypesCacheInput, handle: TypesCacheHandle): Promise<void>
@@ -58,7 +58,7 @@ export function createTypesCacheWorker(): TypesCacheWorker {
   })
   return {
     read: input => call('read', input) as Promise<CacheHit | null>,
-    capture: input => call('capture', input) as Promise<TypesCacheHandle | null>,
+    capture: (input, traceFile) => call('capture', input, { traceFile }) as Promise<TypesCacheHandle | null>,
     validate: (input, handle, stable) => call('validate', input, { token: handle.token, stable }) as Promise<string | null>,
     async write(input, handle, result) {
       const temporaryId = crypto.randomUUID()

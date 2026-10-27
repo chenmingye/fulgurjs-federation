@@ -14,6 +14,7 @@
 import type { NormalizedOptions } from './options'
 import path from 'node:path'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
 import { createTypesCacheWorker, type TypesCacheHandle } from './dts-cache-worker-client'
 
@@ -79,6 +80,11 @@ export function createDevTypesServer(
     .map((e) => ({ name: e.name, import: e.import }))
 
   const cacheInput = { root: options.root, exposes: publicExposes, pluginVersion: options.pluginVersion, dts: options.dts }
+  // 现代Vue工具能够直接记录真实输入，无需在编译前跑第二套依赖分析。
+  let compilerTracesInputs = false
+  if (publicExposes.some(entry => entry.import.endsWith('.vue'))) {
+    try { const req = createRequire(path.join(options.root, 'package.json')); compilerTracesInputs = Number(String(req('vue-tsc/package.json').version).split('.')[0]) >= 2 } catch { /* 缺失工具走既有诊断 */ }
+  }
   let cacheUnavailableAnnounced = false
   let inputEpoch = 0
   const cache = createTypesCacheWorker()
@@ -115,10 +121,10 @@ export function createDevTypesServer(
           await cache.release(cacheInput, cached)
           handle = null
         }
-        handle = await cache.capture(cacheInput)
+        if (!compilerTracesInputs) handle = await cache.capture(cacheInput)
         if (disposed) return
         if (handle) cache.watch(handle, changed)
-        else if (!cacheUnavailableAnnounced) {
+        else if (!compilerTracesInputs && !cacheUnavailableAnnounced) {
           cacheUnavailableAnnounced = true
           log('[fulgurjs] 类型缓存：无法建立完整输入快照，使用正常编译；自定义编译插件、外部模板或工具不可读取时不复用持久缓存。')
         }
@@ -144,6 +150,20 @@ export function createDevTypesServer(
         result = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截）：${(e as Error).stack ?? (e as Error).message}`] }
       }
       if (disposed) return
+      if (result.ok && result.cacheTraceFile && !handle) {
+        try {
+          handle = await cache.capture(cacheInput, result.cacheTraceFile)
+          if (handle) cache.watch(handle, changed)
+        } catch (error) {
+          if (disposed) return
+          if ((error as Error).message.startsWith('输入已变化：')) { queueRecheck((error as Error).message); return }
+          warn(`[fulgurjs] 编译输入记录不可用：${(error as Error).message}；本轮不写持久缓存。`)
+        }
+      }
+      if (result.ok && compilerTracesInputs && !handle && !cacheUnavailableAnnounced) {
+        cacheUnavailableAnnounced = true
+        log('[fulgurjs] 类型声明已生成，但未建立可验证的编译输入记录，本轮不保存跨重启缓存；自定义Vue编译插件、外部模板或记录不可写时使用正常生成。')
+      }
       let changedDuringGeneration = pendingInvalidate || epoch !== inputEpoch
       if (handle) {
         try { const reason = await cache.validate(cacheInput, handle, true); if (reason) { queueRecheck(reason); return } }

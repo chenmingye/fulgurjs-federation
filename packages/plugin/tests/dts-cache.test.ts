@@ -181,3 +181,23 @@ it('解析候选检查后才新增高优先级文件，最终目录复检仍拒�
     expect(injected).toBe(true)
   } finally { spy.mockRestore() }
 }, 15000)
+
+
+it('不把无关业务实现和工具测试依赖纳入输入，实际导入的测试命名文件仍必须跟踪', () => {
+  const { root, input } = project()
+  fs.writeFileSync(path.join(root, 'src/unrelated.ts'), 'export const unrelated = 1')
+  const tool = path.join(root, 'node_modules/vue-tsc')
+  fs.mkdirSync(tool, { recursive: true })
+  fs.writeFileSync(path.join(tool, 'package.json'), '{"name":"vue-tsc","main":"index.js"}')
+  fs.writeFileSync(path.join(tool, 'index.js'), "require('./test-runtime.js')")
+  fs.writeFileSync(path.join(tool, 'test-runtime.js'), 'exports.enabled = true')
+  fs.writeFileSync(path.join(tool, 'test-noisy.js'), "require('not-a-real-runtime-dependency')")
+  const snapshot = captureTypesInputs(input)!
+  expect(snapshot.files[path.join(root, 'src/unrelated.ts')]).toBeUndefined()
+  expect(snapshot.files[path.join(tool, 'test-noisy.js')]).toBeUndefined()
+  expect(snapshot.files[fs.realpathSync(path.join(tool, 'test-runtime.js'))]).toBeDefined()
+  fs.writeFileSync(path.join(root, 'src/unrelated.ts'), 'export const unrelated = 2')
+  expect(validateTypesInputs(snapshot, root)).toBeNull()
+  fs.writeFileSync(path.join(tool, 'test-runtime.js'), 'exports.enabled = false')
+  expect(validateTypesInputs(snapshot, root)).not.toBeNull()
+}, 15000)

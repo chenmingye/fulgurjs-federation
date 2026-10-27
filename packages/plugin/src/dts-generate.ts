@@ -3,7 +3,7 @@
  *
  * 从 exposes 出发建立声明闭包并产出可分发 bundle（协议见 dts-shared）：
  * - 纯 TS/TSX：TypeScript 编译器 API（createProgram + declaration emit）；
- * - 含 .vue（入口或工程内）：vue-tsc CLI（官方 SFC 声明工具链，不用正则猜 props）；
+ * - 含 .vue（入口或工程内）：提供方官方Vue Program，能力不可用时回退vue-tsc CLI；
  * - 重写 pass：源码 alias（tsconfig paths）与相对导入 → bundle 内相对路径；
  *   裸包名保留并登记 externals（宿主自行解析，不复制 node_modules）；
  * - 闭包内编译错误 → 拒绝产出（ok:false + 诊断），绝不发布标记成功的残缺资源。
@@ -51,6 +51,8 @@ export interface DtsGenerateOk {
   fileCount: number
   /** 非阻断提示（如默认堆 OOM 后提堆重试成功的过程说明）；无提示为空数组 */
   notices: string[]
+  /** dev隔离编译进程的实际输入记录；仅在独占临时目录内使用，不进入公开类型资源。 */
+  cacheTraceFile?: string
 }
 
 export interface DtsGenerateFail {
@@ -129,6 +131,7 @@ function computeStaticClosure(
   entryFiles: string[],
   resolver: (spec: string, from: string) => { resolved: string; fromNodeModules: boolean } | null,
   root: string,
+  readFile: (file: string) => string | undefined = file => fs.readFileSync(file, 'utf8'),
 ): Set<string> {
   const closure = new Set<string>()
   const queue = [...entryFiles]
@@ -138,7 +141,9 @@ function computeStaticClosure(
     closure.add(file)
     let text: string
     try {
-      text = fs.readFileSync(file, 'utf8')
+      const source = readFile(file)
+      if (source === undefined) continue
+      text = source
     } catch {
       continue
     }
@@ -282,8 +287,8 @@ interface TsConfigContext {
 }
 
 /** 读取并解析工程 tsconfig（无 tsconfig 时合成最小默认——JS/JSDoc 暴露项场景） */
-function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsConfigContext | null {
-  const tsconfigFile = ts.findConfigFile(root, ts.sys.fileExists, 'tsconfig.json')
+function loadTsContext(root: string, ts: TsModule, diagnostics: string[], readFile = ts.sys.readFile, observedHost: Partial<import('typescript').ModuleResolutionHost> = {}): TsConfigContext | null {
+  const tsconfigFile = ts.findConfigFile(root, observedHost.fileExists ?? ts.sys.fileExists, 'tsconfig.json')
   if (!tsconfigFile) {
     const defaults = {
       target: 'ES2022',
@@ -313,14 +318,14 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
       tsconfigFile: null,
     }
   }
-  const raw = ts.readConfigFile(tsconfigFile, ts.sys.readFile)
+  const raw = ts.readConfigFile(tsconfigFile, readFile)
   if (raw.error) {
     diagnostics.push(`tsconfig 解析失败（${tsconfigFile}）：${ts.flattenDiagnosticMessageText(raw.error.messageText, ' ')}`)
     return null
   }
   // 原生 TS 的目录扫描不认识 .vue。纯 SFC 工程不能被误判为 TS18003「没有输入」；
   // 这里只登记扩展名，具体 SFC 解析和声明检查仍由提供方 vue-tsc 完成。
-  const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, path.dirname(tsconfigFile), undefined, undefined, undefined, [
+  const parsed = ts.parseJsonConfigFileContent(raw.config, { ...ts.sys, ...observedHost, readFile, useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames }, path.dirname(tsconfigFile), undefined, undefined, undefined, [
     { extension: '.vue', isMixedContent: true, scriptKind: ts.ScriptKind.Deferred },
   ])
   const co: import('typescript').CompilerOptions = { ...parsed.options }
@@ -348,9 +353,10 @@ function loadTsContext(root: string, ts: TsModule, diagnostics: string[]): TsCon
 }
 
 /** 解析入口/依赖说明符到绝对源文件（paths alias / 相对 / node_modules 都走 TS 语义） */
-function makeResolver(ts: TsModule, co: Record<string, unknown>) {
+function makeResolver(ts: TsModule, co: Record<string, unknown>, readFile = ts.sys.readFile, observedHost: Partial<import('typescript').ModuleResolutionHost> = {}) {
   return (spec: string, fromFile: string): { resolved: string; fromNodeModules: boolean } | null => {
-    const host = { ...ts.sys, fileExists: (file: string) => ts.sys.fileExists(file) || (file.endsWith('.vue.ts') && ts.sys.fileExists(file.slice(0, -3))) }
+    const exists = observedHost.fileExists ?? ts.sys.fileExists
+    const host = { ...ts.sys, ...observedHost, readFile, fileExists: (file: string) => exists(file) || (file.endsWith('.vue.ts') && exists(file.slice(0, -3))) }
     const r = ts.resolveModuleName(spec, fromFile, co as never, host)
     let resolved = r.resolvedModule?.resolvedFileName
     if (resolved?.endsWith('.vue.ts') && ts.sys.fileExists(resolved.slice(0, -3))) resolved = resolved.slice(0, -3)
@@ -364,6 +370,7 @@ function makeResolver(ts: TsModule, co: Record<string, unknown>) {
  * 成功产出 index.json + files/*.d.ts（in-memory Map，由调用方决定落盘/服务/打包）。
  */
 export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsGenerateResult> {
+  const generationStarted = Date.now()
   const { root, exposes, pluginVersion, signal } = input
   const diagnostics: string[] = []
   if (exposes.length === 0) {
@@ -376,11 +383,55 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   }
   const tsReq = createRequire(path.join(tsPkgDir, 'package.json'))
   const ts = tsReq('typescript') as TsModule
-  const ctx = loadTsContext(root, ts, diagnostics)
+  const parentInputs: Record<string, { hash: string; size: number; mtime: number; ctime: number; ino: number }> = {}
+  let parentChanged = false
+  const parentQueries: Record<string, Record<string, boolean>> = {}
+  const parentProbes: Record<string, boolean> = {}
+  const parentLinks: Record<string, string> = {}
+  const parentDirectories: Array<{ kind: 'dirs'; root: string; nodePackages: true; result: string[] }> = []
+  const observedHost: Partial<import('typescript').ModuleResolutionHost> = {
+    fileExists(file) {
+      const exists = ts.sys.fileExists(file)
+      ;(parentQueries[path.dirname(path.resolve(file))] ??= {})[path.basename(file)] = exists
+      return exists
+    },
+    directoryExists(directory) { const exists = ts.sys.directoryExists(directory); parentProbes[`d:${path.resolve(directory)}`] = exists; return exists },
+    realpath(file) { const resolved = ts.sys.realpath?.(file) ?? file; parentLinks[path.resolve(file)] = resolved; return resolved },
+  }
+  const readGenerationFile = (file: string): string | undefined => {
+    try {
+      const before = fs.statSync(file)
+      const text = ts.sys.readFile(file)
+      if (text === undefined) return undefined
+      const bytes = fs.readFileSync(file)
+      const after = fs.statSync(file)
+      const value = { hash: crypto.createHash('sha256').update(bytes).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
+      const previous = parentInputs[path.resolve(file)]
+      if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size
+        || (previous && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
+      parentInputs[path.resolve(file)] = value
+      return text
+    } catch { return undefined }
+  }
+  for (let directory = root;; directory = path.dirname(directory)) {
+    for (const name of ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb']) { const file = path.join(directory, name); observedHost.fileExists!(file); readGenerationFile(file) }
+    const modules = path.join(directory, 'node_modules')
+    const list = (folder: string): string[] => {
+      const exists = observedHost.directoryExists!(folder)
+      if (!exists) return []
+      const names = ts.sys.getDirectories(folder).filter(name => !path.basename(name).startsWith('.')).sort()
+      parentDirectories.push({ kind: 'dirs', root: folder, nodePackages: true, result: names })
+      for (const name of names) { const file = path.resolve(folder, name); try { if (fs.lstatSync(file).isSymbolicLink()) parentLinks[file] = fs.realpathSync(file) } catch { /* 真实变化由后续观察拒绝 */ } }
+      return names
+    }
+    for (const name of list(modules)) if (path.basename(name).startsWith('@')) list(path.resolve(modules, name))
+    if (path.dirname(directory) === directory) break
+  }
+  const ctx = loadTsContext(root, ts, diagnostics, readGenerationFile, observedHost)
   if (!ctx) return { ok: false, diagnostics }
 
   // 入口解析：exposes.import 相对 root；alias 形态（@/x）经 TS resolver 解析
-  const resolver = makeResolver(ts, ctx.compilerOptions)
+  const resolver = makeResolver(ts, ctx.compilerOptions, readGenerationFile, observedHost)
   const entryMap = new Map<string, string>() // expose 名 → 绝对源文件
   for (const expose of exposes) {
     const raw = expose.import.replace(/^\.?\//, '')
@@ -409,12 +460,13 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     hasVueFilesUnderSources(root)
 
   // rootDir：全工程文件公共目录（空时退到入口公共目录）
-  const closure = computeStaticClosure(ts, entryFiles, resolver, root)
+  const closure = computeStaticClosure(ts, entryFiles, resolver, root, readGenerationFile)
   const rootDir = commonDirOf([...ctx.projectFiles, ...closure])
   if (!rootDir) return { ok: false, diagnostics: ['无法确定声明输出根目录（rootDir）。请检查工程 tsconfig 的 include。'] }
 
   const emitted = new Map<string, string>() // 绝对源文件 → 声明文本
   let tool: 'typescript' | 'vue-tsc' = 'typescript'
+  let cacheTraceFile: string | undefined
 
   // 入口**静态**导入闭包：诊断门禁与产物范围都限定在它——动态导入（如桥接契约的
   // 装配模块）只是类型边，其文件的存量业务错误与公开声明面无关，不进闭包也不阻断
@@ -432,15 +484,24 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       }
     }
     tool = 'vue-tsc'
-    const vueTscPkg = JSON.parse(fs.readFileSync(path.join(vueTscDir, 'package.json'), 'utf8')) as {
+    const vueTscPkg = JSON.parse(readGenerationFile(path.join(vueTscDir, 'package.json'))!) as {
       version: string
       bin: Record<string, string>
     }
     const binRel = vueTscPkg.bin?.['vue-tsc'] ?? vueTscPkg.bin?.['vue-tsc.js'] ?? 'bin/vue-tsc.js'
     const binPath = path.resolve(vueTscDir, binRel)
-    // vue-tsc 1.x 公开 createProgram；直接向官方程序请求闭包诊断/emit，避免其 CLI
-    // 检查所有动态导入页面。其余工具版本继续使用各自 CLI，不依赖未公开的内部路径。
-    const scopedVueProgram = /^1\./.test(vueTscPkg.version)
+    // Vue工具链公开Program能力可用时只检查/emit暴露闭包；不检查无关动态装配页面。
+    // 旧createProgram或现代Volar公开代理均使用提供方的工具；能力不可用仍回到CLI。
+    const scopedVueProgram = (() => {
+      if (/^1\./.test(vueTscPkg.version)) return true
+      try {
+        const req = createRequire(path.join(vueTscDir, 'package.json'))
+        const volar = req('@volar/typescript') as { proxyCreateProgram?: unknown }
+        const core = req('@vue/language-core') as { createParsedCommandLine?: unknown; createVueLanguagePlugin?: unknown }
+        return typeof ts.createProgram === 'function' && typeof volar.proxyCreateProgram === 'function' && typeof core.createParsedCommandLine === 'function'
+          && typeof core.createVueLanguagePlugin === 'function'
+      } catch { return false }
+    })()
     if (!fs.existsSync(binPath)) {
       return { ok: false, diagnostics: [`vue-tsc 入口不存在（${binPath}）。请重新安装 vue-tsc。`] }
     }
@@ -454,6 +515,11 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${cacheDir ? path.basename(cacheDir) : `${process.pid}-${crypto.randomUUID()}`}.json`)
     const outDir = cacheDir ? path.join(cacheDir, 'emit') : fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
     const clearOutput = (): void => { if (!cacheDir) fs.rmSync(outDir, { recursive: true, force: true }) }
+    // Program路径不使用tsbuildinfo或旧emit；先清理，避免未重新emit的旧声明掩盖缺失依赖。
+    if (cacheDir && scopedVueProgram) fs.rmSync(outDir, { recursive: true, force: true })
+    const traceFile = cacheDir && scopedVueProgram && !/^1\./.test(vueTscPkg.version) ? path.join(cacheDir, 'inputs.json') : undefined
+    if (traceFile) fs.rmSync(traceFile, { force: true })
+    const programInputFile = `${tmpCfg}.inputs.json`
     const baseCo: Record<string, unknown> = { ...rawOptionsWithInherited(ctx) }
     delete baseCo.noEmit
     delete baseCo.incremental
@@ -490,6 +556,11 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         ...entryFiles.map((f) => path.relative(root, f)),
         ...ctx.ambientInputs.map((f) => path.relative(root, f)),
       ],
+    }))
+    // 大型闭包与输入记录不塞进argv，避免macOS ARG_MAX/Linux单参数长度上限。
+    if (scopedVueProgram) fs.writeFileSync(programInputFile, JSON.stringify({
+      closure: [...closure], entries: entryFiles, traceFile, ambientInputs: ctx.ambientInputs, started: generationStarted,
+      ...(traceFile ? { parentInputs: { files: parentInputs, changed: parentChanged, fileQueries: parentQueries, probes: parentProbes, links: parentLinks, directories: parentDirectories } } : {}),
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
     /** 子进程形态的 OOM 识别：v8 崩溃横幅固定行首（FATAL ERROR: …heap…）。
@@ -528,7 +599,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           const child = execFile(
             process.execPath,
             [...extraNodeArgs, ...(scopedVueProgram
-              ? ['--eval', genVueDeclarationProgram(), tmpCfg, JSON.stringify([...closure])]
+              ? ['--eval', genVueDeclarationProgram(), tmpCfg, programInputFile]
               : [binPath, '-p', tmpCfg, '--noErrorTruncation', '--pretty', 'false'])],
             { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutFor(extraNodeArgs.length > 0) },
             (err, stdout, stderr) => {
@@ -619,10 +690,13 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     } catch {
       clearOutput()
       fs.rmSync(tmpCfg, { force: true })
+      fs.rmSync(programInputFile, { force: true })
       return { ok: false, diagnostics }
     } finally {
       fs.rmSync(tmpCfg, { force: true })
+      fs.rmSync(programInputFile, { force: true })
     }
+    if (traceFile && fs.existsSync(traceFile)) cacheTraceFile = traceFile
     collectEmitted(ts, outDir, rootDir, emitted, closure)
     clearOutput()
   } else {
@@ -788,7 +862,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   const revision = crypto.createHash('sha256').update(JSON.stringify(index)).digest('hex').slice(0, 16)
   const fullIndex: DtsBundleIndex = { ...index, revision }
   files.set('index.json', `${JSON.stringify(fullIndex, null, 2)}\n`)
-  return { ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0, notices: diagnostics }
+  return { ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0, notices: diagnostics, ...(cacheTraceFile ? { cacheTraceFile } : {}) }
 }
 
 /** 收集 emit 产物 → { 绝对源文件 → 声明文本 }（.vue → .vue.d.ts；.ts/.tsx → .d.ts）。

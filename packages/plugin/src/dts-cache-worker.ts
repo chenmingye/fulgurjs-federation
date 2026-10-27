@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parentPort } from 'node:worker_threads'
-import { captureTypesInputs, readTypesCache, validateTypesInputs, writeTypesCache, type TypesCacheInput, type TypesInputSnapshot } from './dts-cache'
+import { captureCompilerInputs, captureTypesInputs, readTypesCache, validateTypesInputs, writeTypesCache, type TypesCacheInput, type TypesInputSnapshot } from './dts-cache'
 import type { DtsGenerateOk } from './dts-generate'
 
 interface Entry { snapshot: TypesInputSnapshot; dirty: boolean; watchers: fs.FSWatcher[] }
@@ -37,14 +37,14 @@ function externalInputs(input: TypesCacheInput, snapshot: TypesInputSnapshot): s
   }
   return [...files]
 }
-parentPort?.on('message', (message: { id: string; operation: string; input: TypesCacheInput; token?: string; stable?: boolean; result?: DtsGenerateOk; temporaryId?: string }) => {
+parentPort?.on('message', (message: { id: string; operation: string; input: TypesCacheInput; token?: string; stable?: boolean; result?: DtsGenerateOk; temporaryId?: string; traceFile?: string }) => {
   const { id, operation, input } = message
   try {
     let value: unknown
     if (operation === 'read' || operation === 'capture') {
       const observed = observe(input)
       const cached = operation === 'read' ? readTypesCache(input, false) : null
-      const snapshot = cached?.snapshot ?? (operation === 'capture' ? captureTypesInputs(input) : null)
+      const snapshot = cached?.snapshot ?? (operation === 'capture' ? (message.traceFile ? captureCompilerInputs(input, message.traceFile) : captureTypesInputs(input)) : null)
       if (!snapshot) { close(observed); value = null }
       else {
         observed.snapshot = snapshot
