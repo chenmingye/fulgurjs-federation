@@ -1,10 +1,12 @@
 /** 在隔离的Vue编译进程内记录实际输入，避免dev冷生成前再运行一套依赖扫描。 */
+import { genTypeRealpath } from './dts-realpath'
 import { genTypeInputBytes } from './dts-input-hash'
 
 export function genTypesInputRecorder(): string {
   return String.raw`
 const crypto = require('node:crypto');
 ${genTypeInputBytes()}
+${genTypeRealpath()}
 const traceFile = generationInput.traceFile;
 const toolStarted = Date.now() - process.uptime() * 1000;
 const traceStarted = Number(generationInput.started) || toolStarted;
@@ -24,7 +26,7 @@ let inputChanged = !!parentInputs.changed;
 const recordFile = file => {
   file = path.resolve(file);
   if (!traceFile || ignoredInput(file)) return;
-  try { const previous=snapshot.files[file];const stat=fs.statSync(file);const same=previous&&previous.ctime===stat.ctimeMs&&previous.mtime===stat.mtimeMs&&previous.ino===stat.ino&&previous.size===stat.size; const next = same ? previous : readStamp(file); if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash)) { traceValid = false; inputChanged = true; } snapshot.files[file] = next; const real = fs.realpathSync(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
+  try { const previous=snapshot.files[file];const stat=fs.statSync(file);const same=previous&&previous.ctime===stat.ctimeMs&&previous.mtime===stat.mtimeMs&&previous.ino===stat.ino&&previous.size===stat.size; const next = same ? previous : readStamp(file); if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash)) { traceValid = false; inputChanged = true; } snapshot.files[file] = next; const real = realpath(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
   catch { traceValid = false; }
 };
 // 同一次解析会反复询问相同目录，缺失目录还会反复向上找父目录。
@@ -92,9 +94,27 @@ if (traceFile) {
   const originalRealpath = ts.sys.realpath;
   if (originalRealpath) ts.sys.realpath = file => {
     const result = originalRealpath(file);
-    if (!ignoredInput(file)) { try { const key = path.resolve(file), real = fs.realpathSync(file); if (snapshot.links[key] && snapshot.links[key] !== real) { traceValid = false; inputChanged = true; } snapshot.links[key] = real; } catch {} }
+    if (!ignoredInput(file)) { try { const key = path.resolve(file), real = realpath(file); if (snapshot.links[key] && snapshot.links[key] !== real) { traceValid = false; inputChanged = true; } snapshot.links[key] = real; } catch {} }
     return result;
   };
+}
+// 仅dev请求启用一次编译内的读取视图。每个首次读取仍经过上面的输入记录器；
+// 服务必须校验完整输入后才能发布，无法建立/校验快照时重跑普通读取路径。
+// Vue工具会在读取中生成global-types，编译临时文件也会被写入，二者不能复用旧读取。
+if (traceFile && generationInput.cacheCompilerReads) {
+  for (const method of ['fileExists', 'directoryExists', 'readFile', 'realpath']) {
+    const original = ts.sys[method];
+    if (!original) continue;
+    const reads = new Map();
+    ts.sys[method] = (file, ...args) => {
+      if (file.includes('.vue-global-types') || ignoredInput(file)) return original(file, ...args);
+      const key = args.length ? file + '\0' + JSON.stringify(args) : file;
+      if (reads.has(key)) return reads.get(key);
+      const value = original(file, ...args);
+      reads.set(key, value);
+      return value;
+    };
+  }
 }
 const finishInputTrace = () => {
   if (!traceFile) return;
@@ -138,7 +158,7 @@ const finishInputTrace = () => {
         snapshot.probes['d:' + candidate] = exists; recordDirectory(path.dirname(candidate));
         if (!exists) continue;
         try {
-          const real = fs.realpathSync(candidate); if (snapshot.links[candidate] && snapshot.links[candidate] !== real) { traceValid = false; inputChanged = true; } snapshot.links[candidate] = real;
+          const real = realpath(candidate); if (snapshot.links[candidate] && snapshot.links[candidate] !== real) { traceValid = false; inputChanged = true; } snapshot.links[candidate] = real;
           if (!(child.filename === real || child.filename.startsWith(real + path.sep))) traceValid = false;
         } catch { traceValid = false; }
         break;

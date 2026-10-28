@@ -1,6 +1,7 @@
 /** dev缓存后台任务：大输入快照留在线程中，不经过主线程反复复制。 */
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { parentPort } from 'node:worker_threads'
 import { captureCompilerInputs, captureTypesInputs, readTypesCache, validateTypesInputs, writeTypesCache, type TypesCacheInput, type TypesInputSnapshot } from './dts-cache'
 import type { DtsGenerateOk } from './dts-generate'
@@ -41,7 +42,10 @@ parentPort?.on('message', (message: { id: string; operation: string; input: Type
   const { id, operation, input } = message
   try {
     let value: unknown
-    if (operation === 'read' || operation === 'capture') {
+    if (operation === 'warmup') {
+      // 仅载入提供方的配置解析工具，不扫描项目、不创建快照、不运行编译。
+      createRequire(path.join(input.root, 'package.json'))('typescript')
+    } else if (operation === 'read' || operation === 'capture') {
       const observed = observe(input)
       const cached = operation === 'read' ? readTypesCache(input, false) : null
       const snapshot = cached?.snapshot ?? (operation === 'capture' ? (message.traceFile ? captureCompilerInputs(input, message.traceFile) : captureTypesInputs(input)) : null)

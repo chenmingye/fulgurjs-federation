@@ -78,6 +78,29 @@ function cacheProject() {
   return { root, options, result, revision: index.revision, logs, start }
 }
 
+it.each([true, false])('读取视图无法校验时不提供未验证的%s结果，自动关闭复用重跑', async success => {
+  const p = cacheProject()
+  p.options.exposes[0]!.import = './src/entry.vue'
+  fs.mkdirSync(path.join(p.root, 'node_modules/vue-tsc'))
+  fs.writeFileSync(path.join(p.root, 'node_modules/vue-tsc/package.json'), '{"version":"3.3.13"}')
+  if (!p.result.ok) throw Error('fixture must succeed')
+  let finish!: (result: DtsGenerateResult) => void
+  generate.mockResolvedValueOnce(success
+    ? { ...p.result, requiresInputValidation: true }
+    : { ok: false, diagnostics: ['不应发布的旧视图诊断'], requiresInputValidation: true })
+    .mockImplementationOnce(() => new Promise<DtsGenerateResult>(resolve => { finish = resolve }))
+  const service = p.start()
+  await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(2))
+  expect(service.revision()).toBeNull()
+  expect(service.servePath('/@fulgurjs-types/index.json')).toBeNull()
+  expect(generate.mock.calls[0]![0].cacheCompilerReads).toBe(true)
+  expect(generate.mock.calls[1]![0].cacheCompilerReads).toBe(false)
+  expect(p.logs.join('\n')).not.toContain('TYP-001')
+  finish(p.result)
+  await vi.waitFor(() => expect(service.revision()).toBe(p.revision))
+  expect(p.logs.join('\n')).toContain('已关闭读取复用并重新生成')
+})
+
 it('关闭并重启恢复成功声明；同内容触碰不编译，改动失败不服务旧缓存', async () => {
   const p = cacheProject()
   generate.mockResolvedValue(p.result)

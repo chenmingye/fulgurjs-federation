@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,6 +10,23 @@ function project() {
   fs.symlinkSync(path.resolve(__dirname,'../node_modules/typescript'),path.join(root,'node_modules/typescript'),'dir')
   return root
 }
+it('预载只启动一个自有进程，实际请求接管同一PID；未编译就关闭也会退出', async () => {
+  const root = project(), session = createVueCompilerSession()
+  try {
+    const pid = session.prime(root)
+    expect(pid).toBeDefined()
+    expect(session.prime(root)).toBeUndefined()
+    const result = await session.run({ root, script: 'process.stdout.write(String(process.pid))', args: [], nodeArgs: [], timeout: 10000 })
+    expect(result.err).toBeNull()
+    expect(Number(result.stdout)).toBe(pid)
+    session.dispose()
+    await vi.waitFor(() => expect(() => process.kill(pid!, 0)).toThrow())
+    expect(session.prime(root)).toBeUndefined()
+    const unused = createVueCompilerSession(), unusedPid = unused.prime(root)
+    unused.dispose()
+    await vi.waitFor(() => expect(() => process.kill(unusedPid!, 0)).toThrow())
+  } finally { session.dispose(); fs.rmSync(root, { recursive: true, force: true }) }
+}, 15000)
 it('同一服务串行复用进程，收集中文诊断且失败后可恢复',async()=>{
   const root=project(),session=createVueCompilerSession()
   const script=`__fulgurjsProgramState.count=(__fulgurjsProgramState.count||0)+1;process.stdout.write(JSON.stringify({pid:process.pid,count:__fulgurjsProgramState.count}));if(process.argv[1]==='bad'){process.stderr.write('真实中文诊断');process.exitCode=1;}`

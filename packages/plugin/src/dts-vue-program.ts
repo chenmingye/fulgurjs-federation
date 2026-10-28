@@ -69,6 +69,19 @@ if (!diagnostics.length) {
   const freshHost = ts.createCompilerHost(parsed.options);
   const host = state?.host ?? freshHost;
   if (state) { Object.assign(host,freshHost);state.host=host; }
+  const readSource = host.getSourceFile;
+  // TS官方增量主机也使用ParseForTypeErrors。这里只用于第三方声明文件：
+  // 保留正确类型诊断所需的JSDoc，业务源码、JS、SFC和公开声明展示仍完整解析文档。
+  // 自定义Vue编译扩展可能依赖额外注释信息，保持其原始解析路径。
+  if (!legacyProgram && !vueOptions.plugins?.length && !vueOptions.hooks?.length
+    && typeof ts.JSDocParsingMode?.ParseForTypeErrors === 'number') {
+    host.getSourceFile = (file, language, ...args) => {
+      const declaration = /\.d\.[cm]?ts$/.test(file) && file.replace(/\\/g, '/').includes('/node_modules/');
+      const mode = declaration ? { ...(typeof language === 'object' ? language : { languageVersion: language }),
+        jsDocParsingMode: ts.JSDocParsingMode.ParseForTypeErrors } : language;
+      return readSource(file, mode, ...args);
+    };
+  }
   const baseGetSourceFile=host.getSourceFile;
   const stampEqual=(a,b)=>a.ctimeMs===b.ctimeMs&&a.mtimeMs===b.mtimeMs&&a.size===b.size&&a.ino===b.ino;
   if (state) {
@@ -77,7 +90,7 @@ if (!diagnostics.length) {
       const key=path.resolve(file);let before;
       try{before=fs.statSync(file)}catch{state.files.delete(key);return baseGetSourceFile(file,...args)}
       const cached=state.files.get(key);
-      if(cached&&stampEqual(cached.stat,before)&&cached.real===fs.realpathSync(file)){
+      if(cached&&stampEqual(cached.stat,before)&&cached.real===realpath(file)){
         if(cached.input)snapshot.files[key]={...cached.input};
         snapshot.links[key]=cached.real;
         return cached.source;
@@ -85,7 +98,7 @@ if (!diagnostics.length) {
       const source=baseGetSourceFile(file,...args);
       if(source){
         source.version=crypto.createHash('sha256').update(source.text).digest('hex');
-        try{const after=fs.statSync(file);if(stampEqual(before,after))state.files.set(key,{source,stat:after,real:fs.realpathSync(file),input:snapshot.files[key]});else state.files.delete(key)}catch{state.files.delete(key)}
+        try{const after=fs.statSync(file);if(stampEqual(before,after))state.files.set(key,{source,stat:after,real:realpath(file),input:snapshot.files[key]});else state.files.delete(key)}catch{state.files.delete(key)}
       }
       return source;
     };
@@ -157,10 +170,11 @@ if (!diagnostics.length) {
 }
 __fgMark('emit');
 const errors = diagnostics.filter(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error);
-if (!errors.length) finishInputTrace();
+// 读取视图下的诊断也须校验输入；失败记录只用于监听与重检，不会成为成功缓存。
+if (!errors.length || generationInput.cacheCompilerReads) finishInputTrace();
 __fgMark('trace');
 if (__fgTimingsOn) process.stderr.write('FG_DTS_TIMINGS ' + JSON.stringify(__fgTimings) + '\n');
-if (!errors.length && typeof __fulgurjsProgramState === 'object' && traceFile && !fs.existsSync(traceFile)) __fulgurjsProgramState.reusable=false;
+if (typeof __fulgurjsProgramState === 'object' && traceFile && !fs.existsSync(traceFile)) __fulgurjsProgramState.reusable=false;
 if (errors.length) {
   process.stdout.write(ts.formatDiagnostics(errors, formatHost));
   process.exitCode = 1;

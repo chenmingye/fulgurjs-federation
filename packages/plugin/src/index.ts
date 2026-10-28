@@ -354,6 +354,46 @@ export function federation(options: FederationOptions): Plugin[] {
   // dev 类型生成只依赖源码/配置，不依赖 dev server 就绪。配置解析阶段就启动，
   // 避免编译子进程排到 Vite 启动的同步工作之后（实测会白等数秒）。
   let earlyTypesServer: DevTypesServer | null = null
+  let earlyTypesKey = ''
+  let earlyTypesLease: ReturnType<typeof setTimeout> | null = null
+  let stopServingTypes: (() => void) | null = null
+  const clearTypesLease = (): void => { if (earlyTypesLease) clearTimeout(earlyTypesLease); earlyTypesLease = null }
+  const stopEarlyTypes = (): void => {
+    clearTypesLease()
+    stopServingTypes?.()
+    stopServingTypes = null
+    earlyTypesServer?.dispose()
+    earlyTypesServer = null
+    earlyTypesKey = ''
+  }
+  const prepareTypes = (normalized: NormalizedOptions): DevTypesServer => {
+    const key = JSON.stringify([normalized.root, normalized.pluginVersion, normalized.dts,
+      normalized.exposes.filter(expose => !expose.internal).map(({ name, import: entry }) => [name, entry])])
+    if (earlyTypesServer && key !== earlyTypesKey) stopEarlyTypes()
+    if (!earlyTypesServer) {
+      earlyTypesKey = key
+      const owned = earlyTypesServer = createDevTypesServer(normalized)
+      // 配置解析失败时可能根本到不了configureServer。预取有界，不能让API调用者
+      // 捕获其他插件的配置异常后，仍永久持有本插件的编译子进程。
+      earlyTypesLease = setTimeout(() => { if (earlyTypesServer === owned) stopEarlyTypes() }, 60000)
+      earlyTypesLease.unref?.()
+    }
+    return earlyTypesServer
+  }
+  const typesPreparation: Plugin = {
+    name: 'fulgurjs:types-prepare',
+    enforce: 'pre',
+    config: {
+      order: 'pre',
+      handler(userConfig, env) {
+        if (env.command !== 'serve' || env.isPreview) { stopEarlyTypes(); return }
+        const normalized = normalizeOptions(options, path.resolve(userConfig.root ?? process.cwd()), env.command)
+        if (normalized.exposes.length && normalized.dts) prepareTypes(normalized)
+        else stopEarlyTypes()
+      },
+    },
+    closeBundle() { stopEarlyTypes() },
+  }
 
   const pre: Plugin = {
     name: 'fulgurjs:core',
@@ -367,7 +407,9 @@ export function federation(options: FederationOptions): Plugin[] {
       // 在此启动可让编译子进程与 Vite 其余启动工作并行，而不是等服务器就绪后才开始。
       // preview 不提供 dev 类型端点，不能只为了预演产物启动编译子进程。
       if (env.command === 'serve' && !env.isPreview && normalized.exposes.length > 0 && normalized.dts) {
-        earlyTypesServer ??= createDevTypesServer(normalized)
+        prepareTypes(normalized)
+      } else {
+        stopEarlyTypes()
       }
       // Vite 8（rolldown）生产构建：启用原生 codeSplitting 保护组（outputOptions 钩子）
       state.rolldownBuild = env.command === 'build' && Number((readInstalledVersion(root, 'vite') ?? '0').split('.')[0]) >= 8
@@ -1534,8 +1576,10 @@ export function federation(options: FederationOptions): Plugin[] {
       // ---- remote 端中间件：容器入口 / manifest / 类型资源（跨 dev-server 协作的服务面）----
       let typesServer: DevTypesServer | null = null
       if (n.exposes.length > 0 && n.dts) {
+        stopServingTypes?.()
         // 已在 configResolved 提前创建时复用同一实例（生成可能早已开始）。
-        typesServer = earlyTypesServer ??= createDevTypesServer(n)
+        typesServer = prepareTypes(n)
+        clearTypesLease()
         // 源码变化 → 防抖重生成声明 bundle（revision 变化经 manifest 轮询传导到宿主）
         let regenTimer: ReturnType<typeof setTimeout> | null = null
         const syncedTypesDir = typeof n.dts === 'object' && n.dts.dir
@@ -1553,13 +1597,17 @@ export function federation(options: FederationOptions): Plugin[] {
         server.watcher?.on('change', scheduleRegen)
         server.watcher?.on('unlink', scheduleRegen)
         server.watcher?.on('add', scheduleRegen)
-        server.httpServer?.once('close', () => {
+        const cleanupTypes = (): void => {
           if (regenTimer) clearTimeout(regenTimer)
           server.watcher?.off('change', scheduleRegen)
           server.watcher?.off('unlink', scheduleRegen)
           server.watcher?.off('add', scheduleRegen)
           typesServer?.dispose()
-        })
+          if (earlyTypesServer === typesServer) { earlyTypesServer = null; earlyTypesKey = '' }
+          if (stopServingTypes === cleanupTypes) stopServingTypes = null
+        }
+        stopServingTypes = cleanupTypes
+        server.httpServer?.once('close', cleanupTypes)
       }
       if (n.exposes.length > 0) {
         const baseNorm = state.base
@@ -1925,7 +1973,8 @@ export function federation(options: FederationOptions): Plugin[] {
     },
   }
 
-  return [pre, post, devClientCompat, reactRefreshPublisher]
+  // 独立的准备钩子只提前类型任务，不改变core对共享/分包配置的合并顺序。
+  return [pre, post, devClientCompat, reactRefreshPublisher, typesPreparation]
 }
 
 export default federation

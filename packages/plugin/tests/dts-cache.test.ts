@@ -167,15 +167,16 @@ it('解析候选检查后才新增高优先级文件，最终目录复检仍拒�
   fs.writeFileSync(path.join(directory, 'data/index.ts'), 'export const value = 1')
   fs.writeFileSync(path.join(root, 'src/entry.ts'), "export { value } from '../external/data'")
   const snapshot = captureTypesInputs(input)!
-  const original = fs.realpathSync
+  const original = fs.realpathSync.native
   let injected = false
-  const spy = vi.spyOn(fs, 'realpathSync').mockImplementation(((file: fs.PathLike, options?: unknown) => {
+  // 在实际链接校验调用处注入变化，覆盖原生路径优化后的最后复检窗口。
+  const spy = vi.spyOn(fs.realpathSync, 'native').mockImplementation(((file: fs.PathLike, options?: unknown) => {
     if (!injected) {
       injected = true
       fs.writeFileSync(path.join(directory, 'data.ts'), 'export const value = 2')
     }
     return original(file, options as never)
-  }) as typeof fs.realpathSync)
+  }) as typeof fs.realpathSync.native)
   try {
     expect(validateTypesInputs(snapshot, root)).toContain('校验期间解析候选变化')
     expect(injected).toBe(true)

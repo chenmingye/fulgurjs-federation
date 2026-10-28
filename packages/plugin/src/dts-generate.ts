@@ -13,6 +13,7 @@
  * 管理器的安装命令。本模块只在 Node 侧运行，产物不进入浏览器运行时。
  */
 import fs from 'node:fs'
+import { realPath } from './dts-realpath'
 import { typeInputBytes } from './dts-input-hash'
 import type { VueCompilerSession } from './dts-vue-session'
 import path from 'node:path'
@@ -43,6 +44,8 @@ export interface DtsGenerateInput {
   incrementalDir?: string
   /** dev独占的内存编译会话；一次性CLI/build不传入。 */
   vueCompiler?: VueCompilerSession
+  /** dev内部读取视图；结果必须先完成真实输入校验，无法校验时关闭此项重新生成。 */
+  cacheCompilerReads?: boolean
 }
 
 export interface DtsGenerateOk {
@@ -57,12 +60,17 @@ export interface DtsGenerateOk {
   notices: string[]
   /** dev隔离编译进程的实际输入记录；仅在独占临时目录内使用，不进入公开类型资源。 */
   cacheTraceFile?: string
+  /** 本结果使用了当轮读取视图，服务未验证输入前不能发布。 */
+  requiresInputValidation?: boolean
   /** FG_DTS_TIMINGS=1 时的分阶段耗时（毫秒，父进程与编译子进程各一组）；默认不采集。 */
   timings?: { parent: Record<string, number>; child?: Record<string, number> }
 }
 
 export interface DtsGenerateFail {
   ok: false
+  /** 失败编译也可留下输入记录，用于校验诊断和监听外部依赖修复；绝不缓存失败声明。 */
+  cacheTraceFile?: string
+  requiresInputValidation?: boolean
   /** 诊断（人读；含工具缺失安装命令 / 闭包编译错误定位） */
   diagnostics: string[]
 }
@@ -161,7 +169,8 @@ function computeStaticClosure(
       text = [descriptor.script?.content, descriptor.scriptSetup?.content].filter(Boolean).join('\n')
       if (descriptor.script?.src) text += `\nimport ${JSON.stringify(descriptor.script.src)}`
     }
-    const sfile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    // 这里只读取导入/导出与类型引用，不使用祖先信息；无需为整棵扫描AST建立parent指针。
+    const sfile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false)
     const imports: string[] = sfile.referencedFiles.map(ref => ref.fileName)
     const visitType = (node: import('typescript').Node): void => {
       if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) imports.push(node.argument.literal.text)
@@ -434,7 +443,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       if (!exists) return []
       const names = ts.sys.getDirectories(folder).filter(name => !path.basename(name).startsWith('.')).sort()
       parentDirectories.push({ kind: 'dirs', root: folder, nodePackages: true, result: names })
-      for (const name of names) { const file = path.resolve(folder, name); try { if (fs.lstatSync(file).isSymbolicLink()) parentLinks[file] = fs.realpathSync(file) } catch { /* 真实变化由后续观察拒绝 */ } }
+      for (const name of names) { const file = path.resolve(folder, name); try { if (fs.lstatSync(file).isSymbolicLink()) parentLinks[file] = realPath(file) } catch { /* 真实变化由后续观察拒绝 */ } }
       return names
     }
     for (const name of list(modules)) if (path.basename(name).startsWith('@')) list(path.resolve(modules, name))
@@ -482,6 +491,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   const emitted = new Map<string, string>() // 绝对源文件 → 声明文本
   let tool: 'typescript' | 'vue-tsc' = 'typescript'
   let cacheTraceFile: string | undefined
+  let requiresInputValidation = false
   let childTimings: Record<string, number> | undefined
 
   // 入口**静态**导入闭包：诊断门禁与产物范围都限定在它——动态导入（如桥接契约的
@@ -534,6 +544,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     // Program路径不使用tsbuildinfo或旧emit；先清理，避免未重新emit的旧声明掩盖缺失依赖。
     if (cacheDir && scopedVueProgram) fs.rmSync(outDir, { recursive: true, force: true })
     const traceFile = cacheDir && scopedVueProgram && !/^1\./.test(vueTscPkg.version) ? path.join(cacheDir, 'inputs.json') : undefined
+    requiresInputValidation = !!(traceFile && input.cacheCompilerReads)
     if (traceFile) fs.rmSync(traceFile, { force: true })
     const programInputFile = `${tmpCfg}.inputs.json`
     const baseCo: Record<string, unknown> = { ...rawOptionsWithInherited(ctx) }
@@ -576,6 +587,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     // 大型闭包与输入记录不塞进argv，避免macOS ARG_MAX/Linux单参数长度上限。
     if (scopedVueProgram) fs.writeFileSync(programInputFile, JSON.stringify({
       closure: [...closure], entries: entryFiles, traceFile, ambientInputs: ctx.ambientInputs, started: generationStarted,
+      cacheCompilerReads: requiresInputValidation,
       ...(traceFile ? { parentInputs: { files: parentInputs, changed: parentChanged, fileQueries: parentQueries, probes: parentProbes, links: parentLinks, directories: parentDirectories } } : {}),
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
@@ -710,7 +722,10 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           const tail = formatDeclarationDiagnostics(stdout, stderr, err.message, root, closure)
           diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
           clearOutput()
-          return { ok: false, diagnostics }
+          return { ok: false, diagnostics,
+            ...(requiresInputValidation ? { requiresInputValidation: true,
+              ...(traceFile && fs.existsSync(traceFile) ? { cacheTraceFile: traceFile } : {}) } : {}),
+          }
         }
         // 仅闭包外错误：声明 emit 已产出（noEmitOnError:false），继续
       }
@@ -900,6 +915,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   return {
     ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0, notices: diagnostics,
     ...(cacheTraceFile ? { cacheTraceFile } : {}),
+    ...(requiresInputValidation ? { requiresInputValidation: true } : {}),
     ...(timingsEnabled ? { timings: { parent: { ...timings }, ...(childTimings ? { child: childTimings } : {}) } } : {}),
   }
 }

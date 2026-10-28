@@ -10,6 +10,7 @@ import type { DtsGenerateOk } from './dts-generate'
 export interface TypesCacheHandle { token: string; externalInputs: string[] }
 interface CacheHit extends TypesCacheHandle { result: DtsGenerateOk }
 export interface TypesCacheWorker {
+  warmup(input: TypesCacheInput): Promise<void>
   read(input: TypesCacheInput): Promise<CacheHit | null>
   capture(input: TypesCacheInput, traceFile?: string): Promise<TypesCacheHandle | null>
   validate(input: TypesCacheInput, handle: TypesCacheHandle, stable: boolean): Promise<string | null>
@@ -57,6 +58,7 @@ export function createTypesCacheWorker(): TypesCacheWorker {
     } catch (error) { pending.delete(id); if (pending.size === 0) worker?.unref(); reject(error as Error) }
   })
   return {
+    warmup: input => call('warmup', input).then(() => {}),
     read: input => call('read', input) as Promise<CacheHit | null>,
     capture: (input, traceFile) => call('capture', input, { traceFile }) as Promise<TypesCacheHandle | null>,
     validate: (input, handle, stable) => call('validate', input, { token: handle.token, stable }) as Promise<string | null>,

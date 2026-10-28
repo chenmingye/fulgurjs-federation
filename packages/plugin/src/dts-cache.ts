@@ -4,6 +4,7 @@
  * 编译临时目录仍由每个服务独占；本模块只原子发布一个不可分割的成功快照。
  */
 import fs from 'node:fs'
+import { realPath } from './dts-realpath'
 import { typeInputBytes } from './dts-input-hash'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -47,7 +48,7 @@ const resolve = (from: string, request: string): string | null => {
   try { return createRequire(from).resolve(request) } catch { return null }
 }
 function linkIdentity(file: string): string {
-  try { return fs.realpathSync(file) }
+  try { return realPath(file) }
   catch { return `!missing:${fs.readlinkSync(file)}` }
 }
 function ownModule(): string {
@@ -95,7 +96,7 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
     observeDirectory(path.dirname(dir))
     try {
       rows = fs.readdirSync(dir, { withFileTypes: true })
-      snapshot.links[dir] = fs.realpathSync(dir)
+      snapshot.links[dir] = realPath(dir)
     } catch (e) {
       if (!['ENOENT', 'ENOTDIR'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e
     }
@@ -140,7 +141,7 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
     const data = fs.readFileSync(absolute)
     const after = fs.statSync(absolute)
     if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.size !== after.size || before.ino !== after.ino) throw new Error('输入在读取过程中变化')
-    const real = fs.realpathSync(absolute)
+    const real = realPath(absolute)
     snapshot.links[absolute] = real
     snapshot.files[absolute] = { hash: hash(typeInputBytes(absolute,data)), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
     const text = data.toString('utf8')
@@ -158,7 +159,7 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
       for (const directory of createRequire(file).resolve.paths(request) ?? []) {
         const candidate = path.join(directory, packageName)
         if (!directoryExists(candidate)) continue
-        const actual = fs.realpathSync(candidate)
+        const actual = realPath(candidate)
         snapshot.links[candidate] = actual
         // require.resolve自身会缓存解析；链接切换后不能把旧进程当成新工具保存。
         if (!(resolved === actual || resolved.startsWith(`${actual}${path.sep}`))) unsupported = true
@@ -174,7 +175,7 @@ export function captureTypesInputs(input: TypesCacheInput): TypesInputSnapshot |
     directoryExists,
     realpath: file => {
       const resolved = ts.sys.realpath?.(file) ?? file
-      try { snapshot.links[file] = fs.realpathSync(file) } catch { /* Vue的虚拟.vue.ts不是实际文件 */ }
+      try { snapshot.links[file] = realPath(file) } catch { /* Vue的虚拟.vue.ts不是实际文件 */ }
       return resolved
     },
     readDirectory: (dir, extensions, excludes, includes, depth) => {
@@ -505,7 +506,7 @@ export function captureCompilerInputs(input: TypesCacheInput, traceFile: string)
   const temporaryRoot = path.dirname(traceFile)
   if (path.dirname(temporaryRoot) !== path.join(root, 'node_modules') || !path.basename(temporaryRoot).startsWith('.fulgurjs-types-cache-')) return null
   const trace = JSON.parse(fs.readFileSync(traceFile, 'utf8')) as { format: number; changed?: boolean; root: string; started: number; ambientInputs: string[]; snapshot: TypesInputSnapshot }
-  if (trace.format !== 1 || fs.realpathSync(trace.root) !== fs.realpathSync(root) || !trace.snapshot?.files || !Array.isArray(trace.ambientInputs)) return null
+  if (trace.format !== 1 || realPath(trace.root) !== realPath(root) || !trace.snapshot?.files || !Array.isArray(trace.ambientInputs)) return null
   const snapshot = trace.snapshot
   if (trace.changed) throw new Error('输入已变化：编译期间输入变化，重新检查')
   const addFile = (file: string): void => {
@@ -520,7 +521,7 @@ export function captureCompilerInputs(input: TypesCacheInput, traceFile: string)
       const previous = snapshot.files[file]
       if (previous ? JSON.stringify(previous) !== JSON.stringify(value) : value.ctime > trace.started) throw new Error('输入已变化：生成期间工具或锁文件变化')
       snapshot.files[file] = value
-      snapshot.links[file] = fs.realpathSync(file)
+      snapshot.links[file] = realPath(file)
     }
   }
   for (let directory = root;; directory = path.dirname(directory)) {
@@ -545,7 +546,7 @@ export function captureCompilerInputs(input: TypesCacheInput, traceFile: string)
     const name = resolution.request.startsWith('@') ? resolution.request.split('/').slice(0, 2).join('/') : resolution.request.split('/')[0]!
     for (const directory of createRequire(resolution.from).resolve.paths(resolution.request) ?? []) {
       const candidate = path.join(directory, name)
-      if (fs.existsSync(candidate)) { snapshot.links[candidate] = fs.realpathSync(candidate); break }
+      if (fs.existsSync(candidate)) { snapshot.links[candidate] = realPath(candidate); break }
     }
   }
   return snapshot

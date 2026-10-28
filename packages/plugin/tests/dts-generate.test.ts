@@ -633,6 +633,80 @@ defineProps<{ title: string }>(); const result = calculate('x');</script><templa
     if (!failed.ok) expect(failed.diagnostics.join('\n')).toMatch(/implementation\.ts.*TS2322/s)
   }, 30000)
 
+  it('当轮读取视图保留真实Vue诊断，失败输入可验证且修复后重新生成', async () => {
+    const root = makeProject('vue-read-view', {
+      'src/entry.vue': `<script setup lang="ts">import {value} from './model';defineProps<{title:string}>();</script><template>{{value.toUpperCase()}}</template>`,
+      'src/model.ts': `export const value:string='ok'`,
+    })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const input = { root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test',
+      incrementalDir: path.join(root, 'node_modules/.fulgurjs-types-cache-read-view'), cacheCompilerReads: true }
+    const first = await generateTypesBundle(input)
+    expect(first.ok, first.ok ? '' : first.diagnostics.join('\n')).toBe(true)
+    expect(first.requiresInputValidation).toBe(true)
+    fs.writeFileSync(path.join(root, 'src/model.ts'), 'export const value:number=1')
+    const failed = await generateTypesBundle(input)
+    expect(failed.ok).toBe(false)
+    if (failed.ok) return
+    expect(failed.diagnostics.join('\n')).toContain('TS2339')
+    expect(failed.requiresInputValidation).toBe(true)
+    expect(failed.cacheTraceFile).toBeDefined()
+    const snapshot = captureCompilerInputs(input, failed.cacheTraceFile!)!
+    expect(snapshot).not.toBeNull()
+    expect(validateTypesInputs(snapshot, root, true)).toBeNull()
+    fs.writeFileSync(path.join(root, 'src/model.ts'), `export const value:string='ok'`)
+    expect(validateTypesInputs(snapshot, root, true)).not.toBeNull()
+    const restored = await generateTypesBundle(input)
+    expect(restored.ok, restored.ok ? '' : restored.diagnostics.join('\n')).toBe(true)
+    if (first.ok && restored.ok) expect(restored.index.files).toEqual(first.index.files)
+  }, 20000)
+
+  it('库声明使用类型诊断解析时仍保留公开字段说明、readonly及JS的JSDoc类型错误', async () => {
+    const entry = `<script lang="ts">
+import type {Base} from 'model-lib';
+export interface Payload extends Base {
+  /** 自有计数说明 */
+  count:number
+}
+</script><script setup lang="ts">import {double} from 'js-lib';defineProps<{params:Payload}>();const result=double(2);</script><template>{{params.id}} {{result}}</template>`
+    const root = makeProject('vue-library-docs', {
+      'src/entry.vue': entry,
+      'node_modules/model-lib/package.json': '{"name":"model-lib","version":"1.0.0","types":"index.d.ts"}',
+      'node_modules/model-lib/index.d.ts': 'export interface Base {\n/** 来自库的字段说明 */\nreadonly id?:string\n}',
+      'node_modules/js-lib/package.json': '{"name":"js-lib","version":"1.0.0","main":"index.js"}',
+      'node_modules/js-lib/index.js': '/** @param {number} value @returns {number} */ export function double(value){return value*2}',
+    }, { allowJs: true, maxNodeModuleJsDepth: 1 })
+    for (const pkg of ['vue', 'vue-tsc']) fs.symlinkSync(path.join(pluginRoot, 'node_modules', pkg), path.join(root, 'node_modules', pkg), 'dir')
+    const input = { root, exposes: [{ name: './entry', import: './src/entry.vue' }], pluginVersion: 'test',
+      incrementalDir: path.join(root, 'node_modules/.fulgurjs-types-cache-docs'), cacheCompilerReads: true }
+    const result = await generateTypesBundle(input)
+    expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+    if (!result.ok) return
+    const text = [...result.files.values()].join('\n')
+    expect(text).toContain('自有计数说明')
+    // 继承字段保留外部库引用，不能要求复制库源码注释；验证真实消费方能读出说明和修饰符。
+    const output = path.join(root, 'consumer-types')
+    for (const [name, content] of result.files) {
+      const file = path.join(output, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content)
+    }
+    const consumer = path.join(root, 'consumer.ts')
+    fs.writeFileSync(consumer, `import type {Payload} from './consumer-types/files/entry.vue.d.ts';declare const payload:Payload;const current=payload.id;payload.id='wrong';`)
+    const program = ts.createProgram([consumer], { noEmit: true, strict: true, skipLibCheck: true,
+      module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, types: [] })
+    const checker = program.getTypeChecker()
+    let id: ts.PropertyAccessExpression | undefined
+    const visit = (node: ts.Node): void => { if (!id && ts.isPropertyAccessExpression(node) && node.name.text === 'id') id = node; ts.forEachChild(node, visit) }
+    visit(program.getSourceFile(consumer)!)
+    const field = checker.getSymbolAtLocation(id!.name)!
+    expect(ts.displayPartsToString(field.getDocumentationComment(checker))).toContain('来自库的字段说明')
+    expect(checker.typeToString(checker.getTypeAtLocation(id!))).toBe('string | undefined')
+    expect(ts.getPreEmitDiagnostics(program).map(d => d.code)).toEqual([2540])
+    fs.writeFileSync(path.join(root, 'src/entry.vue'), entry.replace('double(2)', `double('wrong')`))
+    const invalid = await generateTypesBundle(input)
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) expect(invalid.diagnostics.join('\n')).toContain('TS2345')
+  }, 20000)
+
   it('dev内存程序响应依赖类型、源位置和配置变化，不复用旧诊断', async () => {
     const root=makeProject('vue-live-program', {
       'src/entry.vue': `<script lang="ts">export type {Model} from './model';</script><script setup lang="ts">import type {Model} from './model';defineProps<{params:Model}>();</script><template>{{params.id.toUpperCase()}}</template>`,

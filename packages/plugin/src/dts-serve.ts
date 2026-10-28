@@ -155,21 +155,30 @@ export function createDevTypesServer(
       }
       mark('cache-check')
       let result: DtsGenerateResult
+      const generate = (cacheCompilerReads: boolean): Promise<DtsGenerateResult> => generateTypesBundle({
+        root: options.root, exposes: publicExposes, pluginVersion: options.pluginVersion,
+        signal: controller.signal, incrementalDir, vueCompiler, cacheCompilerReads,
+      })
       try {
         if (!incrementalDir) {
           const cacheRoot = path.join(options.root, 'node_modules')
           fs.mkdirSync(cacheRoot, { recursive: true })
           incrementalDir = fs.mkdtempSync(path.join(cacheRoot, '.fulgurjs-types-cache-'))
         }
-        result = await generateTypesBundle({ root: options.root, exposes: publicExposes,
-          pluginVersion: options.pluginVersion, signal: controller.signal, incrementalDir, vueCompiler })
+        // 父进程解析配置/闭包时，子进程即可并行载入工具；缓存命中不会到达此处。
+        if (compilerTracesInputs) vueCompiler.prime(options.root)
+        const compilation = generate(compilerTracesInputs)
+        // 编译已经启动，再并行预热校验线程；不能又把冷路径排到缓存往返之后。
+        // 预热失败由实际capture/validate路径处理，并以普通读取安全降级。
+        if (compilerTracesInputs) void cache.warmup(cacheInput).catch(() => {})
+        result = await compilation
       } catch (e) {
         result = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截）：${(e as Error).stack ?? (e as Error).message}`] }
       }
       mark('generate')
       if (disposed) return
       if (result.ok) for (const notice of result.notices) warn(`[fulgurjs] 类型生成提示：${notice}`)
-      if (result.ok && result.cacheTraceFile && !handle) {
+      if (result.cacheTraceFile && !handle) {
         try {
           handle = await cache.capture(cacheInput, result.cacheTraceFile)
           if (handle) cache.watch(handle, changed)
@@ -194,6 +203,15 @@ export function createDevTypesServer(
         }
       }
       if (disposed) return
+      if (result.requiresInputValidation && !handle) {
+        // 普通成功结果允许缓存故障降级；读取视图的结果不能未经验证直接提供。
+        // 自定义Vue工具、外部模板或缓存线程故障时，以实时读取重新完整编译。
+        warn('[fulgurjs] 类型读取视图无法完成输入校验，已关闭读取复用并重新生成；未验证结果不会提供。')
+        try { result = await generate(false) }
+        catch (error) { result = { ok: false, diagnostics: [`普通读取重试失败：${(error as Error).message}`] } }
+        mark('uncached-retry')
+        if (disposed) return
+      }
       if (changedDuringGeneration || pendingInvalidate || epoch !== inputEpoch) { queueRecheck(); return }
       if (result.ok) {
         if (handle) {
