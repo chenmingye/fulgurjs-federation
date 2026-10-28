@@ -32,10 +32,10 @@ function project(): string {
   return root
 }
 
-async function runConfig(root: string, command: 'serve' | 'build', options: Record<string, unknown> = {}): Promise<void> {
+async function runConfig(root: string, command: 'serve' | 'build', options: Record<string, unknown> = {}, isPreview = false): Promise<void> {
   const plugins = federation({ name: 'probe', exposes: { './Entry': './src/Entry.vue' }, ...options } as never)
   const core = plugins.find((plugin) => plugin.name === 'fulgurjs:core')!
-  await (core.config as (config: unknown, env: { command: 'serve' | 'build'; mode: string }) => Promise<unknown>)({ root }, { command, mode: command === 'build' ? 'production' : 'development' })
+  await (core.config as (config: unknown, env: { command: 'serve' | 'build'; mode: string; isPreview?: boolean }) => Promise<unknown>)({ root }, { command, mode: command === 'build' ? 'production' : 'development', isPreview })
 }
 
 it('serve 配置解析阶段创建类型服务，build 不创建', async () => {
@@ -46,6 +46,17 @@ it('serve 配置解析阶段创建类型服务，build 不创建', async () => {
     expect(mocks.create).toHaveBeenCalledTimes(1)
     mocks.create.mockClear()
     await runConfig(root, 'build')
+    expect(mocks.create).not.toHaveBeenCalled()
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+it('vite preview 不创建类型服务', async () => {
+  const root = project()
+  try {
+    mocks.create.mockClear()
+    await runConfig(root, 'serve', {}, true)
     expect(mocks.create).not.toHaveBeenCalled()
   } finally {
     fs.rmSync(root, { recursive: true, force: true })

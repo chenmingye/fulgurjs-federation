@@ -365,7 +365,8 @@ export function federation(options: FederationOptions): Plugin[] {
       state.normalized = normalized
       // 类型生成只依赖源码/配置。配置解析是 dev 启动里最早能拿到 root/exposes 的时机，
       // 在此启动可让编译子进程与 Vite 其余启动工作并行，而不是等服务器就绪后才开始。
-      if (env.command === 'serve' && normalized.exposes.length > 0 && normalized.dts) {
+      // preview 不提供 dev 类型端点，不能只为了预演产物启动编译子进程。
+      if (env.command === 'serve' && !env.isPreview && normalized.exposes.length > 0 && normalized.dts) {
         earlyTypesServer ??= createDevTypesServer(normalized)
       }
       // Vite 8（rolldown）生产构建：启用原生 codeSplitting 保护组（outputOptions 钩子）
