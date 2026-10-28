@@ -12,6 +12,10 @@ export function genVueDeclarationProgram(): string {
 const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
+const __fgTimingsOn = !!process.env.FG_DTS_TIMINGS;
+const __fgTimingStart = performance.now();
+const __fgTimings = {};
+const __fgMark = name => { if (__fgTimingsOn) __fgTimings[name] = Math.round(performance.now() - __fgTimingStart); };
 const req = createRequire(path.join(process.cwd(), 'package.json'));
 const ts = req('typescript');
 const vue = req('vue-tsc');
@@ -34,6 +38,7 @@ const formatHost = {
   getNewLine: () => '\n',
 };
 const diagnostics = [...(raw.error ? [raw.error] : []), ...parsed.errors];
+__fgMark('config');
 if (!diagnostics.length) {
   const legacyProgram = typeof vue.createProgram === 'function';
   const reusableState = !legacyProgram && typeof __fulgurjsProgramState === 'object' ? __fulgurjsProgramState : undefined;
@@ -94,7 +99,9 @@ if (!diagnostics.length) {
     return writeFile(fileName,text,...args);
   };
   const request={rootNames:parsed.fileNames,options:parsed.options,host,...(state?.program?{oldProgram:state.program}:{})};
+  __fgMark('beforeProgram');
   const program=factory(request);
+  __fgMark('program');
   if(state){
     state.program=program;state.resolution=request.host.getModuleResolutionCache?.();
     const packageInputs=new Map(state.packageInputs||[]);
@@ -103,6 +110,7 @@ if (!diagnostics.length) {
     state.packageInputs=packageInputs;
   }
   diagnostics.push(...program.getOptionsDiagnostics(), ...program.getGlobalDiagnostics());
+  __fgMark('globals');
   const sources = program.getSourceFiles().filter(file => {
     const original = file.fileName.replace(/(\.vue)\.[cm]?[jt]sx?$/, '$1');
     return closure.has(path.resolve(original));
@@ -111,6 +119,7 @@ if (!diagnostics.length) {
   for (const file of sources) {
     diagnostics.push(...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file));
   }
+  __fgMark('diagnostics');
   const normalize = file => path.resolve(file.replace(/(\.vue)\.[cm]?[jt]sx?$/, '$1'));
   const sourceMap = new Map(sources.map(source => [normalize(source.fileName), source]));
   const pending = legacyProgram ? [...sourceMap.keys()] : generationInput.entries.map(normalize);
@@ -146,8 +155,11 @@ if (!diagnostics.length) {
   }
 
 }
+__fgMark('emit');
 const errors = diagnostics.filter(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error);
 if (!errors.length) finishInputTrace();
+__fgMark('trace');
+if (__fgTimingsOn) process.stderr.write('FG_DTS_TIMINGS ' + JSON.stringify(__fgTimings) + '\n');
 if (!errors.length && typeof __fulgurjsProgramState === 'object' && traceFile && !fs.existsSync(traceFile)) __fulgurjsProgramState.reusable=false;
 if (errors.length) {
   process.stdout.write(ts.formatDiagnostics(errors, formatHost));

@@ -18,6 +18,7 @@ import { createVueCompilerSession } from './dts-vue-session'
 import { createRequire } from 'node:module'
 import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
 import { createTypesCacheWorker, type TypesCacheHandle } from './dts-cache-worker-client'
+import { typesCachePath } from './dts-cache'
 
 /**
  * 只响应可能改变声明的源码和配置。Vite watcher 同时观察日志、截图和文档；
@@ -96,32 +97,45 @@ export function createDevTypesServer(
     log(`[fulgurjs] 类型输入在校验/生成期间变化${reason ? `（${reason}）` : ''}，已排队重检；本轮结果不发布到缓存。`)
   }
   const run = async (): Promise<void> => {
-    await new Promise<void>(resolve => setImmediate(resolve))
     if (disposed) return
     const epoch = inputEpoch
     const started = performance.now()
+    const timingStart = started
+    const timing: string[] = []
+    const mark = (label: string): void => {
+      if (process.env.FG_DTS_TIMINGS) timing.push(`${label} ${Math.round(performance.now() - timingStart)}ms`)
+    }
     let handle: TypesCacheHandle | null = null
     try {
+      // 冷启动（还没有成功快照文件）直接进入生成：等待 setImmediate 和后台缓存线程
+      // 往返会让编译子进程排到 Vite 启动的同步工作之后，实测白等数秒。缓存文件存在时
+      // 仍然先做后台校验，命中就不重新编译。
+      const hasCache = fs.existsSync(typesCachePath(options.root))
+      mark(hasCache ? 'cache-file' : 'cold-start')
       try {
-        const cached = await cache.read(cacheInput)
-        if (disposed) return
-        if (cached) {
-          handle = cached
-          cache.watch(cached, changed)
-          // 外部输入监听安装后再次校验，封闭监听建立前的窗口。
-          const reason = await cache.validate(cacheInput, cached, false)
+        if (hasCache) {
+          await new Promise<void>(resolve => setImmediate(resolve))
           if (disposed) return
-          if (epoch !== inputEpoch || pendingInvalidate) { queueRecheck(); return }
-          if (!reason) {
-            files = cached.result.files
-            revision = cached.result.index.revision
-            lastErrorKey = null
-            log(`[fulgurjs] 类型缓存命中（后台输入与声明摘要校验 ${Math.round(performance.now() - started)}ms，${cached.result.fileCount} 个声明文件，revision ${revision}），无需重新编译。`)
-            return
+          const cached = await cache.read(cacheInput)
+          if (disposed) return
+          if (cached) {
+            handle = cached
+            cache.watch(cached, changed)
+            // 外部输入监听安装后再次校验，封闭监听建立前的窗口。
+            const reason = await cache.validate(cacheInput, cached, false)
+            if (disposed) return
+            if (epoch !== inputEpoch || pendingInvalidate) { queueRecheck(); return }
+            if (!reason) {
+              files = cached.result.files
+              revision = cached.result.index.revision
+              lastErrorKey = null
+              log(`[fulgurjs] 类型缓存命中（后台输入与声明摘要校验 ${Math.round(performance.now() - started)}ms，${cached.result.fileCount} 个声明文件，revision ${revision}），无需重新编译。`)
+              return
+            }
+            // 有效旧快照不代表输入仍有效；失效后必须进入冷生成，不能反复读取同一旧快照。
+            await cache.release(cacheInput, cached)
+            handle = null
           }
-          // 有效旧快照不代表输入仍有效；失效后必须进入冷生成，不能反复读取同一旧快照。
-          await cache.release(cacheInput, cached)
-          handle = null
         }
         if (!compilerTracesInputs) handle = await cache.capture(cacheInput)
         if (disposed) return
@@ -139,6 +153,7 @@ export function createDevTypesServer(
           warn(`[fulgurjs] 类型缓存后台检查不可用：${(error as Error).message}；已回到正常生成。请检查插件安装及缓存目录权限。`)
         }
       }
+      mark('cache-check')
       let result: DtsGenerateResult
       try {
         if (!incrementalDir) {
@@ -151,6 +166,7 @@ export function createDevTypesServer(
       } catch (e) {
         result = { ok: false, diagnostics: [`声明生成发生未预期异常（已拦截）：${(e as Error).stack ?? (e as Error).message}`] }
       }
+      mark('generate')
       if (disposed) return
       if (result.ok) for (const notice of result.notices) warn(`[fulgurjs] 类型生成提示：${notice}`)
       if (result.ok && result.cacheTraceFile && !handle) {
@@ -194,6 +210,13 @@ export function createDevTypesServer(
         lastErrorKey = null
         log(`[fulgurjs] 类型资源已生成（${result.tool}，${result.fileCount} 个声明文件，revision ${revision}）`
           + `${result.index.externals.length > 0 ? `；外部类型依赖：${result.index.externals.join(', ')}` : ''}。宿主将自动同步。`)
+        if (process.env.FG_DTS_TIMINGS) {
+          mark('publish')
+          const child = result.timings?.child ? Object.entries(result.timings.child).map(([k, v]) => `${k} ${v}ms`).join('，') : ''
+          log(`[fulgurjs] 类型生成耗时：本服务 ${timing.join('，')}`
+            + `${result.timings ? `；生成器 ${Object.entries(result.timings.parent).map(([k, v]) => `${k} ${v}ms`).join('，')}` : ''}`
+            + `${child ? `；编译进程 ${child}` : ''}`)
+        }
       } else {
         files = null
         revision = null

@@ -351,6 +351,10 @@ export function federation(options: FederationOptions): Plugin[] {
     state.transformedModules.add(id.split('?')[0])
   }
 
+  // dev 类型生成只依赖源码/配置，不依赖 dev server 就绪。配置解析阶段就启动，
+  // 避免编译子进程排到 Vite 启动的同步工作之后（实测会白等数秒）。
+  let earlyTypesServer: DevTypesServer | null = null
+
   const pre: Plugin = {
     name: 'fulgurjs:core',
     enforce: 'pre',
@@ -359,6 +363,11 @@ export function federation(options: FederationOptions): Plugin[] {
       const root = path.resolve(userConfig.root ?? process.cwd())
       const normalized = normalizeOptions(options, root, env.command)
       state.normalized = normalized
+      // 类型生成只依赖源码/配置。配置解析是 dev 启动里最早能拿到 root/exposes 的时机，
+      // 在此启动可让编译子进程与 Vite 其余启动工作并行，而不是等服务器就绪后才开始。
+      if (env.command === 'serve' && normalized.exposes.length > 0 && normalized.dts) {
+        earlyTypesServer ??= createDevTypesServer(normalized)
+      }
       // Vite 8（rolldown）生产构建：启用原生 codeSplitting 保护组（outputOptions 钩子）
       state.rolldownBuild = env.command === 'build' && Number((readInstalledVersion(root, 'vite') ?? '0').split('.')[0]) >= 8
 
@@ -1524,7 +1533,8 @@ export function federation(options: FederationOptions): Plugin[] {
       // ---- remote 端中间件：容器入口 / manifest / 类型资源（跨 dev-server 协作的服务面）----
       let typesServer: DevTypesServer | null = null
       if (n.exposes.length > 0 && n.dts) {
-        typesServer = createDevTypesServer(n)
+        // 已在 configResolved 提前创建时复用同一实例（生成可能早已开始）。
+        typesServer = earlyTypesServer ??= createDevTypesServer(n)
         // 源码变化 → 防抖重生成声明 bundle（revision 变化经 manifest 轮询传导到宿主）
         let regenTimer: ReturnType<typeof setTimeout> | null = null
         const syncedTypesDir = typeof n.dts === 'object' && n.dts.dir

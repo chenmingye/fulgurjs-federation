@@ -57,6 +57,8 @@ export interface DtsGenerateOk {
   notices: string[]
   /** dev隔离编译进程的实际输入记录；仅在独占临时目录内使用，不进入公开类型资源。 */
   cacheTraceFile?: string
+  /** FG_DTS_TIMINGS=1 时的分阶段耗时（毫秒，父进程与编译子进程各一组）；默认不采集。 */
+  timings?: { parent: Record<string, number>; child?: Record<string, number> }
 }
 
 export interface DtsGenerateFail {
@@ -376,6 +378,12 @@ function makeResolver(ts: TsModule, co: Record<string, unknown>, readFile = ts.s
  */
 export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsGenerateResult> {
   const generationStarted = Date.now()
+  const timingsEnabled = !!process.env.FG_DTS_TIMINGS
+  const timingStart = performance.now()
+  const timings: Record<string, number> = {}
+  const mark = (label: string): void => {
+    if (timingsEnabled) timings[label] = Math.round(performance.now() - timingStart)
+  }
   const { root, exposes, pluginVersion, signal } = input
   const diagnostics: string[] = []
   if (exposes.length === 0) {
@@ -434,6 +442,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   }
   const ctx = loadTsContext(root, ts, diagnostics, readGenerationFile, observedHost)
   if (!ctx) return { ok: false, diagnostics }
+  mark('config')
 
   // 入口解析：exposes.import 相对 root；alias 形态（@/x）经 TS resolver 解析
   const resolver = makeResolver(ts, ctx.compilerOptions, readGenerationFile, observedHost, root)
@@ -466,12 +475,14 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
 
   // rootDir：全工程文件公共目录（空时退到入口公共目录）
   const closure = computeStaticClosure(ts, entryFiles, resolver, root, readGenerationFile)
+  mark('closure')
   const rootDir = commonDirOf([...ctx.projectFiles, ...closure])
   if (!rootDir) return { ok: false, diagnostics: ['无法确定声明输出根目录（rootDir）。请检查工程 tsconfig 的 include。'] }
 
   const emitted = new Map<string, string>() // 绝对源文件 → 声明文本
   let tool: 'typescript' | 'vue-tsc' = 'typescript'
   let cacheTraceFile: string | undefined
+  let childTimings: Record<string, number> | undefined
 
   // 入口**静态**导入闭包：诊断门禁与产物范围都限定在它——动态导入（如桥接契约的
   // 装配模块）只是类型边，其文件的存量业务错误与公开声明面无关，不进闭包也不阻断
@@ -630,7 +641,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       const heapMarker = cacheDir ? path.join(cacheDir, 'raised-heap') : undefined
       const raisedArgs = [`--max-old-space-size=${process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'}`]
       const initialArgs = heapMarker && fs.existsSync(heapMarker) ? raisedArgs : []
+      mark('before-compiler')
       let { err, stdout, stderr } = await attempt(initialArgs)
+      mark('compiler')
       // 服务关闭是主动取消，不能误走「系统强杀」重试，重新启动无人使用的编译器。
       if (signal?.aborted) {
         clearOutput()
@@ -700,6 +713,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
           return { ok: false, diagnostics }
         }
         // 仅闭包外错误：声明 emit 已产出（noEmitOnError:false），继续
+      }
+      if (timingsEnabled) {
+        const trace = /FG_DTS_TIMINGS (\{[^\n]*\})/.exec(`${stdout}\n${stderr}`)
+        if (trace) {
+          try { childTimings = JSON.parse(trace[1]!) as Record<string, number> } catch { /* 输出不是计时行 */ }
+        }
       }
     } catch {
       clearOutput()
@@ -857,6 +876,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     exposesMap[name] = { declaration: declRel }
   }
 
+  mark('display')
   displayPublicDataTypes(ts, files, Object.values(exposesMap).map(entry => entry.declaration), root, ctx.compilerOptions)
   for (const [rel, text] of files) {
     if (text.includes(root)) {
@@ -876,7 +896,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   const revision = crypto.createHash('sha256').update(JSON.stringify(index)).digest('hex').slice(0, 16)
   const fullIndex: DtsBundleIndex = { ...index, revision }
   files.set('index.json', `${JSON.stringify(fullIndex, null, 2)}\n`)
-  return { ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0, notices: diagnostics, ...(cacheTraceFile ? { cacheTraceFile } : {}) }
+  mark('total')
+  return {
+    ok: true, files, index: fullIndex, tool, fileCount: filesDigest ? Object.keys(filesDigest).length : 0, notices: diagnostics,
+    ...(cacheTraceFile ? { cacheTraceFile } : {}),
+    ...(timingsEnabled ? { timings: { parent: { ...timings }, ...(childTimings ? { child: childTimings } : {}) } } : {}),
+  }
 }
 
 /** 收集 emit 产物 → { 绝对源文件 → 声明文本 }（.vue → .vue.d.ts；.ts/.tsx → .d.ts）。
