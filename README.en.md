@@ -84,7 +84,7 @@ Rule of thumb: import from the entry of the framework your app runs on; framewor
 - **Full sub app bridge**: `defineBridgeApp` (child) + `createVueBridgeApp` / `createReactBridgeApp` (host); mount/unmount, session epochs, unmount-failure quarantine.
 - **URL sync**: `createVueBridgeNavigation` / `createReactBridgeNavigation` (host) + Vue factory returning `{ app, router }` / `createReactBridgeRouter` (child); deep-link refresh, guard cancellation, query/hash preservation.
 - **Shared dependencies**: singleton / requiredVersion / strictVersion / shareScope / eager, sync & async negotiation, React 18/19 multi-version isolation.
-- **Remote types**: providers ship distributable declarations with the build (real SFC props/generics/overloads), hosts sync automatically in dev — plain imports and `loadRemote`/`remoteComponent`/bridge factories share one set of types, misspelled entries fail at compile time; the `types` CLI command syncs and validates for CI before typecheck.
+- **Remote types**: providers ship distributable declarations with the build (real SFC props/generics/overloads), hosts sync automatically in dev — plain imports and `loadRemote`/`remoteComponent`/bridge factories share one set of types, misspelled entries fail at compile time; the `types` CLI command syncs and validates for CI before typecheck. Dev defaults to public-contract generation; `dts.devCheck: "implementation"` enables full static implementation checking. Production build and CLI always check original source; available types do not prove application implementation correctness.
 - **CLI**: `create` / `init` / `explain` / `types` / `check-pages` / `doctor` / `port`.
 
 ## Documentation

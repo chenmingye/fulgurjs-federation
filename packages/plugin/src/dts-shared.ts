@@ -29,6 +29,8 @@ export interface DtsBundleIndex {
   externals: string[]
   /** bundle 内全部声明文件 → sha256（宿主逐文件校验；只允许下载登记过的文件） */
   files: Record<string, string>
+  /** 开发期公开合同检查；缺省为原有完整实现生成路径，不能把contract当完整业务检查。 */
+  check?: 'contract'
 }
 
 export interface DtsIndexIssue {
@@ -114,6 +116,9 @@ export function parseDtsIndex(input: unknown): DtsIndexParseResult {
       issues.push({ field: 'externals', message: '必须是字符串数组（外部类型依赖包名）', got: typeof raw.externals })
     }
   }
+  if (raw.check !== undefined && raw.check !== 'contract') {
+    issues.push({ field: 'check', message: '公开合同检查标记必须为 contract', got: raw.check })
+  }
   if (issues.length > 0) return { issues }
   return {
     index: {
@@ -124,6 +129,7 @@ export function parseDtsIndex(input: unknown): DtsIndexParseResult {
       exposes: raw.exposes as Record<string, DtsBundleExposeEntry>,
       externals: Array.isArray(raw.externals) ? (raw.externals as string[]) : [],
       files: raw.files as Record<string, string>,
+      ...(raw.check === 'contract' ? { check: 'contract' as const } : {}),
     },
     issues,
   }

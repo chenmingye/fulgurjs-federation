@@ -70,6 +70,7 @@ npm run test:examples
 - 单测只在 `packages/plugin/tests/` 内发现。示例脚本用 Node test runner，Jeecg 自带其他测试框架，不混入插件 Vitest。
 - fixture/e2e 安装顺序和链接依赖见 CONTRIBUTING 与 `e2e/scripts/ci-install-fixtures.sh`；本地修改插件后先构建，再启动消费工程。
 - dev/prod、Vue/React、桥接及路由项目列表以当前 Playwright 配置和 CI 为准。根 `test:dev` / `test:prod` 的简写不能当作整个 CI 矩阵已跑完。
+- 开发类型默认只检查公开合同，`dts.devCheck: "implementation"`使用完整静态实现门禁；build/CLI始终从真实源码严格生成。检查范围和复杂语法回退见组件指南，不能把合同生成成功报告成业务实现检查通过。
 - 行为修复增加能重现原问题的回归；按实际影响验证浏览器行为。构建通过不能证明页面挂载、路由、错误恢复和卸载正确。
 - 修改公开 Jeecg TinyMCE 生命周期时运行 `npm --prefix e2e run test:editor-lifecycle`，并验证真实浏览器快速离开、重进与只读。
 - 文档、注释与简单目录说明不机械新增测试，不因纯文档任务重建业务站点。

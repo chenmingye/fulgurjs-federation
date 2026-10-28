@@ -111,7 +111,7 @@ export interface NormalizedOptions {
   manifest: boolean
   runtimePlugins: string[]
   /** 远程类型输出（6.5.0 单一机制：宿主自动同步声明 + ambient 声明 + 注册表；dir 覆盖默认目录） */
-  dts: boolean | { dir?: string }
+  dts: boolean | { dir?: string; devCheck?: 'contract' | 'implementation' }
   root: string
   /** 本插件版本（D.5 DEV-006：宿主/远程版本一致性校验） */
   pluginVersion: string
@@ -140,7 +140,8 @@ export interface FederationOptions {
   shareScope?: string
   manifest?: boolean | Record<string, unknown>
   runtimePlugins?: string[]
-  dts?: boolean | { dir?: string; mode?: 'source' | 'shim' }
+  /** dev默认只检查公开类型合同；implementation恢复完整静态实现检查。build/CLI始终完整检查。 */
+  dts?: boolean | { dir?: string; devCheck?: 'contract' | 'implementation'; mode?: 'source' | 'shim' }
   /**
    * dev 下自身源码（含依赖，需配合 optimizeDeps.exclude）是否参与 shared 协商改写。
    * 缺省按角色推断：提供 exposes/setup 的应用（纯 remote 与双向联邦）为 true——被宿主
@@ -618,6 +619,11 @@ function validateOptions(options: FederationOptions): void {
       '删除 mode 字段（保留 dts: true 或 { dir } 形态）',
       `dts: true  // 或 dts: { dir: 'src/fulgurjs/types' }`,
     )
+  }
+  if (typeof options.dts === 'object' && options.dts !== null && options.dts.devCheck !== undefined
+      && !['contract', 'implementation'].includes(options.dts.devCheck)) {
+    configError('dts.devCheck 必须是 contract 或 implementation', options.dts.devCheck,
+      '选择开发期公开合同检查或完整静态实现检查；build/CLI始终完整检查', "dts: { devCheck: 'contract' }")
   }
 }
 

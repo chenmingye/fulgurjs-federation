@@ -262,3 +262,9 @@ describe('current configuration diagnostics', () => {
     expect(() => norm({ name: 'h', automaticAsyncBoundary: false } as never)).not.toThrow(/5\.0\.0|恒为 true|始终开启/)
   })
 })
+
+it('dts.devCheck只接受明确的开发检查范围，归一化保留选择',()=>{
+  expect(norm({name:'provider',dts:{devCheck:'contract'}}).dts).toEqual({devCheck:'contract'})
+  expect(norm({name:'provider',dts:{devCheck:'implementation'}}).dts).toEqual({devCheck:'implementation'})
+  expect(()=>norm({name:'provider',dts:{devCheck:'none' as 'contract'}})).toThrow('dts.devCheck')
+})

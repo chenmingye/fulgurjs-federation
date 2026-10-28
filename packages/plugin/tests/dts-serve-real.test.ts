@@ -20,7 +20,7 @@ it('真实Vue失败记录监听目录外依赖，外部修复后自动恢复且�
   fs.writeFileSync(path.join(root, 'src/Entry.vue'), `<script setup lang="ts">import type {Model} from '../../external/model';defineProps<{params:Model}>();</script><template>{{params.id.toUpperCase()}}</template>`)
   for (const name of ['typescript', 'vue', 'vue-tsc']) fs.symlinkSync(path.resolve(__dirname, '../node_modules', name), path.join(root, 'node_modules', name), 'dir')
   const logs: string[] = []
-  const service = createDevTypesServer({ root, exposes: [{ name: './Entry', import: './src/Entry.vue' }], pluginVersion: 'test', dts: true } as NormalizedOptions,
+  const service = createDevTypesServer({ root, exposes: [{ name: './Entry', import: './src/Entry.vue' }], pluginVersion: 'test', dts: { devCheck: 'implementation' } } as NormalizedOptions,
     { log: line => logs.push(line), warn: line => logs.push(line) })
   try {
     await vi.waitFor(() => expect(logs.join('\n')).toContain('TS2339'), { timeout: 15000 })

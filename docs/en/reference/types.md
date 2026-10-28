@@ -21,7 +21,7 @@ Import from: `@fulgurjs/federation`.
 | `shareScope` | yes | `string` | Sharing group name; scopes negotiate independently, default default. |
 | `manifest` | yes | `boolean \| Record<string, unknown>` | Production manifest enabled by default; false disables it without disabling ordinary module loading, but limits manifest-based checks/preloading. |
 | `runtimePlugins` | yes | `string[]` | Runtime plugin module paths, empty by default; relative paths resolve from the application root. |
-| `dts` | yes | `boolean \| { dir?: string }` | Remote type generation and sync (see the [configuration reference](configuration.md) and [API · remote types](api.md#remote-types-generation-and-sync)). |
+| `dts` | yes | `boolean \| { dir?: string; devCheck?: 'contract' \| 'implementation' }` | Remote type generation and sync (see the [configuration reference](configuration.md) and [API · remote types](api.md#remote-types-generation-and-sync)). |
 | `devSharedSelf` | yes | `boolean` | Whether dev source participates in sharing. Omitted: true for exposes/setup providers, false for pure consumers; explicit values win. The plugin manages its pre-bundling wiring; do not manually exclude all shared packages by default. |
 | `devCorsOrigins` | yes | `string[] \| "*"` | Dev federation entry/manifest/types Origin policy, default *. It supplies Vite module CORS only when server.cors is omitted; explicit server.cors does not override plugin endpoints. Non-loopback wildcard configurations may still warn DEV-011. Production CORS is separate. |
 

@@ -19,6 +19,7 @@ import type { VueCompilerSession } from './dts-vue-session'
 import path from 'node:path'
 import { formatDeclarationDiagnostics } from './dts-diagnostics'
 import { genVueDeclarationProgram } from './dts-vue-program'
+import { createContractProjection } from './dts-contract'
 import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
@@ -38,7 +39,7 @@ export interface DtsGenerateInput {
   root: string
   exposes: DtsGenerateExpose[]
   pluginVersion: string
-  /** 中止信号：vue-tsc 子进程立即 kill（TS API 路径为进程内同步段，仅边界检查） */
+  /** 中止信号：vue-tsc 子进程立即 kill（独立CLI的TS API同步段仅边界检查） */
   signal?: AbortSignal
   /** dev 服务独占的临时缓存目录；同一服务串行复用，关闭后由服务删除，不进入类型包。 */
   incrementalDir?: string
@@ -46,6 +47,8 @@ export interface DtsGenerateInput {
   vueCompiler?: VueCompilerSession
   /** dev内部读取视图；结果必须先完成真实输入校验，无法校验时关闭此项重新生成。 */
   cacheCompilerReads?: boolean
+  /** 开发期公开合同投影；未传仍完整实现诊断，build/CLI不启用。 */
+  contractOnly?: boolean
 }
 
 export interface DtsGenerateOk {
@@ -64,6 +67,8 @@ export interface DtsGenerateOk {
   requiresInputValidation?: boolean
   /** FG_DTS_TIMINGS=1 时的分阶段耗时（毫秒，父进程与编译子进程各一组）；默认不采集。 */
   timings?: { parent: Record<string, number>; child?: Record<string, number> }
+  /** 开启计时时记录实际程序规模，不与毫秒值混用。 */
+  graph?: { programFiles: number; checkedFiles: number; projectedFiles: number }
 }
 
 export interface DtsGenerateFail {
@@ -386,6 +391,17 @@ function makeResolver(ts: TsModule, co: Record<string, unknown>, readFile = ts.s
  * 成功产出 index.json + files/*.d.ts（in-memory Map，由调用方决定落盘/服务/打包）。
  */
 export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsGenerateResult> {
+  const projection = { used: false, diagnosticFailure: false }
+  const result = await generateTypesBundleOnce(input, projection)
+  if (result.ok || !input.contractOnly || !projection.used || !projection.diagnosticFailure || input.signal?.aborted) return result
+  // 投影不适用于某种工具/语法时由原编译器裁决，不能发布近似合同。
+  const fallback = await generateTypesBundleOnce({ ...input, contractOnly: false })
+  if (fallback.ok) fallback.notices.push('公开合同快速路径未能完成检查，已使用完整源码路径生成精确声明。')
+  else fallback.diagnostics.unshift('公开合同投影检查未完成，已用完整源码重试；以下为完整路径诊断：')
+  return fallback
+}
+
+async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { used: false, diagnosticFailure: false }): Promise<DtsGenerateResult> {
   const generationStarted = Date.now()
   const timingsEnabled = !!process.env.FG_DTS_TIMINGS
   const timingStart = performance.now()
@@ -405,6 +421,24 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   }
   const tsReq = createRequire(path.join(tsPkgDir, 'package.json'))
   const ts = tsReq('typescript') as TsModule
+  let parseVue: ((text: string) => unknown) | undefined
+  if (input.contractOnly) {
+    try {
+      const provider = createRequire(path.join(root, 'package.json'))
+      const tool = createRequire(provider.resolve('vue-tsc'))
+      const core = tool('@vue/language-core')
+      const config = ts.findConfigFile(root, ts.sys.fileExists)
+      const options = config ? core.createParsedCommandLine(ts, ts.sys, config).vueOptions : undefined
+      const special = options && (options.lib !== 'vue' || options.plugins?.length || options.hooks?.length
+        || Object.keys(options).some(key => /^infer(?:Component|Template)Dollar/.test(key) && options[key])
+        || options.fallthroughAttributes || options.vapor || options.jsxSlots || options.resolveStyleImports
+        || JSON.stringify(options.optionsWrapper) !== JSON.stringify(["(await import('vue')).defineComponent(", ')'])
+        || Object.entries(options.macros ?? {}).some(([name, aliases]) => JSON.stringify(aliases) !== JSON.stringify([name])))
+      if (!special) parseVue = provider('vue/compiler-sfc').parse
+    } catch { /* 旧版/自定义Vue工具保留原SFC；TS工程无需Vue */ }
+  }
+  const projectContract = input.contractOnly ? createContractProjection(ts, parseVue) : undefined
+  const contractSources: Record<string, string> = {}
   const parentInputs: Record<string, { hash: string; size: number; mtime: number; ctime: number; ino: number }> = {}
   let parentChanged = false
   const parentQueries: Record<string, Record<string, boolean>> = {}
@@ -432,7 +466,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size
         || (previous && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
       parentInputs[path.resolve(file)] = value
-      return text
+      const projected = projectContract?.(file, text) ?? text
+      if (projected !== text) { contractSources[path.resolve(file)] = projected; projection.used = true }
+      return projected
     } catch { return undefined }
   }
   for (let directory = root;; directory = path.dirname(directory)) {
@@ -493,13 +529,14 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   let cacheTraceFile: string | undefined
   let requiresInputValidation = false
   let childTimings: Record<string, number> | undefined
+  let graph: DtsGenerateOk['graph']
 
   // 入口**静态**导入闭包：诊断门禁与产物范围都限定在它——动态导入（如桥接契约的
   // 装配模块）只是类型边，其文件的存量业务错误与公开声明面无关，不进闭包也不阻断
   // 生成（设计合同：「与 exposed 声明依赖无关的业务错误不要被偷换成类型生成失败」）。
 
-  if (needsVueTsc) {
-    const vueTscDir = resolveFromRoot(root, 'vue-tsc')
+  if (needsVueTsc || input.vueCompiler) {
+    const vueTscDir = needsVueTsc ? resolveFromRoot(root, 'vue-tsc') : tsPkgDir
     if (!vueTscDir) {
       return {
         ok: false,
@@ -509,16 +546,17 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         ],
       }
     }
-    tool = 'vue-tsc'
+    tool = needsVueTsc ? 'vue-tsc' : 'typescript'
     const vueTscPkg = JSON.parse(readGenerationFile(path.join(vueTscDir, 'package.json'))!) as {
       version: string
       bin: Record<string, string>
     }
-    const binRel = vueTscPkg.bin?.['vue-tsc'] ?? vueTscPkg.bin?.['vue-tsc.js'] ?? 'bin/vue-tsc.js'
+    const binRel = needsVueTsc ? (vueTscPkg.bin?.['vue-tsc'] ?? vueTscPkg.bin?.['vue-tsc.js'] ?? 'bin/vue-tsc.js') : 'lib/typescript.js'
     const binPath = path.resolve(vueTscDir, binRel)
     // Vue工具链公开Program能力可用时只检查/emit暴露闭包；不检查无关动态装配页面。
     // 旧createProgram或现代Volar公开代理均使用提供方的工具；能力不可用仍回到CLI。
     const scopedVueProgram = (() => {
+      if (!needsVueTsc) return true
       if (/^1\./.test(vueTscPkg.version)) return true
       try {
         const req = createRequire(path.join(vueTscDir, 'package.json'))
@@ -529,7 +567,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       } catch { return false }
     })()
     if (!fs.existsSync(binPath)) {
-      return { ok: false, diagnostics: [`vue-tsc 入口不存在（${binPath}）。请重新安装 vue-tsc。`] }
+      return { ok: false, diagnostics: [`${tool} 入口不存在（${binPath}）。请重新安装 ${tool}。`] }
     }
     // 临时 tsconfig 写在提供方根（include 相对路径语义正确；用完即删）
     // 同一进程内重启/重建可与上一轮取消后的清理重叠，PID不能作为唯一文件名。
@@ -587,7 +625,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     // 大型闭包与输入记录不塞进argv，避免macOS ARG_MAX/Linux单参数长度上限。
     if (scopedVueProgram) fs.writeFileSync(programInputFile, JSON.stringify({
       closure: [...closure], entries: entryFiles, traceFile, ambientInputs: ctx.ambientInputs, started: generationStarted,
-      cacheCompilerReads: requiresInputValidation,
+      cacheCompilerReads: requiresInputValidation, contractSources, vue: needsVueTsc,
       ...(traceFile ? { parentInputs: { files: parentInputs, changed: parentChanged, fileQueries: parentQueries, probes: parentProbes, links: parentLinks, directories: parentDirectories } } : {}),
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
@@ -659,21 +697,21 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       // 服务关闭是主动取消，不能误走「系统强杀」重试，重新启动无人使用的编译器。
       if (signal?.aborted) {
         clearOutput()
-        return { ok: false, diagnostics: ['vue-tsc 声明生成被中止（dev server 关闭）。'] }
+        return { ok: false, diagnostics: [`${tool} 声明生成被中止（dev server 关闭）。`] }
       }
       // 默认堆 OOM：提堆重试一次（大型真实应用的闭包可达数 GB）。OOM 必须与
       // 「闭包内编译错误」区分诊断——OOM 的 stdout 没有可修的 TS 错误。
       if (err && isOom(stderr)) {
         const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
         if (initialArgs.length === 0) {
-          diagnostics.push(`vue-tsc 声明生成在默认堆下内存不足（V8 OOM），以 --max-old-space-size=${raised}MB 重试。`)
+          diagnostics.push(`${tool} 声明生成在默认堆下内存不足（V8 OOM），以 --max-old-space-size=${raised}MB 重试。`)
           if (heapMarker) fs.writeFileSync(heapMarker, '')
           ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
         }
         if (err && isOom(stderr)) {
           clearOutput()
           diagnostics.push(
-            'vue-tsc 声明生成内存不足（提高堆后仍 OOM）——类型资源未产出。',
+            `${tool} 声明生成内存不足（提高堆后仍 OOM）——类型资源未产出。`,
             '修法：用环境变量 FG_DTS_MAX_OLD_SPACE 提高生成器堆（如 16384），或缩小暴露模块的静态依赖面后重试。',
           )
           return { ok: false, diagnostics }
@@ -682,12 +720,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       // 超时强杀：首次超时 → 提堆+更长上限重试；重试再超时 → 明确超时诊断
       if (err && isTimeoutKill(err) && !isOom(stderr)) {
         const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
-        diagnostics.push(`vue-tsc 声明生成超过单次上限（${Math.round(timeoutFor(false) / 60000)} 分钟）被强杀，以提堆 + 更长上限重试。`)
+        diagnostics.push(`${tool} 声明生成超过单次上限（${Math.round(timeoutFor(false) / 60000)} 分钟）被强杀，以提堆 + 更长上限重试。`)
         ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
         if (err && isTimeoutKill(err) && !isOom(stderr) && !/error TS\d+/i.test(stdout + '\n' + stderr)) {
           clearOutput()
           diagnostics.push(
-            `vue-tsc 声明生成再次超时（单次上限 ${Math.round(timeoutFor(true) / 60000)} 分钟）——类型资源未产出。`,
+            `${tool} 声明生成再次超时（单次上限 ${Math.round(timeoutFor(true) / 60000)} 分钟）——类型资源未产出。`,
             '修法：用环境变量 FG_DTS_TIMEOUT_MS 提高上限（毫秒，如 3600000），或缩小暴露模块的静态依赖面。',
           )
           return { ok: false, diagnostics }
@@ -695,12 +733,12 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       }
       // 系统级终止（无 V8 横幅、无 TS 诊断、非超时）：重试一次；仍被终止则给出环境修法
       if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
-        diagnostics.push(`vue-tsc 声明生成进程被系统终止（signal=${err.signal ?? 'Killed'}，无 TypeScript 诊断输出），重试一次。`)
+        diagnostics.push(`${tool} 声明生成进程被系统终止（signal=${err.signal ?? 'Killed'}，无 TypeScript 诊断输出），重试一次。`)
         ;({ err, stdout, stderr } = await attempt([]))
         if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
           clearOutput()
           diagnostics.push(
-            'vue-tsc 声明生成进程再次被系统终止——类型资源未产出。',
+            `${tool} 声明生成进程再次被系统终止——类型资源未产出。`,
             '常见原因：机器内存压力下被 OS 终止（如同时运行多个大型声明生成/构建），或进程被外部 kill。',
             '修法：释放内存后重试（dev 会按源码变化自动重跑；也可 `fulgurjs types` 手动触发），或缩小暴露闭包。',
           )
@@ -709,7 +747,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
       }
       if (err) {
         if (signal?.aborted) {
-          diagnostics.push('vue-tsc 声明生成被中止（dev server 关闭）。')
+          diagnostics.push(`${tool} 声明生成被中止（dev server 关闭）。`)
           clearOutput()
           return { ok: false, diagnostics }
         }
@@ -719,8 +757,9 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
         const globalError = /(?:^|\n)(?:error )?TS\d+:/.test(stdout + '\n' + stderr)
         if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
+          projection.diagnosticFailure = true
           const tail = formatDeclarationDiagnostics(stdout, stderr, err.message, root, closure)
-          diagnostics.push(`vue-tsc 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
+          diagnostics.push(`${tool} 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
           clearOutput()
           return { ok: false, diagnostics,
             ...(requiresInputValidation ? { requiresInputValidation: true,
@@ -734,8 +773,11 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
         if (trace) {
           try { childTimings = JSON.parse(trace[1]!) as Record<string, number> } catch { /* 输出不是计时行 */ }
         }
+        const size = /FG_DTS_GRAPH (\{[^\n]*\})/.exec(`${stdout}\n${stderr}`)
+        if (size) { try { graph = JSON.parse(size[1]!) } catch { /* 非规模记录 */ } }
       }
-    } catch {
+    } catch (error) {
+      diagnostics.push(`${tool} 隔离声明生成异常：${(error as Error).message}。请检查提供方配置和临时目录读写权限。`)
       clearOutput()
       fs.rmSync(tmpCfg, { force: true })
       fs.rmSync(programInputFile, { force: true })
@@ -749,48 +791,57 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     clearOutput()
   } else {
     const outDir = fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
-    const program = ts.createProgram([...entryFiles, ...ctx.ambientInputs, ...resolveTypesEntries(root, ctx.rawOptions, [])], {
-      ...(ctx.compilerOptions as Record<string, never>),
-      noEmit: false,
-      declaration: true,
-      emitDeclarationOnly: true,
-      declarationMap: false,
-      sourceMap: false,
-      incremental: false,
-      composite: false,
-      outDir,
-      rootDir,
-    })
-    const errs = [
-      ...program.getSyntacticDiagnostics(),
-      ...program.getOptionsDiagnostics(),
-      ...program.getSemanticDiagnostics(),
-      ...program.getDeclarationDiagnostics(),
-    ].filter((d) => d.category === ts.DiagnosticCategory.Error)
-      // 门禁 = 入口静态闭包内的错误；闭包外业务文件不偷换成生成失败
-      .filter((d) => !d.file || closure.has(path.resolve(d.file.fileName)))
-    if (errs.length > 0) {
-      fs.rmSync(outDir, { recursive: true, force: true })
-      diagnostics.push(
-        `声明生成失败：暴露闭包内存在 ${errs.length} 个编译错误——类型资源未产出（修复后重新构建/重启 dev）。前若干条：`,
-        ...errs.slice(0, 20).map((d) => {
-          const f = d.file ? path.relative(root, d.file.fileName) : '?'
-          const pos = d.file ? d.file.getLineAndCharacterOfPosition(d.start ?? 0) : { line: 0 }
-          return `  ${f}:${pos.line + 1} TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, ' ')}`
-        }),
-      )
-      return { ok: false, diagnostics }
-    }
-    for (const source of program.getSourceFiles()) {
-      if (source.isDeclarationFile || source.fileName.endsWith('.json') || !closure.has(path.resolve(source.fileName))) continue
-      const emitResult = program.emit(source, undefined, undefined, true)
-      if (emitResult.emitSkipped) {
-        fs.rmSync(outDir, { recursive: true, force: true })
-        return { ok: false, diagnostics: [`TypeScript 声明 emit 失败（emitSkipped）：${path.relative(root, source.fileName)}。请检查 tsconfig 编译选项。`] }
+    try {
+      const compilerOptions: import('typescript').CompilerOptions = {
+        ...(ctx.compilerOptions as Record<string, never>),
+        noEmit: false,
+        declaration: true,
+        emitDeclarationOnly: true,
+        declarationMap: false,
+        sourceMap: false,
+        incremental: false,
+        composite: false,
+        outDir,
+        rootDir,
       }
-    }
-    collectEmitted(ts, outDir, rootDir, emitted, closure)
-    fs.rmSync(outDir, { recursive: true, force: true })
+      const host = ts.createCompilerHost(compilerOptions)
+      const originalRead = host.readFile
+      host.readFile = file => contractSources[path.resolve(file)] ?? originalRead(file)
+      const program = ts.createProgram([...entryFiles, ...ctx.ambientInputs, ...resolveTypesEntries(root, ctx.rawOptions, [])], compilerOptions, host)
+      if (timingsEnabled) graph = { programFiles: program.getSourceFiles().length,
+        checkedFiles: program.getSourceFiles().filter(source => closure.has(path.resolve(source.fileName))).length,
+        projectedFiles: Object.keys(contractSources).length }
+      const errs = [
+        ...program.getSyntacticDiagnostics(),
+        ...program.getOptionsDiagnostics(),
+        ...program.getSemanticDiagnostics(),
+        ...program.getDeclarationDiagnostics(),
+      ].filter((d) => d.category === ts.DiagnosticCategory.Error)
+        // 门禁 = 入口静态闭包内的错误；闭包外业务文件不偷换成生成失败
+        .filter((d) => !d.file || closure.has(path.resolve(d.file.fileName)))
+      if (errs.length > 0) {
+        projection.diagnosticFailure = true
+        fs.rmSync(outDir, { recursive: true, force: true })
+        diagnostics.push(
+          `声明生成失败：暴露闭包内存在 ${errs.length} 个编译错误——类型资源未产出（修复后重新构建/重启 dev）。前若干条：`,
+          ...errs.slice(0, 20).map((d) => {
+            const f = d.file ? path.relative(root, d.file.fileName) : '?'
+            const pos = d.file ? d.file.getLineAndCharacterOfPosition(d.start ?? 0) : { line: 0 }
+            return `  ${f}:${pos.line + 1} TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, ' ')}`
+          }),
+        )
+      return { ok: false, diagnostics }
+      }
+      for (const source of program.getSourceFiles()) {
+        if (source.isDeclarationFile || source.fileName.endsWith('.json') || !closure.has(path.resolve(source.fileName))) continue
+        const emitResult = program.emit(source, undefined, undefined, true)
+        if (emitResult.emitSkipped) {
+          fs.rmSync(outDir, { recursive: true, force: true })
+          return { ok: false, diagnostics: [`TypeScript 声明 emit 失败（emitSkipped）：${path.relative(root, source.fileName)}。请检查 tsconfig 编译选项。`] }
+        }
+      }
+      collectEmitted(ts, outDir, rootDir, emitted, closure)
+    } finally { fs.rmSync(outDir, { recursive: true, force: true }) }
   }
 
   // TypeScript does not emit existing declaration inputs; keep imported local contracts.
@@ -907,6 +958,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     exposes: exposesMap,
     externals: [...externals].sort(),
     files: filesDigest,
+    ...(input.contractOnly ? { check: 'contract' as const } : {}),
   }
   const revision = crypto.createHash('sha256').update(JSON.stringify(index)).digest('hex').slice(0, 16)
   const fullIndex: DtsBundleIndex = { ...index, revision }
@@ -917,6 +969,7 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
     ...(cacheTraceFile ? { cacheTraceFile } : {}),
     ...(requiresInputValidation ? { requiresInputValidation: true } : {}),
     ...(timingsEnabled ? { timings: { parent: { ...timings }, ...(childTimings ? { child: childTimings } : {}) } } : {}),
+    ...(graph ? { graph } : {}),
   }
 }
 

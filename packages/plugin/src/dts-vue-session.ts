@@ -1,5 +1,6 @@
 /**
- * 单个dev服务独占的Vue编译进程。请求串行，保留官方Program的内存状态；
+ * 单个dev服务独占的类型编译进程（Vue及纯TS合同生成共用隔离协议）。
+ * 请求串行，现代Vue保留官方Program的内存状态；
  * 关闭/取消直接终止自有子进程，CLI/build不使用本会话。
  */
 import { spawn, type ChildProcess, type ExecFileException } from 'node:child_process'

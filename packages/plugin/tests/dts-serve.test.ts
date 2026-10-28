@@ -63,7 +63,8 @@ function cacheProject() {
   fs.writeFileSync(path.join(root, 'package.json'), '{"private":true}')
   fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { types: [], moduleResolution: 'bundler', module: 'ESNext' }, include: ['src'] }))
   fs.writeFileSync(path.join(root, 'src/entry.ts'), 'export const value = 1')
-  const options = { root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test' } as NormalizedOptions
+  // 本组mock生成器不返回真实编译输入trace，覆盖保守快照路径；默认合同路径另用真实Program验收。
+  const options = { root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test', dts: { devCheck: 'implementation' } } as NormalizedOptions
   const text = 'export declare const value: 1;'
   const index = { schemaVersion: 1, generator: '@fulgurjs/federation', pluginVersion: 'test', revision: 'abcdef1234567890', exposes: { './entry': { declaration: 'files/entry.d.ts' } }, externals: [], files: { 'files/entry.d.ts': crypto.createHash('sha256').update(text).digest('hex') } }
   const { revision: _revision, ...body } = index

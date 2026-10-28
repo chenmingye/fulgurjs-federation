@@ -18,11 +18,19 @@ const __fgTimings = {};
 const __fgMark = name => { if (__fgTimingsOn) __fgTimings[name] = Math.round(performance.now() - __fgTimingStart); };
 const req = createRequire(path.join(process.cwd(), 'package.json'));
 const ts = req('typescript');
-const vue = req('vue-tsc');
 const configFile = process.argv[1];
 const generationInput = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const vue = generationInput.vue === false ? {createProgram:request=>ts.createProgram(request)} : req('vue-tsc');
 const closure = new Set(generationInput.closure.map(file => path.resolve(file)));
 ${genTypesInputRecorder()}
+// 投影只改变隔离声明程序的读取；输入记录器仍读取/校验真实源码。
+if (Object.keys(generationInput.contractSources || {}).length) {
+  const original = ts.sys.readFile;
+  ts.sys.readFile = (file,...args) => {
+    const text = original(file,...args);
+    return generationInput.contractSources[path.resolve(file)] ?? text;
+  };
+}
 const raw = ts.readConfigFile(configFile, ts.sys.readFile);
 const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, path.dirname(configFile), undefined, configFile, undefined, [
   { extension: '.vue', isMixedContent: true, scriptKind: ts.ScriptKind.Deferred },
@@ -54,7 +62,7 @@ if (!diagnostics.length) {
   if (state) {
     if(state.packageInputs)for(const [file,before]of state.packageInputs){try{const now=fs.statSync(file);if(now.ctimeMs===before.ctime&&now.mtimeMs===before.mtime&&now.size===before.size&&now.ino===before.ino)continue}catch{}state.key=undefined;break;}
     const packages = Object.entries(parentInputs.files).filter(([file]) => path.basename(file)==='package.json' || /(?:lock|workspace)\.(?:json|ya?ml|lock)$/.test(file)).map(([file,value])=>[file,value.hash]);
-    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,parentInputs.links,packages]);
+    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,generationInput.contractSources,parentInputs.links,packages]);
     if (state.key !== key) { state.key=key;state.files=new Map();state.program=undefined;state.packageInputs=undefined;state.factory=undefined;state.host=undefined;state.resolution=undefined;state.options=undefined; }
     else state.resolution?.clear();
     parsed.options = state.options ?? parsed.options;
@@ -128,6 +136,8 @@ if (!diagnostics.length) {
     const original = file.fileName.replace(/(\.vue)\.[cm]?[jt]sx?$/, '$1');
     return closure.has(path.resolve(original));
   });
+  if (__fgTimingsOn) process.stderr.write('FG_DTS_GRAPH ' + JSON.stringify({programFiles:program.getSourceFiles().length,
+    checkedFiles:sources.length,projectedFiles:Object.keys(generationInput.contractSources || {}).length}) + '\n');
   // 诊断门禁仍覆盖完整静态闭包；只把公开声明实际引用的文件送入emit。
   for (const file of sources) {
     diagnostics.push(...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file));

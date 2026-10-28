@@ -628,11 +628,11 @@ Once the server takes ownership, closing or restarting releases the owned compil
 
 Set `FG_DTS_TIMINGS=1` when investigating startup cost: the success log then includes per-stage timings for the dev service (cold start / cache check / generation / publish), the generator parent (config, static closure, compiler, display, total) and the compiler child (config, Program, global diagnostics, static-closure diagnostics, emit, input recording). These values are diagnostics only and are not printed by default; they are not the same metric as Vite ready and cannot substitute for it.
 
-With supported modern Vue Program APIs, the isolated compiler records the source, configuration, and dependencies it actually reads. The cache reuses that record instead of performing another full-project scan before cold compilation. Diagnostics still cover the complete static closure, while declaration emit follows only public declaration dependencies. Actual tool modules and logical links are recorded without walking unrelated tool tests/examples or their test-only dependencies. Older tools retain an available conservative path; incomplete tracking disables persistence explicitly.
+With supported modern Vue Program APIs, the isolated compiler records the source, configuration, and dependencies it actually reads. The cache reuses that record instead of performing another full-project scan before cold compilation. Checking uses the devCheck scope described below; the original-source path checks the static closure and emit follows public declaration dependencies. Actual tool modules and logical links are recorded without walking unrelated tool tests/examples or their test-only dependencies. Older tools retain an available conservative path; incomplete tracking disables persistence explicitly.
 
-Input recording, digest validation, and compression run in the isolated compiler/Node worker, keeping heavy scans off the Vite main thread. The provider's official compiler still infers props, events, slots, expose, and return values. No any, handwritten replacement interfaces, noCheck, or skipped error gates are used for speed.
+Input recording, digest validation, and compression run in the isolated compiler/Node worker, keeping heavy scans off the Vite main thread. The provider's official compiler still infers props, events, slots, expose, and return values. Contract and implementation checking have distinct scopes, described below; one must not be presented as the other.
 
-**Saving source changes also reuses the in-memory program.** Each provider dev server owns one isolated compiler session. Unchanged files retain their AST and official Vue mappings; changed files are read and processed again. Every generation still runs real diagnostics over the complete static closure rather than reusing potentially stale diagnostics. Imported type changes, global declarations, and shifted error locations must be reflected. Compiler settings, dependency structure, or incompatible tools rebuild the state. Timeout, cancellation, and shutdown terminate the owned process. CLI/build do not reuse this memory, and compiler dependency changes still require a full dev-process restart.
+**Saving source changes also reuses the in-memory program.** Each provider dev server owns one isolated compiler session. Unchanged files retain their AST and official Vue mappings; changed files are read and processed again. Each generation checks its selected scope rather than reusing potentially stale diagnostics. Imported type changes, global declarations, and shifted error locations must be reflected. Compiler settings, dependency structure, or incompatible tools rebuild the state. Timeout, cancellation, and shutdown terminate the owned process. CLI/build do not reuse this memory, and compiler dependency changes still require a full dev-process restart.
 
 **Reusing reads within a compilation requires validation before publication.** Modern Vue generation can reuse recorded file, directory, and link reads within one request. Generated global-types and compiler temporary files are excluded. Before publishing results or diagnostics, the service checks real inputs, resolution candidates, links, and ambient declaration membership again. Changed inputs discard the result and queue a recheck. If recording or validation is unavailable, it disables read reuse and repeats full compilation with ordinary reads; unvalidated results are never served. Failed-compilation records are used only for rechecking and watching external dependency repairs, never as successful cached declarations.
 
@@ -712,3 +712,33 @@ For debugging, `(globalThis as any).__FULGURJS_RUNTIME__` gives direct access to
 | Component renders, but the class prefix turns `undefined-xxx` / theme classes missing (inject miss) | — | The remote declares `pageProviders` in its setup module (ancestor providers auto-wrapped); see the provide/inject note above |
 
 The full error code list: [error code table](../reference/errors.md); symptom-based troubleshooting: [troubleshooting index](../troubleshooting/README.md).
+
+### Public contracts in dev; implementation checking stays explicit
+
+With `dts: true`, dev defaults to public-contract checking. Exposing a form should not require analysis of its entire application merely because the implementation calls routing, HTTP, or an editor. This is a generic compiler path: consumers do not need to rewrite routes, split component barrels, copy DTOs, or patch third-party packages.
+
+Projection exists only in an **isolated declaration compiler read view**. Source files and Vite runtime transforms are unchanged:
+
+- TS/TSX uses the provider TypeScript `transpileDeclaration` API only when its isolated-declaration diagnostics permit exact output. Cross-file inference retains original source. Output containing diagnostic fallback `any` is never accepted as a successful projection.
+- Explicit, non-generic Vue `<script setup lang="ts">` props/events can retain contract dependencies while omitting unrelated implementation and template expressions. The provider's official Vue Program still generates the component declaration; the plugin does not handcraft `DefineComponent`. Named type exports and documentation remain. Literal defaults are retained. Runtime props, destructured defaults, expose/model/slots, Options API, generics, and special compiler extensions retain the original path. A failed projected contract check retries original-source compilation instead of serving approximate types.
+- Referenced types still require resolution and checking. Large library types, ambient declarations, or complex inference may still load many files. There is no promise of entry-file-only compilation or a fixed first-start time on every project.
+
+Global/module augmentations belong in explicit side-effect imports or project ambient declarations; explicit augmentation imports are retained. If a type relies only on implicit runtime assembly, use `devCheck: "implementation"` and ensure the augmentation is distributed with the public declarations rather than relying on the provider machine environment.
+
+**Checking scopes are different.** Public-contract checking rejects missing types and invalid type references, but does not check removed function bodies or template business expressions. An `id: string` prop stays precise; a template incorrectly calling `id.toFixed()` belongs to the application's `vue-tsc --noEmit`/typecheck. Startup logs describe this scope. The bundle index and consumer metadata record `check: "contract"`. Successful type generation is not proof of successful application implementation checking or rendering.
+
+```ts
+// Default: automatic public-contract generation in dev; no separate generation command.
+federation({ name: 'provider', exposes: { './OrderForm': './src/OrderForm.vue' }, dts: true })
+
+// Make full static implementation checking gate dev type publication:
+federation({ name: 'provider', exposes: { './OrderForm': './src/OrderForm.vue' },
+  dts: { devCheck: 'implementation', dir: 'src/fulgurjs/types' } })
+
+// Disable provider and consumer types entirely:
+federation({ name: 'provider', dts: false })
+```
+
+`dts.devCheck` is `'contract' | 'implementation'`, defaults to `'contract'`, and affects dev providers only. **Production build and `fulgurjs types` always check the original-source static closure; neither dev projections nor successful dev snapshots bypass errors.** Run the application's own typecheck before release; its full-project scope is broader than the plugin's expose closure.
+
+Restart and recovery after deleting generated types remain automatic. Successful caches validate real source inputs, invalidate on source/type/config changes, and distinguish checking modes. A contract cache hit must never be described as full implementation validation. Performance acceptance uses unchanged independent projects and large graphs, checks precision and failure boundaries, and separates generic SDK improvements from application-specific refactoring.

@@ -90,6 +90,8 @@ export interface DtsMetadata {
   files: string[]
   externals: string[]
   syncedAt: number
+  /** 提供方此次只检查公开合同，不代表其业务实现检查通过。 */
+  check?: 'contract'
 }
 
 const METADATA_FILE = 'metadata.json'
@@ -274,6 +276,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
       files: written,
       externals: index.externals,
       syncedAt: Date.now(),
+      ...(index.check ? { check: index.check } : {}),
     }
     fs.writeFileSync(path.join(staging, METADATA_FILE), JSON.stringify(meta, null, 2))
 
@@ -298,7 +301,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     status: 'synced',
     alias,
     revision: index.revision,
-    message: `已同步远程 ${alias} 的类型（revision ${index.revision}，${Object.keys(index.files).length} 个声明文件）。`,
+    message: `已同步远程 ${alias} 的类型（revision ${index.revision}，${Object.keys(index.files).length} 个声明文件${index.check === 'contract' ? '，开发期公开合同检查' : ''}）。`,
     warnings: ambient.warnings,
   }
 }

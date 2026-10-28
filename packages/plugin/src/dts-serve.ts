@@ -83,10 +83,15 @@ export function createDevTypesServer(
     .map((e) => ({ name: e.name, import: e.import }))
 
   const cacheInput = { root: options.root, exposes: publicExposes, pluginVersion: options.pluginVersion, dts: options.dts }
+  const contractOnly = typeof options.dts !== 'object' || options.dts.devCheck !== 'implementation'
+  if (contractOnly && publicExposes.length) log('[fulgurjs] 开发期生成并检查公开类型合同；业务实现检查请运行应用 typecheck，build/fulgurjs types 仍执行完整静态闭包检查。dts.devCheck: "implementation" 可在 dev 使用完整检查。')
   // 现代Vue工具能够直接记录真实输入，无需在编译前跑第二套依赖分析。
   let compilerTracesInputs = false
   if (publicExposes.some(entry => entry.import.endsWith('.vue'))) {
     try { const req = createRequire(path.join(options.root, 'package.json')); compilerTracesInputs = Number(String(req('vue-tsc/package.json').version).split('.')[0]) >= 2 } catch { /* 缺失工具走既有诊断 */ }
+  }
+  else if (contractOnly) {
+    try { createRequire(path.join(options.root, 'package.json')).resolve('typescript'); compilerTracesInputs = true } catch { /* 工具缺失由生成器诊断 */ }
   }
   let cacheUnavailableAnnounced = false
   let inputEpoch = 0
@@ -98,6 +103,11 @@ export function createDevTypesServer(
   }
   const run = async (): Promise<void> => {
     if (disposed) return
+    // 纯TS Program是同步段；先交还调用方一次，允许刚创建即关闭的服务取消。
+    if (compilerTracesInputs && !publicExposes.some(entry => entry.import.endsWith('.vue'))) {
+      await Promise.resolve()
+      if (disposed) return
+    }
     const epoch = inputEpoch
     const started = performance.now()
     const timingStart = started
@@ -157,7 +167,7 @@ export function createDevTypesServer(
       let result: DtsGenerateResult
       const generate = (cacheCompilerReads: boolean): Promise<DtsGenerateResult> => generateTypesBundle({
         root: options.root, exposes: publicExposes, pluginVersion: options.pluginVersion,
-        signal: controller.signal, incrementalDir, vueCompiler, cacheCompilerReads,
+        signal: controller.signal, incrementalDir, vueCompiler, cacheCompilerReads, contractOnly,
       })
       try {
         if (!incrementalDir) {
@@ -166,7 +176,7 @@ export function createDevTypesServer(
           incrementalDir = fs.mkdtempSync(path.join(cacheRoot, '.fulgurjs-types-cache-'))
         }
         // 父进程解析配置/闭包时，子进程即可并行载入工具；缓存命中不会到达此处。
-        if (compilerTracesInputs) vueCompiler.prime(options.root)
+        if (compilerTracesInputs && publicExposes.some(entry => entry.import.endsWith('.vue'))) vueCompiler.prime(options.root)
         const compilation = generate(compilerTracesInputs)
         // 编译已经启动，再并行预热校验线程；不能又把冷路径排到缓存往返之后。
         // 预热失败由实际capture/validate路径处理，并以普通读取安全降级。
@@ -234,6 +244,7 @@ export function createDevTypesServer(
           log(`[fulgurjs] 类型生成耗时：本服务 ${timing.join('，')}`
             + `${result.timings ? `；生成器 ${Object.entries(result.timings.parent).map(([k, v]) => `${k} ${v}ms`).join('，')}` : ''}`
             + `${child ? `；编译进程 ${child}` : ''}`)
+          if (result.graph) log(`[fulgurjs] 类型程序规模：读入 ${result.graph.programFiles}，检查 ${result.graph.checkedFiles}，投影 ${result.graph.projectedFiles} 个文件。`)
         }
       } else {
         files = null

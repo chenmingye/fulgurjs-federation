@@ -15,7 +15,7 @@
 | `shareScope` | `string` | `'default'` | 默认共享作用域名；各项可用 `shared[*].shareScope` 覆盖 |
 | `manifest` | `boolean \| Record<string, unknown>` | `true` | `false` 关闭；其余值开启（对象形态不提供额外字段配置）。prod 构建生成 `fulgurjs-manifest.json`——关闭不影响普通 loadRemote；preloadRemote 降为仅预载入口，check-pages 缺清单时无法验证 exposes；doctor 可通过 --no-manifest 继续检查其他端点 |
 | `runtimePlugins` | `string[]` | `[]` | 运行时插件模块路径列表（相对路径按应用根解析）。hook 错误契约：观测 hook 抛错只告警；`resolveShare`（决策 hook）显式抛错向调用方传播。见 [API 参考 · 运行时插件](api.md#运行时插件) |
-| `dts` | `boolean \| { dir?: string }` | `true` | 远程类型自动生成与同步。提供方：dev 后台生成、随 prod 构建输出**可分发声明资源**（声明闭包 + 类型清单，不依赖远程本机源码）；宿主：dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`）并生成 ambient 声明与类型注册表——普通 import、动态 import 与字符串 API（`loadRemote`/`remoteComponent`/桥接工厂）共用同一套类型。`{ dir }` 自定义输出目录；`false` 完全关闭。含 `.vue` 暴露的提供方需 `vue-tsc`（模板已带）。见 [CLI · types](cli.md#fulgurjs-types) |
+| `dts` | `boolean \| { dir?: string; devCheck?: 'contract' \| 'implementation' }` | `true` | 远程类型自动生成与同步。提供方：dev 后台生成、随 prod 构建输出**可分发声明资源**（声明闭包 + 类型清单，不依赖远程本机源码）；宿主：dev 自动同步到 `src/fulgurjs/types/`（无 src 布局回退 `.fulgurjs/types`）并生成 ambient 声明与类型注册表——普通 import、动态 import 与字符串 API（`loadRemote`/`remoteComponent`/桥接工厂）共用同一套类型。`{ dir }` 自定义输出目录；`false` 完全关闭。含 `.vue` 暴露的提供方需 `vue-tsc`（模板已带）。见 [CLI · types](cli.md#fulgurjs-types) |
 | `devSharedSelf` | `boolean` | 按角色推断：提供 `exposes`/`setup` 的应用 `true`；纯宿主 `false`；**显式配置永远优先** | dev 下自身源码（含依赖）是否参与 shared 协商改写。双向联邦缺省即 `true` 无需显式。build 下协商门面自动隔离进插件专属 chunk，业务 manualChunks 可保留 |
 | `devCorsOrigins` | `string[] \| '*'` | '*' | dev 联邦 entry/manifest/types 端点按本项响应；Vite 源码模块在 server.cors 省略时沿用本项，显式 server.cors 仅覆盖 Vite 侧。省略与显式 * 均可能在非 loopback 提示 DEV-011；不修改生产服务器。 |
 省略语义小结：`manifest`/`dts` 省略 = 开启/默认；`setup` 省略 = 无初始化行为；`shared`/`exposes`/`remotes` 省略 = 对应能力关闭（都不配 = 孤岛配置，得到 CFG-006 类提醒：既不提供也不消费）。
@@ -119,3 +119,5 @@ export default {
 ## 配置期校验（fail fast）
 
 一切配置错误在 vite config 阶段立即以「问题 + 当前值 + 预期值 + 修法示例」三段式报出，不带错误配置静默运行。CFG 段错误码：`CFG-001`（name）～`CFG-012`（setup/保留键），全集见[错误码总表](errors.md)。`remotes` 运行参数（timeout/retries/breaker）在配置期即校验数值合法性，坏数值不留到运行时。
+
+`dts.devCheck` 默认为 `contract`，只控制开发提供方检查范围；`implementation` 将完整静态实现检查作为dev门禁；`false`关闭类型。build/CLI始终完整检查。用法、回退边界、缓存及三态示例见[组件与模块](../guide/components-and-modules.md#开发期先生成公开合同完整实现另行检查)。

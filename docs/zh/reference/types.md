@@ -21,7 +21,7 @@ Vite 联邦插件配置.
 | `shareScope` | yes | `string` | 共享分组名；不同作用域独立协商，默认 default。 |
 | `manifest` | yes | `boolean \| Record<string, unknown>` | 默认开启生产清单；false 关闭，普通模块加载仍可使用，清单相关检查/预载能力受限。 |
 | `runtimePlugins` | yes | `string[]` | 运行时插件模块路径数组，默认空；相对路径按应用根解析。 |
-| `dts` | yes | `boolean \| { dir?: string }` | 远程类型自动生成与同步（见[配置参考](configuration.md)与[API · 远程类型](api.md#远程类型自动生成与同步)）。 |
+| `dts` | yes | `boolean \| { dir?: string; devCheck?: 'contract' \| 'implementation' }` | 远程类型自动生成与同步（见[配置参考](configuration.md)与[API · 远程类型](api.md#远程类型自动生成与同步)）。 |
 | `devSharedSelf` | yes | `boolean` | dev 自身源码参与共享协商；省略时 exposes/setup 提供方为 true、纯消费方为 false。显式值优先；插件处理自身预构建接线，不要求所有工程手动 exclude 全部共享依赖。 |
 | `devCorsOrigins` | yes | `string[] \| "*"` | dev 联邦 entry/manifest/types 端点的来源策略，默认 *；未显式配置 server.cors 时也用于 Vite 源码模块。显式 server.cors 仅覆盖 Vite 侧策略，不覆盖这些插件端点。非 loopback 的通配配置仍可提示 DEV-011；不配置生产 CORS。 |
 
