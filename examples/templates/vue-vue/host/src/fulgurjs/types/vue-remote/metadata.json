@@ -3,7 +3,7 @@
   "ambientFormat": 2,
   "alias": "vue-remote",
   "source": "/vue-remote/fulgurjs-remoteEntry.js",
-  "revision": "8207b92718e7e084",
+  "revision": "05c9ba85d9cc6a0a",
   "files": [
     "modules.d.ts",
     "registry.d.ts"
@@ -11,5 +11,5 @@
   "externals": [
     "vue"
   ],
-  "syncedAt": 1791598103938
+  "syncedAt": 1793274286008
 }

@@ -1,7 +1,8 @@
+import type { JSX } from 'react'
 import ClickButton from '../ClickButton'
 
 /** 联邦页面：渲染在宿主的路由出口内 */
-export default function HomePage() {
+export default function HomePage(): JSX.Element {
   return (
     <div data-testid="demo-remote-home">
       <h3>react-remote / 首页</h3>

@@ -478,3 +478,18 @@ it.each([
   const program=ts.createProgram([file,path.join(root,'full.d.ts'),path.join(root,'fast.d.ts')],{strict:true,noEmit:true,types:[],skipLibCheck:true,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler})
   expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
 },30000)
+
+it('直接使用公开React模板源码生成合同，默认组件签名和详情参数不能退化',async()=>{
+  const {buildAmbientDeclarations}=await import('../src/dts-ambient')
+  const source=path.resolve(__dirname,'../../../examples/templates/react-react/remote/src/fulgurjs/exposes')
+  const files:Record<string,string>={};for(const file of ['ClickButton.tsx','pages/HomePage.tsx','pages/DetailPage.tsx','utils.ts'])files['src/'+file]=fs.readFileSync(path.join(source,file),'utf8')
+  const root=project('public-react-template',files)
+  for(const pkg of ['react','@types'])fs.symlinkSync(path.resolve(__dirname,'../node_modules',pkg),path.join(root,'node_modules',pkg),'dir')
+  const config=path.join(root,'tsconfig.json');const raw=JSON.parse(fs.readFileSync(config,'utf8'));raw.compilerOptions.jsx='react-jsx';fs.writeFileSync(config,JSON.stringify(raw))
+  const result=await generateTypesBundle({root,exposes:[{name:'./Button',import:'./src/ClickButton.tsx'},{name:'./Home',import:'./src/pages/HomePage.tsx'},{name:'./Detail',import:'./src/pages/DetailPage.tsx'}],pluginVersion:'test',contractOnly:true})
+  expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true);if(!result.ok)return
+  const ambient=buildAmbientDeclarations({alias:'remote',index:result.index,source:'test',readFile:f=>result.files.get(f)!});fs.writeFileSync(path.join(root,'remote.d.ts'),ambient.files.get('modules.d.ts')!)
+  const consumer=path.join(root,'consumer.ts');fs.writeFileSync(consumer,`import Detail from 'remote/Detail';type Props=Parameters<typeof Detail>[0];const good:Props={id:'1',tab:'base'};\n// @ts-expect-error 详情参数仍为string\nconst wrong:Props={id:123};`)
+  const program=ts.createProgram([consumer,path.join(root,'remote.d.ts')],{strict:true,noEmit:true,skipLibCheck:true,types:[],target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler})
+  expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
+},30000)

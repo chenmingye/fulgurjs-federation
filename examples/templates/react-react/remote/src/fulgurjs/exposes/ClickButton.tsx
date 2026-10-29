@@ -1,7 +1,8 @@
+import type { JSX } from 'react'
 import { useState } from 'react'
 
 /** 可点击计数按钮：本地 state 保存在远程组件内部（宿主消费时运行在宿主页面的 React 上） */
-export default function ClickButton() {
+export default function ClickButton(): JSX.Element {
   const [count, setCount] = useState(0)
   return (
     <button

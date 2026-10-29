@@ -1,5 +1,6 @@
+import type { JSX } from 'react'
 /** 联邦参数页：宿主路由的 params + query 作为 props 传入 */
-export default function DetailPage({ id, tab }: { id?: string; tab?: string }) {
+export default function DetailPage({ id, tab }: { id?: string; tab?: string }): JSX.Element {
   return (
     <div data-testid="demo-remote-detail">
       <h3>react-remote / 详情页</h3>

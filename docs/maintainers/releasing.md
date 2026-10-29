@@ -21,6 +21,7 @@
 - [ ] 文档同步：行为/配置项/API/CLI 输出变化已同步[使用指南](../zh/README.md)、[API 参考](../zh/reference/api.md)、[配置参考](../zh/reference/configuration.md)、[CLI 参考](../zh/reference/cli.md)；错误码变化已同步[错误码总表](../zh/reference/errors.md)（build 三方一致性门禁会拦截遗漏）；
 - [ ] **模板与锁文件**：按「模板依赖与两阶段发布」执行——基础版本 B 发布前模板维持现行钉版（其锁/冻结安装已验证）；模板升钉与最终交付版本 C 在 B 发布后完成（见下节）；
 - [ ] 包内模板资产同步：`scripts/sync-package-examples.mjs` 已把 `examples/templates/` 同步进包内（`fulgurjs create` 的模板唯一来源）；
+- [ ] 修改默认开发类型生成时，在基础版本B发布前，用当前候选生成五个模板所有提供方的真实合同，必须观察类型就绪并验证精确参数；仅模板build或运行页面通过不能替代dev合同验收。默认函数/类、JSX返回签名与SDK应用工厂属于必测，不能等模板升钉后才检查。
 - [ ] CI 全绿：`test`（单测 + 双口径 typecheck + build 门禁）、`e2e`（Vite 6/7/8）、生产、版本隔离、tarball 安装等必跑作业。
 
 ## 发布后核验
