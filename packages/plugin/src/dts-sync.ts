@@ -119,11 +119,17 @@ function cleanupOwnFiles(dir: string, meta: DtsMetadata): void {
   } catch { /* 目录非空（用户文件共存）——保留 */ }
 }
 
-/** 清扫历史中断残留的 staging/trash 目录（自有前缀，任意时点安全删除） */
+/** 仅清扫已退出进程的自有临时目录；活跃进程及无PID的旧格式保守保留。 */
 function sweepStaleStaging(typesRoot: string, alias: string): void {
   if (!fs.existsSync(typesRoot)) return
   for (const name of fs.readdirSync(typesRoot)) {
     if (name.startsWith(`.fg-staging-${alias}-`) || name.startsWith(`.fg-trash-${alias}-`)) {
+      {
+        const prefix = name.startsWith('.fg-staging-') ? `.fg-staging-${alias}-` : `.fg-trash-${alias}-`
+        const pid = Number(name.slice(prefix.length).split('-')[0])
+        if (!Number.isInteger(pid) || pid <= 0 || pid > 0xffffffff) continue
+        try { process.kill(pid, 0); continue } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') continue }
+      }
       fs.rmSync(path.join(typesRoot, name), { recursive: true, force: true })
     }
   }
@@ -135,6 +141,8 @@ export interface SyncRemoteTypesInput {
   manifestUrl: string
   /** 类型输出根（生成到 <typesRoot>/<alias>/；一般是 src/fulgurjs/types） */
   typesRoot: string
+  /** 内部临时根；同卷时在src以外准备完整目录，避免自动组件/类型工具扫描半成品。 */
+  stagingRoot?: string
   /** 来源描述（进 metadata/文件头） */
   source: string
   /** 下载与网络行为注入（单测） */
@@ -256,8 +264,20 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
   // 先清扫历史残留（同前缀的 staging/trash），再建本轮 staging——顺序不能反：
   // sweep 的前缀匹配会命中同前缀的本轮目录
   sweepStaleStaging(typesRoot, alias)
-  const staging = path.join(typesRoot, `.fg-staging-${alias}-${process.pid}-${Date.now()}`)
-  fs.rmSync(staging, { recursive: true, force: true })
+  fs.mkdirSync(typesRoot, { recursive: true })
+  let temporaryRoot = typesRoot
+  if (input.stagingRoot) {
+    try {
+      const candidate = path.join(input.stagingRoot, crypto.createHash('sha256').update(path.resolve(typesRoot)).digest('hex').slice(0, 12))
+      fs.mkdirSync(candidate, { recursive: true })
+      const sameDrive = process.platform !== 'win32' || path.parse(candidate).root.toLowerCase() === path.parse(typesRoot).root.toLowerCase()
+      if (sameDrive && fs.statSync(candidate).dev === fs.statSync(typesRoot).dev) {
+        temporaryRoot = candidate
+        sweepStaleStaging(candidate, alias)
+      }
+    } catch { /* 缓存不可写时仍可使用原输出根，不能让临时缓存故障阻断类型同步。 */ }
+  }
+  let staging = path.join(temporaryRoot, `.fg-staging-${alias}-${process.pid}-${Date.now()}-${crypto.randomUUID()}`)
   fs.mkdirSync(staging, { recursive: true })
   const written: string[] = []
   try {
@@ -280,19 +300,25 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     }
     fs.writeFileSync(path.join(staging, METADATA_FILE), JSON.stringify(meta, null, 2))
 
-    const trash = path.join(typesRoot, `.fg-trash-${alias}-${Date.now()}`)
-    let swapped = false
-    if (fs.existsSync(dir)) {
-      fs.renameSync(dir, trash)
-      swapped = true
+    const swap = (base: string): void => {
+      const trash = path.join(base, `.fg-trash-${alias}-${process.pid}-${Date.now()}-${crypto.randomUUID()}`)
+      let swapped = false
+      if (fs.existsSync(dir)) { fs.renameSync(dir, trash); swapped = true }
+      try { fs.renameSync(staging, dir) }
+      catch (error) { if (swapped) fs.renameSync(trash, dir); throw error }
+      if (swapped) fs.rmSync(trash, { recursive: true, force: true })
     }
-    try {
-      fs.renameSync(staging, dir)
-    } catch (e) {
-      if (swapped) fs.renameSync(trash, dir)
-      throw e
+    try { swap(temporaryRoot) }
+    catch (error) {
+      if (temporaryRoot === typesRoot || (error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+      // 挂载点/卷在准备后变化时，以完整副本重新执行同目录原子切换；旧目录先恢复。
+      const local = path.join(typesRoot, `.fg-staging-${alias}-${process.pid}-${Date.now()}-${crypto.randomUUID()}`)
+      try { fs.cpSync(staging, local, { recursive: true }) }
+      catch (copyError) { fs.rmSync(local, { recursive: true, force: true }); throw copyError }
+      fs.rmSync(staging, { recursive: true, force: true })
+      staging = local
+      swap(typesRoot)
     }
-    if (swapped) fs.rmSync(trash, { recursive: true, force: true })
   } catch (e) {
     fs.rmSync(staging, { recursive: true, force: true })
     return { status: 'failed', alias, message: `远程 ${alias} 的类型写入失败（${(e as Error).message}）。本地声明保持原状。` }
@@ -357,6 +383,7 @@ export function startRemoteTypesSyncLoop(opts: TypesLoopOptions): () => void {
       alias,
       manifestUrl,
       typesRoot: opts.typesRoot,
+      stagingRoot: path.join(opts.root, 'node_modules/.cache/fulgurjs/types/sync'),
       source: devEntry,
     })
     if (result.status === 'synced' && !controller.signal.aborted) opts.onSynced?.()

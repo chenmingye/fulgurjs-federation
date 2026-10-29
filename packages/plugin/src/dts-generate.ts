@@ -49,6 +49,8 @@ export interface DtsGenerateInput {
   cacheCompilerReads?: boolean
   /** 开发期公开合同投影；未传仍完整实现诊断，build/CLI不启用。 */
   contractOnly?: boolean
+  /** dev在读取全局声明前建立变更观察，及时取消已失效编译；build/CLI不使用。 */
+  onAmbientInputs?: (files: string[]) => void
 }
 
 export interface DtsGenerateOk {
@@ -68,7 +70,7 @@ export interface DtsGenerateOk {
   /** FG_DTS_TIMINGS=1 时的分阶段耗时（毫秒，父进程与编译子进程各一组）；默认不采集。 */
   timings?: { parent: Record<string, number>; child?: Record<string, number> }
   /** 开启计时时记录实际程序规模，不与毫秒值混用。 */
-  graph?: { programFiles: number; checkedFiles: number; projectedFiles: number }
+  graph?: { programFiles: number; checkedFiles: number; projectedFiles: number; declarationFiles?: number; vueFiles?: number }
 }
 
 export interface DtsGenerateFail {
@@ -396,8 +398,10 @@ export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsG
   if (result.ok || !input.contractOnly || !projection.used || !projection.diagnosticFailure || input.signal?.aborted) return result
   // 投影不适用于某种工具/语法时由原编译器裁决，不能发布近似合同。
   const fallback = await generateTypesBundleOnce({ ...input, contractOnly: false })
-  if (fallback.ok) fallback.notices.push('公开合同快速路径未能完成检查，已使用完整源码路径生成精确声明。')
-  else fallback.diagnostics.unshift('公开合同投影检查未完成，已用完整源码重试；以下为完整路径诊断：')
+  if (fallback.ok) {
+    fallback.notices.push('公开合同快速路径未能完成检查，已使用完整源码路径生成精确声明。')
+    if (process.env.FG_DTS_TIMINGS) fallback.notices.push(`快速路径诊断：${result.diagnostics.join('\n').slice(0, 1500)}`)
+  } else fallback.diagnostics.unshift('公开合同投影检查未完成，已用完整源码重试；以下为完整路径诊断：')
   return fallback
 }
 
@@ -422,22 +426,29 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
   const tsReq = createRequire(path.join(tsPkgDir, 'package.json'))
   const ts = tsReq('typescript') as TsModule
   let parseVue: ((text: string) => unknown) | undefined
+  let projectionAllowed = true
   if (input.contractOnly) {
+    let resolvedVueTool = false
     try {
       const provider = createRequire(path.join(root, 'package.json'))
       const tool = createRequire(provider.resolve('vue-tsc'))
+      resolvedVueTool = true
       const core = tool('@vue/language-core')
       const config = ts.findConfigFile(root, ts.sys.fileExists)
-      const options = config ? core.createParsedCommandLine(ts, ts.sys, config).vueOptions : undefined
+      const rawVueOptions = config ? core.createParsedCommandLine(ts, ts.sys, config).vueOptions : undefined
+      const options = rawVueOptions && typeof core.resolveVueCompilerOptions === 'function'
+        ? core.resolveVueCompilerOptions(rawVueOptions) : rawVueOptions
       const special = options && (options.lib !== 'vue' || options.plugins?.length || options.hooks?.length
         || Object.keys(options).some(key => /^infer(?:Component|Template)Dollar/.test(key) && options[key])
         || options.fallthroughAttributes || options.vapor || options.jsxSlots || options.resolveStyleImports
+        || options.experimentalAdditionalLanguageModules?.length || options.experimentalDefinePropProposal
         || JSON.stringify(options.optionsWrapper) !== JSON.stringify(["(await import('vue')).defineComponent(", ')'])
         || Object.entries(options.macros ?? {}).some(([name, aliases]) => JSON.stringify(aliases) !== JSON.stringify([name])))
       if (!special) parseVue = provider('vue/compiler-sfc').parse
-    } catch { /* 旧版/自定义Vue工具保留原SFC；TS工程无需Vue */ }
+      else projectionAllowed = false
+    } catch { if (resolvedVueTool) projectionAllowed = false /* 旧版/自定义工具不投影；纯TS无需Vue */ }
   }
-  const projectContract = input.contractOnly ? createContractProjection(ts, parseVue) : undefined
+  const projectContract = input.contractOnly && projectionAllowed ? createContractProjection(ts, parseVue) : undefined
   const contractSources: Record<string, string> = {}
   const parentInputs: Record<string, { hash: string; size: number; mtime: number; ctime: number; ino: number }> = {}
   let parentChanged = false
@@ -487,6 +498,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
   }
   const ctx = loadTsContext(root, ts, diagnostics, readGenerationFile, observedHost)
   if (!ctx) return { ok: false, diagnostics }
+  input.onAmbientInputs?.(ctx.ambientInputs)
   mark('config')
 
   // 入口解析：exposes.import 相对 root；alias 形态（@/x）经 TS resolver 解析
@@ -569,23 +581,36 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
     if (!fs.existsSync(binPath)) {
       return { ok: false, diagnostics: [`${tool} 入口不存在（${binPath}）。请重新安装 ${tool}。`] }
     }
-    // 临时 tsconfig 写在提供方根（include 相对路径语义正确；用完即删）
+    // 临时配置不能出现在Vite/自动组件工具扫描的工程根；路径统一按原配置解析后
+    // 写入缓存目录，真实源码与原tsconfig不变。
     // 同一进程内重启/重建可与上一轮取消后的清理重叠，PID不能作为唯一文件名。
     // 每次生成拥有独立配置，避免旧任务finally删除新任务仍在读取的配置。
     // dev 服务为自己的串行生成保留编译状态和 emit；不能让不同服务共享此目录，
     // 否则取消旧服务或同时构建会删除另一轮仍在使用的输出。一次性构建仍用独立临时目录。
     const cacheDir = input.incrementalDir
     if (cacheDir) fs.mkdirSync(cacheDir, { recursive: true })
-    const tmpCfg = path.join(root, `.fulgurjs-types-tsconfig-${cacheDir ? path.basename(cacheDir) : `${process.pid}-${crypto.randomUUID()}`}.json`)
+    const configDir = cacheDir ?? fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-config-'))
+    const tmpCfg = path.join(configDir, `.fulgurjs-types-tsconfig-${process.pid}-${crypto.randomUUID()}.json`)
     const outDir = cacheDir ? path.join(cacheDir, 'emit') : fs.mkdtempSync(path.join(root, 'node_modules', '.fulgurjs-types-emit-'))
     const clearOutput = (): void => { if (!cacheDir) fs.rmSync(outDir, { recursive: true, force: true }) }
     // Program路径不使用tsbuildinfo或旧emit；先清理，避免未重新emit的旧声明掩盖缺失依赖。
     if (cacheDir && scopedVueProgram) fs.rmSync(outDir, { recursive: true, force: true })
-    const traceFile = cacheDir && scopedVueProgram && !/^1\./.test(vueTscPkg.version) ? path.join(cacheDir, 'inputs.json') : undefined
+    const traceFile = cacheDir && scopedVueProgram ? path.join(cacheDir, 'inputs.json') : undefined
     requiresInputValidation = !!(traceFile && input.cacheCompilerReads)
     if (traceFile) fs.rmSync(traceFile, { force: true })
     const programInputFile = `${tmpCfg}.inputs.json`
     const baseCo: Record<string, unknown> = { ...rawOptionsWithInherited(ctx) }
+    for (const key of ['baseUrl', 'rootDirs', 'typeRoots'] as const) {
+      if (ctx.compilerOptions[key] !== undefined) baseCo[key] = ctx.compilerOptions[key]
+    }
+    if (ctx.compilerOptions.paths && !ctx.compilerOptions.baseUrl) {
+      const pathsBase = (ctx.compilerOptions as import('typescript').CompilerOptions & { pathsBasePath?: string }).pathsBasePath
+        ?? (ctx.tsconfigFile ? path.dirname(ctx.tsconfigFile) : root)
+      baseCo.paths = Object.fromEntries(Object.entries(ctx.compilerOptions.paths).map(([name, values]) => [name, values.map(value => path.resolve(pathsBase, value))]))
+    }
+    // 投影视图擦除了真实用途，unused诊断在该视图中没有源代码含义；
+    // 仅关闭这两项实现lint，原tsconfig及build/CLI的完整检查不变。
+    if (input.contractOnly && projectionAllowed) { baseCo.noUnusedLocals = false; baseCo.noUnusedParameters = false }
     delete baseCo.noEmit
     delete baseCo.incremental
     delete baseCo.composite
@@ -616,16 +641,13 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       },
       // 显式 types 是声明程序的根文件，不能再受工程 exclude: ["node_modules"] 过滤。
       // include 仍受继承的 exclude 约束；files 保留 vite/client 等已解析的全局声明。
-      files: resolvedTypeFiles.map((f) => path.relative(root, f)),
-      include: [
-        ...entryFiles.map((f) => path.relative(root, f)),
-        ...ctx.ambientInputs.map((f) => path.relative(root, f)),
-      ],
+      files: [...new Set([...resolvedTypeFiles, ...entryFiles, ...ctx.ambientInputs])],
+      include: [],
     }))
     // 大型闭包与输入记录不塞进argv，避免macOS ARG_MAX/Linux单参数长度上限。
     if (scopedVueProgram) fs.writeFileSync(programInputFile, JSON.stringify({
       closure: [...closure], entries: entryFiles, traceFile, ambientInputs: ctx.ambientInputs, started: generationStarted,
-      cacheCompilerReads: requiresInputValidation, contractSources, vue: needsVueTsc,
+      cacheCompilerReads: requiresInputValidation, contractSources, contractOnly: !!input.contractOnly && projectionAllowed, projectVue: !!parseVue, vue: needsVueTsc,
       ...(traceFile ? { parentInputs: { files: parentInputs, changed: parentChanged, fileQueries: parentQueries, probes: parentProbes, links: parentLinks, directories: parentDirectories } } : {}),
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
@@ -693,6 +715,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       const initialArgs = heapMarker && fs.existsSync(heapMarker) ? raisedArgs : []
       mark('before-compiler')
       let { err, stdout, stderr } = await attempt(initialArgs)
+      if (/FG_DTS_CONTRACT [1-9]\d*/.test(stderr)) projection.used = true
       mark('compiler')
       // 服务关闭是主动取消，不能误走「系统强杀」重试，重新启动无人使用的编译器。
       if (signal?.aborted) {
@@ -781,10 +804,12 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       clearOutput()
       fs.rmSync(tmpCfg, { force: true })
       fs.rmSync(programInputFile, { force: true })
+      if (!cacheDir) fs.rmSync(configDir, { recursive: true, force: true })
       return { ok: false, diagnostics }
     } finally {
       fs.rmSync(tmpCfg, { force: true })
       fs.rmSync(programInputFile, { force: true })
+      if (!cacheDir) fs.rmSync(configDir, { recursive: true, force: true })
     }
     if (traceFile && fs.existsSync(traceFile)) cacheTraceFile = traceFile
     collectEmitted(ts, outDir, rootDir, emitted, closure)
@@ -794,6 +819,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
     try {
       const compilerOptions: import('typescript').CompilerOptions = {
         ...(ctx.compilerOptions as Record<string, never>),
+        ...(input.contractOnly && projectionAllowed ? { noUnusedLocals: false, noUnusedParameters: false } : {}),
         noEmit: false,
         declaration: true,
         emitDeclarationOnly: true,
@@ -806,7 +832,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       }
       const host = ts.createCompilerHost(compilerOptions)
       const originalRead = host.readFile
-      host.readFile = file => contractSources[path.resolve(file)] ?? originalRead(file)
+      host.readFile = file => { const text = originalRead(file); return projectContract?.(file, text) ?? text }
       const program = ts.createProgram([...entryFiles, ...ctx.ambientInputs, ...resolveTypesEntries(root, ctx.rawOptions, [])], compilerOptions, host)
       if (timingsEnabled) graph = { programFiles: program.getSourceFiles().length,
         checkedFiles: program.getSourceFiles().filter(source => closure.has(path.resolve(source.fileName))).length,

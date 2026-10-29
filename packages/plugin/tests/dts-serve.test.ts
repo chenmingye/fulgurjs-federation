@@ -187,3 +187,12 @@ it('根目录外的真实导入变更也会自动重新生成，不依赖Vite根
   await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(2), { timeout: 10000 })
   await vi.waitFor(() => expect(service.isGenerating()).toBe(false), { timeout: 10000 })
 }, 25000)
+
+it('全局声明变更立即取消正在运行的编译，合并后重跑，不把取消写成TYP错误',async()=>{
+  const p=cacheProject();const ambient=path.join(p.root,'src/auto-imports.d.ts');fs.writeFileSync(ambient,'declare const GeneratedValue:string')
+  const calls:DtsGenerateInput[]=[];let finish:((result:DtsGenerateResult)=>void)|undefined
+  generate.mockImplementation((input:DtsGenerateInput)=>{calls.push(input);input.onAmbientInputs?.([ambient]);return new Promise<DtsGenerateResult>(resolve=>{finish=resolve;input.signal?.addEventListener('abort',()=>resolve({ok:false,diagnostics:['受控中止']}),{once:true})})})
+  const service=p.start();await vi.waitFor(()=>expect(calls).toHaveLength(1),{timeout:10000});fs.writeFileSync(ambient,'declare const GeneratedValue:number')
+  await vi.waitFor(()=>expect(calls).toHaveLength(2),{timeout:10000});expect(calls[0]!.signal?.aborted).toBe(true);expect(calls[1]!.signal?.aborted).toBe(false);expect(service.revision()).toBeNull();finish!(p.result)
+  await vi.waitFor(()=>expect(service.revision()).toBe(p.revision),{timeout:10000});expect(p.logs.join('\n')).not.toContain('TYP-001');service.dispose()
+},25000)

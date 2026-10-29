@@ -15,7 +15,7 @@ import type * as TS from 'typescript'
 import type { DtsGenerateInput, DtsGenerateOk } from './dts-generate'
 import { parseDtsIndex, DTS_FILE_COUNT_MAX, DTS_FILE_MAX_BYTES, DTS_TOTAL_MAX_BYTES } from './dts-shared'
 
-type FileStamp = { hash: string; size: number; mtime: number; ctime: number; ino: number }
+type FileStamp = { hash: string; size: number; mtime: number; ctime: number; ino: number; readHash?: string }
 type DirectoryQuery = { kind: 'files' | 'dirs' | 'entries'; root: string; recurse?: boolean; tools?: boolean; nodePackages?: boolean; extensions?: readonly string[]; excludes?: readonly string[]; includes?: readonly string[]; depth?: number; result: string[] }
 export interface TypesInputSnapshot {
   ambient?: { configFile: string; files: string[] }
@@ -375,8 +375,11 @@ export function validateTypesInputs(snapshot: TypesInputSnapshot, root: string, 
     for (const [file, before] of Object.entries(snapshot.files)) {
       const prior = fs.statSync(file)
       const now = stamp(file)
+      // 声明工具可能重写完全相同的文本。仅当编译器实际读入文本的摘要已证明
+      // 等于当前文件时允许stat变化；工具代码及没有读入证明的源文件仍保留ABA门禁。
+      const sameDeclarationRead = file.endsWith('.d.ts') && before.readHash === before.hash && !snapshot.runtimeTools.includes(file)
       if (prior.ctimeMs !== now.ctime || prior.mtimeMs !== now.mtime || prior.ino !== now.ino || prior.size !== now.size
-        || now.hash !== before.hash || (stable && (now.ctime !== before.ctime || now.mtime !== before.mtime || now.ino !== before.ino))) return `输入文件变化：${path.relative(root, file)}`
+        || now.hash !== before.hash || (stable && !sameDeclarationRead && (now.ctime !== before.ctime || now.mtime !== before.mtime || now.ino !== before.ino))) return `输入文件变化：${path.relative(root, file)}`
       checked.set(file, now)
     }
     for (const [probe, expected] of Object.entries(snapshot.probes)) {
@@ -519,7 +522,7 @@ export function captureCompilerInputs(input: TypesCacheInput, traceFile: string)
       const value = stamp(file)
       // 父进程生成器/锁文件不由TS host读取，必须确认期间没有修改。
       const previous = snapshot.files[file]
-      if (previous ? JSON.stringify(previous) !== JSON.stringify(value) : value.ctime > trace.started) throw new Error('输入已变化：生成期间工具或锁文件变化')
+      if (previous ? ['hash', 'size', 'mtime', 'ctime', 'ino'].some(key => previous[key as keyof FileStamp] !== value[key as keyof FileStamp]) : value.ctime > trace.started) throw new Error('输入已变化：生成期间工具或锁文件变化')
       snapshot.files[file] = value
       snapshot.links[file] = realPath(file)
     }

@@ -292,3 +292,34 @@ export interface Result { value: Contract }`)
     expect(manifestUrlFromEntry('not a url')).toBe(null)
   })
 })
+
+it('同步半成品和备份放在src之外，切换完成前不污染源目录扫描',async()=>{
+  const bundle=makeBundle({widget:'export declare const value:number'});const fetch=fetchRouter(bundle)
+  const root=path.join(tmp,'outside-src');const output=path.join(root,'src/fulgurjs/types'),stagingRoot=path.join(root,'node_modules/.cache/fulgurjs/types/sync')
+  const rename=fs.renameSync;const moves:Array<[string,string]>=[]
+  const spy=vi.spyOn(fs,'renameSync').mockImplementation((from,to)=>{moves.push([String(from),String(to)]);if(String(from).includes('.fg-staging-')){expect(String(from).startsWith(stagingRoot)).toBe(true);expect(fs.readdirSync(output).filter(name=>name.startsWith('.fg-'))).toEqual([])}return rename(from,to)})
+  try{expect((await syncRemoteTypes({alias:'remote',manifestUrl,typesRoot:output,stagingRoot,source:'dev',fetchJsonImpl:fetch.json,fetchTextImpl:fetch.text})).status).toBe('synced');expect(moves.length).toBeGreaterThan(0);expect(readMetadata(path.join(output,'remote'))?.revision).toBe(bundle.index.revision)}finally{spy.mockRestore()}
+})
+
+it('临时缓存不可写与跨卷切换均回退同目录原子更新，真实写失败保留完整旧声明',async()=>{
+  const root=path.join(tmp,'stage-fallback');const output=path.join(root,'src/fulgurjs/types'),cache=path.join(root,'cache');fs.mkdirSync(root,{recursive:true});fs.writeFileSync(cache,'not a directory')
+  const bundle=makeBundle({widget:'export declare const value:number'}),fetch=fetchRouter(bundle)
+  const input={alias:'fallback',manifestUrl,typesRoot:output,stagingRoot:cache,source:'s',fetchJsonImpl:fetch.json,fetchTextImpl:fetch.text}
+  expect((await syncRemoteTypes(input)).status).toBe('synced')
+  const newer=makeBundle({widget:'export declare const value:string'});newer.index.revision='bbbbbbbbbbbbbbbb';(newer.manifest as any).types.revision=newer.index.revision;const next=fetchRouter(newer)
+  fs.unlinkSync(cache);fs.mkdirSync(cache)
+  const rename=fs.renameSync;let crossed=false
+  const spy=vi.spyOn(fs,'renameSync').mockImplementation((from,to)=>{if(!crossed&&String(to).startsWith(cache)&&String(to).includes('.fg-trash-')){crossed=true;throw Object.assign(new Error('cross device'),{code:'EXDEV'})}return rename(from,to)})
+  try{expect((await syncRemoteTypes({...input,fetchJsonImpl:next.json,fetchTextImpl:next.text})).status).toBe('synced');expect(crossed).toBe(true);expect(readMetadata(path.join(output,'fallback'))?.revision).toBe(newer.index.revision)}finally{spy.mockRestore()}
+  const third=makeBundle({widget:'export declare const value:boolean'});third.index.revision='cccccccccccccccc';(third.manifest as any).types.revision=third.index.revision;const last=fetchRouter(third)
+  const fail=vi.spyOn(fs,'renameSync').mockImplementation((from,to)=>{if(String(from).includes('.fg-staging-'))throw Object.assign(new Error('write rejected'),{code:'EACCES'});return rename(from,to)})
+  try{expect((await syncRemoteTypes({...input,fetchJsonImpl:last.json,fetchTextImpl:last.text})).status).toBe('failed');expect(readMetadata(path.join(output,'fallback'))?.revision).toBe(newer.index.revision);expect(fs.readFileSync(path.join(output,'fallback/modules.d.ts'),'utf8')).toContain('value:string')}finally{fail.mockRestore()}
+})
+
+it('共享缓存不清扫另一个活跃实例的临时目录，只清理已退出进程目录',async()=>{
+  const root=path.join(tmp,'active-staging'),output=path.join(root,'src/types'),stagingRoot=path.join(root,'cache');const base=path.join(stagingRoot,sha(path.resolve(output)).slice(0,12))
+  const alive=path.join(base,`.fg-staging-active-${process.pid}-live`),dead=path.join(base,'.fg-staging-active-99999999-dead');fs.mkdirSync(alive,{recursive:true});fs.mkdirSync(dead);fs.writeFileSync(path.join(alive,'owner.txt'),'active')
+  const bundle=makeBundle({widget:'export declare const value:number'}),fetch=fetchRouter(bundle)
+  expect((await syncRemoteTypes({alias:'active',manifestUrl,typesRoot:output,stagingRoot,source:'dev',fetchJsonImpl:fetch.json,fetchTextImpl:fetch.text})).status).toBe('synced')
+  expect(fs.readFileSync(path.join(alive,'owner.txt'),'utf8')).toBe('active');expect(fs.existsSync(dead)).toBe(false)
+})

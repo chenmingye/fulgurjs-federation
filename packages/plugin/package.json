@@ -1,6 +1,6 @@
 {
   "name": "@fulgurjs/federation",
-  "version": "6.15.0",
+  "version": "6.15.1",
   "type": "module",
   "description": "Vite Module Federation for Vue and React: remote modules, shared dependencies and app bridges.",
   "license": "MIT",
@@ -153,7 +153,9 @@
     "vitest": "^3.1.0",
     "vue": "^3.5.22",
     "vue-router": "^4.6.4",
-    "vue-tsc": "^3.3.12"
+    "vue-tsc": "^3.3.12",
+    "vue-tsc-legacy": "npm:vue-tsc@^1.8.27",
+    "vue-tsc-v2": "npm:vue-tsc@^2.2.12"
   },
   "peerDependencies": {
     "react": ">=18.0.0 <20",

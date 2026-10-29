@@ -57,3 +57,16 @@ it('超时终止进程后可重新创建，不留下执行中的请求',async()=
     expect(recovered.err).toBeNull();expect(recovered.stdout).toBe('恢复')
   }finally{session.dispose();fs.rmSync(root,{recursive:true,force:true})}
 },15000)
+
+it('快速完成与取消竞争后立即开始下一轮，不复用正在退出的进程',async()=>{
+  const root=project(),session=createVueCompilerSession()
+  const script="process.stdout.write('ready')"
+  try{
+    for(let i=0;i<15;i++){
+      const warm=await session.run({root,script,args:[],nodeArgs:[],timeout:10000});expect(warm.err).toBeNull()
+      const controller=new AbortController();const pending=session.run({root,script,args:[],nodeArgs:[],timeout:10000,signal:controller.signal});const timer=setTimeout(()=>controller.abort(),i%3)
+      await pending;clearTimeout(timer)
+      const next=await session.run({root,script,args:[],nodeArgs:[],timeout:10000});expect(next.err).toBeNull();expect(next.stdout).toBe('ready')
+    }
+  }finally{session.dispose();fs.rmSync(root,{recursive:true,force:true})}
+},30000)

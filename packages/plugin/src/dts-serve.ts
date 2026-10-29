@@ -14,6 +14,7 @@
 import type { NormalizedOptions } from './options'
 import path from 'node:path'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import { createVueCompilerSession } from './dts-vue-session'
 import { createRequire } from 'node:module'
 import { generateTypesBundle, type DtsGenerateResult } from './dts-generate'
@@ -63,7 +64,8 @@ export function createDevTypesServer(
 ): DevTypesServer {
   const warn = hooks.warn ?? ((m: string) => console.warn(m))
   const log = hooks.log ?? ((m: string) => console.log(m))
-  const controller = new AbortController()
+  let activeRound: AbortController | undefined
+  const ambientWatchers: fs.FSWatcher[] = []
   const vueCompiler = createVueCompilerSession()
   let files: Map<string, string> | null = null
   let revision: string | null = null
@@ -88,7 +90,7 @@ export function createDevTypesServer(
   // 现代Vue工具能够直接记录真实输入，无需在编译前跑第二套依赖分析。
   let compilerTracesInputs = false
   if (publicExposes.some(entry => entry.import.endsWith('.vue'))) {
-    try { const req = createRequire(path.join(options.root, 'package.json')); compilerTracesInputs = Number(String(req('vue-tsc/package.json').version).split('.')[0]) >= 2 } catch { /* 缺失工具走既有诊断 */ }
+    try { const req = createRequire(path.join(options.root, 'package.json')); compilerTracesInputs = Number(String(req('vue-tsc/package.json').version).split('.')[0]) >= 1 } catch { /* 缺失工具走既有诊断 */ }
   }
   else if (contractOnly) {
     try { createRequire(path.join(options.root, 'package.json')).resolve('typescript'); compilerTracesInputs = true } catch { /* 工具缺失由生成器诊断 */ }
@@ -96,7 +98,40 @@ export function createDevTypesServer(
   let cacheUnavailableAnnounced = false
   let inputEpoch = 0
   const cache = createTypesCacheWorker()
-  const changed = (): void => { inputEpoch++; void ensure() }
+  const changed = (): void => { inputEpoch++; activeRound?.abort(); void ensure() }
+  const consumerDir = path.resolve(options.root, typeof options.dts === 'object' && options.dts.dir
+    ? options.dts.dir : fs.existsSync(path.join(options.root, 'src')) ? 'src/fulgurjs/types' : '.fulgurjs/types')
+  const observeAmbient = (inputs: string[]): void => {
+    for (const watcher of ambientWatchers.splice(0)) watcher.close()
+    const groups = new Map<string, Map<string, string>>()
+    const stamp = (file: string): string => {
+      try { const stat = fs.statSync(file); return stat.size > 512 * 1024 ? `${stat.ctimeMs}/${stat.mtimeMs}/${stat.size}` : crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') }
+      catch { return '!missing' }
+    }
+    for (const file of inputs) {
+      const relative = path.relative(consumerDir, file)
+      if (file.split(path.sep).includes('node_modules') || (!relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))) continue
+      const directory = path.dirname(file), files = groups.get(directory) ?? new Map<string, string>()
+      files.set(path.basename(file), stamp(file)); groups.set(directory, files)
+    }
+    for (const [directory, files] of groups) {
+      try {
+        const watcher = fs.watch(directory, { persistent: false }, (_event, filename) => {
+          if (disposed) return
+          const names = filename ? [String(filename)] : [...files.keys()]
+          let updated = false
+          for (const name of names) {
+            if (!files.has(name) && !name.endsWith('.d.ts')) continue
+            const next = stamp(path.join(directory, name))
+            if (next !== files.get(name)) { files.set(name, next); updated = true; if (process.env.FG_DTS_TIMINGS) log(`[fulgurjs] 全局声明变化：${path.join(directory, name)}`) }
+          }
+          if (updated) changed()
+        })
+        watcher.on('error', () => watcher.close())
+        ambientWatchers.push(watcher)
+      } catch { /* 无法观察时由发布前快照校验和Vite watcher兜底。 */ }
+    }
+  }
   const queueRecheck = (reason?: string): void => {
     pendingInvalidate = true
     log(`[fulgurjs] 类型输入在校验/生成期间变化${reason ? `（${reason}）` : ''}，已排队重检；本轮结果不发布到缓存。`)
@@ -116,6 +151,8 @@ export function createDevTypesServer(
       if (process.env.FG_DTS_TIMINGS) timing.push(`${label} ${Math.round(performance.now() - timingStart)}ms`)
     }
     let handle: TypesCacheHandle | null = null
+    const round = new AbortController()
+    activeRound = round
     try {
       // 冷启动（还没有成功快照文件）直接进入生成：等待 setImmediate 和后台缓存线程
       // 往返会让编译子进程排到 Vite 启动的同步工作之后，实测白等数秒。缓存文件存在时
@@ -167,7 +204,7 @@ export function createDevTypesServer(
       let result: DtsGenerateResult
       const generate = (cacheCompilerReads: boolean): Promise<DtsGenerateResult> => generateTypesBundle({
         root: options.root, exposes: publicExposes, pluginVersion: options.pluginVersion,
-        signal: controller.signal, incrementalDir, vueCompiler, cacheCompilerReads, contractOnly,
+        signal: round.signal, incrementalDir, vueCompiler, cacheCompilerReads, contractOnly, onAmbientInputs: observeAmbient,
       })
       try {
         if (!incrementalDir) {
@@ -187,6 +224,7 @@ export function createDevTypesServer(
       }
       mark('generate')
       if (disposed) return
+      if (round.signal.aborted) { queueRecheck('全局声明或源码已更新，已取消失效编译'); return }
       if (result.ok) for (const notice of result.notices) warn(`[fulgurjs] 类型生成提示：${notice}`)
       if (result.cacheTraceFile && !handle) {
         try {
@@ -256,6 +294,7 @@ export function createDevTypesServer(
         }
       }
     } finally {
+      if (activeRound === round) activeRound = undefined
       if (handle) await cache.release(cacheInput, handle).catch(() => {})
     }
   }
@@ -269,7 +308,8 @@ export function createDevTypesServer(
     // 单飞：进行中再触发的 invalidate 在当前轮结束后补跑一轮
     for (;;) {
       pendingInvalidate = false
-      generating = run()
+      // 先登记单飞Promise，再进入可能同步执行的工具/观察器，避免重入开启第二轮。
+      generating = Promise.resolve().then(run)
       try {
         await generating
       } finally {
@@ -277,6 +317,7 @@ export function createDevTypesServer(
         if (disposed) clearCache()
       }
       if (!pendingInvalidate || disposed) return
+      await new Promise<void>(resolve => setTimeout(resolve, 80))
     }
   }
 
@@ -301,13 +342,15 @@ export function createDevTypesServer(
     invalidate(): void {
       if (disposed) return
       inputEpoch++
+      activeRound?.abort()
       void ensure()
     },
-    markInputChanged(): void { if (!disposed) inputEpoch++ },
+    markInputChanged(): void { if (!disposed) { inputEpoch++; activeRound?.abort() } },
     isGenerating: () => generating !== null,
     dispose(): void {
       disposed = true
-      controller.abort()
+      activeRound?.abort()
+      for (const watcher of ambientWatchers.splice(0)) watcher.close()
       vueCompiler.dispose()
       cache.dispose()
       if (!generating) clearCache()

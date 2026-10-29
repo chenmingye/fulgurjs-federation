@@ -26,7 +26,7 @@ let inputChanged = !!parentInputs.changed;
 const recordFile = file => {
   file = path.resolve(file);
   if (!traceFile || ignoredInput(file)) return;
-  try { const previous=snapshot.files[file];const stat=fs.statSync(file);const same=previous&&previous.ctime===stat.ctimeMs&&previous.mtime===stat.mtimeMs&&previous.ino===stat.ino&&previous.size===stat.size; const next = same ? previous : readStamp(file); if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash)) { traceValid = false; inputChanged = true; } snapshot.files[file] = next; const real = realpath(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
+  try { const previous=snapshot.files[file];const stat=fs.statSync(file);const same=previous&&previous.ctime===stat.ctimeMs&&previous.mtime===stat.mtimeMs&&previous.ino===stat.ino&&previous.size===stat.size; const next = same ? previous : readStamp(file); if (previous && (previous.ctime !== next.ctime || previous.mtime !== next.mtime || previous.ino !== next.ino || previous.hash !== next.hash) && !(file.endsWith('.d.ts') && previous.readHash === previous.hash && previous.hash === next.hash)) { traceValid = false; inputChanged = true; } if(previous?.readHash)next.readHash=previous.readHash; snapshot.files[file] = next; const real = realpath(file); if (snapshot.links[file] && snapshot.links[file] !== real) { traceValid = false; inputChanged = true; } snapshot.links[file] = real; }
   catch { traceValid = false; }
 };
 // 同一次解析会反复询问相同目录，缺失目录还会反复向上找父目录。
@@ -53,6 +53,17 @@ if (traceFile) {
     if (text !== undefined && !ignoredInput(file)) {
       recordFile(file);
       const stamp = snapshot.files[path.resolve(file)];
+      if (stamp && file.endsWith('.d.ts')) {
+        const actual = crypto.createHash('sha256').update(typeInputBytes(file,Buffer.from(text,'utf8'))).digest('hex');
+        // 不使用编码不一致的读入证明；有效UTF8文本发生任何不同读取仍必须重检。
+        if (actual === stamp.hash) stamp.readHash = actual;
+        else {
+          delete stamp.readHash;
+          const raw=fs.readFileSync(file);
+          const bom=(raw[0]===0xef&&raw[1]===0xbb&&raw[2]===0xbf)||(raw[0]===0xff&&raw[1]===0xfe)||(raw[0]===0xfe&&raw[1]===0xff);
+          if(!bom&&Buffer.from(raw.toString('utf8'),'utf8').equals(raw)){traceValid=false;inputChanged=true;}
+        }
+      }
       if (!before || !stamp || before.ctimeMs !== stamp.ctime || before.mtimeMs !== stamp.mtime || before.ino !== stamp.ino || before.size !== stamp.size) { traceValid = false; inputChanged = true; }
     }
     return text;

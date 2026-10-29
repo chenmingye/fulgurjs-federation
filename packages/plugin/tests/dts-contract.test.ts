@@ -187,3 +187,150 @@ const missing:Props={};`)
     expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
   }
 },30000)
+
+it('无props的script-setup及字面量name选项不牵入实现，保留原组件合同',async()=>{
+  for(const options of ['',`defineOptions({name:'ClosedView',inheritAttrs:false});`]){
+    const root=project('closed-view-'+(options?'named':'plain'),{
+      'src/View.vue':`<script setup lang="ts">import {run} from './engine';${options}const value=run();</script><template><div>{{value}}</div></template>`,
+      'src/engine.ts':`export function run():string{return 'value'}`,
+    })
+    const text=fs.readFileSync(path.join(root,'src/View.vue'),'utf8');expect(projection('View.vue',text)).not.toContain('./engine')
+    const full=await bundle(root,'./src/View.vue');const fast=await bundle(root,'./src/View.vue',true)
+    expect(full.ok).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
+    if(full.ok&&fast.ok){expect(fast.index.check).toBe('contract');for(const [file,text]of full.files)if(file!=='index.json')expect(fast.files.get(file)!.replace(/^export \{\};\n/, '')).toBe(text.replace(/^export \{\};\n/, ''))}
+  }
+},30000)
+
+it('name、运行时事件数组和暴露的void方法保留真实参数/返回值，不跟随方法实现依赖',async()=>{
+  const root=project('exposed-void',{
+    'src/View.vue':`<script setup lang="ts">import {run} from './engine';defineOptions({name:'Editor'});defineProps<{id:string}>();defineEmits(['cancel']);const init=async(row:any)=>{const state={};if(row.kind===1){await run()}else if(row.kind===2||row.path){await run()}};defineExpose({init});</script><template><div/></template>`,
+    'src/engine.ts':`export async function run():Promise<void>{}`,
+  })
+  const source=fs.readFileSync(path.join(root,'src/View.vue'),'utf8');const projected=projection('View.vue',source)!;expect(projected).not.toContain('./engine');expect(projected).toContain('Promise<void>')
+  const full=await bundle(root,'./src/View.vue');const fast=await bundle(root,'./src/View.vue',true)
+  expect(full.ok).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
+  if(full.ok&&fast.ok){
+    expect(fast.index.check).toBe('contract')
+    const normalize=(s:string)=>s.replace(/globalThis\.Promise/g,'Promise')
+    for(const [file,text]of full.files)if(file!=='index.json')expect(normalize(fast.files.get(file)!)).toBe(normalize(text))
+  }
+},30000)
+
+it.each([
+ `const init=async()=>{throw Error()};defineExpose({init})`,
+ `declare function fatal():never;const init=async()=>{fatal()};defineExpose({init})`,
+ `const init=async()=>{while(true){}};defineExpose({init})`,
+ `const init=async()=>{return load()};defineExpose({init})`,
+ `const init=(x:string):string=>x;init.extra=1;defineExpose({init})`,
+ `const init:((x:string)=>string)|undefined=x=>x;defineExpose({init})`,
+])('复杂返回或流类型不强行改成void：%s',body=>{
+  const text=`<script setup lang="ts">${body}</script><template/>`;expect(projection('View.vue',text)).toBe(text)
+})
+
+it('桥接工厂合同从SDK真实签名取得：默认、显式和参数推导props保持一致，400模块初始化不进入类型程序',async()=>{
+  const {buildAmbientDeclarations}=await import('../src/dts-ambient')
+  for(const framework of ['vue','react'])for(const kind of ['default','explicit','parameter']){
+    const call=kind==='explicit'?`makeBridge<Props>(()=>boot())`:kind==='parameter'?`makeBridge((props:Props)=>{props.id;return boot()})`:`makeBridge((_props)=>boot())`
+    const files:Record<string,string>={
+      'src/entry.ts':`import {defineBridgeApp as makeBridge} from '@fulgurjs/federation/${framework}';import {boot} from './engine';export interface Props {readonly id:string;disabled?:boolean};export default ${call}`,
+      'src/engine.ts':`import type {${framework==='vue'?'App':'ReactElement'}} from '${framework}';import * as pages from './barrel';export function boot():${framework==='vue'?'App':'ReactElement'}{if(Object.keys(pages).length)throw Error();throw Error()}`,
+      'src/barrel.ts':Array.from({length:400},(_,i)=>`export {value as value${i}} from './page${i}'`).join('\n'),
+    }
+    for(let i=0;i<400;i++)files[`src/page${i}.ts`]=`export const value=${i}`
+    const root=project('bridge-contract-'+framework+'-'+kind,files)
+    if(framework==='react'){fs.symlinkSync(path.resolve(__dirname,'../node_modules/react'),path.join(root,'node_modules/react'),'dir');fs.symlinkSync(path.resolve(__dirname,'../node_modules/@types'),path.join(root,'node_modules/@types'),'dir')}
+    fs.mkdirSync(path.join(root,'node_modules/@fulgurjs'));fs.symlinkSync(path.resolve(__dirname,'..'),path.join(root,'node_modules/@fulgurjs/federation'),'dir')
+    const full=await bundle(root,'./src/entry.ts');expect(full.ok,full.ok?'':full.diagnostics.join('\n')).toBe(true)
+    const spy=vi.spyOn(fs,'readFileSync');let fast:Awaited<ReturnType<typeof bundle>>
+    try {fast=await bundle(root,'./src/entry.ts',true);expect(spy.mock.calls.filter(([file])=>/src\/page\d+\.ts$/.test(String(file)))).toHaveLength(0)}finally{spy.mockRestore()}
+    expect(fast!.ok,fast!.ok?'':fast!.diagnostics.join('\n')).toBe(true)
+    if(!full.ok||!fast!.ok)continue
+    expect(fast!.index.check).toBe('contract')
+    for(const [alias,result]of [['before',full],['after',fast!]] as const){const ambient=buildAmbientDeclarations({alias,index:result.index,source:'test',readFile:file=>result.files.get(file)!});fs.writeFileSync(path.join(root,alias+'.d.ts'),ambient.files.get('modules.d.ts')!)}
+    const consumer=path.join(root,'consumer.ts');fs.writeFileSync(consumer,`import before from 'before/Form';import after from 'after/Form';const a:typeof before=after;const b:typeof after=before;type A=NonNullable<typeof before.__fgBridgeProps>;type B=NonNullable<typeof after.__fgBridgeProps>;type Eq<X,Y>=(<T>()=>T extends X?1:2) extends (<T>()=>T extends Y?1:2)?true:false;const same:Eq<A,B>=true;${kind==='default'?'':`const ok:B={id:'1'};\n// @ts-expect-error 必填字段\nconst missing:B={};\n// @ts-expect-error boolean保持精确\nconst wrong:B={id:'1',disabled:'false'};`}`)
+    const program=ts.createProgram([consumer,path.join(root,'before.d.ts'),path.join(root,'after.d.ts')],{strict:true,noEmit:true,skipLibCheck:true,types:[],target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler})
+    expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
+  }
+},60000)
+
+it('投影视图不运行已被擦除用途的unused和CSS v-bind检查；真实源码配置仍严格检查',async()=>{
+  const root=project('projection-usage-check',{
+    'src/Form.vue':`<script setup lang="ts">const props=defineProps<{id:string}>();const height=12;</script><template><div>{{props.id}}</div></template><style scoped>.x{height:v-bind(height)}</style>`,
+  })
+  const file=path.join(root,'tsconfig.json');const config=JSON.parse(fs.readFileSync(file,'utf8'));config.compilerOptions.noUnusedLocals=true;config.compilerOptions.noUnusedParameters=true;fs.writeFileSync(file,JSON.stringify(config))
+  const full=await bundle(root,'./src/Form.vue');const fast=await bundle(root,'./src/Form.vue',true)
+  expect(full.ok,full.ok?'':full.diagnostics.join('\n')).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
+  if(fast.ok)expect(fast.index.check).toBe('contract')
+  const source=path.join(root,'src/Form.vue');fs.writeFileSync(source,fs.readFileSync(source,'utf8').replace('const props=','const unused=1;const props='))
+  expect((await bundle(root,'./src/Form.vue')).ok).toBe(false)
+  expect((await bundle(root,'./src/Form.vue',true)).ok).toBe(true)
+  expect(JSON.parse(fs.readFileSync(file,'utf8')).compilerOptions.noUnusedLocals).toBe(true)
+},30000)
+
+it.each(['vue-tsc-legacy','vue-tsc-v2'])('%s真实旧工具支持投影、实际输入记录、跨重启缓存及外部类型修复',async tool=>{
+  const {createDevTypesServer}=await import('../src/dts-serve');const {typesCachePath}=await import('../src/dts-cache')
+  const root=project('tool-'+tool,{'src/Form.vue':`<script setup lang="ts">import type {Model} from '../external';defineOptions({name:'OldToolForm'});const props=defineProps<{data:Model}>();</script><template><div>{{props.data.id}}</div></template>`,'external.ts':`export interface Model{id:string}`})
+  const external=path.join(tmp,'model-'+tool+'.ts');fs.writeFileSync(external,'export interface Model{id:string}')
+  const source=path.join(root,'src/Form.vue');fs.writeFileSync(source,fs.readFileSync(source,'utf8').replace("'../external'",`'../../model-${tool}'`))
+  fs.unlinkSync(path.join(root,'node_modules/vue-tsc'));fs.symlinkSync(path.resolve(__dirname,'../node_modules',tool),path.join(root,'node_modules/vue-tsc'),'dir')
+  const options={root,exposes:[{name:'./Form',import:'./src/Form.vue'}],pluginVersion:'matrix',dts:true} as import('../src/options').NormalizedOptions
+  const logs:string[]=[];const services:Array<ReturnType<typeof createDevTypesServer>>=[];const start=()=>{const service=createDevTypesServer(options,{log:s=>logs.push(s),warn:s=>logs.push(s)});services.push(service);return service}
+  try{
+    const first=start();await vi.waitFor(()=>expect(first.revision(),logs.join('\n')).not.toBeNull(),{timeout:20000});const revision=first.revision();expect(fs.existsSync(typesCachePath(root))).toBe(true)
+    fs.writeFileSync(external,'export interface Model{id:number}');await vi.waitFor(()=>expect(first.revision(),logs.join('\n')).not.toBe(revision),{timeout:20000});await vi.waitFor(()=>expect(first.isGenerating()).toBe(false),{timeout:20000});expect(first.revision()).not.toBeNull();const index=JSON.parse(first.servePath('/@fulgurjs-types/index.json')!.body);expect(Object.keys(index.files).map(file=>first.servePath('/@fulgurjs-types/'+file)!.body).join('\n')).toContain('id: number');first.dispose();logs.length=0
+    const second=start();await vi.waitFor(()=>expect(logs.join('\n')).toContain('类型缓存命中'),{timeout:20000});expect(second.revision()).not.toBeNull()
+  }finally{for(const service of services)service.dispose()}
+},65000)
+
+it('SDK桥接签名无法确认或公共工具名被遮蔽时不推测默认props',()=>{
+  for(const text of [
+    `import {defineBridgeApp}from './third-party';export default defineBridgeApp(()=>boot())`,
+    `import {defineBridgeApp}from '@fulgurjs/federation/vue';type ReturnType<T>=number;export default defineBridgeApp(()=>boot())`,
+    `import {defineBridgeApp}from '@fulgurjs/federation/vue';export default defineBridgeApp((props={id:'1'})=>boot())`,
+  ])expect(projection('bridge.ts',text)).toBe(text)
+})
+
+it('从ambient组件引用进入的页面同样建立合同边界，不解析其400模块实现图',async()=>{
+  const files:Record<string,string>={
+    'src/Form.vue':`<script setup lang="ts">defineProps<{id:string}>()</script><template/>`,
+    'src/HeavyView.vue':`<script setup lang="ts">import {run} from './engine';const value=run()</script><template><div>{{value}}</div></template>`,
+    'src/components.d.ts':`import HeavyView from './HeavyView.vue';declare module 'vue'{export interface GlobalComponents{HeavyView:typeof HeavyView}}export {};`,
+    'src/engine.ts':`import * as pages from './barrel';export function run():number{return Object.keys(pages).length}`,
+    'src/barrel.ts':Array.from({length:400},(_,i)=>`export {value as value${i}} from './page${i}'`).join('\n'),
+  };for(let i=0;i<400;i++)files[`src/page${i}.ts`]=`export const value=${i}`
+  const root=project('ambient-projection',files),old=process.env.FG_DTS_TIMINGS;process.env.FG_DTS_TIMINGS='1'
+  try{const full=await bundle(root,'./src/Form.vue');const fast=await bundle(root,'./src/Form.vue',true);expect(full.ok).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true);if(full.ok&&fast.ok){expect(fast.index.check).toBe('contract');expect(fast.graph!.programFiles).toBeLessThan(full.graph!.programFiles-350)}}finally{if(old===undefined)delete process.env.FG_DTS_TIMINGS;else process.env.FG_DTS_TIMINGS=old}
+},30000)
+
+it('父进程准备投影后源码改变，Vue编译器仍从实际新读取生成，不覆盖成旧合同',async()=>{
+  const original=`<script setup lang="ts">const props=defineProps<{id:string}>()</script><template>{{props.id}}</template>`
+  const root=project('projection-latest-read',{'src/Form.vue':original});const file=path.join(root,'src/Form.vue');const write=fs.writeFileSync;let changed=false
+  const spy=vi.spyOn(fs,'writeFileSync').mockImplementation(((target:fs.PathOrFileDescriptor,...args:unknown[])=>{
+    const result=(write as (...args:unknown[])=>void)(target,...args)
+    if(!changed&&String(target).endsWith('.inputs.json')){expect(String(target).startsWith(path.join(root,'node_modules'))).toBe(true);changed=true;write(file,original.replace('id:string','id:number'))}
+    return result
+  }) as typeof fs.writeFileSync)
+  try{const result=await bundle(root,'./src/Form.vue',true);expect(changed).toBe(true);expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true);if(result.ok)expect(result.files.get(result.index.exposes['./Form']!.declaration)).toContain('id: number')}finally{spy.mockRestore()}
+},30000)
+
+it('暴露函数保留重载、显式返回和内联箭头签名，真实消费方正反例通过',async()=>{
+  const {buildAmbientDeclarations}=await import('../src/dts-ambient')
+  const root=project('expose-overloads',{'src/Form.vue':`<script setup lang="ts">function choose(v:string):string;function choose(v:number):number;function choose(v:string|number){return v}const focus=(index:number):string=>String(index);defineExpose({choose,focus,inline:(id:string):number=>id.length});</script><template/>`})
+  const result=await bundle(root,'./src/Form.vue',true);expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true)
+  if(!result.ok)return;expect(result.index.check).toBe('contract')
+  const ambient=buildAmbientDeclarations({alias:'remote',index:result.index,source:'test',readFile:file=>result.files.get(file)!});const declaration=path.join(root,'remote.d.ts');fs.writeFileSync(declaration,ambient.files.get('modules.d.ts')!)
+  const consumer=path.join(root,'consumer.ts');fs.writeFileSync(consumer,`import Form from 'remote/Form';declare const form:InstanceType<typeof Form>;const a:string=form.choose('a');const b:number=form.choose(1);const c:string=form.focus(1);const d:number=form.inline('id');\n// @ts-expect-error 重载不能变成any\nform.choose(true);\n// @ts-expect-error 参数不能变宽\nform.focus('1');\n// @ts-expect-error 返回值不能变成any\nconst wrong:string=form.inline('id');`)
+  const program=ts.createProgram([consumer,declaration],{strict:true,noEmit:true,skipLibCheck:true,types:[],target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler});expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
+},30000)
+
+it('缓存目录中的配置保留无baseUrl的paths语义，不把同名本地vue.ts当裸包',async()=>{
+  const root=project('config-paths-no-base',{
+    'src/entry.ts':`import type {Ref}from 'vue';import type {DTO}from '@/dto';export function read(value:Ref<DTO>):DTO{return value.value}`,
+    'src/Other.vue':`<script setup lang="ts">const value=1</script><template>{{value}}</template>`,
+    'src/dto.ts':`export interface DTO{id:string}`,
+    'vue.ts':`export interface IncorrectLocalPackage{wrong:true}`,
+  })
+  const file=path.join(root,'tsconfig.json');const config=JSON.parse(fs.readFileSync(file,'utf8'));config.compilerOptions.paths={'@/*':['./src/*']};fs.writeFileSync(file,JSON.stringify(config))
+  for(const contractOnly of [false,true]){const result=await bundle(root,'./src/entry.ts',contractOnly);expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true);if(result.ok)expect([...result.files.values()].join('\n')).toContain('id: string')}
+  expect(JSON.parse(fs.readFileSync(file,'utf8')).compilerOptions.baseUrl).toBeUndefined()
+},30000)

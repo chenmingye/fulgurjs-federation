@@ -6,6 +6,7 @@
  * 某些工具版本的增量诊断失去文件位置。这里不改源码、不抹掉类型、不改编译器。
  */
 import { genTypesInputRecorder } from './dts-input-recorder'
+import { genContractProjection } from './dts-contract'
 
 export function genVueDeclarationProgram(): string {
   return String.raw`
@@ -23,12 +24,22 @@ const generationInput = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const vue = generationInput.vue === false ? {createProgram:request=>ts.createProgram(request)} : req('vue-tsc');
 const closure = new Set(generationInput.closure.map(file => path.resolve(file)));
 ${genTypesInputRecorder()}
+const parseVue=generationInput.projectVue?req('vue/compiler-sfc').parse:undefined;
+${genContractProjection()}
+const projectedFiles=new Set();
 // 投影只改变隔离声明程序的读取；输入记录器仍读取/校验真实源码。
-if (Object.keys(generationInput.contractSources || {}).length) {
+if (generationInput.contractOnly) {
   const original = ts.sys.readFile;
+  const projectedReads=new Map();
   ts.sys.readFile = (file,...args) => {
     const text = original(file,...args);
-    return generationInput.contractSources[path.resolve(file)] ?? text;
+    const previous=projectedReads.get(file);
+    if(previous&&previous.text===text)return previous.next;
+    // 从本次真实读取投影；不能把父进程预扫时的旧文本覆盖到新源码上。
+    const next=projectContract(file,text);
+    projectedReads.set(file,{text,next});
+    if(next!==text)projectedFiles.add(path.resolve(file));
+    return next;
   };
 }
 const raw = ts.readConfigFile(configFile, ts.sys.readFile);
@@ -62,7 +73,7 @@ if (!diagnostics.length) {
   if (state) {
     if(state.packageInputs)for(const [file,before]of state.packageInputs){try{const now=fs.statSync(file);if(now.ctimeMs===before.ctime&&now.mtimeMs===before.mtime&&now.size===before.size&&now.ino===before.ino)continue}catch{}state.key=undefined;break;}
     const packages = Object.entries(parentInputs.files).filter(([file]) => path.basename(file)==='package.json' || /(?:lock|workspace)\.(?:json|ya?ml|lock)$/.test(file)).map(([file,value])=>[file,value.hash]);
-    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,generationInput.contractSources,parentInputs.links,packages]);
+    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,generationInput.contractOnly,generationInput.contractSources,parentInputs.links,packages]);
     if (state.key !== key) { state.key=key;state.files=new Map();state.program=undefined;state.packageInputs=undefined;state.factory=undefined;state.host=undefined;state.resolution=undefined;state.options=undefined; }
     else state.resolution?.clear();
     parsed.options = state.options ?? parsed.options;
@@ -122,6 +133,7 @@ if (!diagnostics.length) {
   const request={rootNames:parsed.fileNames,options:parsed.options,host,...(state?.program?{oldProgram:state.program}:{})};
   __fgMark('beforeProgram');
   const program=factory(request);
+  if(projectedFiles.size)process.stderr.write('FG_DTS_CONTRACT '+projectedFiles.size+'\n');
   __fgMark('program');
   if(state){
     state.program=program;state.resolution=request.host.getModuleResolutionCache?.();
@@ -137,7 +149,9 @@ if (!diagnostics.length) {
     return closure.has(path.resolve(original));
   });
   if (__fgTimingsOn) process.stderr.write('FG_DTS_GRAPH ' + JSON.stringify({programFiles:program.getSourceFiles().length,
-    checkedFiles:sources.length,projectedFiles:Object.keys(generationInput.contractSources || {}).length}) + '\n');
+    checkedFiles:sources.length,projectedFiles:projectedFiles.size,
+    declarationFiles:program.getSourceFiles().filter(f=>f.isDeclarationFile).length,
+    vueFiles:program.getSourceFiles().filter(f=>/\.vue(?:\.[cm]?[jt]sx?)?$/.test(f.fileName)).length}) + '\n');
   // 诊断门禁仍覆盖完整静态闭包；只把公开声明实际引用的文件送入emit。
   for (const file of sources) {
     diagnostics.push(...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file));

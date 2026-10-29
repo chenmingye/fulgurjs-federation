@@ -75,6 +75,9 @@ export function createVueCompilerSession(): VueCompilerSession {
     running.stderr!.setEncoding('utf8').on('data', (value: string) => { if (child === running) { if (active) active.stderr += value; else startupErr += value } })
     running.on('message', (message: { id: number; restart?: boolean; code?: number; stdout?: string; stderr?: string; reusable?: boolean }) => {
       if (child !== running || active?.id !== message.id) return
+      // 取消/超时后可能仍有已排队的完成消息；必须等close再释放会话，
+      // 否则下一轮会向正在退出的进程发送请求。
+      if (active.aborted || active.timedOut) return
       if (message.restart) {
         // 标记为受控失败，生成器下一次尝试会以新进程加载工具。
         reusable = false
@@ -120,7 +123,10 @@ export function createVueCompilerSession(): VueCompilerSession {
         startupOut = ''; startupErr = ''
         request.signal?.addEventListener('abort', abort, { once: true })
         if (request.signal?.aborted) { abort(); return }
-        running.send({ id, script: request.script, args: request.args }, error => { if (error && active?.id === id) { running.kill('SIGKILL'); finish({ err: error as ExecFileException, stdout: active.stdout, stderr: active.stderr }) } })
+        running.send({ id, script: request.script, args: request.args }, error => { if (error && active?.id === id) {
+          if (active.aborted || active.timedOut) return
+          running.kill('SIGKILL'); child = null; finish({ err: error as ExecFileException, stdout: active.stdout, stderr: active.stderr })
+        } })
       })
     },
     dispose() { if (disposed) return; disposed = true; if (active) active.aborted = true; child?.kill('SIGKILL') },

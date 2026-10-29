@@ -17,7 +17,7 @@ function recorder(cacheCompilerReads = false) {
   roots.push(root)
   const fileExists = vi.fn((file: string) => fs.existsSync(file) && fs.statSync(file).isFile())
   const directoryExists = vi.fn((file: string) => fs.existsSync(file) && fs.statSync(file).isDirectory())
-  const ts = { sys: { useCaseSensitiveFileNames: true, fileExists, directoryExists } }
+  const ts = { sys: { useCaseSensitiveFileNames: true, fileExists, directoryExists, readFile: (file:string)=>{try{return fs.readFileSync(file,'utf8')}catch{return undefined}} } }
   const req = createRequire(import.meta.url)
   const inspect = new Function('require', 'ts', 'fs', 'path', 'generationInput', 'req',
     genTypesInputRecorder() + '\nreturn {snapshot, changed:()=>inputChanged};')(
@@ -66,4 +66,17 @@ it('记录去重不隐藏同一轮中新建目录和优先解析文件', () => {
   expect(inspect.snapshot.probes['d:' + directory]).toBe(true)
   expect(inspect.snapshot.fileQueries[directory]['index.ts']).toBe(true)
   expect(inspect.changed()).toBe(true)
+})
+
+it('编译器实际读取过的声明允许相同文本重写，工具及未证明输入仍保留stat门禁',()=>{
+  const {root,sys,inspect}=recorder();fs.mkdirSync(path.join(root,'node_modules'));fs.symlinkSync(path.resolve(__dirname,'../node_modules/typescript'),path.join(root,'node_modules/typescript'),'dir')
+  const file=path.join(root,'auto-imports.d.ts'),text='declare const GeneratedValue:string';fs.writeFileSync(file,text);expect(sys.readFile(file)).toBe(text);const before=fs.statSync(file);fs.writeFileSync(file,text);fs.utimesSync(file,before.atime,new Date(before.mtimeMs+2000))
+  expect(inspect.snapshot.files[file].readHash).toBe(inspect.snapshot.files[file].hash);expect(validateTypesInputs(inspect.snapshot,root,true)).toBeNull()
+  inspect.snapshot.runtimeTools.push(file);expect(validateTypesInputs(inspect.snapshot,root,true)).toContain('输入文件变化')
+})
+
+it('声明在同轮被读到不同内容，即使最后恢复也拒绝；最终文本变化同样拒绝',()=>{
+  const {root,sys,inspect}=recorder();fs.mkdirSync(path.join(root,'node_modules'));fs.symlinkSync(path.resolve(__dirname,'../node_modules/typescript'),path.join(root,'node_modules/typescript'),'dir')
+  const file=path.join(root,'auto-imports.d.ts'),a='declare const GeneratedValue:string',b='declare const GeneratedValue:number';fs.writeFileSync(file,a);sys.readFile(file);fs.writeFileSync(file,b);sys.readFile(file);fs.writeFileSync(file,a);expect(inspect.changed()).toBe(true)
+  expect(validateTypesInputs(inspect.snapshot,root,true)).not.toBeNull()
 })

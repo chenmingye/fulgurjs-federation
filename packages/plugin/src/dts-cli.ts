@@ -118,6 +118,7 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
         alias: remote.key,
         manifestUrl,
         typesRoot,
+        stagingRoot: path.join(n.root, 'node_modules/.cache/fulgurjs/types/sync'),
         source: entry,
       })
       lines.push(`[consumer] ${result.status === 'synced' ? '✓' : result.status === 'unchanged' ? '=' : '×'} 远程 ${remote.key}：${result.message}`)
