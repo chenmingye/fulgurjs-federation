@@ -19,7 +19,8 @@ import type { VueCompilerSession } from './dts-vue-session'
 import path from 'node:path'
 import { formatDeclarationDiagnostics } from './dts-diagnostics'
 import { genVueDeclarationProgram } from './dts-vue-program'
-import { createContractProjection } from './dts-contract'
+import { createContractProjection, createContractBoundary } from './dts-contract'
+import { selectContractEnvironment } from './dts-contract-environment'
 import crypto from 'node:crypto'
 import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
@@ -153,6 +154,7 @@ function computeStaticClosure(
   resolver: (spec: string, from: string) => { resolved: string; fromNodeModules: boolean } | null,
   root: string,
   readFile: (file: string) => string | undefined = file => fs.readFileSync(file, 'utf8'),
+  onDependency?: (from: string, specifier: string, to: string, typeNames?: string[]) => void,
 ): Set<string> {
   const closure = new Set<string>()
   const queue = [...entryFiles]
@@ -179,8 +181,18 @@ function computeStaticClosure(
     // 这里只读取导入/导出与类型引用，不使用祖先信息；无需为整棵扫描AST建立parent指针。
     const sfile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false)
     const imports: string[] = sfile.referencedFiles.map(ref => ref.fileName)
+    const requestedTypes = new Map<string, string[] | null>()
+    const requestTypes = (specifier: string, names?: string[]): void => {
+      const before = requestedTypes.get(specifier)
+      requestedTypes.set(specifier, before === null || !names ? null : [...new Set([...(before ?? []), ...names])])
+    }
     const visitType = (node: import('typescript').Node): void => {
-      if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) imports.push(node.argument.literal.text)
+      if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) {
+        const specifier = node.argument.literal.text; imports.push(specifier)
+        let qualifier = node.qualifier
+        while (qualifier && ts.isQualifiedName(qualifier)) qualifier = qualifier.left
+        requestTypes(specifier, !node.isTypeOf && qualifier && ts.isIdentifier(qualifier) ? [qualifier.text] : undefined)
+      }
       ts.forEachChild(node, visitType)
     }
     visitType(sfile)
@@ -191,7 +203,16 @@ function computeStaticClosure(
           : (ts.isImportEqualsDeclaration(stmt) && ts.isExternalModuleReference(stmt.moduleReference) && ts.isStringLiteral(stmt.moduleReference.expression))
             ? stmt.moduleReference.expression
             : null
-      if (specNode) imports.push(specNode.text)
+      if (specNode) {
+        imports.push(specNode.text)
+        let names: string[] | undefined
+        if (ts.isImportDeclaration(stmt) && stmt.importClause?.namedBindings && ts.isNamedImports(stmt.importClause.namedBindings)
+          && !stmt.importClause.name && (stmt.importClause.isTypeOnly || stmt.importClause.namedBindings.elements.every(e => e.isTypeOnly)))
+          names = stmt.importClause.namedBindings.elements.map(e => e.propertyName?.text ?? e.name.text)
+        if (ts.isExportDeclaration(stmt) && stmt.exportClause && ts.isNamedExports(stmt.exportClause)
+          && (stmt.isTypeOnly || stmt.exportClause.elements.every(e => e.isTypeOnly))) names = stmt.exportClause.elements.map(e => e.propertyName?.text ?? e.name.text)
+        requestTypes(specNode.text, names)
+      }
     }
     for (const spec of imports) {
       const r = resolver(spec, file)
@@ -204,6 +225,7 @@ function computeStaticClosure(
         }
       }
       if (resolved && !resolved.includes(`${path.sep}node_modules${path.sep}`)) {
+        onDependency?.(file, spec, path.resolve(resolved), requestedTypes.get(spec) ?? undefined)
         queue.push(path.resolve(resolved))
       }
     }
@@ -393,19 +415,15 @@ function makeResolver(ts: TsModule, co: Record<string, unknown>, readFile = ts.s
  * 成功产出 index.json + files/*.d.ts（in-memory Map，由调用方决定落盘/服务/打包）。
  */
 export async function generateTypesBundle(input: DtsGenerateInput): Promise<DtsGenerateResult> {
-  const projection = { used: false, diagnosticFailure: false }
-  const result = await generateTypesBundleOnce(input, projection)
-  if (result.ok || !input.contractOnly || !projection.used || !projection.diagnosticFailure || input.signal?.aborted) return result
-  // 投影不适用于某种工具/语法时由原编译器裁决，不能发布近似合同。
-  const fallback = await generateTypesBundleOnce({ ...input, contractOnly: false })
-  if (fallback.ok) {
-    fallback.notices.push('公开合同快速路径未能完成检查，已使用完整源码路径生成精确声明。')
-    if (process.env.FG_DTS_TIMINGS) fallback.notices.push(`快速路径诊断：${result.diagnostics.join('\n').slice(0, 1500)}`)
-  } else fallback.diagnostics.unshift('公开合同投影检查未完成，已用完整源码重试；以下为完整路径诊断：')
-  return fallback
+  // 合同模式只运行一次有边界的程序；错误不能触发隐式完整源码重试。
+  const result = await generateTypesBundleOnce(input)
+  if (!result.ok && input.contractOnly) result.diagnostics.push(
+    `合同入口：${input.exposes.map(e => `${e.name} → ${e.import}`).join('；')}。本次未自动重试完整源码。请明确公开类型，或显式设置 dts.devCheck: "implementation"。`,
+  )
+  return result
 }
 
-async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { used: false, diagnosticFailure: false }): Promise<DtsGenerateResult> {
+async function generateTypesBundleOnce(input: DtsGenerateInput): Promise<DtsGenerateResult> {
   const generationStarted = Date.now()
   const timingsEnabled = !!process.env.FG_DTS_TIMINGS
   const timingStart = performance.now()
@@ -448,7 +466,19 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       else projectionAllowed = false
     } catch { if (resolvedVueTool) projectionAllowed = false /* 旧版/自定义工具不投影；纯TS无需Vue */ }
   }
-  const projectContract = input.contractOnly && projectionAllowed ? createContractProjection(ts, parseVue) : undefined
+  if (input.contractOnly && !projectionAllowed) return { ok: false, diagnostics: [
+    '公开合同生成已停止：当前 Vue 编译扩展无法安全建立独立合同视图。',
+    '请使用标准 Vue 编译选项，或显式配置 dts.devCheck: "implementation" 选择完整实现检查；本次没有自动扩大扫描。',
+  ] }
+  const contractTypeNames: Record<string, string[] | null> = {}
+  const projectContract = input.contractOnly ? createContractProjection(ts, parseVue, contractTypeNames) : undefined
+  const ambientSources: Record<string, { original: string; text: string }> = {}
+  const contractEdges = new Map<string, { from: string; specifier: string }>()
+  const dependency = (from: string, specifier: string, to: string, names?: string[]): void => {
+    if (!contractEdges.has(to)) contractEdges.set(to, { from, specifier })
+    if (input.contractOnly) contractTypeNames[to] = contractTypeNames[to] === null || !names ? null : [...new Set([...(contractTypeNames[to] ?? []), ...names])].sort()
+  }
+  const boundary = projectContract ? createContractBoundary(projectContract, ambientSources) : undefined
   const contractSources: Record<string, string> = {}
   const parentInputs: Record<string, { hash: string; size: number; mtime: number; ctime: number; ino: number }> = {}
   let parentChanged = false
@@ -477,8 +507,8 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size
         || (previous && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
       parentInputs[path.resolve(file)] = value
-      const projected = projectContract?.(file, text) ?? text
-      if (projected !== text) { contractSources[path.resolve(file)] = projected; projection.used = true }
+      const projected = boundary ? boundary.read(file, text) : text
+      if (projected !== undefined && projected !== text) { contractSources[path.resolve(file)] = projected }
       return projected
     } catch { return undefined }
   }
@@ -498,7 +528,8 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
   }
   const ctx = loadTsContext(root, ts, diagnostics, readGenerationFile, observedHost)
   if (!ctx) return { ok: false, diagnostics }
-  input.onAmbientInputs?.(ctx.ambientInputs)
+  const allAmbientInputs = [...ctx.ambientInputs]
+  input.onAmbientInputs?.(allAmbientInputs)
   mark('config')
 
   // 入口解析：exposes.import 相对 root；alias 形态（@/x）经 TS resolver 解析
@@ -525,13 +556,41 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
 
   // .vue 需求判定：入口是 .vue，或工程内存在 .vue（入口可能传递依赖 SFC——TS 的
   // 目录枚举只收 TS 扩展名，parsed.fileNames 看不到 .vue，必须实际扫文件系统）
-  const needsVueTsc =
+  let needsVueTsc =
     entryFiles.some((f) => f.endsWith('.vue')) ||
     ctx.projectFiles.some((f) => f.endsWith('.vue')) ||
     hasVueFilesUnderSources(root)
 
   // rootDir：全工程文件公共目录（空时退到入口公共目录）
-  const closure = computeStaticClosure(ts, entryFiles, resolver, root, readGenerationFile)
+  for (const file of entryFiles) contractTypeNames[file] = null
+  let closure = computeStaticClosure(ts, entryFiles, resolver, root, readGenerationFile, dependency)
+  if (boundary?.errors.size) return { ok: false, diagnostics: [...boundary.errors, ...[...contractEdges].slice(0, 20).map(([to, edge]) => `合同依赖：${path.relative(root, edge.from)} → ${edge.specifier} → ${path.relative(root, to)}`)] }
+  if (input.contractOnly) {
+    const candidates = [...ctx.ambientInputs]
+    // 只把被合同实际引用的全局声明加入程序；索引仍记录原文件用于变更校验。
+    // 全局类型的依赖可以再引用其他全局类型，因此与静态合同闭包一起求不动点。
+    for (;;) {
+      const previous = JSON.stringify([ambientSources, contractTypeNames])
+      const selected = selectContractEnvironment(ts, candidates,
+        [...closure].map(file => {
+          const text = readGenerationFile(file) ?? ''
+          if (!file.endsWith('.vue') || !parseVue) return text
+          const parsed = parseVue(text) as { descriptor: { script?: { content: string }; scriptSetup?: { content: string } } }
+          return [parsed.descriptor.script?.content, parsed.descriptor.scriptSetup?.content].filter(Boolean).join('\n')
+        }), file => {
+          const saved = ambientSources[file]
+          if (saved) return saved.original
+          return readGenerationFile(file)
+        })
+      Object.assign(ambientSources, selected)
+      ctx.ambientInputs = Object.keys(ambientSources)
+      closure = computeStaticClosure(ts, [...entryFiles, ...ctx.ambientInputs], resolver, root, readGenerationFile, dependency)
+      if (boundary?.errors.size) return { ok: false, diagnostics: [...boundary.errors, ...[...contractEdges].slice(0, 20).map(([to, edge]) => `合同依赖：${path.relative(root, edge.from)} → ${edge.specifier} → ${path.relative(root, to)}`)] }
+      if (JSON.stringify([ambientSources, contractTypeNames]) === previous) break
+    }
+  }
+  if (boundary?.errors.size) return { ok: false, diagnostics: [...boundary.errors, ...[...contractEdges].slice(0, 20).map(([to, edge]) => `合同依赖：${path.relative(root, edge.from)} → ${edge.specifier} → ${path.relative(root, to)}`)] }
+  if (input.contractOnly) needsVueTsc = [...closure].some(file => file.endsWith('.vue'))
   mark('closure')
   const rootDir = commonDirOf([...ctx.projectFiles, ...closure])
   if (!rootDir) return { ok: false, diagnostics: ['无法确定声明输出根目录（rootDir）。请检查工程 tsconfig 的 include。'] }
@@ -547,7 +606,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
   // 装配模块）只是类型边，其文件的存量业务错误与公开声明面无关，不进闭包也不阻断
   // 生成（设计合同：「与 exposed 声明依赖无关的业务错误不要被偷换成类型生成失败」）。
 
-  if (needsVueTsc || input.vueCompiler) {
+  if (needsVueTsc || input.vueCompiler || input.contractOnly) {
     const vueTscDir = needsVueTsc ? resolveFromRoot(root, 'vue-tsc') : tsPkgDir
     if (!vueTscDir) {
       return {
@@ -578,6 +637,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
           && typeof core.createVueLanguagePlugin === 'function'
       } catch { return false }
     })()
+    if (input.contractOnly && !scopedVueProgram) return { ok: false, diagnostics: ['公开合同生成已停止：提供方 Vue 工具缺少隔离 Program 能力。请安装兼容的 vue-tsc，或显式设置 dts.devCheck: "implementation"；未退回完整扫描。'] }
     if (!fs.existsSync(binPath)) {
       return { ok: false, diagnostics: [`${tool} 入口不存在（${binPath}）。请重新安装 ${tool}。`] }
     }
@@ -622,6 +682,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
     // （"vite/client" 落不进 ./types → TS2688，MESZC bpm 实测）；自行按包解析出具体
     // .d.ts 并纳入 files，绕开解析歧义及 exclude 过滤；解析失败的条目丢弃（如实记录诊断）
     const resolvedTypeFiles = resolveTypesEntries(root, baseCo, diagnostics)
+    if (input.contractOnly) baseCo.types = [] // 显式类型已经解析为根；不自动加载无关 @types。
 
     fs.writeFileSync(tmpCfg, JSON.stringify({
       ...(ctx.tsconfigFile ? { extends: ctx.tsconfigFile } : {}),
@@ -646,8 +707,8 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
     }))
     // 大型闭包与输入记录不塞进argv，避免macOS ARG_MAX/Linux单参数长度上限。
     if (scopedVueProgram) fs.writeFileSync(programInputFile, JSON.stringify({
-      closure: [...closure], entries: entryFiles, traceFile, ambientInputs: ctx.ambientInputs, started: generationStarted,
-      cacheCompilerReads: requiresInputValidation, contractSources, contractOnly: !!input.contractOnly && projectionAllowed, projectVue: !!parseVue, vue: needsVueTsc,
+      closure: [...closure], entries: entryFiles, traceFile, ambientInputs: allAmbientInputs, started: generationStarted,
+      cacheCompilerReads: requiresInputValidation, contractSources, contractTypeNames, ambientSources, contractOnly: !!input.contractOnly && projectionAllowed, projectVue: !!parseVue, vue: needsVueTsc,
       ...(traceFile ? { parentInputs: { files: parentInputs, changed: parentChanged, fileQueries: parentQueries, probes: parentProbes, links: parentLinks, directories: parentDirectories } } : {}),
     }))
     if (process.env.FG_DUMP_TSCFG) fs.writeFileSync(process.env.FG_DUMP_TSCFG, fs.readFileSync(tmpCfg, 'utf8'))
@@ -672,6 +733,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
      * 旧实现固定 10 分钟会在提堆重试阶段被超时强杀，被误判为编译错误/系统终止。
      */
     const timeoutFor = (raisedHeap: boolean): number => {
+      if (input.contractOnly) return 15000 // 合同模式固定单次预算，不自动提堆或延长重试。
       const env = Number(process.env.FG_DTS_TIMEOUT_MS)
       if (Number.isFinite(env) && env > 0) return env
       return raisedHeap ? 30 * 60 * 1000 : 10 * 60 * 1000
@@ -712,10 +774,10 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       // 不改变其他工程/一次性构建的内存设置，也不把机器相关信息写入公开类型资源。
       const heapMarker = cacheDir ? path.join(cacheDir, 'raised-heap') : undefined
       const raisedArgs = [`--max-old-space-size=${process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'}`]
-      const initialArgs = heapMarker && fs.existsSync(heapMarker) ? raisedArgs : []
+      const initialArgs = !input.contractOnly && heapMarker && fs.existsSync(heapMarker) ? raisedArgs : []
       mark('before-compiler')
       let { err, stdout, stderr } = await attempt(initialArgs)
-      if (/FG_DTS_CONTRACT [1-9]\d*/.test(stderr)) projection.used = true
+      if (traceFile && fs.existsSync(traceFile)) cacheTraceFile = traceFile
       mark('compiler')
       // 服务关闭是主动取消，不能误走「系统强杀」重试，重新启动无人使用的编译器。
       if (signal?.aborted) {
@@ -724,7 +786,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       }
       // 默认堆 OOM：提堆重试一次（大型真实应用的闭包可达数 GB）。OOM 必须与
       // 「闭包内编译错误」区分诊断——OOM 的 stdout 没有可修的 TS 错误。
-      if (err && isOom(stderr)) {
+      if (!input.contractOnly && err && isOom(stderr)) {
         const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
         if (initialArgs.length === 0) {
           diagnostics.push(`${tool} 声明生成在默认堆下内存不足（V8 OOM），以 --max-old-space-size=${raised}MB 重试。`)
@@ -741,7 +803,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
         }
       }
       // 超时强杀：首次超时 → 提堆+更长上限重试；重试再超时 → 明确超时诊断
-      if (err && isTimeoutKill(err) && !isOom(stderr)) {
+      if (!input.contractOnly && err && isTimeoutKill(err) && !isOom(stderr)) {
         const raised = process.env.FG_DTS_MAX_OLD_SPACE ?? '8192'
         diagnostics.push(`${tool} 声明生成超过单次上限（${Math.round(timeoutFor(false) / 60000)} 分钟）被强杀，以提堆 + 更长上限重试。`)
         ;({ err, stdout, stderr } = await attempt([`--max-old-space-size=${raised}`]))
@@ -755,7 +817,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
         }
       }
       // 系统级终止（无 V8 横幅、无 TS 诊断、非超时）：重试一次；仍被终止则给出环境修法
-      if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
+      if (!input.contractOnly && err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
         diagnostics.push(`${tool} 声明生成进程被系统终止（signal=${err.signal ?? 'Killed'}，无 TypeScript 诊断输出），重试一次。`)
         ;({ err, stdout, stderr } = await attempt([]))
         if (err && isSystemKilled(err, stdout, stderr) && !isTimeoutKill(err)) {
@@ -768,6 +830,13 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
           return { ok: false, diagnostics }
         }
       }
+      if (input.contractOnly && err && !signal?.aborted && (isTimeoutKill(err) || isOom(stderr) || isSystemKilled(err, stdout, stderr))) {
+        clearOutput()
+        return { ok: false, diagnostics: [
+          `公开合同生成已停止：${isTimeoutKill(err) ? '超过隔离编译15秒预算' : isOom(stderr) ? '编译器内存不足' : '编译进程被终止'}。`,
+          `入口：${exposes.map(e => `${e.name} → ${e.import}`).join('；')}。请缩小公开类型依赖，或显式选择 dts.devCheck: "implementation"；本次未提堆、延长重试或退回完整源码扫描。`,
+        ] }
+      }
       if (err) {
         if (signal?.aborted) {
           diagnostics.push(`${tool} 声明生成被中止（dev server 关闭）。`)
@@ -776,11 +845,14 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
         }
         // 门禁 = 入口静态闭包内的错误（file(line,col): error TSxxxx 形态解析）；
         // 闭包外（动态导入类型边/无关业务文件）的错误如实丢弃，不偷换成生成失败
+        if (input.contractOnly && /FG_DTS_BOUNDARY/.test(stderr)) {
+          clearOutput()
+          return { ok: false, diagnostics: [stderr.slice(stderr.indexOf('FG_DTS_BOUNDARY') + 16).split(/\nFG_DTS_/)[0]!.trim()], ...(cacheTraceFile ? { cacheTraceFile } : {}) }
+        }
         const errFiles = parseErrorFiles(stdout, root)
         const closureErrs = new Set([...errFiles].filter((f) => closure.has(f)))
         const globalError = /(?:^|\n)(?:error )?TS\d+:/.test(stdout + '\n' + stderr)
         if (closureErrs.size > 0 || globalError || errFiles.size === 0) {
-          projection.diagnosticFailure = true
           const tail = formatDeclarationDiagnostics(stdout, stderr, err.message, root, closure)
           diagnostics.push(`${tool} 声明生成失败（暴露闭包内存在编译错误）——类型资源未产出：\n${tail}`)
           clearOutput()
@@ -832,8 +904,9 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
       }
       const host = ts.createCompilerHost(compilerOptions)
       const originalRead = host.readFile
-      host.readFile = file => { const text = originalRead(file); return projectContract?.(file, text) ?? text }
+      host.readFile = file => { const text = originalRead(file); return boundary ? boundary.read(file, text) : text }
       const program = ts.createProgram([...entryFiles, ...ctx.ambientInputs, ...resolveTypesEntries(root, ctx.rawOptions, [])], compilerOptions, host)
+      if (boundary?.errors.size) return { ok: false, diagnostics: [...boundary.errors, ...[...contractEdges].slice(0, 20).map(([to, edge]) => `合同依赖：${path.relative(root, edge.from)} → ${edge.specifier} → ${path.relative(root, to)}`)] }
       if (timingsEnabled) graph = { programFiles: program.getSourceFiles().length,
         checkedFiles: program.getSourceFiles().filter(source => closure.has(path.resolve(source.fileName))).length,
         projectedFiles: Object.keys(contractSources).length }
@@ -846,7 +919,6 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
         // 门禁 = 入口静态闭包内的错误；闭包外业务文件不偷换成生成失败
         .filter((d) => !d.file || closure.has(path.resolve(d.file.fileName)))
       if (errs.length > 0) {
-        projection.diagnosticFailure = true
         fs.rmSync(outDir, { recursive: true, force: true })
         diagnostics.push(
           `声明生成失败：暴露闭包内存在 ${errs.length} 个编译错误——类型资源未产出（修复后重新构建/重启 dev）。前若干条：`,
@@ -872,8 +944,9 @@ async function generateTypesBundleOnce(input: DtsGenerateInput, projection = { u
 
   // TypeScript does not emit existing declaration inputs; keep imported local contracts.
   for (const file of closure) {
-    if (file.endsWith('.d.ts')) emitted.set(file, fs.readFileSync(file, 'utf8'))
+    if (file.endsWith('.d.ts')) emitted.set(file, input.contractOnly ? (readGenerationFile(file) ?? '') : fs.readFileSync(file, 'utf8'))
   }
+  if (boundary?.errors.size) return { ok: false, diagnostics: [...boundary.errors] }
   // JSON 没有独立的 declaration emit，但它可以出现在公开类型中（typeof config）。
   // 用提供方的 TypeScript checker 保留真实结构，不把它误判为 emitSkipped，
   // 也不把 package.json 等运行时数据复制进公开类型包。

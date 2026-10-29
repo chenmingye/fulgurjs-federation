@@ -140,7 +140,7 @@ export interface FederationOptions {
   shareScope?: string
   manifest?: boolean | Record<string, unknown>
   runtimePlugins?: string[]
-  /** dev默认只检查公开类型合同；implementation恢复完整静态实现检查。build/CLI始终完整检查。 */
+  /** dev默认只检查公开类型合同，无法提取/超预算时拒绝，不自动完整扫描；implementation显式启用完整静态实现检查。build/CLI始终完整检查。 */
   dts?: boolean | { dir?: string; devCheck?: 'contract' | 'implementation'; mode?: 'source' | 'shim' }
   /**
    * dev 下自身源码（含依赖，需配合 optimizeDeps.exclude）是否参与 shared 协商改写。

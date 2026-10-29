@@ -120,4 +120,6 @@ export default {
 
 一切配置错误在 vite config 阶段立即以「问题 + 当前值 + 预期值 + 修法示例」三段式报出，不带错误配置静默运行。CFG 段错误码：`CFG-001`（name）～`CFG-012`（setup/保留键），全集见[错误码总表](errors.md)。`remotes` 运行参数（timeout/retries/breaker）在配置期即校验数值合法性，坏数值不留到运行时。
 
-`dts.devCheck` 默认为 `contract`，只控制开发提供方检查范围；`implementation` 将完整静态实现检查作为dev门禁；`false`关闭类型。build/CLI始终完整检查。用法、回退边界、缓存及三态示例见[组件与模块](../guide/components-and-modules.md#开发期先生成公开合同完整实现另行检查)。
+`dts.devCheck` 默认为 `contract`，只控制开发提供方检查范围；`implementation` 将完整静态实现检查作为dev门禁；`false`关闭类型。build/CLI始终完整检查。用法、读取边界、缓存及三态示例见[组件与模块](../guide/components-and-modules.md#开发期先生成公开合同完整实现另行检查)。
+
+开发合同模式无法安全提取或超过分析预算时明确停止，**不自动回到完整实现扫描**；独立ambient环境按合同引用选择声明。预算、全局类型和修法见[组件与模块指南](../guide/components-and-modules.md#为什么必须限制读取范围)。

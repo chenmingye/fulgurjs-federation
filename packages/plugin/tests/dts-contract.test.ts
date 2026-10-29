@@ -101,13 +101,13 @@ it('Vue具名类型导出、字面量默认值、事件重载与完整合同保�
   }
 },30000)
 
-it('SFC投影出现无法检查的类型时自动回到真实源码，不服务近似结果',async()=>{
+it('SFC合同检查失败时停止，不自动回到完整源码',async()=>{
   const root=project('vue-fallback-global',{
     'src/Form.vue':`<script setup lang="ts">const defaultId = '1' as const;defineProps<{id:typeof defaultId}>()</script><template/>`,
   })
   const full=await bundle(root,'./src/Form.vue');const fast=await bundle(root,'./src/Form.vue',true)
-  expect(full.ok).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
-  if(full.ok&&fast.ok){expect(fast.index.check).toBeUndefined();expect(fast.notices.join('')).toContain('完整源码');expect(fast.files).toEqual(full.files)}
+  expect(full.ok).toBe(true);expect(fast.ok).toBe(false)
+  if(!fast.ok){expect(fast.diagnostics.join('\n')).toContain('TS2304');expect(fast.diagnostics.join('\n')).toContain('未自动重试完整源码')}
 },30000)
 
 it('局部同名函数不是Vue编译宏，不把它改写成另一套组件合同',()=>{
@@ -144,7 +144,7 @@ it('真实dev缓存按公开合同记录实际TS输入；400个实现模块不�
   } finally {for(const service of services)service.dispose()}
 },45000)
 
-it('React TSX显式组件合同可独立生成，推导组件自动保留原路径，消费方仍拒绝错误props',async()=>{
+it('React TSX显式组件合同可独立生成，推导组件停止，消费方仍拒绝错误props',async()=>{
   const {buildAmbientDeclarations}=await import('../src/dts-ambient')
   for (const inferred of [false,true]) {
     const root=project(`react-${inferred}`,{
@@ -155,7 +155,9 @@ it('React TSX显式组件合同可独立生成，推导组件自动保留原路�
     fs.symlinkSync(path.resolve(__dirname,'../node_modules/@types'),path.join(root,'node_modules/@types'),'dir')
     const cfg=JSON.parse(fs.readFileSync(path.join(root,'tsconfig.json'),'utf8'));cfg.compilerOptions.jsx='react-jsx';fs.writeFileSync(path.join(root,'tsconfig.json'),JSON.stringify(cfg))
     const full=await bundle(root,'./src/Card.tsx');const fast=await bundle(root,'./src/Card.tsx',true)
-    expect(full.ok,full.ok?'':full.diagnostics.join('\n')).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
+    expect(full.ok,full.ok?'':full.diagnostics.join('\n')).toBe(true)
+    if(inferred){expect(fast.ok).toBe(false);if(!fast.ok)expect(fast.diagnostics.join('\n')).toContain('未自动重试完整源码');continue}
+    expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
     if(!full.ok||!fast.ok)continue
     for(const [file,text]of full.files)if(file!=='index.json')expect(fast.files.get(file)).toBe(text)
     const ambient=buildAmbientDeclarations({alias:'remote',index:fast.index,source:'test',readFile:file=>fast.files.get(file)!})
@@ -229,15 +231,15 @@ it.each([
 
 it('桥接工厂合同从SDK真实签名取得：默认、显式和参数推导props保持一致，400模块初始化不进入类型程序',async()=>{
   const {buildAmbientDeclarations}=await import('../src/dts-ambient')
-  for(const framework of ['vue','react'])for(const kind of ['default','explicit','parameter']){
+  for(const factory of ['defineBridgeApp','defineApplication'])for(const framework of ['vue','react'])for(const kind of ['default','explicit','parameter']){
     const call=kind==='explicit'?`makeBridge<Props>(()=>boot())`:kind==='parameter'?`makeBridge((props:Props)=>{props.id;return boot()})`:`makeBridge((_props)=>boot())`
     const files:Record<string,string>={
-      'src/entry.ts':`import {defineBridgeApp as makeBridge} from '@fulgurjs/federation/${framework}';import {boot} from './engine';export interface Props {readonly id:string;disabled?:boolean};export default ${call}`,
+      'src/entry.ts':`import {${factory} as makeBridge} from '@fulgurjs/federation/${framework}';import {boot} from './engine';export interface Props {readonly id:string;disabled?:boolean};export default ${call}`,
       'src/engine.ts':`import type {${framework==='vue'?'App':'ReactElement'}} from '${framework}';import * as pages from './barrel';export function boot():${framework==='vue'?'App':'ReactElement'}{if(Object.keys(pages).length)throw Error();throw Error()}`,
       'src/barrel.ts':Array.from({length:400},(_,i)=>`export {value as value${i}} from './page${i}'`).join('\n'),
     }
     for(let i=0;i<400;i++)files[`src/page${i}.ts`]=`export const value=${i}`
-    const root=project('bridge-contract-'+framework+'-'+kind,files)
+    const root=project('bridge-contract-'+factory+'-'+framework+'-'+kind,files)
     if(framework==='react'){fs.symlinkSync(path.resolve(__dirname,'../node_modules/react'),path.join(root,'node_modules/react'),'dir');fs.symlinkSync(path.resolve(__dirname,'../node_modules/@types'),path.join(root,'node_modules/@types'),'dir')}
     fs.mkdirSync(path.join(root,'node_modules/@fulgurjs'));fs.symlinkSync(path.resolve(__dirname,'..'),path.join(root,'node_modules/@fulgurjs/federation'),'dir')
     const full=await bundle(root,'./src/entry.ts');expect(full.ok,full.ok?'':full.diagnostics.join('\n')).toBe(true)
@@ -334,3 +336,128 @@ it('缓存目录中的配置保留无baseUrl的paths语义，不把同名本地v
   for(const contractOnly of [false,true]){const result=await bundle(root,'./src/entry.ts',contractOnly);expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true);if(result.ok)expect([...result.files.values()].join('\n')).toContain('id: string')}
   expect(JSON.parse(fs.readFileSync(file,'utf8')).compilerOptions.baseUrl).toBeUndefined()
 },30000)
+
+it('无法投影的推导入口立即拒绝，400模块业务图在进入编译器前被截断；显式完整模式仍可检查',async()=>{
+  const files:Record<string,string>={
+    'src/entry.ts':`import {run} from './engine';export const result=run()`,
+    'src/engine.ts':`import * as pages from './barrel';export function run():number{return Object.keys(pages).length}`,
+    'src/barrel.ts':Array.from({length:400},(_,i)=>`export {value as value${i}} from './page${i}'`).join('\n'),
+  };for(let i=0;i<400;i++)files[`src/page${i}.ts`]=`export const value=${i}`
+  const root=project('strict-boundary',files)
+  const read=vi.spyOn(fs,'readFileSync')
+  try{
+    const result=await bundle(root,'./src/entry.ts',true)
+    expect(result.ok).toBe(false)
+    if(!result.ok)expect(result.diagnostics.join('\n')).toMatch(/entry.ts[\s\S]*无法[\s\S]*implementation/)
+    expect(read.mock.calls.filter(([file])=>/src\/(?:page\d+|barrel|engine)\.ts$/.test(String(file)))).toEqual([])
+  }finally{read.mockRestore()}
+  expect((await bundle(root,'./src/entry.ts')).ok).toBe(true)
+},30000)
+
+it('独立ambient环境保留真正引用的全局DTO，不加载未引用模块或模板组件的实现',async()=>{
+  const root=project('selective-ambient',{
+    'src/Form.vue':`<script setup lang="ts">defineProps<{params:BusinessParams}>()</script><template/>`,
+    'src/globals.d.ts':`import type {Id} from './id';declare global {interface BusinessParams {readonly id:Id; disabled?:boolean};const unused:typeof import('./engine').run;}export {};`,
+    'src/id.ts':`export type Id = string`,
+    'src/components.d.ts':`declare module 'vue'{export interface GlobalComponents {Heavy:typeof import('./Heavy.vue')['default']}}export {};`,
+    'src/Heavy.vue':`<script lang="ts">import {run} from './engine';export default {data(){return {value:run()}}}</script>`,
+    'src/engine.ts':`export function run(){return Math.random()}`,
+    'src/unrelated.d.ts':`export interface Unrelated {value:typeof import('./engine').run}`,
+  })
+  const read=vi.spyOn(fs,'readFileSync')
+  try{
+    const result=await bundle(root,'./src/Form.vue',true)
+    expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true)
+    expect(read.mock.calls.filter(([file])=>/\/(?:Heavy\.vue|engine\.ts)$/.test(String(file)))).toEqual([])
+    if(result.ok)expect([...result.files.values()].join('\n')).toContain('BusinessParams')
+  }finally{read.mockRestore()}
+},30000)
+
+it('合同显式需要GlobalComponents时保留其依赖，遇到不支持的组件明确拒绝，不能偷偷删掉所需类型',async()=>{
+  const root=project('explicit-components',{
+    'src/entry.ts':`import type {GlobalComponents} from 'vue';export interface Props {component:GlobalComponents['Heavy']}`,
+    'src/components.d.ts':`declare module 'vue'{export interface GlobalComponents {Heavy:typeof import('./Heavy.vue')['default']}}export {};`,
+    'src/Heavy.vue':`<script lang="ts">export default {data(){return {value:Math.random()}}}</script>`,
+  })
+  const result=await bundle(root,'./src/entry.ts',true)
+  expect(result.ok).toBe(false)
+  if(!result.ok)expect(result.diagnostics.join('\n')).toContain('Heavy.vue')
+},30000)
+
+it('合同分析预算主动拒绝大文件，不能截断或自动扩大扫描',async()=>{
+  const {createContractBoundary}=await import('../src/dts-contract')
+  const boundary=createContractBoundary(projection)
+  expect(boundary.read('/src/contracts.d.ts',`export type X = '${'x'.repeat(4*1024*1024)}'`)).toBeUndefined()
+  expect([...boundary.errors].join('\n')).toContain('超过合同分析预算')
+  expect(boundary.read('/src/next.ts','export const next=1')).toBeUndefined()
+})
+
+it('旧Vue工具的存在性探测不误报，只有实际进入类型Program的未投影源码才拒绝',async()=>{
+  const root=project('legacy-probe',{
+    'src/Form.vue':`<script setup lang="ts">defineProps<{value:import('union').Version}>()</script><template/>`,
+    'node_modules/union/package.json':`{"name":"union","types":"index.d.ts"}`,
+    'node_modules/union/index.d.ts':`export * from 'javascript-lib'`,
+    'node_modules/javascript-lib/package.json':`{"name":"javascript-lib","main":"index.js"}`,
+    'node_modules/javascript-lib/index.js':`export const version = Math.random()`,
+    'node_modules/@types/javascript-lib/package.json':`{"name":"@types/javascript-lib","types":"index.d.ts"}`,
+    'node_modules/@types/javascript-lib/index.d.ts':`export type Version = 'v1'|'v2'`,
+  })
+  fs.unlinkSync(path.join(root,'node_modules/vue-tsc'))
+  fs.symlinkSync(path.resolve(__dirname,'../node_modules/vue-tsc-legacy'),path.join(root,'node_modules/vue-tsc'),'dir')
+  const cfg=JSON.parse(fs.readFileSync(path.join(root,'tsconfig.json'),'utf8'));cfg.compilerOptions.allowJs=true;fs.writeFileSync(path.join(root,'tsconfig.json'),JSON.stringify(cfg))
+  const result=await bundle(root,'./src/Form.vue',true)
+  expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true)
+},30000)
+
+it('合同超时只运行一次固定预算的隔离编译，不自动提堆或完整重试',async()=>{
+  const root=project('bounded-timeout',{'src/entry.ts':`export interface Props {id:string}`})
+  const run=vi.fn(async(_request:import('../src/dts-vue-session').VueCompileRequest)=>({err:Object.assign(new Error('timeout'),{killed:true,signal:'SIGTERM'}),stdout:'',stderr:''}))
+  const result=await generateTypesBundle({root,exposes:[{name:'./Form',import:'./src/entry.ts'}],pluginVersion:'test',contractOnly:true,
+    incrementalDir:path.join(root,'node_modules/.fulgurjs-types-budget'),vueCompiler:{run,prime:()=>undefined,dispose:()=>{}}})
+  expect(result.ok).toBe(false);expect(run).toHaveBeenCalledTimes(1)
+  expect(run.mock.calls[0]![0].timeout).toBe(15000)
+  if(!result.ok)expect(result.diagnostics.join('\n')).toContain('超过隔离编译15秒预算')
+})
+
+it('只引用混合模块中的具名类型时不受无关推导导出影响；多个类型需求合并，值需求仍严格拒绝',async()=>{
+  const root=project('named-type-boundary',{
+    'src/entry.ts':`import type {Props as P} from './mixed';export interface Envelope {params:P}`,
+    'src/other.ts':`export type {OtherProps} from './mixed'`,
+    'src/mixed.ts':`import {run} from './engine';export interface Props {readonly id:string;disabled?:boolean};export interface OtherProps {count:number};const id=run();export function unrelated(){return run()}`,
+    'src/engine.ts':`export function run():number{return Math.random()}`,
+    'src/value.ts':`export {unrelated} from './mixed'`,
+  })
+  const result=await generateTypesBundle({root,exposes:[{name:'./Envelope',import:'./src/entry.ts'},{name:'./Other',import:'./src/other.ts'}],pluginVersion:'test',contractOnly:true})
+  expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true)
+  if(result.ok){const text=[...result.files.values()].join('\n');expect(text).toContain('readonly id: string');expect(text).toContain('count: number');expect(text).not.toContain('unrelated');expect(text).not.toContain('engine')}
+  const value=await generateTypesBundle({root,exposes:[{name:'./Envelope',import:'./src/entry.ts'},{name:'./Value',import:'./src/value.ts'}],pluginVersion:'test',contractOnly:true})
+  expect(value.ok).toBe(false);if(!value.ok)expect(value.diagnostics.join('\n')).toContain('mixed.ts')
+},30000)
+
+
+it('间接库模块的实例/接口增强保守保留，不能因外层合同没有直接import该库而丢字段',async()=>{
+  const root=project('transitive-augmentation',{
+    'src/entry.ts':`import type {Outer} from 'outer-lib';export type Additional = Outer['stamp']`,
+    'src/augment.d.ts':`import 'inner-lib';declare module 'inner-lib'{interface Inner {stamp:string}}`,
+    'node_modules/outer-lib/package.json':`{"name":"outer-lib","types":"index.d.ts"}`,
+    'node_modules/outer-lib/index.d.ts':`export {Inner as Outer} from 'inner-lib'`,
+    'node_modules/inner-lib/package.json':`{"name":"inner-lib","types":"index.d.ts"}`,
+    'node_modules/inner-lib/index.d.ts':`export interface Inner {id:string}`,
+  })
+  const result=await bundle(root,'./src/entry.ts',true)
+  expect(result.ok,result.ok?'':result.diagnostics.join('\n')).toBe(true)
+},30000)
+
+
+it('增量复用的AST也计入预算，探测到未投影源码实际入图时必须拒绝',async()=>{
+  const {createContractBoundary}=await import('../src/dts-contract')
+  const boundary=createContractBoundary(projection)
+  const file='/src/inferred.ts'
+  expect(boundary.read(file,'export const inferred=load()',true)).toBe('')
+  expect(boundary.errors.size).toBe(0)
+  boundary.validateProgram([{fileName:file,text:''}])
+  expect([...boundary.errors].join('\n')).toContain(file)
+  const reused=createContractBoundary(projection)
+  reused.validateProgram(Array.from({length:4097},(_,i)=>({fileName:`/node_modules/lib${i}.d.ts`,text:''})))
+  expect([...reused.errors].join('\n')).toContain('含复用AST')
+})

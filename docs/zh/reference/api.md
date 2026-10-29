@@ -668,4 +668,6 @@ const counter = useCounter()
 
 getter 仅适合本模块明确只有一个默认实例且初始化较晚的情形；未就绪时抛可读错误。多容器并发请每次工厂绑定实际实例并向自身组件注入，不能用一个会被下一次挂载覆盖的模块变量。组件内正常 Pinia 注入继续使用原生 useStore。
 
-开发提供方默认检查公开合同；`dts.devCheck: "implementation"` 使用完整静态实现门禁。build和CLI始终检查真实源码静态闭包。类型清单/消费metadata的`check: "contract"`明确标记检查范围；合同成功不表示模板或函数体检查通过。精确适用条件、复杂语法回退与示例见[公开合同生成](../guide/components-and-modules.md#开发期先生成公开合同完整实现另行检查)。
+开发提供方默认检查公开合同；`dts.devCheck: "implementation"` 使用完整静态实现门禁。build和CLI始终检查真实源码静态闭包。类型清单/消费metadata的`check: "contract"`明确标记检查范围；合同成功不表示模板或函数体检查通过。精确适用条件、复杂语法拒绝边界与示例见[公开合同生成](../guide/components-and-modules.md#开发期先生成公开合同完整实现另行检查)。
+
+开发合同模式无法安全提取或超过分析预算时明确停止，**不自动回到完整实现扫描**；独立ambient环境按合同引用选择声明。预算、全局类型和修法见[组件与模块指南](../guide/components-and-modules.md#为什么必须限制读取范围)。

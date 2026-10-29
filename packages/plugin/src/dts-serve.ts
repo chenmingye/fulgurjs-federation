@@ -86,7 +86,7 @@ export function createDevTypesServer(
 
   const cacheInput = { root: options.root, exposes: publicExposes, pluginVersion: options.pluginVersion, dts: options.dts }
   const contractOnly = typeof options.dts !== 'object' || options.dts.devCheck !== 'implementation'
-  if (contractOnly && publicExposes.length) log('[fulgurjs] 开发期生成并检查公开类型合同；业务实现检查请运行应用 typecheck，build/fulgurjs types 仍执行完整静态闭包检查。dts.devCheck: "implementation" 可在 dev 使用完整检查。')
+  if (contractOnly && publicExposes.length) log('[fulgurjs] 开发期只在公开合同边界内生成类型，无法提取或超预算会明确停止，不自动完整扫描；业务实现检查请运行应用 typecheck，build/fulgurjs types 仍执行完整静态闭包检查。dts.devCheck: "implementation" 可在 dev 使用完整检查。')
   // 现代Vue工具能够直接记录真实输入，无需在编译前跑第二套依赖分析。
   let compilerTracesInputs = false
   if (publicExposes.some(entry => entry.import.endsWith('.vue'))) {

@@ -261,7 +261,7 @@ export interface Result { value: Contract }`)
         remotes: [{ key: 'upstream', devEntry: 'http://remote.test/@fulgurjs-entry.js' }], pollMs: 20,
         log: () => {}, warn: () => {}, onSynced: () => { notifications++; provider.invalidate() },
       })
-      await vi.waitFor(() => expect(provider.revision()).not.toBeNull(), { timeout: 5000 })
+      await vi.waitFor(() => expect(provider.revision(), warnings.join('\n')+'\n'+messages.join('\n')).not.toBeNull(), { timeout: 5000 })
       expect(provider.servePath('/@fulgurjs-types/files/entry.d.ts')?.body).toContain('value: Contract')
       await vi.waitFor(() => expect(manifestRequests).toBeGreaterThanOrEqual(3))
       expect(notifications).toBe(1)

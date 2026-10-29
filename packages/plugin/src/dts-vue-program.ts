@@ -6,7 +6,7 @@
  * 某些工具版本的增量诊断失去文件位置。这里不改源码、不抹掉类型、不改编译器。
  */
 import { genTypesInputRecorder } from './dts-input-recorder'
-import { genContractProjection } from './dts-contract'
+import { genContractProjection, genContractBoundary } from './dts-contract'
 
 export function genVueDeclarationProgram(): string {
   return String.raw`
@@ -25,7 +25,10 @@ const vue = generationInput.vue === false ? {createProgram:request=>ts.createPro
 const closure = new Set(generationInput.closure.map(file => path.resolve(file)));
 ${genTypesInputRecorder()}
 const parseVue=generationInput.projectVue?req('vue/compiler-sfc').parse:undefined;
+const contractTypeNames = generationInput.contractTypeNames || {};
 ${genContractProjection()}
+${genContractBoundary()}
+const contractBoundary = generationInput.contractOnly ? createContractBoundary(projectContract, generationInput.ambientSources) : undefined;
 const projectedFiles=new Set();
 // 投影只改变隔离声明程序的读取；输入记录器仍读取/校验真实源码。
 if (generationInput.contractOnly) {
@@ -36,9 +39,9 @@ if (generationInput.contractOnly) {
     const previous=projectedReads.get(file);
     if(previous&&previous.text===text)return previous.next;
     // 从本次真实读取投影；不能把父进程预扫时的旧文本覆盖到新源码上。
-    const next=projectContract(file,text);
+    const next=contractBoundary.read(file,text,true);
     projectedReads.set(file,{text,next});
-    if(next!==text)projectedFiles.add(path.resolve(file));
+    if(next!==undefined&&next!==text)projectedFiles.add(path.resolve(file));
     return next;
   };
 }
@@ -73,7 +76,7 @@ if (!diagnostics.length) {
   if (state) {
     if(state.packageInputs)for(const [file,before]of state.packageInputs){try{const now=fs.statSync(file);if(now.ctimeMs===before.ctime&&now.mtimeMs===before.mtime&&now.size===before.size&&now.ino===before.ino)continue}catch{}state.key=undefined;break;}
     const packages = Object.entries(parentInputs.files).filter(([file]) => path.basename(file)==='package.json' || /(?:lock|workspace)\.(?:json|ya?ml|lock)$/.test(file)).map(([file,value])=>[file,value.hash]);
-    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,generationInput.contractOnly,generationInput.contractSources,parentInputs.links,packages]);
+    const key = JSON.stringify([parsed.options,vueOptions,parsed.fileNames,generationInput.closure,generationInput.contractOnly,generationInput.contractSources,generationInput.contractTypeNames,parentInputs.links,packages]);
     if (state.key !== key) { state.key=key;state.files=new Map();state.program=undefined;state.packageInputs=undefined;state.factory=undefined;state.host=undefined;state.resolution=undefined;state.options=undefined; }
     else state.resolution?.clear();
     parsed.options = state.options ?? parsed.options;
@@ -134,6 +137,7 @@ if (!diagnostics.length) {
   __fgMark('beforeProgram');
   const program=factory(request);
   if(projectedFiles.size)process.stderr.write('FG_DTS_CONTRACT '+projectedFiles.size+'\n');
+  contractBoundary?.validateProgram(program.getSourceFiles());
   __fgMark('program');
   if(state){
     state.program=program;state.resolution=request.host.getModuleResolutionCache?.();
@@ -142,6 +146,7 @@ if (!diagnostics.length) {
     for(const [file,value]of Object.entries(snapshot.files))if(path.basename(file)==='package.json')packageInputs.set(file,value);
     state.packageInputs=packageInputs;
   }
+  if (!contractBoundary?.errors.size) {
   diagnostics.push(...program.getOptionsDiagnostics(), ...program.getGlobalDiagnostics());
   __fgMark('globals');
   const sources = program.getSourceFiles().filter(file => {
@@ -191,8 +196,14 @@ if (!diagnostics.length) {
       messageText: '暴露模块声明 emit 被编译器跳过：' + file.fileName });
   }
 
+  }
 }
 __fgMark('emit');
+if(contractBoundary?.errors.size) {
+  if(typeof __fulgurjsProgramState === 'object') __fulgurjsProgramState.reusable=false;
+  process.stderr.write('FG_DTS_BOUNDARY '+[...contractBoundary.errors].join('\n')+'\n');
+  diagnostics.push({category:ts.DiagnosticCategory.Error,code:90002,messageText:[...contractBoundary.errors].join('\n')});
+}
 const errors = diagnostics.filter(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error);
 // 读取视图下的诊断也须校验输入；失败记录只用于监听与重检，不会成为成功缓存。
 if (!errors.length || generationInput.cacheCompilerReads) finishInputTrace();

@@ -719,9 +719,41 @@ With `dts: true`, dev defaults to public-contract checking. Exposing a form shou
 
 Projection exists only in an **isolated declaration compiler read view**. Source files and Vite runtime transforms are unchanged:
 
-- TS/TSX uses the provider TypeScript `transpileDeclaration` API only when its isolated-declaration diagnostics permit exact output. Cross-file inference retains original source. Output containing diagnostic fallback `any` is never accepted as a successful projection.
-- Non-generic Vue `<script setup lang="ts">` retains public-contract dependencies, including explicit props/events, closed components without props, literal naming options, and provable exposed functions while omitting unrelated implementation and template expressions. The provider's official Vue Program still generates the component declaration; the plugin does not handcraft `DefineComponent`. Named type exports and documentation remain. Literal defaults are retained. Runtime props, destructured defaults, complex expose/model/slots, Options API, generics, and special compiler extensions retain the original path. A failed projected contract check retries original-source compilation instead of serving approximate types.
+- TS/TSX uses the provider TypeScript 5.5+ `transpileDeclaration` API (older tools receive an explicit install/mode remedy) only when its isolated-declaration diagnostics permit exact output. Named type-only imports select referenced exports and their local type dependencies; unrelated value inference in the same file does not block them. Actual cross-file implementation inference stops with the file and a remedy instead of expanding implementation dependencies. Output containing diagnostic fallback `any` is never accepted as a successful projection.
+- Non-generic Vue `<script setup lang="ts">` retains public-contract dependencies, including explicit props/events, closed components without props, literal naming options, and provable exposed functions while omitting unrelated implementation and template expressions. The provider's official Vue Program still generates the component declaration; the plugin does not handcraft `DefineComponent`. Named type exports and documentation remain. Literal defaults are retained. Unsupported runtime props, destructured defaults, complex expose/model/slots, Options API, generics, and compiler extensions fail explicitly. A failed contract check never automatically retries original-source compilation or serves approximate types.
 - Referenced types still require resolution and checking. Large library types, ambient declarations, or complex inference may still load many files. There is no promise of entry-file-only compilation or a fixed first-start time on every project.
+
+#### Why the read boundary is required
+
+An expose may publish only `params.id` while its implementation imports the entire router and editor. Following inferred return values into those implementations makes cold generation grow with application size. Background execution, fewer output files and warm caching alone do not solve that problem. Contract mode therefore rejects unprojectable source before expanding its implementation dependencies. It never silently changes into full implementation checking, substitutes any, or deletes application code.
+
+#### An independent ambient environment
+
+Program roots are exposes and selected public contracts, not all business files from tsconfig.include. The plugin reads local `.d.ts` files to index declared names/modules, then selects declarations referenced by contract identifiers and module specifiers to a fixed point. Reading that declaration index is different from loading the business implementation behind each registration. Unused global DTOs, auto-import variables and unrelated declaration modules do not become Program roots.
+
+Template-only `GlobalComponents` registration is omitted because templates are outside this view. If a contract explicitly references `GlobalComponents`, its dependencies are retained. Global DTOs are selected by name. Module augmentations are retained conservatively because they can affect transitive library dependencies; direct entry imports alone cannot prove them irrelevant. Mixed declaration files retain selected members and the imports they use. Explicit side-effect imports remain dependencies. The independent environment does not automatically load every visible `@types` package; explicitly configured compilerOptions.types entries are retained. Public signatures relying on implicit library globals should use explicit type imports rather than packages coincidentally installed on the provider machine.
+
+This is not entry-file-only analysis. `OrderItem[]` requires OrderItem; public third-party types require their declarations. An unprojectable local implementation reached through a needed type fails the whole new bundle rather than expanding unchecked.
+
+#### Fixed budgets and actionable failures
+
+Contract mode permits at most **4096 input files, 512 local non-declaration sources, 4MiB per file, 32MiB cumulative text, and 15 seconds per isolated compile**. Library declarations count toward file/text budgets; config and declaration indexing can also consume read budget. Exceeding a limit stops generation without truncation, any substitution, heap escalation or extended retry. The time limit is a stop boundary, not a successful-readiness promise; startup, indexing and cache validation also cost time.
+
+Provider terminal TYP-001 includes the failing file, reason, remedy and expose entries. Local static edges discovered during preparation are included. Compiler errors keep TS positions; unsupported syntax does not invent an exact line/column. Logs state that full-source retry did not occur. Failed bundles are not published and manifests do not claim fresh types. Existing consumer declarations do not prove that the provider's new contract succeeded.
+
+For missing types or paths, correct the actual declaration and save to regenerate automatically. For implementation-dependent return inference, annotate the public export accurately using an existing contract. For unsupported Vue syntax or tools, preserve real capabilities and explicitly select `dts.devCheck: 'implementation'` if necessary. For genuinely large public type graphs, remove unnecessary public dependencies or deliberately choose implementation checking; never replace real fields with any/unknown to obtain a pass.
+
+```ts
+import { runOrder } from './implementation'
+import type { OrderResult } from './contracts'
+
+// The public signature does not require analysis of runOrder's implementation.
+export function submit(id: string): Promise<OrderResult> {
+  return runOrder(id)
+}
+```
+
+React can annotate an exported component with its existing props and component type, such as `const Card: FC<Props>`. Vue still exposes the original .vue file directly with precise defineProps/defineEmits; do not add a wrapper merely to generate declarations.
 
 Global/module augmentations belong in explicit side-effect imports or project ambient declarations; explicit augmentation imports are retained. If a type relies only on implicit runtime assembly, use `devCheck: "implementation"` and ensure the augmentation is distributed with the public declarations rather than relying on the provider machine environment.
 
@@ -746,15 +778,15 @@ Restart and recovery after deleting generated types remain automatic. Successful
 
 #### Bridges, exposed functions, and older Vue tools
 
-A full-application bridge is also a public contract. For `defineBridgeApp` imported from this SDK's `/vue` or `/react`, projection derives the return type from the actual SDK generic signature. Props come from explicit type arguments, an unambiguous factory parameter type, or the SDK's existing `Record<string, unknown>` default. App/router initialization bodies are not needed. Unknown factories, parameter defaults, and ambiguous inference retain original source; no business DTO is invented. Named import aliases follow the same rules.
+A full-application bridge is also a public contract. For `defineBridgeApp` / `defineApplication` imported from this SDK's `/vue` or `/react`, projection derives the return type from the actual SDK generic signature. Props come from explicit type arguments, an unambiguous factory parameter type, or the SDK's existing `Record<string, unknown>` default. App/router initialization bodies are not needed. Unknown factories, parameter defaults, and ambiguous inference stop with an explicit diagnostic; no business DTO is invented. Named import aliases follow the same rules.
 
-`defineOptions` accepts literal `name`/`inheritAttrs` only. String-array emits retain original event names and Vue payload semantics. Exposed const functions, function declarations/overloads, and inline arrows first use official isolated declaration generation. Missing return annotations are handled only for provable void completion paths. Data returns, potential never, mutable values, or flow narrowing retain the full path; `Promise<never>` or a data promise must not become `Promise<void>`. Arbitrary refs, accessors, object spreads, and ambiguous imported capabilities are not guessed.
+`defineOptions` accepts literal `name`/`inheritAttrs` only. String-array emits retain original event names and Vue payload semantics. Exposed const functions, function declarations/overloads, and inline arrows first use official isolated declaration generation. Missing return annotations are handled only for provable void completion paths. Unannotated data returns, potential never, mutable values, or flow narrowing fail explicitly; `Promise<never>` or a data promise must not become `Promise<void>`. Arbitrary refs, accessors, object spreads, and ambiguous imported capabilities are not guessed.
 
-Projection applies to local modules actually read by the compiler, including pages reached through ambient global-component declarations. It is not limited to the outer expose. Each projection uses the current real read; same-request reuse requires identical text. A parent's prepared text cannot overwrite a later source edit. Vite continues to execute original files, templates, and styles.
+Projection applies to local modules actually read by the compiler, including modules needed by explicitly referenced ambient types. It is not limited to the outer expose. Each projection uses the current real read; same-request reuse requires identical text. A parent's prepared text cannot overwrite a later source edit. Vite continues to execute original files, templates, and styles.
 
 Templates and non-CSS-module styles belong to implementation and are omitted from the type view, including CSS v-bind references to removed locals. `noUnusedLocals`/`noUnusedParameters` are disabled only in that view because their usages have been erased. The project tsconfig is unchanged, original-source checking still rejects genuine unused errors, and public type errors still fail. Do not copy these overrides into application configuration to bypass checks.
 
-Provider tools retain their own versions. Vue 1.x raw options are resolved using that version's official defaults; an omitted lib is not a custom compiler. Vue tools 1.x/2.x/3.x record actual inputs and persist caches only after validation. Untraceable extensions fall back conservatively. The regression matrix uses real older packages rather than modified version strings.
+Provider tools retain their own versions. Vue 1.x raw options are resolved using that version's official defaults; an omitted lib is not a custom compiler. Vue tools 1.x/2.x/3.x record actual inputs and persist caches only after validation. Extensions that cannot safely project fail explicitly; implementation mode retains original-source checking. The regression matrix uses real older packages rather than modified version strings.
 
 Consumer sync prepares complete declarations under `node_modules/.cache/fulgurjs/types/sync` before an atomic swap, keeping temporary files out of source scanners. Unwritable caches or cross-volume paths fall back to same-directory staging; failures retain the previous complete generation. Cleanup removes only owned temporary directories belonging to exited processes, preserving active instances.
 

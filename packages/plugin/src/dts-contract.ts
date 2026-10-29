@@ -2,8 +2,8 @@
  * 公开合同投影：仅供开发期类型分发，不替代业务实现检查。
  *
  * TS/TSX 使用提供方 TypeScript 的 isolatedDeclarations 诊断裁决；不能独立生成
- * 精确声明时保留原源码。Vue 处理可确认的非泛型 script-setup 公共合同，
- * 声明仍由官方 Vue Program 生成；复杂expose/model/slots/选项式组件走原路径。
+ * 精确声明时返回未投影状态，由合同边界拒绝读取实现。Vue 处理可确认的非泛型 script-setup 公共合同，
+ * 声明仍由官方 Vue Program 生成；复杂语法给出定位，不自动退回完整源码。
  * 投影只存在于编译器读取视图，不写源码、不改变 Vite 的运行时代码。
  */
 import type * as TS from 'typescript'
@@ -33,7 +33,7 @@ function projectBridgeFactories(file, text) {
                 if (['ReturnType', 'Record', 'globalThis'].includes(e.name.text))
                     shadow = true;
                 if (['@fulgurjs/federation/vue', '@fulgurjs/federation/react'].includes(s.moduleSpecifier.text)
-                    && (e.propertyName?.text || e.name.text) === 'defineBridgeApp')
+                    && ['defineBridgeApp', 'defineApplication'].includes(e.propertyName?.text || e.name.text))
                     names.add(e.name.text);
             }
     }
@@ -74,17 +74,63 @@ function projectBridgeFactories(file, text) {
         output = output.slice(0, edit.start) + edit.text + output.slice(edit.end);
     return output;
 }
+// 纯具名类型消费只需要对应导出及其本地依赖，不让同文件无关值导出触发实现推导。
+function selectContractTypes(file, text) {
+    const names = contractTypeNames[file];
+    if (!Array.isArray(names)) return text;
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+    const used = new Set(names), keep = new Set();
+    const identifiers = node => {
+        if (ts.isIdentifier(node)) {
+            const parent = node.parent;
+            const declarationName = parent && parent.name === node && !ts.isTypeReferenceNode(parent);
+            const memberName = parent && ts.isQualifiedName(parent) && parent.right === node;
+            if (!declarationName && !memberName) used.add(node.text);
+        }
+        ts.forEachChild(node, child => { if (!(ts.isFunctionLike(node) && child === node.body)) identifiers(child); });
+    };
+    for (;;) {
+        let changed = false;
+        for (const statement of source.statements) {
+            if (keep.has(statement)) continue;
+            let selected = statement.name && ts.isIdentifier(statement.name) && used.has(statement.name.text);
+            if (ts.isVariableStatement(statement)) selected = statement.declarationList.declarations.some(d => ts.isIdentifier(d.name) && used.has(d.name.text));
+            if (ts.isExportDeclaration(statement)) selected = !statement.exportClause
+                || (ts.isNamedExports(statement.exportClause) && statement.exportClause.elements.some(e => used.has(e.name.text)));
+            if (ts.isModuleDeclaration(statement)) selected = selected || !!(statement.flags & ts.NodeFlags.GlobalAugmentation) || ts.isStringLiteral(statement.name);
+            if (!selected) continue;
+            keep.add(statement); identifiers(statement); changed = true;
+        }
+        if (!changed) break;
+    }
+    const printer = ts.createPrinter({removeComments:false});
+    return source.statements.filter(statement => keep.has(statement) || ts.isImportDeclaration(statement) || ts.isImportEqualsDeclaration(statement))
+        .map(statement => {
+            if (ts.isVariableStatement(statement)) statement = ts.factory.updateVariableStatement(statement, statement.modifiers,
+                ts.factory.updateVariableDeclarationList(statement.declarationList, statement.declarationList.declarations.filter(d => ts.isIdentifier(d.name) && used.has(d.name.text))));
+            return printer.printNode(ts.EmitHint.Unspecified, statement, source);
+        }).join('\n') + '\n';
+}
 function projectContract(file, text) {
+    projectContract.supported = false;
+    projectContract.reason = undefined;
     if (typeof text !== 'string' || /(?:^|[/\\])node_modules(?:[/\\]|$)/.test(file)
         || /\.d\.[cm]?ts$/.test(file))
         return text;
     if (/\.[cm]?tsx?$/.test(file)) {
-        if (typeof ts.transpileDeclaration !== 'function')
+        if (typeof ts.transpileDeclaration !== 'function') {
+            projectContract.reason = '提供方 TypeScript 缺少 transpileDeclaration，请安装 TypeScript 5.5 或更新版本，或显式使用 implementation 模式。';
             return text;
+        }
         try {
-            const result = ts.transpileDeclaration(projectBridgeFactories(file, text), { fileName: file, reportDiagnostics: true,
+            const result = ts.transpileDeclaration(projectBridgeFactories(file, selectContractTypes(file, text)), { fileName: file, reportDiagnostics: true,
                 compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext, removeComments: false } });
-            return result.diagnostics?.some(d => d.category === ts.DiagnosticCategory.Error) ? text : result.outputText;
+            if (result.diagnostics?.some(d => d.category === ts.DiagnosticCategory.Error)) {
+                projectContract.reason = result.diagnostics.filter(d => d.category === ts.DiagnosticCategory.Error).slice(0,3).map(d => 'TS'+d.code+': '+ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('; ');
+                return text;
+            }
+            projectContract.supported = true;
+            return result.outputText;
         }
         catch {
             return text;
@@ -437,6 +483,7 @@ function projectContract(file, text) {
         let result = text;
         for (const edit of replacements.sort((a, b) => b.start - a.start))
             result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+        projectContract.supported = true;
         return result;
     }
     catch {
@@ -446,6 +493,76 @@ function projectContract(file, text) {
 `
 }
 
-export function createContractProjection(ts: typeof TS, parseVue?: (text: string) => unknown): (file: string, text: string | undefined) => string | undefined {
-  return new Function('ts', 'parseVue', `${genContractProjection()}; return projectContract;`)(ts, parseVue)
+/**
+ * 所有编译读取共用的合同边界。失败时返回空输入阻止后续导入扩张，调用方必须
+ * 拒绝整批结果；不能让工具继续分析未投影的业务实现，也不能发布残缺声明。
+ * 预算涵盖库声明，避免公开合同自己引入的巨型类型图无限扩大。
+ */
+export function genContractBoundary(): string {
+  return String.raw`
+function createContractBoundary(project, ambientSources = {}) {
+  const errors = new Set();
+  const blocked = new Map();
+  const files = new Map();
+  let bytes = 0, local = 0;
+  const reject = (file, reason) => {
+    if (errors.size < 5) errors.add('公开合同生成已停止：' + file + '\n原因：' + reason
+      + '\n修法：为公开导出补充明确的参数/返回类型；Vue 使用可独立确定的 props、事件和 expose 签名。'
+      + '全局类型请通过明确的类型或副作用导入声明。需要完整实现推导时显式设置 dts.devCheck: "implementation"。'
+      + '\n本次没有退回完整源码扫描，未发布新的类型资源。');
+    return undefined;
+  };
+  const read = (file, text, probe = false) => {
+    if (typeof text !== 'string') return text;
+    const source = /\.(?:[cm]?[jt]sx?|vue|json)$/.test(file);
+    if (!source || /(?:^|[/\\])package(?:-lock)?\.json$/.test(file)) return text;
+    if (errors.size) return undefined;
+    if (!files.has(file)) {
+      const size = Buffer.byteLength(text);
+      files.set(file, size); bytes += size;
+      if (!/(?:^|[/\\])node_modules(?:[/\\]|$)/.test(file) && !/\.d\.[cm]?ts$/.test(file)) local++;
+      if (files.size > 4096 || local > 512 || size > 4 * 1024 * 1024 || bytes > 32 * 1024 * 1024)
+        return reject(file, '超过合同分析预算（总输入4096个、本地源码512个、单文件4MiB、总文本32MiB）；当前输入 '
+          + files.size + ' 个，本地 ' + local + ' 个，文本 ' + bytes + ' 字节。请缩小公开类型依赖面。');
+    }
+    const ambient = ambientSources[file];
+    if (ambient) return text === ambient.original ? ambient.text : reject(file, '全局声明在合同准备后发生变化，请等待开发服务重新生成。');
+    if (/\.d\.[cm]?ts$/.test(file) || file.endsWith('.json')) return text;
+    const next = project(file, text);
+    if (!project.supported) {
+      const reason = '无法在不分析实现的情况下准确提取此文件的公开合同（复杂推导、未支持的组件语法或工具扩展）。' + (project.reason ? ' ' + project.reason : '');
+      if (!probe) return reject(file, reason);
+      // 旧Volar以读取snapshot实现fileExists，可能探测最终不被采用的库JS。
+      // 空视图保留存在性且绝不展开实现，只有真正进入Program的文件才构成失败。
+      blocked.set(file, reason);
+      return '';
+    }
+    return next;
+  };
+  const validateProgram = sources => {
+    let programBytes = 0;
+    for (const source of sources) {
+      const file = source.fileName.replace(/(\.vue)\.[cm]?[jt]sx?$/, '$1');
+      if (blocked.has(file)) reject(file, blocked.get(file));
+      programBytes += Buffer.byteLength(source.text || '');
+      if (programBytes > 32 * 1024 * 1024) { reject(file, '实际类型程序超过32MiB文本预算（含复用AST），请缩小公开类型依赖。'); break; }
+    }
+    if (sources.length > 4096) reject('Program', '实际类型程序超过4096文件预算（含复用AST），请缩小公开类型依赖。');
+  };
+  return {read, errors, reject, validateProgram};
+}
+`
+}
+
+export function createContractBoundary(project: ReturnType<typeof createContractProjection>, ambientSources: Record<string, { original: string; text: string }> = {}): {
+  read: (file: string, text: string | undefined, probe?: boolean) => string | undefined
+  errors: Set<string>
+  validateProgram: (sources: Array<{ fileName: string; text?: string }>) => void
+  reject: (file: string, reason: string) => undefined
+} {
+  return new Function('project', 'ambientSources', `${genContractBoundary()}; return createContractBoundary(project, ambientSources);`)(project, ambientSources)
+}
+
+export function createContractProjection(ts: typeof TS, parseVue?: (text: string) => unknown, contractTypeNames: Record<string, string[] | null> = {}): (file: string, text: string | undefined) => string | undefined {
+  return new Function('ts', 'parseVue', 'contractTypeNames', `${genContractProjection()}; return projectContract;`)(ts, parseVue, contractTypeNames)
 }

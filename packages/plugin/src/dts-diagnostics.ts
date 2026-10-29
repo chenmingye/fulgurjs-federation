@@ -9,6 +9,7 @@ export function formatDeclarationDiagnostics(
   // 即使调用方环境强制颜色，也保持文件路径可识别。
   const clean = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, '')
   for (const line of clean(`${stdout}\n${stderr}`).split(/\r?\n/)) {
+    if (/^FG_DTS_(?:GRAPH|TIMINGS|CONTRACT|BOUNDARY)\b/.test(line)) continue
     const file = line.match(/^(.+)\(\d+,\d+\): error TS\d+:/)
     const global = /^(?:error )?TS\d+:/.test(line)
     if (file || global) {
