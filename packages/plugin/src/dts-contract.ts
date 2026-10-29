@@ -111,6 +111,35 @@ function selectContractTypes(file, text) {
             return printer.printNode(ts.EmitHint.Unspecified, statement, source);
         }).join('\n') + '\n';
 }
+// .d.ts中默认函数/类隐含ambient；投影仍按.ts/.tsx被读取，必须显式declare。
+// 保留默认导出的原名字/泛型/重载，不给缺失签名补any，也不添加运行时实现。
+function normalizeContractDeclaration(file, text) {
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+    const used = new Set();
+    const scan = node => { if (ts.isIdentifier(node)) used.add(node.text); ts.forEachChild(node, scan); };
+    scan(source);
+    const defaults = new Set(), statements = [];
+    let serial = 0;
+    for (let statement of source.statements) {
+        if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement))
+            && statement.modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword)) {
+            let name = statement.name;
+            if (!name) {
+                let value; do { value = '__fulgurjs_default_' + (++serial); } while (used.has(value));
+                used.add(value); name = ts.factory.createIdentifier(value);
+            }
+            const modifiers = [ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword),
+                ...statement.modifiers.filter(m => ![ts.SyntaxKind.ExportKeyword, ts.SyntaxKind.DefaultKeyword, ts.SyntaxKind.DeclareKeyword].includes(m.kind))];
+            statement = ts.isFunctionDeclaration(statement)
+                ? ts.factory.updateFunctionDeclaration(statement, modifiers, statement.asteriskToken, name, statement.typeParameters, statement.parameters, statement.type, undefined)
+                : ts.factory.updateClassDeclaration(statement, modifiers, name, statement.typeParameters, statement.heritageClauses, statement.members);
+            defaults.add(name.text);
+        }
+        statements.push(statement);
+    }
+    for (const name of defaults) statements.push(ts.factory.createExportAssignment(undefined, false, ts.factory.createIdentifier(name)));
+    return ts.createPrinter({removeComments:false}).printFile(ts.factory.updateSourceFile(source,statements));
+}
 function projectContract(file, text) {
     projectContract.supported = false;
     projectContract.reason = undefined;
@@ -130,7 +159,7 @@ function projectContract(file, text) {
                 return text;
             }
             projectContract.supported = true;
-            return result.outputText;
+            return normalizeContractDeclaration(file, result.outputText);
         }
         catch {
             return text;

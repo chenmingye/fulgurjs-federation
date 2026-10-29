@@ -461,3 +461,20 @@ it('增量复用的AST也计入预算，探测到未投影源码实际入图时�
   reused.validateProgram(Array.from({length:4097},(_,i)=>({fileName:`/node_modules/lib${i}.d.ts`,text:''})))
   expect([...reused.errors].join('\n')).toContain('含复用AST')
 })
+
+it.each([
+  ['named',`export default function Card(p:{readonly id:string}):string{return p.id}`],
+  ['anonymous',`export default function(p:{readonly id:string}):string{return p.id}`],
+  ['overload',`export default function pick(p:string):string;export default function pick(p:number):number;export default function pick(p:string|number):string|number{return p}`],
+  ['class',`export default class Card {constructor(readonly id:string){};value():string{return this.id}}`],
+] as const)('默认%s导出的声明在源码读取视图中合法，真实消费方保留精确签名',async(name,source)=>{
+  const {buildAmbientDeclarations}=await import('../src/dts-ambient')
+  const root=project('default-'+name,{'src/entry.ts':source})
+  const full=await bundle(root,'./src/entry.ts');const fast=await bundle(root,'./src/entry.ts',true)
+  expect(full.ok,full.ok?'':full.diagnostics.join('\n')).toBe(true);expect(fast.ok,fast.ok?'':fast.diagnostics.join('\n')).toBe(true)
+  if(!full.ok||!fast.ok)return
+  for(const [alias,result]of [['full',full],['fast',fast]] as const){const generated=buildAmbientDeclarations({alias,index:result.index,source:'test',readFile:f=>result.files.get(f)!});fs.writeFileSync(path.join(root,alias+'.d.ts'),generated.files.get('modules.d.ts')!)}
+  const file=path.join(root,'consumer.ts');fs.writeFileSync(file,`import Full from 'full/Form';import Fast from 'fast/Form';const a:typeof Full=Fast;const b:typeof Fast=Full;\n// @ts-expect-error 输入不能变成any\n${name==='class'?`new Fast(123)`:`Fast(${name==='overload'?'true':'{id:123}'})`};`)
+  const program=ts.createProgram([file,path.join(root,'full.d.ts'),path.join(root,'fast.d.ts')],{strict:true,noEmit:true,types:[],skipLibCheck:true,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler})
+  expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
+},30000)
