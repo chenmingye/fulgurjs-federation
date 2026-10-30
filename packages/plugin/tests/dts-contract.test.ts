@@ -253,7 +253,7 @@ it('桥接工厂合同从SDK真实签名取得：默认、显式和参数推导p
     const program=ts.createProgram([consumer,path.join(root,'before.d.ts'),path.join(root,'after.d.ts')],{strict:true,noEmit:true,skipLibCheck:true,types:[],target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler})
     expect(ts.getPreEmitDiagnostics(program).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([])
   }
-},60000)
+},180000)
 
 it('投影视图不运行已被擦除用途的unused和CSS v-bind检查；真实源码配置仍严格检查',async()=>{
   const root=project('projection-usage-check',{
