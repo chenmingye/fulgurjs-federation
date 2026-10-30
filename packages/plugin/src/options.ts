@@ -392,11 +392,17 @@ function normalizeShared(
 }
 
 /** 统一的配置错误格式：问题 + 当前值 + 期望 + 可复制的正确示例 */
-function configError(what: string, got: unknown, expect: string, example: string): never {
+function configError(what: string, got: unknown, expect: string, example: string, code?: string): never {
   const gotText = typeof got === 'string' ? `"${got}"` : JSON.stringify(got)
+  const inferred = /缺少必填的 name|name 格式/.test(what) ? 'CFG-001'
+    : /^exposes/.test(what) ? 'CFG-002'
+    : /^remotes/.test(what) ? 'CFG-003'
+    : /^shared/.test(what) ? 'CFG-004'
+    : undefined
+  const tag = code ?? inferred
   throw new Error(
     [
-      `[fulgurjs] federation() 配置无效：${what}`,
+      `[fulgurjs${tag ? `:${tag}` : ''}] federation() 配置无效：${what}`,
       `  当前值：${gotText}`,
       `  预期值：${expect}`,
       `  修法示例：${example}`,
@@ -665,11 +671,26 @@ export function normalizeOptions(options: FederationOptions, root: string, comma
     seenNames.set(r.name, r.key)
   }
 
+  // CFG-005：远程键与共享依赖键同名。共享协商按裸名匹配，同名会让“加载远程”与
+  // “消费共享依赖”指向同一个键，配置意图不可判定；配置期直接拒绝。
+  const sharedKeys = new Set(shared.map((x) => x.configKey))
+  for (const r of remotes) {
+    if (sharedKeys.has(r.key)) {
+      configError(
+        `CFG-005：remotes["${r.key}"] 与 shared["${r.key}"] 同名，无法区分“远程应用”与“共享依赖”`,
+        r.key,
+        '为远程应用换一个键名，或从 shared 中移除同名键',
+        `remotes: { '${r.key}-remote': 'http://localhost:5101' }`,
+        'CFG-005',
+      )
+    }
+  }
+
   // 语义健康检查：既不提供也不消费的联邦配置几乎一定是配错了（如手滑删了 exposes）
   if ((options.exposes === undefined || Object.keys(options.exposes).length === 0) &&
       (options.remotes === undefined || Object.keys(options.remotes).length === 0)) {
     warnings.push(
-      'federation() 未配置 exposes 或 remotes，目前只会注册共享依赖。若要提供远程模块，请配置 exposes；若要消费远程应用，请配置 remotes。',
+      '[fulgurjs:CFG-006] federation() 未配置 exposes 或 remotes，目前只会注册共享依赖。若要提供远程模块，请配置 exposes；若要消费远程应用，请配置 remotes。',
     )
   }
   // remote 应用配了 remotes / host 配了 exposes 属合法（宿主亦可被消费），但 pure remote 没有 exposes 提醒一次

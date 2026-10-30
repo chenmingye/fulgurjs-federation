@@ -110,6 +110,17 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       // DEV-001：区分「端口无监听」（未启动/错位）与「有监听但 manifest 异常」
       const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80
       const portOpen = await isPortReachable(u.hostname, port)
+      if (!portOpen) {
+        console.warn(
+          formatFulgurjsDiagnostic({
+            code: 'DEV-005',
+            symptom: `远程应用 "${remote.key}" 的 dev 端口 ${port} 无进程监听（${u.hostname}）`,
+            cause: 'remote dev server 未启动，或 remotes[].dev 端口/主机写错',
+            fix: '启动对应 remote 的 dev server，并核对 remotes[].dev 与 remote 的 VITE_PORT/base',
+            details: { remote: remote.key, url: u.href, port, portOpen },
+          }),
+        )
+      }
       console.warn(
         formatFulgurjsDiagnostic({
           code: 'DEV-001',

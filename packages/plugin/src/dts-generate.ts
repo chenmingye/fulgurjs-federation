@@ -439,7 +439,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput): Promise<DtsGene
 
   const tsPkgDir = resolveFromRoot(root, 'typescript')
   if (!tsPkgDir) {
-    return { ok: false, diagnostics: [`提供方工程未安装 typescript（声明生成必需）。${installHint(root, 'typescript')}`] }
+    return { ok: false, diagnostics: [`[fulgurjs:TYP-007] 提供方工程未安装 typescript（声明生成必需）。${installHint(root, 'typescript')}`] }
   }
   const tsReq = createRequire(path.join(tsPkgDir, 'package.json'))
   const ts = tsReq('typescript') as TsModule

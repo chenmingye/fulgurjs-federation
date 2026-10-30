@@ -771,6 +771,14 @@ export function federation(options: FederationOptions): Plugin[] {
       if ((resolved as unknown as { build?: { ssr?: boolean } }).build?.ssr) {
         console.warn('[fulgurjs] 当前版本不支持 SSR 构建；联邦插件钩子已停用。请使用客户端构建。')
       }
+      // BLD-002：显式把构建目标设到 es2022 以下时，顶层 await 的共享裁决无法保证；
+      // 只在用户显式设置低目标时提示，不改变 Vite 默认 target。
+      const buildTarget = (resolved as unknown as { build?: { target?: string | string[] } }).build?.target
+      const targets = Array.isArray(buildTarget) ? buildTarget : buildTarget ? [buildTarget] : []
+      const tooLow = targets.filter((t) => typeof t === 'string' && /^es(?:5|20(?:0\d|1\d|2[01]))$/.test(t))
+      if (tooLow.length > 0) {
+        resolved.logger.warn(`[fulgurjs:BLD-002] 构建目标 ${tooLow.join(', ')} 低于 es2022；联邦共享裁决使用顶层 await，低目标会在初始化时 TDZ/互等。修法：提高 build.target 到 es2022+，或调整共享裁决顺序。`)
+      }
       // D.5 DEV-003/004：optimizeDeps 与联邦 shared/UMD 依赖的配置矛盾，启动前显式提示
       const n0 = state.normalized
       const optimize = (resolved as unknown as { optimizeDeps?: { include?: string[]; exclude?: string[] } })
@@ -1250,7 +1258,7 @@ export function federation(options: FederationOptions): Plugin[] {
           if (resolved) {
             state.exposeAbsPaths[e.import] = resolved.id.split('?')[0]
           } else {
-            this.error(`[fulgurjs] expose "${e.import}" could not be resolved from ${n.root}`)
+            this.error(`[fulgurjs:BLD-001] expose "${e.import}" could not be resolved from ${n.root}`)
           }
         }
         // emitFile 固定文件名：remoteEntry URL 稳定，CDN 长缓存友好

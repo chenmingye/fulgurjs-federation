@@ -165,7 +165,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
       return {
         status: 'absent',
         alias,
-        message: `远程 ${alias} 的 manifest 协议版本不受支持（${parsed.unsupportedVersion ?? '校验失败'}），类型同步跳过。请对齐宿主与远程的 @fulgurjs/federation 版本。`,
+        message: `[fulgurjs:TYP-002] 远程 ${alias} 的 manifest 协议版本不受支持（${parsed.unsupportedVersion ?? '校验失败'}），类型同步跳过。请对齐宿主与远程的 @fulgurjs/federation 版本。`,
       }
     }
     manifest = parsed.manifest
@@ -175,7 +175,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
       status: 'failed',
       alias,
       revision: meta?.revision,
-      message: `远程 ${alias} 的 manifest 获取失败（${(e as Error).message}）。${meta ? `本地保留 revision ${meta.revision} 的声明（陈旧，直到下次成功同步）。` : '尚无本地声明。'}`,
+      message: `[fulgurjs:TYP-002] 远程 ${alias} 的 manifest 获取失败（${(e as Error).message}）。${meta ? `本地保留 revision ${meta.revision} 的声明（陈旧，直到下次成功同步）。` : '尚无本地声明。'}`,
     }
   }
 
@@ -195,7 +195,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     return {
       status: 'absent',
       alias,
-      message: `远程 ${alias} 未提供类型资源（旧版本插件或 dts: false）。页面可正常运行；精确类型检查需要远程升级到当前版本并在远程启用 dts。`,
+      message: `[fulgurjs:TYP-004] 远程 ${alias} 未提供类型资源（旧版本插件或 dts: false）。页面可正常运行；精确类型检查需要远程升级到当前版本并在远程启用 dts。`,
     }
   }
 
@@ -211,7 +211,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
   try {
     const parsedIndex = parseDtsIndex(await fetchJsonFn(indexUrl, timeoutMs))
     if (!parsedIndex.index) {
-      return { status: 'failed', alias, message: `远程 ${alias} 的类型清单校验失败：${parsedIndex.issues.map((x) => `${x.field}: ${x.message}`).join('；')}。已拒绝本次更新（本地声明保持原状）。` }
+      return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的类型清单校验失败：${parsedIndex.issues.map((x) => `${x.field}: ${x.message}`).join('；')}。已拒绝本次更新（本地声明保持原状）。` }
     }
     index = parsedIndex.index
   } catch (e) {
@@ -219,7 +219,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
       status: 'stale',
       alias,
       revision: existing?.revision,
-      message: `远程 ${alias} 的类型清单已变化（revision ${types.revision}）但下载失败（${(e as Error).message}）。本地保留上一代声明（陈旧）；恢复后 dev 自动更新，或重跑 npx @fulgurjs/federation types。`,
+      message: `[fulgurjs:TYP-004] 远程 ${alias} 的类型清单已变化（revision ${types.revision}）但下载失败（${(e as Error).message}）。本地保留上一代声明（陈旧）；恢复后 dev 自动更新，或重跑 npx @fulgurjs/federation types。`,
     }
   }
   const fileCount = Object.keys(index.files).length
@@ -241,7 +241,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
         status: 'stale',
         alias,
         revision: existing?.revision,
-        message: `远程 ${alias} 的声明文件下载失败（清单 revision ${types.revision}，文件 ${rel}：${(e as Error).message}）。本地保留上一代声明（陈旧）。`,
+        message: `[fulgurjs:TYP-004] 远程 ${alias} 的声明文件下载失败（清单 revision ${types.revision}，文件 ${rel}：${(e as Error).message}）。本地保留上一代声明（陈旧）。`,
       }
     }
     const bytes = Buffer.byteLength(text, 'utf8')
@@ -321,7 +321,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     }
   } catch (e) {
     fs.rmSync(staging, { recursive: true, force: true })
-    return { status: 'failed', alias, message: `远程 ${alias} 的类型写入失败（${(e as Error).message}）。本地声明保持原状。` }
+    return { status: 'failed', alias, message: `[fulgurjs:TYP-004] 远程 ${alias} 的类型写入失败（${(e as Error).message}）。本地声明保持原状。` }
   }
   return {
     status: 'synced',
