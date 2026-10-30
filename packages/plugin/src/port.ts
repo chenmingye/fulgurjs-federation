@@ -63,9 +63,16 @@ export function planPortChange(root: string, app: string, to: number): PortPlanR
       `[fulgurjs:port] dev.config.json 中没有应用「${app}」。现有应用：${cfg.apps.map((a) => a.name).join('、')}`,
     )
   }
+  if (!Number.isInteger(to) || to < 1 || to > 65535) {
+    throw new Error(`[fulgurjs:port] 新端口必须是 1–65535 的整数，当前为 ${String(to)}。`)
+  }
   const from = target.port
   if (from === to) {
     throw new Error(`[fulgurjs:port] ${app} 已是端口 ${to}，无需变更`)
+  }
+  const conflict = cfg.apps.find((a) => a !== target && a.port === to)
+  if (conflict) {
+    throw new Error(`[fulgurjs:port] 端口 ${to} 已被工程内应用「${conflict.name}」使用；同一启动编排内不能重复。`)
   }
   const notes: string[] = []
   const candidates: Array<{ file: string; required: boolean }> = [

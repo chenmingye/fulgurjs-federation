@@ -78,3 +78,13 @@ describe('fulgurjs port', () => {
     fs.rmSync(root, { recursive: true, force: true })
   })
 })
+
+it('拒绝非法端口与工程内重复端口，不产生写入计划', () => {
+  const root = makeProject()
+  try {
+    expect(() => planPortChange(root, 'remote', 0)).toThrow(/1–65535/)
+    expect(() => planPortChange(root, 'remote', 70000)).toThrow(/1–65535/)
+    expect(() => planPortChange(root, 'remote', 5334)).toThrow(/已被工程内应用/)
+    expect(() => planPortChange(root, 'remote', 5333)).toThrow(/已是端口/)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})

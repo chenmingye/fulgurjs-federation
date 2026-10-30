@@ -363,7 +363,27 @@ async function main(): Promise<number> {
     }
     const { planPortChange, applyPortChange, formatPortPlan } = await import('./port')
     try {
-      const plan = planPortChange(process.cwd(), app, Number(portArg))
+      const requested = Number(portArg)
+      if (!Number.isInteger(requested) || requested < 1 || requested > 65535) {
+        console.error(`[fulgurjs:port] 新端口必须是 1–65535 的整数，当前为 ${portArg}。`)
+        return 2
+      }
+      // 端口被本机进程监听时拒绝计划：模板 dev 启动会因占用失败，提前暴露而不是写入后才报错。
+      const net = await import('node:net')
+      const occupied = await new Promise<boolean>((resolve) => {
+        const socket = new net.Socket()
+        const done = (value: boolean) => { socket.destroy(); resolve(value) }
+        socket.setTimeout(500)
+        socket.once('connect', () => done(true))
+        socket.once('timeout', () => done(false))
+        socket.once('error', () => done(false))
+        socket.connect(requested, '127.0.0.1')
+      })
+      if (occupied) {
+        console.error(`[fulgurjs:port] 端口 ${requested} 已被本机进程监听；请换端口或先停止占用进程。`)
+        return 2
+      }
+      const plan = planPortChange(process.cwd(), app, requested)
       if (has('--write')) {
         const written = applyPortChange(process.cwd(), plan)
         console.log(`[fulgurjs:port] 已写入 ${written} 个文件（${app} ${plan.from} → ${plan.to}）。回退：git checkout <file>`)
