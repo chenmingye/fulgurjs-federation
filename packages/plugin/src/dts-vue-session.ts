@@ -65,7 +65,10 @@ export function createVueCompilerSession(): VueCompilerSession {
   let reusable = true
   let serial = 0
   let active: { id: number; resolve(result: VueCompileResult): void; stdout: string; stderr: string; aborted: boolean; timedOut: boolean; toolChanged?: boolean; cleanup(): void } | null = null
-  const finish = (result: VueCompileResult): void => { const request = active; active = null; if (request) { request.cleanup(); request.resolve(result) } }
+  // 同一服务只允许一个编译子进程；并发请求排队而不是把合法重检变成 TYP-001。
+  let idleWaiters: (() => void)[] = []
+  const notifyIdle = (): void => { const waiters = idleWaiters; idleWaiters = []; for (const wake of waiters) wake() }
+  const finish = (result: VueCompileResult): void => { const request = active; active = null; if (request) { request.cleanup(); request.resolve(result) } notifyIdle() }
   const startChild = (root: string, nodeArgs: string[]): ChildProcess => {
     const running = spawn(process.execPath, [...nodeArgs, '--eval', bootstrap], { cwd: root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
     child = running
@@ -101,15 +104,18 @@ export function createVueCompilerSession(): VueCompilerSession {
     })
     return running
   }
-  return {
-    prime(root) {
-      if (disposed || child || active) return undefined
-      identity = JSON.stringify([root, [], ''])
-      return startChild(root, []).pid
-    },
-    run(request) {
+  const runRequest = (request: VueCompileRequest): Promise<VueCompileResult> => {
       if (disposed || request.signal?.aborted) return Promise.resolve({ err: Object.assign(new Error('Vue编译会话已取消'), { code: 'ABORT_ERR' }), stdout: '', stderr: '' })
-      if (active) return Promise.reject(new Error('Vue编译会话请求必须串行'))
+      // 排队：调用方在上一轮取消/超时后立即重检属于正常生命周期，不能变成“必须串行”编译失败。
+      if (active) {
+        return new Promise<VueCompileResult>((resolve) => {
+          const start = (): void => {
+            if (disposed || request.signal?.aborted) resolve({ err: Object.assign(new Error('Vue编译会话已取消'), { code: 'ABORT_ERR' }), stdout: '', stderr: '' })
+            else resolve(runRequest(request))
+          }
+          idleWaiters.push(start)
+        })
+      }
       const key = JSON.stringify([request.root, request.nodeArgs, request.script])
       if (child && ((key !== identity && identity !== JSON.stringify([request.root, request.nodeArgs, ''])) || !reusable)) { child.kill('SIGKILL'); child = null }
       identity = key
@@ -128,7 +134,14 @@ export function createVueCompilerSession(): VueCompilerSession {
           running.kill('SIGKILL'); child = null; finish({ err: error as ExecFileException, stdout: active.stdout, stderr: active.stderr })
         } })
       })
+  }
+  return {
+    prime(root) {
+      if (disposed || child || active) return undefined
+      identity = JSON.stringify([root, [], ''])
+      return startChild(root, []).pid
     },
-    dispose() { if (disposed) return; disposed = true; if (active) active.aborted = true; child?.kill('SIGKILL') },
+    run: runRequest,
+    dispose() { if (disposed) return; disposed = true; if (active) active.aborted = true; child?.kill('SIGKILL'); notifyIdle() },
   }
 }

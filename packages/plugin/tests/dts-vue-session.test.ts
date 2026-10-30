@@ -70,3 +70,16 @@ it('快速完成与取消竞争后立即开始下一轮，不复用正在退出�
     }
   }finally{session.dispose();fs.rmSync(root,{recursive:true,force:true})}
 },30000)
+
+it('并发重检请求排队执行，而不是把合法并发判成“必须串行”',async()=>{
+  const root=project(),session=createVueCompilerSession()
+  const script=`__fulgurjsProgramState.count=(__fulgurjsProgramState.count||0)+1;process.stdout.write(JSON.stringify({pid:process.pid,count:__fulgurjsProgramState.count}))`
+  const request=()=>session.run({root,script,args:[],nodeArgs:[],timeout:10000})
+  try{
+    const [a,b]=await Promise.all([request(),request()])
+    expect(a.err).toBeNull();expect(b.err).toBeNull()
+    const pa=JSON.parse(a.stdout),pb=JSON.parse(b.stdout)
+    expect(pb.pid).toBe(pa.pid)
+    expect(Math.max(pa.count,pb.count)).toBe(2)
+  }finally{session.dispose();fs.rmSync(root,{recursive:true,force:true})}
+},15000)
