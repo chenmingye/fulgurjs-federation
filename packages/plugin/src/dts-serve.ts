@@ -305,19 +305,21 @@ export function createDevTypesServer(
       await generating
       return
     }
-    // 单飞：进行中再触发的 invalidate 在当前轮结束后补跑一轮
-    for (;;) {
-      pendingInvalidate = false
-      // 先登记单飞Promise，再进入可能同步执行的工具/观察器，避免重入开启第二轮。
-      generating = Promise.resolve().then(run)
-      try {
-        await generating
-      } finally {
-        generating = null
-        if (disposed) clearCache()
+    // 单飞 Promise 覆盖整个补跑循环，包括合并事件的等待窗口。
+    // 若在两轮之间清空 generating，迟到 invalidate 会另开循环，造成并发生成/旧结果覆盖。
+    generating = Promise.resolve().then(async () => {
+      for (;;) {
+        pendingInvalidate = false
+        await run()
+        if (!pendingInvalidate || disposed) return
+        await new Promise<void>(resolve => setTimeout(resolve, 80))
       }
-      if (!pendingInvalidate || disposed) return
-      await new Promise<void>(resolve => setTimeout(resolve, 80))
+    })
+    try {
+      await generating
+    } finally {
+      generating = null
+      if (disposed) clearCache()
     }
   }
 

@@ -196,3 +196,23 @@ it('全局声明变更立即取消正在运行的编译，合并后重跑，不�
   await vi.waitFor(()=>expect(calls).toHaveLength(2),{timeout:10000});expect(calls[0]!.signal?.aborted).toBe(true);expect(calls[1]!.signal?.aborted).toBe(false);expect(service.revision()).toBeNull();finish!(p.result)
   await vi.waitFor(()=>expect(service.revision()).toBe(p.revision),{timeout:10000});expect(p.logs.join('\n')).not.toContain('TYP-001');service.dispose()
 },25000)
+
+
+it('补跑合并窗口仍保持单飞，迟到失效事件不另开生成循环', async () => {
+  const p = cacheProject()
+  const finish: Array<(result: DtsGenerateResult) => void> = []
+  generate.mockImplementation(() => new Promise<DtsGenerateResult>(resolve => finish.push(resolve)))
+  const service = p.start()
+  await vi.waitFor(() => expect(finish).toHaveLength(1), { timeout: 10000 })
+  service.invalidate()
+  const samples: boolean[] = []
+  const timer = setInterval(() => samples.push(service.isGenerating()), 1)
+  try {
+    finish[0]!({ ok: false, diagnostics: ['被下一轮替代'] })
+    await vi.waitFor(() => expect(finish).toHaveLength(2), { timeout: 10000 })
+    expect(samples.length).toBeGreaterThan(0)
+    expect(samples.every(Boolean)).toBe(true)
+    finish[1]!(p.result)
+    await vi.waitFor(() => expect(service.isGenerating()).toBe(false), { timeout: 10000 })
+  } finally { clearInterval(timer) }
+}, 30000)

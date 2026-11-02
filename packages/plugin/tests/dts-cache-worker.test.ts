@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { createTypesCacheWorker } from '../src/dts-cache-worker-client'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -31,4 +31,32 @@ it('消息序列化失败不留下悬挂请求，后续请求仍可执行；关�
     await rejection
     await expect(worker.read(input)).rejects.toThrow('类型缓存服务已关闭')
   } finally { worker.dispose() }
+})
+
+
+it('外部输入监听忽略内容未变的迟到事件，真实修改和删除仍通知', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fg-cache-notification-'))
+  const file = path.join(root, 'model.ts')
+  fs.writeFileSync(file, 'export interface Model { id: string }')
+  const callbacks: Array<(event: string, filename: string | null) => void> = []
+  const watch = vi.spyOn(fs, 'watch').mockImplementation(((_directory: string, _options: unknown, callback: (event: string, filename: string | null) => void) => {
+    callbacks.push(callback)
+    return { close() {} } as fs.FSWatcher
+  }) as typeof fs.watch)
+  const changed = vi.fn(), worker = createTypesCacheWorker()
+  try {
+    worker.watch({ token: 'test', externalInputs: [file] }, changed)
+    callbacks[0]!('change', 'model.ts')
+    fs.writeFileSync(file, 'export interface Model { id: string }')
+    callbacks[0]!('change', null)
+    expect(changed).not.toHaveBeenCalled()
+    fs.writeFileSync(file, 'export interface Model { id: number }')
+    callbacks[0]!('change', 'model.ts')
+    expect(changed).toHaveBeenCalledTimes(1)
+    callbacks[0]!('change', 'model.ts')
+    expect(changed).toHaveBeenCalledTimes(1)
+    fs.unlinkSync(file)
+    callbacks[0]!('rename', 'model.ts')
+    expect(changed).toHaveBeenCalledTimes(2)
+  } finally { worker.dispose(); watch.mockRestore(); fs.rmSync(root, { recursive: true, force: true }) }
 })

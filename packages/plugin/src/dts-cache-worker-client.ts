@@ -87,10 +87,26 @@ export function createTypesCacheWorker(): TypesCacheWorker {
         names.add(name)
         groups.set(directory, names)
       }
+      // macOS 可在安装监听后补发旧事件；事件只作检查提示，不把未变化内容当成新输入。
+      // 小文件比较摘要，大文件保守比较身份；缺失候选也保留，创建/删除仍会触发重检。
+      const stamp = (file: string): string => {
+        try {
+          const stat = fs.statSync(file)
+          if (stat.size > 512 * 1024) return `${stat.ino}/${stat.ctimeMs}/${stat.mtimeMs}/${stat.size}`
+          return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+        } catch { return '!missing' }
+      }
+      const fingerprints = new Map(handle.externalInputs.map(file => [file, stamp(file)]))
       const next: fs.FSWatcher[] = []
       try {
         for (const [directory, names] of groups) next.push(fs.watch(directory, { persistent: false }, (_event, filename) => {
-          if (!filename || names.has(filename.toString().split(path.sep)[0]!)) changed()
+          if (filename && !names.has(filename.toString().split(path.sep)[0]!)) return
+          let modified = false
+          for (const [file, before] of fingerprints) {
+            const after = stamp(file)
+            if (after !== before) { fingerprints.set(file, after); modified = true }
+          }
+          if (modified) changed()
         }))
       } catch (error) { for (const watcher of next) watcher.close(); throw error }
       for (const watcher of watches) watcher.close()
