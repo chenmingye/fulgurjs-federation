@@ -82,3 +82,40 @@ it.each([false, true])('外部符号链接换到同内容的新目标也触发�
     expect(changed).toHaveBeenCalledTimes(1)
   } finally { worker.dispose(); watch.mockRestore(); fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+it('真实合同的未入Program声明仍保留父进程读取证明，同内容生成通知不打断缓存提交', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fg-cache-parent-proof-'))
+  const incrementalDir = path.join(root, 'node_modules/.fulgurjs-types-cache-test')
+  fs.mkdirSync(path.join(root, 'src/types'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true })
+  fs.symlinkSync(path.resolve(__dirname, '../node_modules/typescript'), path.join(root, 'node_modules/typescript'), 'dir')
+  fs.writeFileSync(path.join(root, 'package.json'), '{"private":true}')
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { types: [], lib: ['ES2022'], moduleResolution: 'bundler', module: 'ESNext', skipLibCheck: true }, include: ['src'] }))
+  fs.writeFileSync(path.join(root, 'src/entry.ts'), 'export const value: number = 1')
+  const ambient = path.join(root, 'src/types/auto-imports.d.ts')
+  const text = 'export {}; declare global { interface NotReferencedByContract { value: string } }'
+  fs.writeFileSync(ambient, text)
+  const input = { root, exposes: [{ name: './entry', import: './src/entry.ts' }], pluginVersion: 'test', dts: true }
+  const { generateTypesBundle } = await import('../src/dts-generate')
+  const result = await generateTypesBundle({ ...input, contractOnly: true, cacheCompilerReads: true, incrementalDir })
+  expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
+  if (!result.ok || !result.cacheTraceFile) throw Error('真实编译输入记录缺失')
+  const trace = JSON.parse(fs.readFileSync(result.cacheTraceFile, 'utf8'))
+  const stamp = Object.entries(trace.snapshot.files).find(([name]) => name.endsWith('/src/types/auto-imports.d.ts'))?.[1] as { hash: string; readHash?: string }
+  expect(stamp?.readHash).toBe(stamp?.hash)
+  const worker = createTypesCacheWorker()
+  try {
+    const handle = await worker.capture(input, result.cacheTraceFile)
+    expect(handle).not.toBeNull()
+    fs.writeFileSync(ambient, text)
+    fs.mkdirSync(path.join(root, 'public-output'))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    await expect(worker.validate(input, handle!, true)).resolves.toBeNull()
+    await expect(worker.commit(input, handle!, result)).resolves.toEqual({ reason: null })
+    const cached = fs.readFileSync(typesCachePath(root))
+    fs.writeFileSync(path.join(root, 'src/entry.ts'), 'export const value: string = "changed"')
+    const rejected = await worker.commit(input, handle!, result)
+    expect(rejected.reason).not.toBeNull()
+    expect(fs.readFileSync(typesCachePath(root)).equals(cached)).toBe(true)
+  } finally { worker.dispose(); fs.rmSync(root, { recursive: true, force: true }) }
+}, 30000)

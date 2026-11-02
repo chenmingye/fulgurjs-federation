@@ -480,7 +480,7 @@ async function generateTypesBundleOnce(input: DtsGenerateInput): Promise<DtsGene
   }
   const boundary = projectContract ? createContractBoundary(projectContract, ambientSources) : undefined
   const contractSources: Record<string, string> = {}
-  const parentInputs: Record<string, { hash: string; size: number; mtime: number; ctime: number; ino: number }> = {}
+  const parentInputs: Record<string, { hash: string; size: number; mtime: number; ctime: number; ino: number; readHash?: string }> = {}
   let parentChanged = false
   const parentQueries: Record<string, Record<string, boolean>> = {}
   const parentProbes: Record<string, boolean> = {}
@@ -503,9 +503,13 @@ async function generateTypesBundleOnce(input: DtsGenerateInput): Promise<DtsGene
       const bytes = fs.readFileSync(file)
       const after = fs.statSync(file)
       const value = { hash: crypto.createHash('sha256').update(typeInputBytes(file,bytes)).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
+      // 父进程为合同选择读取、但未进入Program的声明也有真实读入证明。
+      // 自动声明工具重写相同文本时，不能仅因mtime变化无限取消后续生成。
+      const declarationRead = file.endsWith('.d.ts') && crypto.createHash('sha256').update(typeInputBytes(file, Buffer.from(text, 'utf8'))).digest('hex') === value.hash
+      if (declarationRead) (value as typeof value & { readHash?: string }).readHash = value.hash
       const previous = parentInputs[path.resolve(file)]
       if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size
-        || (previous && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
+        || (previous && !(declarationRead && previous.readHash === previous.hash && previous.hash === value.hash) && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
       parentInputs[path.resolve(file)] = value
       const projected = boundary ? boundary.read(file, text) : text
       if (projected !== undefined && projected !== text) { contractSources[path.resolve(file)] = projected }

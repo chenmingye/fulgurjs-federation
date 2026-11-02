@@ -180,6 +180,7 @@ export function createDevTypesServer(
               return
             }
             // 有效旧快照不代表输入仍有效；失效后必须进入冷生成，不能反复读取同一旧快照。
+            if (process.env.FG_DTS_TIMINGS) log(`[fulgurjs] 类型缓存未命中：${reason ?? '源码代次已更新'}。`)
             await cache.release(cacheInput, cached)
             handle = null
           }
@@ -242,7 +243,17 @@ export function createDevTypesServer(
       }
       let changedDuringGeneration = pendingInvalidate || epoch !== inputEpoch
       if (handle) {
-        try { const reason = await cache.validate(cacheInput, handle, true); if (reason) { queueRecheck(reason); return } }
+        try {
+          if (changedDuringGeneration) { queueRecheck(); return }
+          if (result.ok) {
+            const committed = await cache.commit(cacheInput, handle, result)
+            if (committed.reason) { queueRecheck(committed.reason); return }
+            if (committed.writeError) warn(`[fulgurjs] 类型缓存写入失败：${committed.writeError}；本轮声明正常提供，下次可能重新编译。请检查 node_modules/.cache/fulgurjs 的写入权限。`)
+          } else {
+            const reason = await cache.validate(cacheInput, handle, true)
+            if (reason) { queueRecheck(reason); return }
+          }
+        }
         catch (error) {
           if (disposed) return
           warn(`[fulgurjs] 类型缓存校验失败：${(error as Error).message}；本轮不写持久缓存。`)
@@ -253,7 +264,7 @@ export function createDevTypesServer(
       if (disposed) return
       if (result.requiresInputValidation && !handle) {
         // 普通成功结果允许缓存故障降级；读取视图的结果不能未经验证直接提供。
-        // 自定义Vue工具、外部模板或缓存线程故障时，以实时读取重新完整编译。
+        // 自定义Vue工具、外部模板或缓存线程故障时，以实时读取重新执行同一合同检查。
         warn('[fulgurjs] 类型读取视图无法完成输入校验，已关闭读取复用并重新生成；未验证结果不会提供。')
         try { result = await generate(false) }
         catch (error) { result = { ok: false, diagnostics: [`普通读取重试失败：${(error as Error).message}`] } }
@@ -262,13 +273,6 @@ export function createDevTypesServer(
       }
       if (changedDuringGeneration || pendingInvalidate || epoch !== inputEpoch) { queueRecheck(); return }
       if (result.ok) {
-        if (handle) {
-          try { if (!await cache.write(cacheInput, handle, result)) { queueRecheck(); return } }
-          catch (error) {
-            if (disposed) return
-            warn(`[fulgurjs] 类型缓存写入失败：${(error as Error).message}；本轮声明正常提供，下次可能重新编译。请检查 node_modules/.cache/fulgurjs 的写入权限。`)
-          }
-        }
         if (disposed) return
         if (pendingInvalidate || epoch !== inputEpoch) { queueRecheck(); return }
         files = result.files

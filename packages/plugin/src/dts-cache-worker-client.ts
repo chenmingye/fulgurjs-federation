@@ -14,7 +14,7 @@ export interface TypesCacheWorker {
   read(input: TypesCacheInput): Promise<CacheHit | null>
   capture(input: TypesCacheInput, traceFile?: string): Promise<TypesCacheHandle | null>
   validate(input: TypesCacheInput, handle: TypesCacheHandle, stable: boolean): Promise<string | null>
-  write(input: TypesCacheInput, handle: TypesCacheHandle, result: DtsGenerateOk): Promise<boolean>
+  commit(input: TypesCacheInput, handle: TypesCacheHandle, result: DtsGenerateOk): Promise<{ reason: string | null; writeError?: string }>
   release(input: TypesCacheInput, handle: TypesCacheHandle): Promise<void>
   watch(handle: TypesCacheHandle, changed: () => void): void
   dispose(): void
@@ -62,13 +62,13 @@ export function createTypesCacheWorker(): TypesCacheWorker {
     read: input => call('read', input) as Promise<CacheHit | null>,
     capture: (input, traceFile) => call('capture', input, { traceFile }) as Promise<TypesCacheHandle | null>,
     validate: (input, handle, stable) => call('validate', input, { token: handle.token, stable }) as Promise<string | null>,
-    async write(input, handle, result) {
+    async commit(input, handle, result) {
       const temporaryId = crypto.randomUUID()
       // 与writeTypesCache相同的确定路径，只清理本客户端的未完成文件。
       const digest = crypto.createHash('sha256').update(path.resolve(input.root)).digest('hex').slice(0, 12)
       const file = path.join(input.root, 'node_modules/.cache/fulgurjs/types', `provider-${digest}.json.gz.${process.pid}.${temporaryId}.tmp`)
       temporary.add(file)
-      try { return await call('write', input, { token: handle.token, result, temporaryId }) as boolean }
+      try { return await call('commit', input, { token: handle.token, result, temporaryId }) as { reason: string | null; writeError?: string } }
       finally { if (!disposed) { temporary.delete(file); try { fs.rmSync(file, { force: true }) } catch { /* 缓存故障不影响类型服务 */ } } }
     },
     async release(input, handle) { if (!disposed) await call('release', input, { token: handle.token }) },

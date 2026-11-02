@@ -18,6 +18,8 @@ import { parseDtsIndex, DTS_FILE_COUNT_MAX, DTS_FILE_MAX_BYTES, DTS_TOTAL_MAX_BY
 type FileStamp = { hash: string; size: number; mtime: number; ctime: number; ino: number; readHash?: string }
 type DirectoryQuery = { kind: 'files' | 'dirs' | 'entries'; root: string; recurse?: boolean; tools?: boolean; nodePackages?: boolean; extensions?: readonly string[]; excludes?: readonly string[]; includes?: readonly string[]; depth?: number; result: string[] }
 export interface TypesInputSnapshot {
+  /** 实际编译输入记录已完整验证；粗粒度目录通知仅作重新核验提示。 */
+  compilerTraced?: boolean
   ambient?: { configFile: string; files: string[] }
   caseSensitive: boolean
   directoryStats: Record<string, { mtime: number; ctime: number; ino: number }>

@@ -51,6 +51,7 @@ parentPort?.on('message', (message: { id: string; operation: string; input: Type
       const snapshot = cached?.snapshot ?? (operation === 'capture' ? (message.traceFile ? captureCompilerInputs(input, message.traceFile) : captureTypesInputs(input)) : null)
       if (!snapshot) { close(observed); value = null }
       else {
+        if (message.traceFile) snapshot.compilerTraced = true
         observed.snapshot = snapshot
         entries.set(id, observed)
         value = { token: id, externalInputs: externalInputs(input, snapshot), ...(cached ? { result: cached.result } : {}) }
@@ -58,10 +59,20 @@ parentPort?.on('message', (message: { id: string; operation: string; input: Type
     } else {
       const entry = entries.get(message.token!)
       if (!entry) throw new Error('类型缓存后台快照已释放')
-      if (operation === 'validate') value = entry.dirty ? '输入事件已变化' : validateTypesInputs(entry.snapshot, input.root, message.stable)
-      else if (operation === 'write') {
-        if (entry.dirty) value = false
-        else { writeTypesCache(input, entry.snapshot, message.result!, message.temporaryId); value = true }
+      const validate = (stable = false): string | null => {
+        const reason = entry.dirty && !entry.snapshot.compilerTraced ? '输入事件已变化' : validateTypesInputs(entry.snapshot, input.root, stable)
+        if (!reason) entry.dirty = false
+        return reason
+      }
+      if (operation === 'validate') value = validate(message.stable)
+      else if (operation === 'commit') {
+        // 在同一线程事务内验证并持久化，避免验证后再等待一条IPC消息、重复校验或误收迟到通知。
+        const reason = validate(true)
+        if (reason) value = { reason }
+        else {
+          try { writeTypesCache(input, entry.snapshot, message.result!, message.temporaryId); value = { reason: null } }
+          catch (error) { value = { reason: null, writeError: (error as Error).message } }
+        }
       } else if (operation === 'release') { close(entry); entries.delete(message.token!); value = true }
       else throw new Error('未知的类型缓存后台操作')
     }

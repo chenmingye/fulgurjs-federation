@@ -19,7 +19,7 @@ vi.mock('../src/dts-cache-worker-client', () => ({
     read: state.read,
     capture: vi.fn(async () => null),
     validate: vi.fn(async () => null),
-    write: vi.fn(async () => true),
+    commit: vi.fn(async () => ({ reason: null })),
     release: vi.fn(async () => {}),
     watch: vi.fn(),
     dispose: vi.fn(),
