@@ -60,3 +60,25 @@ it('外部输入监听忽略内容未变的迟到事件，真实修改和删除�
     expect(changed).toHaveBeenCalledTimes(2)
   } finally { worker.dispose(); watch.mockRestore(); fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+it.each([false, true])('外部符号链接换到同内容的新目标也触发重检，以便重新建立后续监听（大文件=%s）', large => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fg-cache-link-'))
+  const first = path.join(root, 'first.ts'), second = path.join(root, 'second.ts'), link = path.join(root, 'model.ts')
+  fs.writeFileSync(first, 'export interface Model { id: string }' + (large ? ' '.repeat(512 * 1024) : ''))
+  // 同 inode 的两个路径也可能拥有不同的相对导入语义，不能仅比较 stat。
+  fs.linkSync(first, second)
+  fs.symlinkSync(first, link)
+  let notify!: (event: string, filename: string | null) => void
+  const watch = vi.spyOn(fs, 'watch').mockImplementation(((_directory: string, _options: unknown, callback: typeof notify) => {
+    notify = callback
+    return { close() {} } as fs.FSWatcher
+  }) as typeof fs.watch)
+  const changed = vi.fn(), worker = createTypesCacheWorker()
+  try {
+    worker.watch({ token: 'test', externalInputs: [link] }, changed)
+    fs.unlinkSync(link)
+    fs.symlinkSync(second, link)
+    notify('rename', 'model.ts')
+    expect(changed).toHaveBeenCalledTimes(1)
+  } finally { worker.dispose(); watch.mockRestore(); fs.rmSync(root, { recursive: true, force: true }) }
+})

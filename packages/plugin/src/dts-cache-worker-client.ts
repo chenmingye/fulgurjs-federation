@@ -91,9 +91,11 @@ export function createTypesCacheWorker(): TypesCacheWorker {
       // 小文件比较摘要，大文件保守比较身份；缺失候选也保留，创建/删除仍会触发重检。
       const stamp = (file: string): string => {
         try {
+          const identity = fs.realpathSync(file)
           const stat = fs.statSync(file)
-          if (stat.size > 512 * 1024) return `${stat.ino}/${stat.ctimeMs}/${stat.mtimeMs}/${stat.size}`
-          return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+          if (stat.size > 512 * 1024) return `${identity}/${stat.ino}/${stat.ctimeMs}/${stat.mtimeMs}/${stat.size}`
+          // 内容相同的链接换目标仍需重建监听；仅比较摘要会漏掉新目标后续的变化。
+          return `${identity}:${crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}`
         } catch { return '!missing' }
       }
       const fingerprints = new Map(handle.externalInputs.map(file => [file, stamp(file)]))
