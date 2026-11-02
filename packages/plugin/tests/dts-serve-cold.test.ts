@@ -69,3 +69,28 @@ it('已有缓存文件时先读取并校验缓存', async () => {
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+it('缓存检查期间输入已失效时先重检，不启动已知过期的编译', async () => {
+  const { root, options } = project()
+  fs.mkdirSync(path.dirname(typesCachePath(root)), { recursive: true })
+  fs.writeFileSync(typesCachePath(root), '{}')
+  let completeRead!: (value: never) => void
+  state.read.mockImplementationOnce(() => new Promise<never>(resolve => { completeRead = resolve }))
+    .mockResolvedValue({ result: { files: new Map([['index.json', '{}']]), index: { revision: 'restored' }, fileCount: 1 } } as never)
+  state.generate.mockImplementation(() => new Promise<DtsGenerateResult>(() => {}))
+  const service = createDevTypesServer(options, { warn: () => {}, log: () => {} })
+  try {
+    await vi.waitFor(() => expect(state.read).toHaveBeenCalledTimes(1))
+    // 模拟自动声明写入时短暂截断；原内容恢复后第二次快照校验允许复用缓存。
+    service.markInputChanged()
+    completeRead(null as never)
+    await vi.waitFor(() => expect(service.revision()).toBe('restored'), { timeout: 2000 })
+    expect(state.read).toHaveBeenCalledTimes(2)
+    expect(state.generate).not.toHaveBeenCalled()
+  } finally {
+    service.dispose()
+    state.read.mockReset()
+    state.generate.mockReset()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})

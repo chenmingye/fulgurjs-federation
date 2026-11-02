@@ -201,6 +201,9 @@ export function createDevTypesServer(
           warn(`[fulgurjs] 类型缓存后台检查不可用：${(error as Error).message}；已回到正常生成。请检查插件安装及缓存目录权限。`)
         }
       }
+      // 缓存检查/输入捕获也可能跨过自动声明的写入窗口。已知过期的轮次
+      // 必须先合并重检，不能再启动一个注定被取消的编译来耗尽启动窗口。
+      if (epoch !== inputEpoch || pendingInvalidate) { queueRecheck('缓存检查期间输入变化'); return }
       mark('cache-check')
       let result: DtsGenerateResult
       const generate = (cacheCompilerReads: boolean): Promise<DtsGenerateResult> => generateTypesBundle({

@@ -73,7 +73,7 @@ export function createTypesCacheWorker(): TypesCacheWorker {
     },
     async release(input, handle) { if (!disposed) await call('release', input, { token: handle.token }) },
     watch(handle, changed) {
-      const groups = new Map<string, Set<string>>()
+      const groups = new Map<string, Map<string, Set<string>>>()
       for (const file of handle.externalInputs) {
         let directory = path.dirname(file)
         for (;;) {
@@ -83,8 +83,10 @@ export function createTypesCacheWorker(): TypesCacheWorker {
           directory = parent
         }
         const name = path.relative(directory, file).split(path.sep)[0]!
-        const names = groups.get(directory) ?? new Set<string>()
-        names.add(name)
+        const names = groups.get(directory) ?? new Map<string, Set<string>>()
+        const files = names.get(name) ?? new Set<string>()
+        files.add(file)
+        names.set(name, files)
         groups.set(directory, names)
       }
       // macOS 可在安装监听后补发旧事件；事件只作检查提示，不把未变化内容当成新输入。
@@ -102,11 +104,16 @@ export function createTypesCacheWorker(): TypesCacheWorker {
       const next: fs.FSWatcher[] = []
       try {
         for (const [directory, names] of groups) next.push(fs.watch(directory, { persistent: false }, (_event, filename) => {
-          if (filename && !names.has(filename.toString().split(path.sep)[0]!)) return
+          // 每个事件只检查所属目录/直接成员对应的候选；无文件名时检查本组。
+          // 不能在任一目录事件上重读整张依赖表：macOS补发事件会放大为O(目录数×全部文件)。
+          const selected = filename
+            ? names.get(filename.toString().split(path.sep)[0]!)
+            : new Set([...names.values()].flatMap(files => [...files]))
+          if (!selected) return
           let modified = false
-          for (const [file, before] of fingerprints) {
+          for (const file of selected) {
             const after = stamp(file)
-            if (after !== before) { fingerprints.set(file, after); modified = true }
+            if (after !== fingerprints.get(file)) { fingerprints.set(file, after); modified = true }
           }
           if (modified) changed()
         }))
