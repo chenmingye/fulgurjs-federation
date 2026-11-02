@@ -3,6 +3,8 @@
  * 每个 case 通过 vi.resetModules + 动态 import 获得全新 runtime 实例（隔离 globalThis 单例）。
  */
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Runtime = typeof import('../src/runtime/index')
@@ -253,13 +255,8 @@ describe('runtime: 容器加载与容错（B-6/B-14/B-15）', () => {
     rt.initSharing('default')
     const container = {
       name: 'c1',
-      initedWith: null as string | null,
-      init: async function (map: any) {
-        if (this.initedWith && this.initedWith !== Object.keys(map).join(',')) {
-          throw Object.assign(new Error('MFU-005 conflict'), { code: 'MFU-005' })
-        }
-        this.initedWith = 'x'
-      },
+      // 由真实 runtime 拒绝跨作用域复用，容器自身不伪造领域错误。
+      init: vi.fn(async () => {}),
       get: async () => ({}),
     }
     rt.registerRemote({ name: 'c1', entry: '', promise: async () => container })
@@ -267,6 +264,42 @@ describe('runtime: 容器加载与容错（B-6/B-14/B-15）', () => {
     // 第二次用不同 scope → runtime 侧 MFU-005
     rt.registerRemotes([{ name: 'c1', entry: '', shareScope: 'other', promise: async () => container }])
     await expect(rt.loadRemote('c1/A', { shareScope: 'other' })).rejects.toThrow('MFU-005')
+    expect(container.init).toHaveBeenCalledTimes(1)
+  })
+
+  it('URL 远程自报名不符触发真实 MFU-002；修正名称后恢复', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fulgurjs-name-'))
+    const entry = path.join(dir, 'entry.mjs')
+    fs.writeFileSync(entry, "export const name='actual'; export async function init(){}; export async function get(){return {ok:true}}")
+    try {
+      rt.registerRemote({ name: 'configured', entry, retries: 0 })
+      await expect(rt.loadRemote('configured/A')).rejects.toMatchObject({
+        code: 'MFU-002', message: expect.stringContaining('actual'),
+      })
+      rt.registerRemote({ name: 'actual', entry, retries: 0 })
+      await expect(rt.loadRemote('actual/A')).resolves.toMatchObject({ ok: true })
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('空导出由真实加载路径报告 MFU-009，非空导出不误报', async () => {
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {})
+    rt.registerRemote({ name: 'empty', entry: '', promise: async () => ({
+      name: 'empty', init: async () => {}, get: async () => ({}),
+    }) })
+    try {
+      await expect(rt.loadRemote('empty/A')).resolves.toEqual({})
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('MFU-009'))
+      warn.mockClear()
+      rt.registerRemote({ name: 'nonempty', entry: '', promise: async () => ({
+        name: 'nonempty', init: async () => {}, get: async () => ({ ok: true }),
+      }) })
+      await expect(rt.loadRemote('nonempty/A')).resolves.toEqual({ ok: true })
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('未注册远程 → MFU-008', async () => {
