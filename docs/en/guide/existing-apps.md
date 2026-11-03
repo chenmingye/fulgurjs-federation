@@ -34,6 +34,23 @@ main.ts(x) remains the standalone entry. The bridge calls the same business init
 
 Use host/ and exposes/ for newly added consumption/provider wiring. New-project unified startup examples may use host/application.ts(x) or exposes/application.ts(x). Paths are organizational conventions; the plugin loads configured files rather than discovering special filenames. Templates choose unified startup without imposing that layout on existing projects.
 
+### Providing components while consuming route and dialog applications
+
+Consider an admin host that exposes existing forms to a workflow application and mounts that application in both menu routes and approval dialogs. Organize files by **caller and responsibility**. The names below are examples; add files only for actual entry points.
+
+| File or location | Caller and responsibility |
+|---|---|
+| Existing business form | `exposes` points directly to the original file. Props, business logic, and local components stay there. |
+| `setup.ts` | Referenced by provider configuration. Declares the environment actually required. Reference an existing Provider directly. Place a new Provider that performs real composition or adaptation under `exposes/`, for example `FormEnvironmentProvider.vue`. |
+| `host/WorkflowRouteView.vue` | Loaded by the host route table for a full-page mount. The host owns browser history and the child uses controlled routing. |
+| `host/WorkflowDialogView.vue` | Loaded by a business dialog or renderer for an embedded mount. Location is scoped to the instance, closing releases the mount, and the host URL stays intact. |
+| `host/context.ts` | Extract only when the route and dialog share meaningful user, session, or business-event mapping. |
+| `types/` | Declarations and metadata synchronized by the plugin. Application code imports contracts through public remote entry points. |
+
+Routes and dialogs can use the same remote bridge entry. Give each caller a clear boundary for navigation ownership and lifecycle. Share a dialog component only when its props, events, and closing behavior agree. For example, keep a form's save-result mapping in the entry that owns that contract. Name entry files so readers can tell which are loaded by the route table and which are loaded by dialogs. Avoid multiple entry points with generic names such as `RemoteApplication` or `Bridge` in the same directory.
+
+Check public plugin APIs and the existing application wiring first. When `getContext` and `appProps` have identical user and event payloads, share the mapping and let each caller obtain it at the appropriate lifecycle point. Reuse an existing token getter directly. Add a navigation adapter only when the dialog needs isolated location state, and reuse applicable public types. If the adapter tracks only the current location, document that it has no local history. An empty `go()` does not implement back navigation. An instance-local counter starting at zero on every mount cannot supply unique identifiers across instances.
+
 ### File formats and names
 
 - Vue components use `.vue`; prefer `<script setup lang="ts">` for new components. Existing `defineComponent` components remain valid. A separate normal `<script lang="ts">` may hold shared module state; do not accidentally recreate it inside each setup.
