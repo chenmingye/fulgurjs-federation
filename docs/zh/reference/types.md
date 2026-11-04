@@ -435,6 +435,10 @@ Vue 子应用 memory 路由连接与就绪/释放.
 | `ready` | no | `Promise<void>` | 必须 await ready 后再 app.use(router)，初始错误会拒绝此 Promise。 |
 | `dispose` | no | `() => void` | 幂等释放当前路由连接/订阅；只清理该连接拥有的资源。 |
 
+## BridgeHostNavigation
+
+自定义宿主导航适配器可直接从 `@fulgurjs/federation/vue` 或 `@fulgurjs/federation/react` 使用 `import type { BridgeHostNavigation }`。该类型描述位置读取、订阅、导航和历史移动合同。
+
 ## BridgeHostRouting
 
 宿主导航端口与子应用路径前缀.

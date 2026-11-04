@@ -46,6 +46,7 @@ import type { BridgeHostRouting } from './bridge-router-core'
 export type { RemoteComponentOptions, HostPagesOptions, HostPages, ResolvedHostPage, FgRemoteVueComponent, FgVueRemoteProps } from './vue-adapter'
 export type { BridgeApp, VueBridgeAppFactory, VueBridgeAppContext, VueBridgeAppSetup } from './bridge-app-vue'
 export type { VueBridgeAppOptions, FgVueBridgeWrapper } from './bridge-host-vue'
+export type { BridgeHostNavigation } from './bridge-router-core'
 export type { VueBridgeRouterConnection, BridgeHostRouting }
 export type { BridgeSession }
 

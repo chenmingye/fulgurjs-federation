@@ -62,6 +62,7 @@ export { createReactBridgeRouter }
 /** 判断指定应用或工厂上下文是否属于桥接形态。 */
 export { hasBridgeMount }
 /** 宿主桥接组件 routing prop 的类型（宿主启用 URL 同步时传入） */
+export type { BridgeHostNavigation } from './bridge-router-core'
 export type { BridgeHostRouting }
 /** 宿主导航可取消预判 */
 export type { ReactBridgeCancelPolicy }

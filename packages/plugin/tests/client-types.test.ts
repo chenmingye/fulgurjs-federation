@@ -58,7 +58,7 @@ describe('/react 物理入口类型', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostRouting',
+      'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeErrorFallback', 'BridgeHostNavigation', 'BridgeHostRouting',
       'DefineReactBridgeAppOptions',
       'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
       'FgReactRemoteProps', 'FgRuntime',
@@ -132,7 +132,7 @@ describe('/vue 物理入口类型（6.0.0 统一入口）', () => {
     const exports = text.match(/^export \{([^\n]+)\};$/m)?.[1] ?? ''
     const names = [...exports.matchAll(/\btype ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]).sort()
     expect(names).toEqual([
-      'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeHostRouting', 'BridgeSession',
+      'AppContext', 'Application', 'ApplicationHandle', 'BridgeApp', 'BridgeHostNavigation', 'BridgeHostRouting', 'BridgeSession',
       'DefineVueBridgeAppOptions',
       'FgBridgeAppProps', 'FgBridgeEntry', 'FgBridgePropsOf', 'FgComponentEntry',
       'FgRemoteVueComponent', 'FgRuntime', 'FgVueBridgeWrapper', 'FgVueRemoteProps',

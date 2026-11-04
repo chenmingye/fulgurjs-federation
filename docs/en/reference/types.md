@@ -436,6 +436,10 @@ Import from: `@fulgurjs/federation/vue`.
 | `ready` | no | `Promise<void>` | Promise for initial controlled navigation; await before installing the Vue router. |
 | `dispose` | no | `() => void` | Idempotently release this routing connection/subscriptions, not unrelated application resources. |
 
+## BridgeHostNavigation
+
+Custom host navigation adapters can use `import type { BridgeHostNavigation }` from `@fulgurjs/federation/vue` or `@fulgurjs/federation/react`. This type describes the location, subscription, navigation, and history contract.
+
 ## BridgeHostRouting
 
 Host navigation port and child route prefix.
