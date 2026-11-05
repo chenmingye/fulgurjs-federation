@@ -7,7 +7,7 @@
  */
 import type { NormalizedOptions } from './options'
 import { formatFulgurjsDiagnostic, isPortReachable } from './diagnostics'
-import { parseManifest, normalizeExposes, type DevFederationManifest } from './manifest'
+import { parseManifest, normalizeExposes, manifestUrlFromEntry, type DevFederationManifest } from './manifest'
 
 export interface RemoteSchemaEntry {
   exposes: string[]
@@ -18,15 +18,6 @@ export interface RemoteSchema {
   [remoteKey: string]: RemoteSchemaEntry
 }
 
-function manifestUrlOf(devEntry: string): URL | null {
-  try {
-    const u = new URL(devEntry)
-    u.pathname = u.pathname.replace('@fulgurjs-entry.js', '@fulgurjs-manifest.json')
-    return u
-  } catch {
-    return null
-  }
-}
 
 /**
  * 探测全部 remote：manifest 拉取（DEV-001/002）+ 端口监听（DEV-005）+ 插件版本比对
@@ -39,7 +30,8 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       schema[remote.key] = { exposes: [], exists: false }
       continue
     }
-    const u = manifestUrlOf(remote.devEntry)
+    const manifestUrl = manifestUrlFromEntry(remote.devEntry)
+    const u = manifestUrl ? new URL(manifestUrl) : null
     if (!u) {
       schema[remote.key] = { exposes: [], exists: false }
       continue
@@ -115,8 +107,8 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
           formatFulgurjsDiagnostic({
             code: 'DEV-005',
             symptom: `远程应用 "${remote.key}" 的 dev 端口 ${port} 无进程监听（${u.hostname}）`,
-            cause: 'remote dev server 未启动，或 remotes[].dev 端口/主机写错',
-            fix: '启动对应 remote 的 dev server，并核对 remotes[].dev 与 remote 的 VITE_PORT/base',
+            cause: '远程服务未启动，或 remotes[].dev 端口/主机配置错误',
+            fix: '启动对应远程服务，核对 remotes[].dev 和实际部署 base',
             details: { remote: remote.key, url: u.href, port, portOpen },
           }),
         )
@@ -124,11 +116,11 @@ export async function probeRemotesAndBuildSchema(options: NormalizedOptions): Pr
       console.warn(
         formatFulgurjsDiagnostic({
           code: 'DEV-001',
-          symptom: `远程应用 "${remote.key}" 的开发 manifest 不可达（${u.href}）——将跳过该远程的路由存在性校验`,
+          symptom: `远程应用 "${remote.key}" 的 manifest 不可达（${u.href}）——将跳过该远程的路由存在性校验`,
           cause: portOpen
-            ? '端口有进程监听但 manifest 端点异常：remote dev server 可能以非联邦配置启动，或 base/路径与 remotes[].dev 不一致'
-            : '端口无进程监听：remote dev server 未启动，或 remotes[].dev 端口写错（server.origin 错位同款）',
-          fix: '启动对应 remote 的 dev server；核对宿主 federation({ remotes }) 的 dev URL 与 remote 实际 VITE_PORT/base',
+            ? '端口有监听但 manifest 不可读：核对同目录 manifest 是否部署、JSON/MIME 与 base 路径'
+            : '远程端口无监听或地址错误',
+          fix: '核对远程服务、入口同目录 manifest、实际 base、代理与 CORS；生产站不需要另起 dev server',
           details: { remote: remote.key, url: u.href, port, portOpen, error: String((err as Error)?.message ?? err) },
         }),
       )

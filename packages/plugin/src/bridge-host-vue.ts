@@ -248,9 +248,9 @@ export function createVueBridgeAppWithLoader(loadRemote: LoadRemoteFn, automatic
               acquireBridgeSession(spec, controlled)
               acquiredSession = controlled
             }
-            // 1) 会话/上下文校验（副作用自由）；通过后才由桥接层写 AppContext（§4.3）
+            // 1) 会话/上下文校验；确认换代后清理旧上下文，再由桥接层写入快照（§4.3）
             const resolution = resolveBridgeContext(spec, controlled,
-              options.getContext ?? (managedSession ? () => ({}) : undefined), !!managedSession)
+              options.getContext, !!managedSession)
             if (resolution.provide) provideAppContext(resolution.provide)
             // 2) loadRemote 取契约（retries/timeout 透传现行语义；迟到结果按代次丢弃）
             const load = loadRemote(spec, { retries: options.retries })

@@ -51,6 +51,33 @@ Routes and dialogs can use the same remote bridge entry. Give each caller a clea
 
 Check public plugin APIs and the existing application wiring first. When `getContext` and `appProps` have identical user and event payloads, share the mapping and let each caller obtain it at the appropriate lifecycle point. Reuse an existing token getter directly. Add a navigation adapter only when the dialog needs isolated location state, and reuse applicable public types. If the adapter tracks only the current location, document that it has no local history. An empty `go()` does not implement back navigation. An instance-local counter starting at zero on every mount cannot supply unique identifiers across instances.
 
+### Session context, instances, and failure states
+
+With automatic `session`, provide the current login's capabilities through synchronous `getContext`. If business context exists without a matching generation, omitting the getter rejects mounting and preserves the existing object. It does not replace that object with a sessionKey-only snapshot. Empty context supports session-only configuration; remounts in the same generation may reuse published context. Account changes require a fresh snapshot and must not retain a captured previous-account snapshot.
+
+`provideAppContext` performs a page-level shallow merge. An events object replaces the previous object under that key. Keep an explicit host context assembly source and read current capabilities through getters. Instance-local layout, subscriptions, and state belong to that application's provide/inject or store, with subscriptions released on disposal. Use public `hasBridgeMount(app or factory context)` for execution mode. The existence of another bridge on the page does not identify the origin of a request. Bind HTTP authentication and error handling to the actual application; tokens are not session identities.
+
+The plugin handles remote loading, sharing, contract, and mount failures. Business empty results, success=false, and missing schemas require page-level states. Cover pending, success, empty, and error. Empty states explain missing records; errors retain a cause and retry action that invokes the same data-loading function. Before asynchronous writes, verify instance lifetime and request generation. Release timers, subscriptions, and cancellable requests on disposal. Valid null components, Suspense, and conditional visibility must not be treated as rendering failures.
+
+### Public contracts and lazy assembly in large applications
+
+Keep public bridge parameters independent of business initialization dependencies. Define shared parameters once in a real contract module, referenced by both the application creation function and exposed entry. Consumers import synchronized named types. Disabling dts because a static assembly closure reports many business diagnostics also stops that application's consumer type synchronization.
+
+An exposed `src/fulgurjs/exposes/application.ts` can use:
+
+```ts
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import type { ApplicationProps } from './contracts'
+export type { ApplicationProps } from './contracts'
+
+export default defineBridgeApp<ApplicationProps>(async (props, context) => {
+  const { createBusinessApplication } = await import('../../application')
+  return createBusinessApplication(props, context)
+}, { routing: true })
+```
+
+`contracts.ts` defines genuinely shared parameters. The existing `application.ts` references it for its creation arguments and returns a value satisfying the public bridge factory contract. Keep plugins, router, store, and registrations in their original assembly source. Lazy loading defines an assembly boundary. Declaration checking of the static public closure and business implementation typechecking are separate validations. Run effective project typechecks for the creation function and business implementation. Successful declarations do not imply the entire application's implementation passed. Diagnose generation failures through the exposes entry's static imports and type dependencies, retaining actual errors and scope boundaries.
+
 ### File formats and names
 
 - Vue components use `.vue`; prefer `<script setup lang="ts">` for new components. Existing `defineComponent` components remain valid. A separate normal `<script lang="ts">` may hold shared module state; do not accidentally recreate it inside each setup.

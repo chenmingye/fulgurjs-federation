@@ -171,6 +171,16 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
         '子应用直接写浏览器历史可能重复前缀或添加意外 hash；此项是人工核查，不是已复现缺陷。',
         '统一装配用 defineApplication；按 context.mode 选择 web/memory history，桥接返回 { app, router }。')
     }
+    if (/\b(?:window|document)\.location\.(?:search|pathname|hash)|\bwindow\.history\.(?:pushState|replaceState)/.test(code)) {
+      add(file, 'WARN', '发现页面级 URL 读取或写入，需要核对嵌入运行的路由来源。',
+        '完整应用桥接使用受控 memory 路由；页面 URL 属于宿主，可能与子应用业务参数不同。',
+        '组件内使用本应用 route.query/path；导航使用当前实例 router。确需读取宿主 URL 时明确用途，独立入口可保留原行为。')
+    }
+    if (/\b(?:ctx|context)\.appContext\b/.test(code) && /define(?:BridgeApp|Application)\s*(?:<[^>]*>)?\s*\(/.test(code)) {
+      add(file, 'WARN', '桥接工厂中出现 ctx.appContext，需要核对工厂上下文类型。',
+        '桥接工厂上下文与 setup 的 RemoteSetupContext 是两种合同；前者不提供 appContext。',
+        '通过公开 getAppContext/requireAppContext 读取宿主能力，保留工厂 signal 和 routing 的实际类型检查。')
+    }
     for (const match of code.matchAll(/import\.meta\.glob(?:Eager)?\s*\(\s*(\[[\s\S]*?\]|["'][^"']+["'])/g)) {
       if (/\.ts/.test(match[1]) && !/![^"']*\.d\.ts/.test(match[1])) {
         add(file, 'WARN', '发现扫描 .ts 的业务 glob，未看到排除 .d.ts 的负模式。',
@@ -184,6 +194,19 @@ export async function runSourceDoctor(configPath: string): Promise<SourceDoctorR
     add('远程类型接线', 'WARN', '远程类型启用；本地扫描不能证明声明已同步且被 IDE 的有效 tsconfig 包含。',
       '首次生成、远程未启动、自定义 include/references 或 IDE 项目选择都会影响提示。',
       '启动提供方后运行 fulgurjs types；在实际消费文件验证正确 props 和错误 props 的正负类型样例。勿用 any 消除诊断，也无需清空全部业务存量错误。')
+  }
+  if (options.dts === false && Object.keys(options.remotes ?? {}).length) {
+    add('远程类型接线', 'WARN', 'dts:false 同时关闭提供方声明生成和消费方类型同步。',
+      '页面运行不代表业务 props 有生成合同；手写泛型只能检查本地形状。',
+      '启用 dts；将公开参数合同与业务启动装配分开，挂载时按需加载装配，并通过生产 manifest/types index 验证真实同步。')
+  }
+  if (options.devSharedSelf !== true && Object.values(options.remotes ?? {}).some(remote =>
+    typeof remote === 'object' && remote !== null && 'dev' in remote &&
+    typeof remote.dev === 'string' && /\.m?js(?:[?#]|$)/.test(remote.dev) && !remote.dev.includes('@fulgurjs-entry.js')
+  )) {
+    add('混合部署共享', 'WARN', '开发宿主配置了已部署的 JS 远程入口，请验证实际共享实例。',
+      '纯宿主默认不改写自身依赖；预构建和 UI 库图可能影响 dev/prod 混合时的 renderer 身份。',
+      '先验证真实 Vue/renderer 身份；确需自身也参与协商时配置 devSharedSelf:true，并覆盖冷启动、重挂载及 dev/prod 浏览器回归。')
   }
   const isImported = (key: string) => [...imports].some(value => value === key || value.startsWith(key + '/'))
   for (const key of shared) {

@@ -200,4 +200,18 @@ describe('接入前一次暴露接线问题', () => {
     expect(r.checks.some(c => c.level === 'FAIL' && c.symptom.includes('运行时代码导入了类型声明'))).toBe(true)
     expect(r.checks.some(c => c.item === '远程类型接线' && c.level === 'WARN')).toBe(true)
   })
+  it('提示桥接 URL 来源、工厂上下文误用与关闭类型同步的影响', async () => {
+    write('src/bridge-risk.ts', `
+      import { defineBridgeApp } from '@fulgurjs/federation/vue'
+      export default defineBridgeApp((props, ctx) => {
+        const query = window.location.search
+        return ctx.appContext.factory(props, query)
+      })
+    `)
+    const report = await doctorFor("exposes: {'./bridge': './src/bridge-risk.ts'}, remotes: {a:'http://localhost:5174'}, dts:false")
+    expect(report.checks.some(c => c.symptom.includes('页面级 URL'))).toBe(true)
+    expect(report.checks.some(c => c.symptom.includes('ctx.appContext'))).toBe(true)
+    expect(report.checks.some(c => c.symptom.includes('dts:false'))).toBe(true)
+  })
+
 })

@@ -91,7 +91,7 @@ export interface BridgeContextResolution {
 }
 
 /**
- * 挂载前校验会话与上下文快照（同步、无副作用；只在全部通过后由调用方 provide）。
+ * 挂载前同步校验会话与上下文快照；校验失败保留原上下文，确认换代后清理旧代次。
  *
  * - getter 抛错/返回非对象/thenable → MFU-016（phase: getContext）；
  * - 自动会话可补入缺省的快照sessionKey；显式矛盾仍拒绝；
@@ -111,6 +111,18 @@ export function resolveBridgeContext(
   getContext: (() => Partial<AppContext> & Record<string, unknown>) | undefined,
   managedSession = false,
 ): BridgeContextResolution {
+  // 自动会话不能把预先发布的业务上下文静默替换成只有代次的空快照。
+  if (managedSession && controlled !== undefined && !getContext) {
+    const existing = (globalThis as { __FULGURJS_APP_CONFIG__?: Partial<AppContext> }).__FULGURJS_APP_CONFIG__
+    if (existing?.sessionKey === controlled) return {}
+    if (existing && Object.keys(existing).some(key => key !== 'sessionKey')) {
+      throw bridgeLifecycleError('getContext', spec, new Error(
+        '自动会话发现已有宿主上下文，但未提供 getContext。请传入同步 getter，返回本次登录的 user/getToken/events 快照；原上下文已保留。'
+      ))
+    }
+    clearAppContext()
+    return { provide: { sessionKey: controlled } }
+  }
   if (getContext) {
     let snapshot: Partial<AppContext> & Record<string, unknown>
     try {

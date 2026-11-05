@@ -51,20 +51,8 @@ export function readManifestTypes(m: FederationManifest): ManifestTypesDescripto
   return { schemaVersion: TYPES_SCHEMA_VERSION, index: d.index, revision: d.revision }
 }
 
-/** 容器入口 URL → manifest URL（dev: @fulgurjs-entry.js → @fulgurjs-manifest.json；prod: 入口同目录） */
-export function manifestUrlFromEntry(entryUrl: string): string | null {
-  try {
-    const u = new URL(entryUrl)
-    if (u.pathname.includes('@fulgurjs-entry.js')) {
-      u.pathname = u.pathname.replace('@fulgurjs-entry.js', '@fulgurjs-manifest.json')
-      return u.toString()
-    }
-    u.pathname = `${u.pathname.slice(0, u.pathname.lastIndexOf('/') + 1)}fulgurjs-manifest.json`
-    return u.toString()
-  } catch {
-    return null
-  }
-}
+export { manifestUrlFromEntry } from './manifest'
+import { manifestUrlFromEntry } from './manifest'
 
 async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })

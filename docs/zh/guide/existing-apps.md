@@ -51,6 +51,33 @@ src/fulgurjs/
 
 先对照插件公开 API 和原应用接线。用户与事件数据若在 `getContext` 和 `appProps` 中形状相同，共用一次组装定义，再由各自调用方按生命周期取值。已有 token getter 直接复用，避免每次组装都包一层等价函数。弹窗只有在确实需要隔离位置时才加导航适配；优先复用可用的公开类型。适配若只跟踪当前位置，应明确写出不提供本地历史，不能用空的 `go()` 暗示支持回退。需要跨实例唯一标识时，实例内每次从零开始的计数器无法实现这个合同。
 
+### 会话上下文、实例与失败状态
+
+配置自动 `session` 时，把本次登录所需能力放入同步 `getContext`。页面已发布业务上下文但没有匹配代次时，省略 getter 会明确拒绝挂载并保留原对象；不会把它替换成只有 sessionKey 的快照。上下文为空时可只配置 session，同代次重挂可复用已发布上下文。真正换账号时必须重新提供新账号快照，不能捕获旧快照长期复用。
+
+`provideAppContext` 是页面级浅合并，同名 events 对象会整体替换。宿主应保持一个明确的上下文装配源，通过 getter 读取当前能力。实例内的布局参数、页面事件订阅和状态使用本应用的 provide/inject 或 store；卸载时释放本实例的订阅。需要判断形态时使用公开 `hasBridgeMount(app或工厂context)`，不要以“同页存在任意桥接实例”推断当前请求来自子应用。HTTP 客户端应绑定实际应用的认证来源和错误处理，业务 token 不作为会话身份。
+
+插件捕获远程加载、共享、契约及挂载错误；业务接口返回空、success=false 或 schema 缺失需要业务页面自己的状态。实际加载分支应包含 pending、success、empty 和 error：empty 提供明确无记录信息，error 保留原因与重试入口，重试从同一数据加载函数开始。异步响应写回前检查实例是否仍存活以及请求是否仍是最新一轮；关闭后取消定时器、订阅和可取消请求。合法的空组件、Suspense 和条件隐藏不应被误判为渲染失败。
+
+### 大型应用的公开合同与按需装配
+
+完整应用桥接的公开参数应独立于业务初始化依赖。把共享参数类型定义在一个真实合同模块，由应用创建函数和暴露入口共同引用，消费方使用自动同步的命名类型。不要因为静态装配闭包里有大量业务诊断就关闭整个应用的 dts；这也会停止它消费其它远程的类型同步。
+
+例如暴露入口 `src/fulgurjs/exposes/application.ts` 可采用：
+
+```ts
+import { defineBridgeApp } from '@fulgurjs/federation/vue'
+import type { ApplicationProps } from './contracts'
+export type { ApplicationProps } from './contracts'
+
+export default defineBridgeApp<ApplicationProps>(async (props, context) => {
+  const { createBusinessApplication } = await import('../../application')
+  return createBusinessApplication(props, context)
+}, { routing: true })
+```
+
+`contracts.ts` 只定义双方真正共享的参数，`application.ts` 复用它声明创建函数参数；返回值应符合公共桥接工厂合同。实际业务插件、router、store 和注册保持原装配源。动态加载负责按需装配，声明生成的静态公开闭包检查与业务实现检查是两层验证，仍需对创建函数与业务项目运行有效 typecheck。不能将动态实现错误过滤后的声明成功报告成整个应用类型检查通过。生成失败时沿 exposes 入口检查静态导入与类型依赖，保留真实错误与边界。
+
 ### 文件格式和名称
 
 - Vue 组件使用 `.vue`，新增组件推荐 `<script setup lang="ts">`。已有 `defineComponent` 组件可以继续使用；需要模块级共享状态时可额外保留普通 `<script lang="ts">`，不要把共享状态误放进每次执行的 setup。
