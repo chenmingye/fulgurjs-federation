@@ -43,7 +43,8 @@ const files = ['app-a', 'app-b'].map(
 );
 const blocks = files.map((p) => {
   const source = fs.readFileSync(p, 'utf8');
-  assert(!source.includes('<Editor\n'), '不能同时由第三方 Vue 组件和本组件重复初始化');
+  assert(!/<Editor(?:\s|>)/.test(source), '不能同时由第三方 Vue 组件和本组件重复初始化');
+  assert(/<textarea\b[^>]*\bref="elRef"/.test(source), '手动初始化必须绑定真实 textarea DOM，不能取得第三方组件代理');
   return source.slice(source.indexOf('      let editorGeneration ='), source.indexOf('      function initSetup(e)'));
 });
 assert.equal(blocks[0], blocks[1]);

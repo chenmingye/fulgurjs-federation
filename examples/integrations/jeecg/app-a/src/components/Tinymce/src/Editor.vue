@@ -10,7 +10,14 @@
         :disabled="disabled"
       />
     </Teleport>
-    <Editor :id="tinymceId" ref="elRef" :disabled="disabled" :init="initOptions" :style="{ visibility: 'hidden' }" v-if="!initOptions.inline"></Editor>
+    <!-- 直接持有DOM目标，由本组件唯一初始化；避免第三方包装组件另起初始化任务。 -->
+    <textarea
+      :id="tinymceId"
+      ref="elRef"
+      :disabled="disabled"
+      style="visibility: hidden"
+      v-if="!initOptions.inline"
+    ></textarea>
     <slot v-else></slot>
     <ProcessMask ref="processMaskRef" :show="showUploadMask"/>
   </div>
@@ -21,7 +28,6 @@
   // update-begin--author:copilot---date:20260711---for:【依赖升级排查】修复 Rolldown 严格 CJS 互操作导致 tinymce 全局未挂载
   import tinymce from '/@/utils/tinymceGlobalShim';
   // update-end--author:copilot---date:20260711---for:【依赖升级排查】修复 Rolldown 严格 CJS 互操作导致 tinymce 全局未挂载
-  import Editor from '@tinymce/tinymce-vue'
   import 'tinymce/themes/silver';
   import 'tinymce/icons/default/icons';
   import 'tinymce/models/dom';
@@ -100,7 +106,7 @@
 
   export default defineComponent({
     name: 'Tinymce',
-    components: { ImgUpload,Editor,ProcessMask },
+    components: { ImgUpload,ProcessMask },
     inheritAttrs: false,
     props: tinymceProps as any,
     emits: ['change', 'update:modelValue', 'inited', 'init-error'],
@@ -335,8 +341,8 @@
         const getdDisabled = options && Reflect.get(options, 'readonly');
         const editor = unref(editorRef);
         // 代码逻辑说明: 设置disabled，图片上传没有被禁用
-        if (editor && editor?.setMode) {
-          editor.setMode(getdDisabled || attrs.disabled === true ? 'readonly' : 'design');
+        if (editor?.initialized) {
+          editor.mode.set(getdDisabled || attrs.disabled === true ? 'readonly' : 'design');
         }
         if (attrs.disabled === true) {
           return true;
@@ -351,12 +357,13 @@
           if (!editor) {
             return;
           }
-         editor?.setMode && editor.setMode(attrs.disabled ? 'readonly' : 'design');
+         editor.mode.set(attrs.disabled ? 'readonly' : 'design');
         }
       );
 
       // 只由本组件初始化一次；使用原始编辑器实例，避免深层代理破坏 TinyMCE 管理器身份。
       let editorGeneration = 0;
+      const modelStops: Array<() => void> = [];
       let editorActive = false;
       let initTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -385,6 +392,7 @@
         initTimer = undefined;
         const editor = unref(editorRef);
         editorRef.value = null;
+        modelStops.splice(0).forEach(stop => stop());
         // 对应 TinyMCE 补丁会在异步恢复后检查 removed，初始化期间也可安全取消。
         if (editor && !editor.removed) editor.remove();
       }
@@ -423,6 +431,7 @@
         if (!editorActive || !editor || e.target !== editor) {
           return;
         }
+        editor.mode.set(unref(disabled) ? 'readonly' : 'design');
         const value = props.modelValue || '';
 
         editor.setContent(value);
@@ -440,14 +449,14 @@
         const modelEvents = attrs.modelEvents ? attrs.modelEvents : null;
         const normalizedEvents = Array.isArray(modelEvents) ? modelEvents.join(' ') : modelEvents;
 
-        watch(
+        modelStops.push(watch(
           () => props.modelValue,
           (val: string, prevVal: string) => {
             setValue(editor, val, prevVal);
           }
-        );
+        ));
 
-        watch(
+        modelStops.push(watch(
           () => props.value,
           (val: string, prevVal: string) => {
             setValue(editor, val, prevVal);
@@ -455,7 +464,7 @@
           {
             immediate: true,
           }
-        );
+        ));
 
         editor.on(normalizedEvents ? normalizedEvents : 'change keyup undo redo', () => {
           const content = editor.getContent({ format: attrs.outputFormat });
