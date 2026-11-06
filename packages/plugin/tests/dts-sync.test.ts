@@ -186,7 +186,32 @@ describe('syncRemoteTypes', () => {
     const r = await syncRemoteTypes({ alias: 'tamper', manifestUrl, typesRoot: typesRoot(), source: 's', fetchJsonImpl: f.json, fetchTextImpl: f.text })
     expect(r.status).toBe('failed')
     expect(r.message).toContain('摘要不符')
+    expect(r.message).toContain('TYP-003')
     expect(fs.existsSync(path.join(typesRoot(), 'tamper'))).toBe(false)
+  })
+
+  it('manifest 与类型清单 revision 不同 → TYP-003 拒绝，保持上一代后可恢复', async () => {
+    const bundle = makeBundle({ math: 'export declare const value: 1\n' })
+    const valid = fetchRouter(bundle)
+    const input = { alias: 'revision-boundary', manifestUrl, typesRoot: typesRoot(), source: 's' }
+    await syncRemoteTypes({ ...input, fetchJsonImpl: valid.json, fetchTextImpl: valid.text })
+    const changed = { ...bundle, manifest: { ...bundle.manifest, types: { ...bundle.manifest.types, revision: 'b1b2c3d4e5f60718' } } }
+    const mismatched = fetchRouter(changed)
+    const result = await syncRemoteTypes({ ...input, fetchJsonImpl: mismatched.json, fetchTextImpl: mismatched.text })
+    expect(result.status).toBe('failed')
+    expect(result.message).toMatch(/TYP-003[\s\S]*revision/)
+    expect(readMetadata(path.join(input.typesRoot, input.alias))?.revision).toBe('a1b2c3d4e5f60718')
+    const recovered = fetchRouter({ ...changed, index: { ...bundle.index, revision: 'b1b2c3d4e5f60718' } })
+    expect((await syncRemoteTypes({ ...input, fetchJsonImpl: recovered.json, fetchTextImpl: recovered.text })).status).toBe('synced')
+  })
+
+  it.each(['index', 'file'])('首次声明%s下载失败 → failed/TYP-002，不冒称存在上一代', async stage => {
+    const bundle = makeBundle({ math: 'export declare const value: 1\n' })
+    const fail = fetchRouter(bundle, stage === 'index' ? { failIndex: true } : { failFile: 'files/math.d.ts' })
+    const result = await syncRemoteTypes({ alias: `first-${stage}`, manifestUrl, typesRoot: typesRoot(), source: 's', fetchJsonImpl: fail.json, fetchTextImpl: fail.text })
+    expect(result.status).toBe('failed')
+    expect(result.message).toContain('TYP-002')
+    expect(result.message).toContain('尚无本地声明')
   })
 
   it('清单含越界路径 → failed（拒绝下载）', async () => {
@@ -206,6 +231,20 @@ describe('syncRemoteTypes', () => {
     const r = await syncRemoteTypes({ alias: 'down', manifestUrl, typesRoot: typesRoot(), source: 's', fetchJsonImpl: f.json as never, fetchTextImpl: f.text as never })
     expect(r.status).toBe('failed')
     expect(r.message).toContain('尚无本地声明')
+    expect(r.message).toContain('TYP-002')
+  })
+
+  it('未提供声明时返回 TYP-004，启用声明后同一消费方自动恢复', async () => {
+    const bundle = makeBundle({ math: 'export declare const ready: true\n' })
+    const noTypes = { ...bundle.manifest, types: undefined }
+    const absent = fetchRouter({ ...bundle, manifest: noTypes })
+    const input = { alias: 'types-restored', manifestUrl, typesRoot: typesRoot(), source: 's' }
+    const result = await syncRemoteTypes({ ...input, fetchJsonImpl: absent.json, fetchTextImpl: absent.text })
+    expect(result.status).toBe('absent')
+    expect(result.message).toContain('TYP-004')
+    const enabled = fetchRouter(bundle)
+    expect((await syncRemoteTypes({ ...input, fetchJsonImpl: enabled.json, fetchTextImpl: enabled.text })).status).toBe('synced')
+    expect(fs.readFileSync(path.join(input.typesRoot, input.alias, 'modules.d.ts'), 'utf8')).toContain('ready')
   })
 
   it('removeGeneratedTypes 只清账本内文件；无账本不动', () => {

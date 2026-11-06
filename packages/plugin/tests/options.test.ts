@@ -174,6 +174,7 @@ describe('配置校验（DX：清晰报错）', () => {
   it('exposes 与 remotes 均空 → 警告（不阻断）', () => {
     const n = norm({ name: 'h' })
     expect(n.warnings.some((w) => w.includes('未配置 exposes 或 remotes'))).toBe(true)
+    expect(n.warnings.some((w) => w.includes('CFG-006'))).toBe(true)
   })
 
   it('纯 host（只有 remotes）→ 警告不阻断', () => {

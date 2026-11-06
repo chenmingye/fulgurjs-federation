@@ -204,21 +204,24 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     index = parsedIndex.index
   } catch (e) {
     return {
-      status: 'stale',
+      status: existing ? 'stale' : 'failed',
       alias,
       revision: existing?.revision,
-      message: `[fulgurjs:TYP-004] 远程 ${alias} 的类型清单已变化（revision ${types.revision}）但下载失败（${(e as Error).message}）。本地保留上一代声明（陈旧）；恢复后 dev 自动更新，或重跑 npx @fulgurjs/federation types。`,
+      message: `[fulgurjs:TYP-002] 远程 ${alias} 的类型清单下载失败（revision ${types.revision}：${(e as Error).message}）。${existing ? '本地保留上一代声明（陈旧）。' : '尚无本地声明。'}请恢复清单地址与网络；恢复后 dev 自动更新，或重跑 npx @fulgurjs/federation types。`,
     }
+  }
+  if (index.revision !== types.revision) {
+    return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的 manifest revision ${types.revision} 与类型清单 revision ${index.revision} 不一致，已拒绝本次更新（本地声明保持原状）。请将 manifest、类型清单与声明文件按同一构建部署，并清除代理/CDN旧缓存；恢复后 dev 自动重试。` }
   }
   const fileCount = Object.keys(index.files).length
   if (fileCount > DTS_FILE_COUNT_MAX) {
-    return { status: 'failed', alias, message: `远程 ${alias} 的类型清单文件数超限（${fileCount} > ${DTS_FILE_COUNT_MAX}）。已拒绝。` }
+    return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的类型清单文件数超限（${fileCount} > ${DTS_FILE_COUNT_MAX}），已拒绝。请收窄提供方公开合同的声明闭包并重新构建部署；本地声明保持原状。` }
   }
   indexRaw = {}
   let total = 0
   for (const [rel, digest] of Object.entries(index.files)) {
     if (!isSafeBundlePath(rel)) {
-      return { status: 'failed', alias, message: `远程 ${alias} 的类型清单含不安全路径（${rel}），已拒绝下载（防路径逃逸）。` }
+      return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的类型清单含不安全路径（${rel}），已拒绝下载（防路径逃逸）。请重新部署插件生成的相对路径清单，不要手写或改写资源路径；本地声明保持原状。` }
     }
     const fileUrl = new URL(rel, new URL('./', indexUrl)).toString()
     let text: string
@@ -226,23 +229,23 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
       text = await fetchTextFn(fileUrl, timeoutMs)
     } catch (e) {
       return {
-        status: 'stale',
+        status: existing ? 'stale' : 'failed',
         alias,
         revision: existing?.revision,
-        message: `[fulgurjs:TYP-004] 远程 ${alias} 的声明文件下载失败（清单 revision ${types.revision}，文件 ${rel}：${(e as Error).message}）。本地保留上一代声明（陈旧）。`,
+        message: `[fulgurjs:TYP-002] 远程 ${alias} 的声明文件下载失败（清单 revision ${types.revision}，文件 ${rel}：${(e as Error).message}）。${existing ? '本地保留上一代声明（陈旧）。' : '尚无本地声明。'}请恢复该声明文件地址与网络；恢复后 dev 自动重试。`,
       }
     }
     const bytes = Buffer.byteLength(text, 'utf8')
     if (bytes > DTS_FILE_MAX_BYTES) {
-      return { status: 'failed', alias, message: `远程 ${alias} 的声明文件超限（${rel}：${bytes}B > ${DTS_FILE_MAX_BYTES}B），已拒绝。` }
+      return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的声明文件超限（${rel}：${bytes}B > ${DTS_FILE_MAX_BYTES}B），已拒绝。请收窄提供方公开合同并重新构建部署；本地声明保持原状。` }
     }
     total += bytes
     if (total > DTS_TOTAL_MAX_BYTES) {
-      return { status: 'failed', alias, message: `远程 ${alias} 的类型资源总量超限（>${DTS_TOTAL_MAX_BYTES}B），已拒绝。` }
+      return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的类型资源总量超限（>${DTS_TOTAL_MAX_BYTES}B），已拒绝。请收窄提供方公开合同并重新构建部署；本地声明保持原状。` }
     }
     const actual = crypto.createHash('sha256').update(text, 'utf8').digest('hex')
     if (actual !== digest) {
-      return { status: 'failed', alias, message: `远程 ${alias} 的声明文件摘要不符（${rel}），已拒绝本次更新（传输损坏或被篡改）。` }
+      return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 远程 ${alias} 的声明文件摘要不符（${rel}），已拒绝本次更新（传输损坏或被篡改）。请将清单与声明文件按同一构建部署，并检查代理是否改写响应；本地声明保持原状，恢复后 dev 自动重试。` }
     }
     indexRaw[rel] = text
   }
@@ -309,7 +312,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
     }
   } catch (e) {
     fs.rmSync(staging, { recursive: true, force: true })
-    return { status: 'failed', alias, message: `[fulgurjs:TYP-004] 远程 ${alias} 的类型写入失败（${(e as Error).message}）。本地声明保持原状。` }
+    return { status: 'failed', alias, message: `[fulgurjs:TYP-002] 远程 ${alias} 的类型写入失败（${(e as Error).message}）。本地声明保持原状。请检查类型输出目录的权限与可用空间；恢复后 dev 自动重试。` }
   }
   return {
     status: 'synced',

@@ -46,8 +46,8 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'DEV-011', stage: 'DEV', title: '非 loopback host + 通配 dev CORS（暴露面扩大提醒）' },
   // ── TYP 远程类型链（6.5.0 类型自动生成）──
   { code: 'TYP-001', stage: 'TYP', title: '提供方声明 bundle 生成失败（合同边界/预算/编译错误/工具缺失/路径泄漏）' },
-  { code: 'TYP-002', stage: 'TYP', title: '宿主类型同步失败（manifest/清单/文件获取失败；本地声明保持原状）' },
-  { code: 'TYP-003', stage: 'TYP', title: '类型资源校验拒绝（摘要不符/路径越界/超限/协议不匹配）' },
+  { code: 'TYP-002', stage: 'TYP', title: '宿主类型同步失败（manifest/清单/文件获取或本地写入失败；本地声明保持原状）' },
+  { code: 'TYP-003', stage: 'TYP', title: '类型资源校验拒绝（revision不一致/摘要不符/路径越界/超限/协议不匹配）' },
   { code: 'TYP-004', stage: 'TYP', title: '远程未提供类型资源（旧版本插件或 dts:false；页面可运行）' },
   { code: 'TYP-005', stage: 'TYP', title: '宿主缺少远程声明的外部类型依赖（externals 解析失败）' },
   { code: 'TYP-006', stage: 'TYP', title: '生成类型目录未被应用 tsconfig 覆盖（发现失败，附最小修法）' },
