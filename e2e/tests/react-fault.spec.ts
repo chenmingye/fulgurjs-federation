@@ -5,11 +5,9 @@
  */
 import { expect, test } from '@playwright/test'
 
-test.beforeEach(async ({ page }) => {
-  await page.goto('http://localhost:5104/')
-})
-
 async function login(page: import('@playwright/test').Page) {
+  // 先由用例安装故障路由，再启动宿主；ThemeProvider在首页就会加载远程容器。
+  if (page.url() === 'about:blank') await page.goto('http://localhost:5104/')
   await page.getByTestId('login-alice').click()
 }
 
@@ -37,6 +35,9 @@ test('N01 冷会话入口不可达：中文错误码+重试；恢复后同页重
 test('N02 入口可达但业务 chunk 失败：全新会话阻断 chunk；解除后恢复', async ({ page }) => {
   await page.route(/localhost:5103\/src\/pages\/Home\.tsx.*/, (route) => route.abort('failed'))
   await login(page)
+  // Provider从loading切到真实Context会重挂children；先等待宿主祖先稳定，
+  // 避免其迟到完成代替用户点击重试，导致故障按钮在click前被移除。
+  await expect(page.getByTestId('theme-toggle')).toBeVisible()
   await page.getByRole('link', { name: '远程首页' }).click()
   const box = page.locator('[data-fulgurjs-error]').first()
   await expect(box).toBeVisible({ timeout: 20000 })
