@@ -1,5 +1,11 @@
 # 当前发布说明
 
+## 6.16.18
+
+- globalComponents 指令交付：远程 setup 捕获器补齐 ElementPlus/Avue 等 install 所需的完整 app 协议（directive/provide/mixin/config.globalProperties），此前 install 中途抛异常被捕获吞掉、其后的组件（含 el-result 等结果组件）静默丢失，消费方页面把未知标签当普通 div 渲染、内部图标 svg 失控放大。
+- 指令按 "directive:名称" 约定键随组件清单交付，runtime 识别后经 consumerApp.directive 真实注册进消费方 app（v-loading 等表单加载态指令此前整体失效）；消费方未实现 directive 时跳过，向后兼容。
+- 新增指令交付正反回归。
+
 ## 6.16.17
 
 - 修复自动导入工具在缓存校验窗口内重写同内容声明导致暖启动重新编译的问题；仅复用编译器证明读取过、内容和链接身份均未变的声明，真实类型变化、源码与工具改动继续失效。

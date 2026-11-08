@@ -25,9 +25,11 @@ function makeContainer(name: string, setupMod: Record<string, unknown> | (() => 
 
 function makeFakeApp() {
   const registered = new Map<string, unknown>()
+  const directives = new Map<string, unknown>()
   return {
     registered,
-    app: { component: (n: string, c: unknown) => registered.set(n, c) },
+    directives,
+    app: { component: (n: string, c: unknown) => registered.set(n, c), directive: (n: string, d: unknown) => directives.set(n, d) },
   }
 }
 
@@ -129,5 +131,36 @@ describe('setup globalComponents（组件联邦全局注册安装）', () => {
     const { app, registered } = makeFakeApp()
     await expect(rt.loadRemote('form-r7/form', { consumerApp: app })).resolves.toBeTruthy()
     expect(registered.size).toBe(0)
+  })
+})
+
+describe('globalComponents 指令交付（6.16.18：ElementPlus/Avue 捕获安装的指令通道）', () => {
+  let rt: Runtime
+  beforeEach(async () => {
+    rt = await fresh()
+  })
+
+  it('"directive:名称"键真实注册进消费方 app.directive，不误注册为组件', async () => {
+    const loading = { mounted: () => {} }
+    const container = makeContainer('meszc-lowcode', {
+      globalComponents: { 'ElResult': { render: () => null }, 'directive:loading': loading },
+    })
+    await registerFake(rt, 'meszc-lowcode', container)
+    const fake = makeFakeApp()
+    await rt.loadRemote('meszc-lowcode/__fulgurjs_setup__', { consumerApp: fake.app })
+    expect(fake.directives.get('loading')).toBe(loading)
+    expect(fake.registered.has('directive:loading')).toBe(false)
+    expect(fake.registered.get('ElResult')).toBeTruthy()
+  })
+
+  it('消费方无 directive 能力时跳过指令、组件照常注册（向后兼容）', async () => {
+    const container = makeContainer('meszc-lowcode', {
+      globalComponents: { 'ElResult': { render: () => null }, 'directive:loading': { mounted: () => {} } },
+    })
+    await registerFake(rt, 'meszc-lowcode', container)
+    const registered = new Map<string, unknown>()
+    await rt.loadRemote('meszc-lowcode/__fulgurjs_setup__', { consumerApp: { component: (n: string, c: unknown) => registered.set(n, c) } })
+    expect(registered.get('ElResult')).toBeTruthy()
+    expect(registered.has('directive:loading')).toBe(false)
   })
 })

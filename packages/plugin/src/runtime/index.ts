@@ -1159,9 +1159,18 @@ function createRuntime() {
     // 每次加载都执行（不随 setup 只跑一次）——桥接子应用每次挂载新建 app 实例，
     // 一次性注册会漏掉重进；app.component 同名覆盖天然幂等，重复注册无副作用。
     const gc = lifecycleOf(name).globalComponents
-    const consumerApp = opts?.consumerApp as { component?: (n: string, c: unknown) => unknown; pageProviders?: (list: unknown[]) => void } | undefined
+    const consumerApp = opts?.consumerApp as { component?: (n: string, c: unknown) => unknown; directive?: (n: string, d: unknown) => unknown; pageProviders?: (list: unknown[]) => void } | undefined
     if (gc && consumerApp && typeof consumerApp.component === 'function') {
-      for (const compName of Object.keys(gc)) consumerApp.component(compName, gc[compName])
+      for (const compName of Object.keys(gc)) {
+        // 指令按约定键交付（"directive:名称"）：ElementPlus/Avue 等带指令的库经组件捕获器
+        // 安装时，指令只能走单独通道；消费方注册器实现了 directive 即真注册，否则跳过
+        // （不可把指令对象误注册为组件——名字不会作为标签使用，但会污染注册表语义）。
+        if (compName.startsWith('directive:')) {
+          if (typeof consumerApp.directive === 'function') consumerApp.directive(compName.slice('directive:'.length), gc[compName])
+          continue
+        }
+        consumerApp.component(compName, gc[compName])
+      }
     }
     // 祖先 Provider 交付：消费方适配器经 consumerApp.pageProviders 捕获后在自己的组件
     // 提取点包裹（与 globalComponents 同一 consumerApp 协议；Vue/React remoteComponent 与

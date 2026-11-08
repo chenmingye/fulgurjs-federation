@@ -1,5 +1,5 @@
 /** Vue 适配层只接收加载函数，不静态引用运行时内核。 */
-import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onErrorCaptured, ref, openBlock, createVNode, createElementVNode, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type PropType } from 'vue'
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onErrorCaptured, ref, openBlock, createVNode, createElementVNode, shallowRef, onActivated, onUnmounted, version as vueRuntimeVersion, type App, type Component, type Directive, type PropType } from 'vue'
 import type { PageRouteLike, RemoteSchemaEntry } from './pages'
 import { ErrorCodes, diagnosticMessage } from './runtime/errors'
 import {
@@ -254,6 +254,11 @@ function consumerRegistry(app: App | undefined, captured?: { providers?: unknown
           })
         : comp
       return app.component(name, wrapped as Component)
+    },
+    // 远程 setup 捕获的指令（"directive:名称"键）真实注册进消费方 app；
+    // v-loading 等指令不交付时表单加载态/反馈态整体失效（lowcode 实测）。
+    directive(name: string, def: unknown) {
+      return app.directive(name, def as Directive)
     },
     pageProviders(list: unknown[]) {
       if (captured) captured.providers = list
