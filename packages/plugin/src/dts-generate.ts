@@ -497,6 +497,8 @@ async function generateTypesBundleOnce(input: DtsGenerateInput): Promise<DtsGene
   }
   const readGenerationFile = (file: string): string | undefined => {
     try {
+      const absolute = path.resolve(file)
+      const beforeLink = realPath(file)
       const before = fs.statSync(file)
       const text = ts.sys.readFile(file)
       if (text === undefined) return undefined
@@ -505,12 +507,17 @@ async function generateTypesBundleOnce(input: DtsGenerateInput): Promise<DtsGene
       const value = { hash: crypto.createHash('sha256').update(typeInputBytes(file,bytes)).digest('hex'), size: after.size, mtime: after.mtimeMs, ctime: after.ctimeMs, ino: after.ino }
       // 父进程为合同选择读取、但未进入Program的声明也有真实读入证明。
       // 自动声明工具重写相同文本时，不能仅因mtime变化无限取消后续生成。
-      const declarationRead = file.endsWith('.d.ts') && crypto.createHash('sha256').update(typeInputBytes(file, Buffer.from(text, 'utf8'))).digest('hex') === value.hash
+      const declarationRead = /\.d\.[cm]?ts$/.test(file) && crypto.createHash('sha256').update(typeInputBytes(file, Buffer.from(text, 'utf8'))).digest('hex') === value.hash
       if (declarationRead) (value as typeof value & { readHash?: string }).readHash = value.hash
-      const previous = parentInputs[path.resolve(file)]
+      const previous = parentInputs[absolute]
+      const afterLink = realPath(file)
       if (before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino || before.size !== after.size
+        || beforeLink !== afterLink || (parentLinks[absolute] && parentLinks[absolute] !== afterLink)
         || (previous && !(declarationRead && previous.readHash === previous.hash && previous.hash === value.hash) && JSON.stringify(previous) !== JSON.stringify(value))) parentChanged = true
-      parentInputs[path.resolve(file)] = value
+      parentInputs[absolute] = value
+      // 合同选择阶段读过、但未进入Program的声明也需要逻辑路径→真实路径证明。
+      // 与子进程记录器保持同一规则，既允许同内容重写，也拒绝同内容链接换目标。
+      parentLinks[absolute] = afterLink
       const projected = boundary ? boundary.read(file, text) : text
       if (projected !== undefined && projected !== text) { contractSources[path.resolve(file)] = projected }
       return projected

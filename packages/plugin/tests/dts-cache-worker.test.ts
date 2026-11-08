@@ -3,7 +3,7 @@ import { createTypesCacheWorker } from '../src/dts-cache-worker-client'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { typesCachePath } from '../src/dts-cache'
+import { captureCompilerInputs, typesCachePath, validateTypesInputs } from '../src/dts-cache'
 
 it('预热仅载入工具，不解析项目或生成声明，也不创建成功缓存', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fg-cache-warmup-'))
@@ -101,8 +101,25 @@ it('真实合同的未入Program声明仍保留父进程读取证明，同内容
   expect(result.ok, result.ok ? '' : result.diagnostics.join('\n')).toBe(true)
   if (!result.ok || !result.cacheTraceFile) throw Error('真实编译输入记录缺失')
   const trace = JSON.parse(fs.readFileSync(result.cacheTraceFile, 'utf8'))
-  const stamp = Object.entries(trace.snapshot.files).find(([name]) => name.endsWith('/src/types/auto-imports.d.ts'))?.[1] as { hash: string; readHash?: string }
+  const [ambientKey, stamp] = Object.entries(trace.snapshot.files).find(([name]) => name.endsWith('/src/types/auto-imports.d.ts'))! as [string, { hash: string; readHash?: string }]
   expect(stamp?.readHash).toBe(stamp?.hash)
+  // 未进入Program的全局声明由父进程读取，同样必须记录链接身份；否则校验窗口
+  // 内相同内容的自动重写会被当成源变更，实际Vite每次暖启动仍重新编译。
+  expect(trace.snapshot.links[ambientKey]).toBe(fs.realpathSync.native(ambient))
+  const snapshot = captureCompilerInputs(input, result.cacheTraceFile)!
+  const readdir = fs.readdirSync
+  let rewritten = false
+  const spy = vi.spyOn(fs, 'readdirSync').mockImplementation(((directory: fs.PathLike, options: unknown) => {
+    if (String(directory) === path.dirname(ambient) && !rewritten) {
+      rewritten = true
+      fs.writeFileSync(ambient, text)
+    }
+    return readdir(directory, options as never)
+  }) as typeof fs.readdirSync)
+  try {
+    expect(validateTypesInputs(snapshot, root, true)).toBeNull()
+    expect(rewritten).toBe(true)
+  } finally { spy.mockRestore() }
   const worker = createTypesCacheWorker()
   try {
     const handle = await worker.capture(input, result.cacheTraceFile)

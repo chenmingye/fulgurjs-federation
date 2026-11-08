@@ -80,3 +80,54 @@ it('声明在同轮被读到不同内容，即使最后恢复也拒绝；最终�
   const file=path.join(root,'auto-imports.d.ts'),a='declare const GeneratedValue:string',b='declare const GeneratedValue:number';fs.writeFileSync(file,a);sys.readFile(file);fs.writeFileSync(file,b);sys.readFile(file);fs.writeFileSync(file,a);expect(inspect.changed()).toBe(true)
   expect(validateTypesInputs(inspect.snapshot,root,true)).not.toBeNull()
 })
+
+it.each(['.d.ts', '.d.mts', '.d.cts'])('校验窗口内同内容重写%s仍可复用，读取证明与链接身份必须保持', extension => {
+  const { root, sys, inspect } = recorder()
+  fs.mkdirSync(path.join(root, 'node_modules'))
+  fs.symlinkSync(path.resolve(__dirname, '../node_modules/typescript'), path.join(root, 'node_modules/typescript'), 'dir')
+  const file = path.join(root, `auto-imports${extension}`)
+  const text = 'declare const GeneratedValue: string'
+  fs.writeFileSync(file, text)
+  sys.fileExists(file)
+  expect(sys.readFile(file)).toBe(text)
+  expect(inspect.snapshot.files[file].readHash).toBe(inspect.snapshot.files[file].hash)
+  const original = fs.readdirSync
+  let rewritten = false
+  vi.spyOn(fs, 'readdirSync').mockImplementation(((directory: fs.PathLike, options: unknown) => {
+    if (String(directory) === root && !rewritten) {
+      rewritten = true
+      const before = fs.statSync(file)
+      fs.writeFileSync(file, text)
+      fs.utimesSync(file, before.atime, new Date(before.mtimeMs + 2000))
+    }
+    return original(directory, options as never)
+  }) as typeof fs.readdirSync)
+  expect(validateTypesInputs(inspect.snapshot, root, true)).toBeNull()
+  expect(rewritten).toBe(true)
+})
+
+it.each(['changed-declaration', 'runtime-tool', 'source', 'unproven-declaration'])('窗口内真实改动或未获声明豁免的输入仍拒绝：%s', kind => {
+  const { root, sys, inspect } = recorder()
+  fs.mkdirSync(path.join(root, 'node_modules'))
+  fs.symlinkSync(path.resolve(__dirname, '../node_modules/typescript'), path.join(root, 'node_modules/typescript'), 'dir')
+  const file = path.join(root, kind === 'source' ? 'source.ts' : 'auto-imports.d.ts')
+  const text = 'declare const GeneratedValue: string'
+  fs.writeFileSync(file, text)
+  sys.fileExists(file)
+  sys.readFile(file)
+  if (kind === 'unproven-declaration') delete inspect.snapshot.files[file].readHash
+  if (kind === 'runtime-tool') inspect.snapshot.runtimeTools.push(file)
+  const original = fs.readdirSync
+  let rewritten = false
+  vi.spyOn(fs, 'readdirSync').mockImplementation(((directory: fs.PathLike, options: unknown) => {
+    if (String(directory) === root && !rewritten) {
+      rewritten = true
+      const before = fs.statSync(file)
+      fs.writeFileSync(file, kind === 'changed-declaration' ? text.replace('string', 'number') : text)
+      fs.utimesSync(file, before.atime, new Date(before.mtimeMs + 2000))
+    }
+    return original(directory, options as never)
+  }) as typeof fs.readdirSync)
+  expect(validateTypesInputs(inspect.snapshot, root, true)).not.toBeNull()
+  expect(rewritten).toBe(true)
+})

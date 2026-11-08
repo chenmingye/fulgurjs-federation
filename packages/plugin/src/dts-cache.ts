@@ -40,6 +40,9 @@ const PROCESS_START = Date.now() - process.uptime() * 1000
 const MAX_CACHE_BYTES = DTS_TOTAL_MAX_BYTES * 2
 const hash = (value: crypto.BinaryLike): string => crypto.createHash('sha256').update(value).digest('hex')
 const sorted = (values: readonly string[]): string[] => [...values].sort()
+const declarationFile = (file: string): boolean => /\.d\.[cm]?ts$/.test(file)
+const sameIdentity = (stat: fs.Stats, value: FileStamp): boolean => stat.ctimeMs === value.ctime
+  && stat.mtimeMs === value.mtime && stat.ino === value.ino && stat.size === value.size
 const temporary = (file: string): boolean => path.basename(file).startsWith('.fulgurjs-types-tsconfig-')
 const stamp = (file: string): FileStamp => {
   const data = fs.readFileSync(file)
@@ -379,7 +382,7 @@ export function validateTypesInputs(snapshot: TypesInputSnapshot, root: string, 
       const now = stamp(file)
       // 声明工具可能重写完全相同的文本。仅当编译器实际读入文本的摘要已证明
       // 等于当前文件时允许stat变化；工具代码及没有读入证明的源文件仍保留ABA门禁。
-      const sameDeclarationRead = file.endsWith('.d.ts') && before.readHash === before.hash && !snapshot.runtimeTools.includes(file)
+      const sameDeclarationRead = declarationFile(file) && before.readHash === before.hash && !snapshot.runtimeTools.includes(file)
       if (prior.ctimeMs !== now.ctime || prior.mtimeMs !== now.mtime || prior.ino !== now.ino || prior.size !== now.size
         || now.hash !== before.hash || (stable && !sameDeclarationRead && (now.ctime !== before.ctime || now.mtime !== before.mtime || now.ino !== before.ino))) return `输入文件变化：${path.relative(root, file)}`
       checked.set(file, now)
@@ -453,7 +456,21 @@ export function validateTypesInputs(snapshot: TypesInputSnapshot, root: string, 
     }
     for (const [file, before] of checked) {
       const now = fs.statSync(file)
-      if (now.ctimeMs !== before.ctime || now.mtimeMs !== before.mtime || now.ino !== before.ino || now.size !== before.size) return `校验期间输入变化：${path.relative(root, file)}`
+      if (sameIdentity(now, before)) continue
+      const expected = snapshot.files[file]
+      // 自动导入工具也可能在校验窗口内重写同一声明。只对编译器证明读过的
+      // 相同文本重新核验，不能把纯mtime变化误判为合同变化；源码、工具与换链接仍拒绝。
+      if (declarationFile(file) && expected && expected.readHash === before.hash && expected.hash === before.hash && !snapshot.runtimeTools.includes(file)
+        && snapshot.links[file]) {
+        const prior = fs.statSync(file)
+        const reread = stamp(file)
+        const after = fs.statSync(file)
+        const sameLink = linkIdentity(file) === snapshot.links[file]
+        const final = fs.statSync(file)
+        if (sameIdentity(prior, reread) && sameIdentity(after, reread) && sameIdentity(final, reread)
+          && reread.hash === before.hash && reread.hash === expected.hash && sameLink) continue
+      }
+      return `校验期间输入变化：${path.relative(root, file)}`
     }
     return null
   } catch { return '输入不可读取或快照无效' }
