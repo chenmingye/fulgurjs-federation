@@ -324,11 +324,48 @@ Semantics:
 
   It and `globalComponents` (consumer-side registration, solving string-tag resolution) are **two different things and not interchangeable**; global CSS/theme styles travel with the build output and are not carried by providers either. Manual `loadRemote` / `useLoadRemote` (module in hand, self-rendered) apply nothing automatically — wrap the provider yourself in your JSX/template.
 
-- **Custom directives require consumer registration**: `globalComponents` registers components; it does not copy the provider’s `app.directive(...)` calls. Register the required directive implementation when initializing the consumer app, or assemble it in a shared provider. Handle name conflicts explicitly; never replace a permission directive with a no-op.
+- **Custom directives must also reach the consumer**: registrations in a provider's standalone `app.directive(...)` calls do not transfer to another app. A setup module can declare explicit `"directive:name"` keys in `globalComponents`, such as `"directive:loading"` mapped to the real loading directive. The SDK registers them through the current consumer app's `directive()` method; ordinary keys remain components. Reuse the original registration source and never substitute a no-op permission directive. Consumers without a directive port, such as plain module callers, skip registration. Resolve same-name conflicts according to the application contract.
 
 - **State injection belongs to the consumer too**: a remote component using injected Pinia may resolve a consumer store with the same ID. When provider-owned state is required, pass the provider Pinia instance explicitly. A complete application requiring its own router, stores and lifecycle should use [app bridging](app-bridge.md).
 
 **Error scope**: Vue remoteComponent errorComponent handles module/initialization/Provider loading failures. Errors thrown **inside** the remote component subtree (setup/render/nested async components) keep their default propagation semantics (still handled by business onErrorCaptured/app.config.errorHandler), but the plugin observes them at the component boundary: the `fulgurjs:error` event and the `onRemoteError` hook receive `MFU-020` (`details.phase='render'`, the original exception preserved in `cause`) — so even when a business handler swallows the error and leaves the region blank, the event is still observable. To display and recover in place, pass `renderErrorComponent` to remoteComponent/createHostPages (it receives `error`/`retry` props; once it owns the display the error stops propagating globally, and retry remounts the remote component). Exceptions in event handlers or arbitrary async callbacks remain outside plugin observation. React remoteComponent ships a built-in subtree render boundary (also reporting MFU-020) but still does not catch event-handler or arbitrary async callback errors. A full-app bridge host boundary also does not cover internal errors in another root. The same error object crossing boundaries (runtime throw → UI placeholder) is reported only once; every new load/render attempt is visible again.
+
+### Own render failures in a critical business region
+
+**A loading placeholder does not imply that every internal component error produces UI.** `errorComponent` handles entry, module, initialization and Provider loading failures. A component's setup/render exception occurs after loading. A Vue application's global errorHandler may only log it, and an error event does not create business UI. Configure `renderErrorComponent` explicitly when a form must retain the host layout and offer feedback and recovery in its own region.
+
+```ts
+// Consumer: preserve the remote entry and generated props; add regional error display.
+import { remoteComponent } from '@fulgurjs/federation/vue'
+import RemoteErrorPanel from './RemoteErrorPanel.vue'
+
+const OrderForm = remoteComponent('orders/OrderForm', {
+  renderErrorComponent: RemoteErrorPanel,
+})
+```
+
+```vue
+<!-- Consumer RemoteErrorPanel.vue: reusable across remote regions, without wrapping business components. -->
+<script setup lang="ts">
+import { computed } from 'vue'
+const props = defineProps<{ error: unknown; retry: () => void }>()
+const message = computed(() => props.error instanceof Error ? props.error.message : String(props.error))
+const reload = () => window.location.reload()
+</script>
+<template>
+  <section role="alert">
+    <p>Remote content failed to render</p>
+    <p>{{ message }}</p>
+    <button type="button" @click="retry">Retry rendering</button>
+    <p>Reload preserves the address but discards unsaved page inputs.</p>
+    <button type="button" @click="reload">Reload page</button>
+  </section>
+</template>
+```
+
+The SDK supplies `retry`, which remounts the current remote component. It does not guarantee that the browser downloads cached module code again. Use an explicitly explained page reload when code or static dependencies must reload. Display the cause as text and retain the MFU-020 observation; hiding logs or leaving an empty container is insufficient.
+
+Test actual setup and render exceptions separately. Assert that injection ran, the region shows a cause and recovery action, and host menus/tabs remain. Remove the fault and recover the real business value through the UI. Missing exposes, empty exports, setup and render errors are separate tests. Legitimate null output, conditional hiding and pending Suspense do not throw and must not become error placeholders. Event-handler failures and asynchronous tasks outside the component execution stack remain the application's responsibility.
 
 ### Reuse an existing component registration source
 

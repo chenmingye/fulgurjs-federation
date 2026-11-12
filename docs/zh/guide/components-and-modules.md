@@ -326,11 +326,48 @@ const RemotePanel = remoteComponent('remote-a/Panel', {
 
   它与 `globalComponents`（消费方全局注册，解决模板字符串标签解析）是**两件不同的事、不能互相替代**；全局 CSS/主题样式随构建产物走，也不由 Provider 承担。仅手动 `loadRemote` / `useLoadRemote`（拿到模块自行渲染）不自动应用——这类消费在 JSX/模板里自己包 Provider。
 
-- **自定义指令也需要消费方注册**：`globalComponents` 只注册组件，不复制提供方的 `app.directive(...)`。远程模板使用权限等指令时，在消费方应用初始化阶段注册同一实现，或由统一的 Provider 装配；同名指令冲突应明确处理，不能用空指令跳过权限。
+- **自定义指令也需要交付到消费方**：提供方独立入口中的 `app.directive(...)` 不会自动出现在另一个 app。可以在 `setup` 的 `globalComponents` 中显式声明 `"directive:名称"` 键，例如 `"directive:loading"` 对应真实的 loading 指令实现；SDK会通过当前消费app的 `directive()` 注册它。普通组件键仍按组件处理。声明应复用原指令注册源，不能写空权限指令。纯模块消费者没有directive端口时不执行注册；同名指令冲突须按实际应用合同处理。
 
 - **状态管理也属于消费方上下文**：远程组件调用的 Pinia store 若沿用消费方注入，可能命中消费方的同名 store。需要提供方自己的状态时，显式传入提供方 Pinia 实例；不要依赖全局当前实例。需要独立路由、store 和应用生命周期的整个页面应用，使用 [子应用桥接](app-bridge.md)。
 
 **错误处理范围**：Vue remoteComponent 的 errorComponent 处理模块/初始化/Provider 加载失败。远程组件**子树内部**的 setup/render/嵌套异步组件错误默认不改变传播语义（仍由业务 onErrorCaptured/app.config.errorHandler 处理），但插件在组件边界**观测上报**：`fulgurjs:error` 事件与 `onRemoteError` hook 收到 `MFU-020`（`details.phase='render'`，原始异常保留在 `cause`）——错误被业务 handler 吞掉导致区域空白时仍有事件可查。需要就地展示与恢复时，为 remoteComponent/createHostPages 传 `renderErrorComponent`（收到 `error`/`retry` props；接管后错误不再向全局传播，retry 重新挂载远程组件）。事件处理器或任意异步回调中的异常仍不归插件观测。React remoteComponent 自带组件子树渲染错误边界（同样上报 MFU-020），但不捕获事件处理器或任意异步回调异常。完整应用桥接的宿主错误边界也不覆盖另一 root 的内部错误。同一错误对象跨边界（运行时抛出 → UI 占位）只报告一次；每次新的加载/渲染尝试各自可见。
+
+### 在关键业务区域接管真实渲染错误
+
+**加载错误有占位，不等于所有组件内部异常都有页面提示。** `errorComponent` 处理入口、模块、初始化和Provider加载失败；组件已经拿到后，其内部setup/render抛错属于另一阶段。Vue项目的全局errorHandler可能只记日志，错误事件也不会自动创建业务UI。因此，要求失败时保留宿主框架、在表单原位置提示并恢复的业务，应显式配置 `renderErrorComponent`。
+
+```ts
+// 消费方：原远程入口与生成props类型不变，只增加本区域的错误展示。
+import { remoteComponent } from '@fulgurjs/federation/vue'
+import RemoteErrorPanel from './RemoteErrorPanel.vue'
+
+const OrderForm = remoteComponent('orders/OrderForm', {
+  renderErrorComponent: RemoteErrorPanel,
+})
+```
+
+```vue
+<!-- 消费方 RemoteErrorPanel.vue：被该区域多个远程组件复用，不包装业务组件本身。 -->
+<script setup lang="ts">
+import { computed } from 'vue'
+const props = defineProps<{ error: unknown; retry: () => void }>()
+const message = computed(() => props.error instanceof Error ? props.error.message : String(props.error))
+const reload = () => window.location.reload()
+</script>
+<template>
+  <section role="alert">
+    <p>远程内容渲染失败</p>
+    <p>{{ message }}</p>
+    <button type="button" @click="retry">重试显示</button>
+    <p>刷新会保留当前地址，但会丢失未保存的页面输入。</p>
+    <button type="button" @click="reload">刷新页面重试</button>
+  </section>
+</template>
+```
+
+`retry` 由SDK提供，通过重新挂载当前远程组件恢复；它不保证已经被浏览器缓存的模块代码重新下载。代码或静态子依赖必须重新加载时，使用明确说明影响的刷新操作。错误原因作为文本展示；真实异常仍通过MFU-020事件保留，不能只隐藏日志或把错误区域替换为空容器。
+
+验收时分别在真实远程组件的setup、render内受控抛错，确认异常确实执行、原区域出现原因和操作、宿主菜单/标签保留，撤除故障后通过页面操作恢复真实值。缺expose、空导出、setup/render是不同测试，不能用一个失败替代全部。合法返回null、条件隐藏或等待中的Suspense没有抛错，不应因此出现错误占位。点击事件和脱离组件执行栈的异步任务仍需业务自己处理错误。
 
 ### 已有项目复用原组件注册源
 
