@@ -203,6 +203,8 @@ function createRuntime() {
   // 远程 manifest），'__proto__'/'constructor' 一类键在普通对象上会命中原型链（读污染
   // 判定、写污染原型），null 原型从根上消除该类歧义。
   const shareScopeMap: ShareScopeMap = Object.create(null)
+  // loaded:true的注册表示宿主已在使用该物理副本；getter尚未回填不等于可被同版本远程接管。
+  const hostShareReservations = new WeakSet<ShareEntry>()
   const remotes = new Map<string, RemoteInternal>()
   const plugins: RuntimePlugin[] = []
   /** 同一版本组合只告警一次，避免多个页面重复导入共享依赖时刷屏。 */
@@ -482,6 +484,7 @@ function createRuntime() {
       return
     }
     byName[version] = { version, get, from: opts.from ?? 'unknown', eager: !!opts.eager, loaded: !!opts.loaded }
+    if (opts.loaded) hostShareReservations.add(byName[version])
   }
 
   /** WP6：运行时注册参数校验（配置期 CFG-009 之外的直连防线）——坏数值当场抛错 */
@@ -607,7 +610,7 @@ function createRuntime() {
    * 副本——若不回写，该实例对作用域不可见：远程的 CJS 垫片会 miss 并 pin 另一份本地
    * 副本，宿主树（早期 fallback 实例）与远程消费（pin 的实例）即单例双实例
    * （react-host 生产实测 useContext/useEffect 读到 null dispatcher）。
-   * 回写规则：作用域已有同键版本表时按相同消费条件回填未就绪条目（版本一致才回填）；
+   * 回写规则：作用域已有同键版本表时按相同消费条件回填未就绪、未被宿主占用的条目；
    * 完全空表（init 尚未注册）时新建 loaded 条目——后续 init 的同版本 registerShare 被
    * first-wins 跳过，远程协商与同步查询都命中这份本地副本。
    */
@@ -621,9 +624,9 @@ function createRuntime() {
     if (byName && Object.keys(byName).length > 0) {
       try {
         const pick = selectShareEntry(name, opts)
-        if (pick && pick.value === undefined) {
+        if (pick && pick.value === undefined && !hostShareReservations.has(pick)) {
           if (pick.version === localVersion) {
-            // 版本一致：本地副本即选中版本的物理实例，回填使后续协商收敛同一实例
+            // 未保留宿主物理副本时，首个本地消费者锁定该版本实例；相同版本号本身不证明引用相同。
             pick.value = instance
             pick.loaded = true
           } else if (opts.singleton && !pick.pendingGet) {
@@ -773,8 +776,8 @@ function createRuntime() {
    *    无裁决 → 同步调用 hook：返回 picked（ShareEntry）则按其决策交付（选中条目
    *    已就绪或恰为本应用本地版本时），决策写入快照供后续消费复用；
    * 3. hook 返回 falsy = 不干预 → 走默认选择。
-   * 「kind: 'local'」的两种合法形态：选中条目版本 === 本地版本（本地 import 即该版本
-   * 的物理实例，等价于异步路径 await get() 的结果），或无满足版本且未开 strictVersion
+   * 「kind: 'local'」的两种合法形态：非宿主占用条目的版本 === 本地版本，
+   * 或无满足版本且未开 strictVersion
    * （对齐异步 fallback 语义）。两种形态都必须 pin，使作用域与后续协商收敛同一实例。
    */
   function loadShareSync(name: string, opts: LoadShareOptions): { kind: 'ready' | 'local'; value?: any } {
@@ -810,7 +813,7 @@ function createRuntime() {
           resolvedShareSnapshots.set(shareRequestKey(name, opts), picked)
           return { kind: 'ready', value: picked.value }
         }
-        if (picked.version !== undefined && picked.version === opts.localVersion) return { kind: 'local' }
+        if (picked.version !== undefined && picked.version === opts.localVersion && !hostShareReservations.has(picked)) return { kind: 'local' }
         throw new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
           `现象：resolveShare 为 "${shareKey}" 选择了未就绪的 ${picked.version ?? '条目'}。\n` +
@@ -823,19 +826,18 @@ function createRuntime() {
     const entry = selectShareEntry(name, opts)
     if (!entry) return { kind: 'local' } // 无满足版本：strictVersion 已在 selector 抛出；非 strict 对齐异步 fallback
     if (entry.value !== undefined) return { kind: 'ready', value: entry.value }
-    if (entry.version !== undefined && entry.version === opts.localVersion) return { kind: 'local' }
+    if (entry.version !== undefined && entry.version === opts.localVersion && !hostShareReservations.has(entry)) return { kind: 'local' }
     if (opts.singleton || (opts.strictVersion && opts.requiredVersion &&
       (!opts.localVersion || !satisfies(opts.localVersion, opts.requiredVersion)))) {
-      if (opts.strictVersion || entry.pendingGet) {
+      if (opts.strictVersion || entry.pendingGet || hostShareReservations.has(entry)) {
         // 另一版本的 getter 已有消费者等待时，不能再 pin 本地实例，
         // 否则异步与同步消费者会各持一份单例。
         // strictVersion：选中版本不满足自身要求时已在 selectShareEntry 抛出；此处是
         // 「选中条目尚未加载且非本地版本」——同步路径无法等待，拒绝而非静默改用本地
         throw new FgError(
           ErrorCodes.SHARE_NOT_AVAILABLE,
-          `现象：共享 "${shareKey}" 选中了 ${entry.from} 提供的 ${entry.version}（尚未加载），同步静态导入无法等待其实例就绪。\n` +
-            `原因：不能改用不兼容的本地副本或分裂单例。\n` +
-            `修法：让该共享的首次消费先经一次动态 loadShare 完成加载，或将本应用版本与作用域提供版本对齐。`,
+          `现象：共享 "${shareKey}" 的 ${entry.from}@${entry.version} 未就绪。\n` +
+            `原因：同步导入不能等待或替换实例。\n修法：先 await loadShare(...) 再导入。`,
           { shareKey, requiredVersion: opts.requiredVersion, syncUnsupported: true },
         )
       }
@@ -973,6 +975,9 @@ function createRuntime() {
     remote.state = 'loading'
     remote.debug.status = 'loading'
     const containerPromise = (async () => {
+      // dev宿主已实际使用本地依赖，但惰性getter未必已被loadShare调用。
+      // 必须先回填这些已使用实例，再求值prod入口（其同步门面可能立即pin同版本本地副本）。
+      // 不触碰其它scope或尚未使用的lazy共享，失败沿原请求返回并允许下一次重试。
       // URL 与 promise-based remote 统一走重试/超时/fallback 通道
       const loaders: Array<() => Promise<any>> = []
       if (remote.promise) {
@@ -1005,6 +1010,11 @@ function createRuntime() {
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
           const start = performance.now()
           try {
+            // 已使用的宿主共享先就绪；进入同一重试/超时/错误通知通道。
+            await withTimeout(Promise.all(Object.entries(getScope(scopeKey)).flatMap(([name, versions]) =>
+              Object.values(versions).some((entry) => hostShareReservations.has(entry) && entry.value === undefined)
+                ? [loadShare(name, { shareScope: scopeKey })] : [],
+            )), remote.timeout ?? DEFAULT_TIMEOUT, '共享依赖')
             container = await loader()
             remote.lastLoadMs = Math.round(performance.now() - start)
             remote.debug.lastLoadMs = remote.lastLoadMs

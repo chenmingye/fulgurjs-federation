@@ -111,3 +111,9 @@ In build, the negotiation facade for that path is automatically isolated into pl
 - `shareScopeMap`: the shared registry itself — fine for inspection; ordinary business code must not modify it directly.
 
 Error codes: `CFG-004/005/008` (config time), `MFU-003` (strictVersion conflict), `MFU-004` (shared missing and no fallback), `MFU-010` (singleton version fails some consumer). Symptom/cause/fix for each: [error code table](../reference/errors.md).
+
+### Preparing instances when a development host consumes production remotes
+
+Matching versions do not prove that Vue, React, or another library is the same physical instance. The development host registers dependencies it already uses as loaded. Before evaluating a remote entry, the plugin waits for those instances to become available so production synchronous facades reuse them. Preparation runs only when loading a remote and only for already-used dependencies in that share scope. It does not eagerly load unused shares or require an extra business initialization command.
+
+Preparation uses the remote request's timeout, error feedback, and retry path. Another copy with the same version cannot take over an unready host instance. Custom synchronous entries must first `await loadShare(...)` and then dynamically import consumers. Verify actual library references, business values, mount/unmount, and recovery in mixed deployments; version strings or network file counts alone do not prove singleton identity.

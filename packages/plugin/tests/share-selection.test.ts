@@ -779,7 +779,7 @@ describe('runtime: loadShareSync（V8 同步门面统一协商，20261003 语义
     expect(threw).not.toBeNull()
     expect(threw.code).toBe('MFU-004')
     expect(threw.details?.syncUnsupported).toBe(true)
-    expect(threw.message).toContain('尚未加载')
+    expect(threw.message).toContain('未就绪')
   })
 })
 

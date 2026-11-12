@@ -307,6 +307,77 @@ describe('runtime: 容器加载与容错（B-6/B-14/B-15）', () => {
   })
 })
 
+describe('runtime: dev宿主消费prod时共享物理实例先就绪', () => {
+  it('同版本远程同步门面不得抢占已由宿主使用的Vue', async () => {
+    const rt = await fresh()
+    const hostVue = { ref: () => 'host' }
+    const remoteVue = { ref: () => 'remote' }
+    const hostGetter = vi.fn(async () => hostVue)
+    rt.registerShare('default', 'vue', '3.5.44', hostGetter, { from: 'dev-host', loaded: true })
+    let remoteInstance: unknown
+    rt.registerRemote({ name: 'prod', entry: '', promise: async () => {
+      // 真实生产provider在入口求值期间先执行同步门面，两个副本版本完全相同。
+      const selected = rt.loadShareSync('vue', { singleton: true, localVersion: '3.5.44' })
+      remoteInstance = selected.kind === 'ready' ? selected.value : remoteVue
+      if (selected.kind === 'local') rt.pinLoadedShare('vue', { singleton: true }, '3.5.44', remoteVue)
+      return { init() {}, get: async () => ({ instance: remoteInstance }) }
+    } })
+    const loaded = await rt.loadRemote('prod/Widget')
+    expect(loaded.instance).toBe(hostVue)
+    expect(await rt.loadShare('vue', { singleton: true })).toBe(hostVue)
+    expect(hostGetter).toHaveBeenCalledTimes(1)
+  })
+
+  it('未准备的宿主实例不能被同版本同步消费或pin替换', async () => {
+    const rt = await fresh()
+    const host = {}
+    rt.registerShare('default', 'vue', '3.5.44', async () => host, { loaded: true })
+    expect(() => rt.loadShareSync('vue', { singleton: true, localVersion: '3.5.44' })).toThrow('MFU-004')
+    rt.pinLoadedShare('vue', { singleton: true }, '3.5.44', { remote: true })
+    expect(await rt.loadShare('vue', { singleton: true })).toBe(host)
+  })
+
+  it('宿主准备挂起同样受远程timeout约束', async () => {
+    const rt = await fresh()
+    const entry = vi.fn(async () => ({ init() {}, get: async () => ({}) }))
+    rt.registerShare('default', 'vue', '3.5.44', () => new Promise(() => {}), { loaded: true })
+    rt.registerRemote({ name: 'prod', entry: '', promise: entry, timeout: 20, retries: 0 })
+    await expect(rt.loadRemote('prod/X')).rejects.toThrow('共享依赖')
+    expect(entry).not.toHaveBeenCalled()
+  })
+
+  it('并发远程请求共用宿主getter，未声明已加载的懒依赖不提前求值', async () => {
+    const rt = await fresh()
+    const host = { ref: () => 'host' }
+    const get = vi.fn(async () => { await Promise.resolve(); return host })
+    const lazy = vi.fn(async () => ({}))
+    rt.registerShare('default', 'vue', '3.5.44', get, { loaded: true })
+    rt.registerShare('default', 'unused', '1.0.0', lazy)
+    for (const name of ['a', 'b']) rt.registerRemote({ name, entry: '', promise: async () => ({ init() {}, get: async () => ({}) }) })
+    await Promise.all([rt.loadRemote('a/X'), rt.loadRemote('b/X')])
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(lazy).not.toHaveBeenCalled()
+  })
+
+  it('宿主getter失败时不求值远程入口，恢复后可以重试且不污染其它scope', async () => {
+    const rt = await fresh()
+    let fail = true
+    const host = {}
+    const getter = vi.fn(async () => { if (fail) throw new Error('host shared unavailable'); return host })
+    const other = vi.fn(async () => ({}))
+    const entry = vi.fn(async () => ({ init() {}, get: async () => ({}) }))
+    rt.registerShare('default', 'vue', '3.5.44', getter, { loaded: true })
+    rt.registerShare('isolated', 'react', '19.0.0', other, { loaded: true })
+    rt.registerRemote({ name: 'prod', entry: '', promise: entry, retries: 0 })
+    await expect(rt.loadRemote('prod/X')).rejects.toThrow('host shared unavailable')
+    expect(entry).not.toHaveBeenCalled()
+    fail = false
+    await expect(rt.loadRemote('prod/X')).resolves.toEqual({})
+    expect(await rt.loadShare('vue')).toBe(host)
+    expect(other).not.toHaveBeenCalled()
+  })
+})
+
 describe('runtime: 容器收养语义（B-5 双向供给 / 兄弟互享）', () => {
   it('remote 容器 init 注册的 provided share 可被 host 消费', async () => {
     const rt = await fresh()
