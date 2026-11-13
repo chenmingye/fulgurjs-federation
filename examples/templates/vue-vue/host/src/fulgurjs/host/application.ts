@@ -5,14 +5,12 @@ import { defineApplication, createHostPages } from '@fulgurjs/federation/vue'
 import App from '../../App.vue'
 import HomePage from '../../pages/HomePage.vue'
 import UtilsDemo from '../../pages/UtilsDemo.vue'
-import { pages, remotePrefixes } from '../../../fulgurjs.config.ts'
+import { hostPages } from '../../../fulgurjs.config.ts'
+const { pages, remotePrefixes } = hostPages
 
 // 页面适配器：URL 解析、最长前缀远程归属、异步组件缓存、
 // 加载/错误占位（含「重试加载 / 刷新页面重试」）全部由插件完成。
-const hostPages = createHostPages({
-  pages,
-  remotePrefixes,
-})
+const remotePages = createHostPages(hostPages)
 
 // 远程页面 Router 记录从页面表派生（route + spec 唯一来源 = fulgurjs.config.ts 的 pages；
 // 业务自有路由仍归本 Router 管理——业务 Router 与联邦页面映射是两类事实）。
@@ -32,7 +30,7 @@ const remoteRoutes = pages.map((page) => ({
     setup() {
       const route = useRoute()
       return () =>
-        h(hostPages.component(`${remoteNameOf(page.route)}/${page.spec}`), {
+        h(remotePages.component(`${remoteNameOf(page.route)}/${page.spec}`), {
           ...route.params,
           ...route.query,
         })

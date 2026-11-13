@@ -10,6 +10,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { syncRemoteTypes, removeGeneratedTypes, manifestUrlFromEntry, readMetadata, startRemoteTypesSyncLoop } from '../src/dts-sync'
 import { createDevTypesServer } from '../src/dts-serve'
+import { runTypesCommand } from '../src/dts-cli'
 import type { NormalizedOptions } from '../src/options'
 import { TYPES_SCHEMA_VERSION } from '../src/dts-shared'
 
@@ -361,4 +362,75 @@ it('共享缓存不清扫另一个活跃实例的临时目录，只清理已退�
   const bundle=makeBundle({widget:'export declare const value:number'}),fetch=fetchRouter(bundle)
   expect((await syncRemoteTypes({alias:'active',manifestUrl,typesRoot:output,stagingRoot,source:'dev',fetchJsonImpl:fetch.json,fetchTextImpl:fetch.text})).status).toBe('synced')
   expect(fs.readFileSync(path.join(alive,'owner.txt'),'utf8')).toBe('active');expect(fs.existsSync(dead)).toBe(false)
+})
+
+
+describe('本地消费声明的账本与实际文件一致', () => {
+  it('CLI离线检查拒绝被修改的声明，显式同步能修复同revision缓存', async () => {
+    const root = path.join(tmp, 'local-proof-command')
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'proof-consumer', type: 'module' }))
+    fs.writeFileSync(path.join(root, 'fulgurjs.config.ts'), `export default {name:'proof-consumer',remotes:{peer:'http://remote.test/'}}`)
+    const bundle = makeBundle({ math: 'export declare const value: string\n' })
+    const fetch = fetchRouter(bundle)
+    const input = { alias: 'peer', manifestUrl, typesRoot: path.join(root, 'src/fulgurjs/types'), source: 'test', fetchJsonImpl: fetch.json, fetchTextImpl: fetch.text }
+    await syncRemoteTypes(input)
+    expect((await runTypesCommand({ cwd: root, check: true })).exitCode).toBe(0)
+    const file = path.join(input.typesRoot, 'peer/modules.d.ts')
+    const original = fs.readFileSync(file, 'utf8')
+    fs.appendFileSync(file, '\nexport this is invalid\n')
+    const bad = await runTypesCommand({ cwd: root, check: true })
+    expect(bad.exitCode).toBe(1)
+    expect(bad.lines.join('\n')).toContain('TYP-003')
+    expect(bad.lines.join('\n')).toContain('modules.d.ts')
+    expect((await syncRemoteTypes({ ...input, verifyLocal: true })).status).toBe('synced')
+    expect(fs.readFileSync(file, 'utf8')).toBe(original)
+    expect((await runTypesCommand({ cwd: root, check: true })).exitCode).toBe(0)
+  })
+
+  it('只删某个声明而保留metadata，正常开发同步也自动补齐', async () => {
+    const bundle = makeBundle({ math: 'export declare const value: string\n' })
+    const fetch = fetchRouter(bundle)
+    const input = { alias: 'partial-delete', manifestUrl, typesRoot: typesRoot(), source: 'test', fetchJsonImpl: fetch.json, fetchTextImpl: fetch.text }
+    await syncRemoteTypes(input)
+    const file = path.join(input.typesRoot, input.alias, 'registry.d.ts')
+    fs.unlinkSync(file)
+    expect((await syncRemoteTypes(input)).status).toBe('synced')
+    expect(fs.existsSync(file)).toBe(true)
+  })
+
+  it('缺少本地摘要的既有账本自动重建证明，不需手工命令', async () => {
+    const bundle = makeBundle({ math: 'export declare const value: string\n' })
+    const fetch = fetchRouter(bundle)
+    const input = { alias: 'missing-local-proof', manifestUrl, typesRoot: typesRoot(), source: 'test', fetchJsonImpl: fetch.json, fetchTextImpl: fetch.text }
+    await syncRemoteTypes(input)
+    const file = path.join(input.typesRoot, input.alias, 'metadata.json')
+    const metadata = JSON.parse(fs.readFileSync(file, 'utf8'))
+    delete metadata.fileHashes
+    fs.writeFileSync(file, JSON.stringify(metadata))
+    expect((await syncRemoteTypes(input)).status).toBe('synced')
+    expect(readMetadata(path.dirname(file))?.fileHashes?.['modules.d.ts']).toMatch(/^[a-f0-9]{64}$/)
+  })
+})
+
+
+it('同步换代保留账本外的用户声明，未登记的同名文件冲突时不覆盖', async () => {
+  const bundle = makeBundle({ math: 'export declare const value: string\n' })
+  const fetch = fetchRouter(bundle)
+  const input = { alias: 'user-files', manifestUrl, typesRoot: typesRoot(), source: 'test', fetchJsonImpl: fetch.json, fetchTextImpl: fetch.text }
+  await syncRemoteTypes(input)
+  const userFile = path.join(input.typesRoot, input.alias, 'custom.d.ts')
+  fs.writeFileSync(userFile, 'declare const userOwned: string\n')
+  bundle.manifest.types.revision = bundle.index.revision = 'b1b2c3d4e5f60718'
+  expect((await syncRemoteTypes(input)).status).toBe('synced')
+  expect(fs.readFileSync(userFile, 'utf8')).toBe('declare const userOwned: string\n')
+  expect(readMetadata(path.dirname(userFile))?.files).not.toContain('custom.d.ts')
+  const other = { ...input, alias: 'user-conflict' }
+  fs.mkdirSync(path.join(other.typesRoot, other.alias))
+  const conflict = path.join(other.typesRoot, other.alias, 'modules.d.ts')
+  fs.writeFileSync(conflict, 'declare const manualFile: string\n')
+  const rejected = await syncRemoteTypes(other)
+  expect(rejected.status).toBe('failed')
+  expect(rejected.message).toContain('TYP-003')
+  expect(fs.readFileSync(conflict, 'utf8')).toBe('declare const manualFile: string\n')
 })

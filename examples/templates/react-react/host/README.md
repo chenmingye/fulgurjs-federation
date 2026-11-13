@@ -17,9 +17,9 @@ pnpm --dir host dev
 
 | 文件 | 职责 |
 | --- | --- |
-| `fulgurjs.config.ts` | **联邦唯一声明**：remotes 地址（dev/prod）、页面表 `pages`、前缀归属 `remotePrefixes` |
+| `fulgurjs.config.ts` | **联邦唯一声明**：remotes 地址（dev/prod）、具名页面合同 `hostPages`（包含 `pages`、`remotePrefixes`） |
 | `vite.config.ts` | 标准 Vite 配置，`federation(fulgurjsConfig)` 挂载插件 |
-| `src/fulgurjs/host/remotePages.tsx` | `createReactHostPages({ pages, remotePrefixes })`（模块顶层一次）；`component(spec)` 取远程页面组件 |
+| `src/fulgurjs/host/remotePages.tsx` | `createReactHostPages(hostPages)`（模块顶层一次）；`component(spec)` 取远程页面组件 |
 | `src/App.tsx` | `remoteComponent('react-remote/ClickButton')` 消费单个远程组件 |
 | `src/pages/UtilsDemo.tsx` | `useLoadRemote('react-remote/utils')` 调用普通 TS 模块 |
 | `src/main.tsx` | react-router 路由；参数页把 `params`/`query` 透传给远程组件 |
@@ -45,3 +45,9 @@ pnpm run build        # dist/
 ## HMR（5.2.0 起）
 
 react-remote 的组件修改（文本/样式/Hooks 结构不变）自动热更新到本宿主正在显示的页面并**保留组件本地状态**（插件保证全页单一 react-refresh 实例）；普通 TS 模块修改自动传播到引用它的组件边界；不兼容改动按框架标准重新挂载/整页刷新。
+
+### 页面表与CLI共用的合同
+
+`fulgurjs.config.ts` 必须具名导出 `hostPages = { pages, remotePrefixes }`。CLI 读取这个对象核对页面；只分别导出两个字段时，CLI 无法确认页面合同，`--require-verified` 会拒绝。运行时页面适配器直接消费同一个 `hostPages`，不再维护第二份页面表。
+
+构建远程后，在宿主目录执行 `pnpm exec fulgurjs check-pages --manifest react-remote=../remote/dist/fulgurjs-manifest.json --require-verified`，必须实际核对两条远程页面。若远程缺少详情 expose，命令应非零退出；不能把“未找到 hostPages”当作通过。

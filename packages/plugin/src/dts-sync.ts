@@ -76,6 +76,8 @@ export interface DtsMetadata {
   revision: string
   /** 本生成器写入 <dir>/<alias>/ 的全部文件（相对该目录） */
   files: string[]
+  /** 消费方转写后生成物的摘要；不能复用提供方原始声明的摘要。 */
+  fileHashes?: Record<string, string>
   externals: string[]
   syncedAt: number
   /** 提供方此次只检查公开合同，不代表其业务实现检查通过。 */
@@ -93,6 +95,62 @@ export function readMetadata(dir: string): DtsMetadata | null {
   } catch {
     return null
   }
+}
+
+/** 开发轮询只核对自有文件和证明是否存在；显式CLI检查才读取内容计算摘要。 */
+export function validateLocalTypes(dir: string, meta: DtsMetadata, verifyHashes = false): string[] {
+  const issues: string[] = []
+  if (!meta.fileHashes || typeof meta.fileHashes !== 'object' || Array.isArray(meta.fileHashes)) {
+    return ['缓存缺少本地声明摘要，无法核验生成物']
+  }
+  for (const rel of meta.files) {
+    if (typeof rel !== 'string' || !isSafeBundlePath(rel)) {
+      issues.push(`账本路径不安全：${String(rel)}`)
+      continue
+    }
+    const file = path.join(dir, rel)
+    try {
+      if (!fs.lstatSync(file).isFile() || !fs.realpathSync(file).startsWith(fs.realpathSync(dir) + path.sep)) {
+        issues.push(`${rel} 不是目录内的普通声明文件`)
+        continue
+      }
+      const expected = meta.fileHashes[rel]
+      if (!Object.hasOwn(meta.fileHashes, rel) || typeof expected !== 'string' || !/^[a-f0-9]{64}$/.test(expected)) {
+        issues.push(`${rel} 缺少有效的本地摘要`)
+      } else if (verifyHashes && crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') !== expected) {
+        issues.push(`${rel} 内容与生成摘要不一致`)
+      }
+    } catch {
+      issues.push(`${rel} 缺失或不可读取`)
+    }
+  }
+  return issues
+}
+
+/** 原子换代前保留未登记为生成物的文件；新的生成路径与用户文件冲突时拒绝覆盖。 */
+function preserveUserFiles(dir: string, staging: string, old: DtsMetadata | null, generated: Set<string>): string | undefined {
+  if (!fs.existsSync(dir)) return
+  const owned = new Set(old?.files.filter(rel => typeof rel === 'string' && isSafeBundlePath(rel)) ?? [])
+  const copy = (relative = ''): string | undefined => {
+    for (const entry of fs.readdirSync(path.join(dir, relative), { withFileTypes: true })) {
+      const rel = path.posix.join(relative, entry.name)
+      if (rel === METADATA_FILE) {
+        if (old) continue
+        return rel
+      }
+      if (owned.has(rel)) continue
+      if (generated.has(rel) || (!entry.isDirectory() && [...generated].some(file => file.startsWith(rel + '/')))) return rel
+      if (entry.isDirectory()) {
+        const conflict = copy(rel)
+        if (conflict) return conflict
+      } else {
+        const target = path.join(staging, rel)
+        fs.mkdirSync(path.dirname(target), { recursive: true })
+        fs.cpSync(path.join(dir, rel), target, { dereference: false, verbatimSymlinks: true })
+      }
+    }
+  }
+  return copy()
 }
 
 /** 只删除 metadata 登记过的自有文件（防误删用户文件）；目录空则移除 */
@@ -133,6 +191,8 @@ export interface SyncRemoteTypesInput {
   stagingRoot?: string
   /** 来源描述（进 metadata/文件头） */
   source: string
+  /** 显式CLI同步核对内容摘要；开发轮询只核对文件存在性，保持热启动快速。 */
+  verifyLocal?: boolean
   /** 下载与网络行为注入（单测） */
   fetchJsonImpl?: (url: string, timeoutMs: number) => Promise<unknown>
   fetchTextImpl?: (url: string, timeoutMs: number) => Promise<string>
@@ -189,7 +249,8 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
 
   const indexUrl = new URL(types.index, manifestUrl).toString()
   const existing = fs.existsSync(dir) ? readMetadata(dir) : null
-  if (existing && existing.revision === types.revision && existing.ambientFormat === AMBIENT_FORMAT) {
+  if (existing && existing.revision === types.revision && existing.ambientFormat === AMBIENT_FORMAT &&
+    validateLocalTypes(dir, existing, input.verifyLocal).length === 0) {
     return { status: 'unchanged', alias, revision: types.revision, message: `远程 ${alias} 类型已是最新（revision ${types.revision}）。` }
   }
 
@@ -271,12 +332,19 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
   let staging = path.join(temporaryRoot, `.fg-staging-${alias}-${process.pid}-${Date.now()}-${crypto.randomUUID()}`)
   fs.mkdirSync(staging, { recursive: true })
   const written: string[] = []
+  const fileHashes: Record<string, string> = Object.create(null)
   try {
     for (const [name, content] of ambient.files) {
       const dest = path.join(staging, name)
       fs.mkdirSync(path.dirname(dest), { recursive: true })
       fs.writeFileSync(dest, content)
       written.push(name)
+      fileHashes[name] = crypto.createHash('sha256').update(content, 'utf8').digest('hex')
+    }
+    const conflict = preserveUserFiles(dir, staging, existing, new Set(written))
+    if (conflict) {
+      fs.rmSync(staging, { recursive: true, force: true })
+      return { status: 'failed', alias, message: `[fulgurjs:TYP-003] 本地用户文件 ${conflict} 与生成物冲突，已拒绝覆盖。请先移出用户文件再同步；原目录保持不变。` }
     }
     const meta: DtsMetadata = {
       generator: '@fulgurjs/federation',
@@ -285,6 +353,7 @@ export async function syncRemoteTypes(input: SyncRemoteTypesInput): Promise<DtsS
       source,
       revision: index.revision,
       files: written,
+      fileHashes,
       externals: index.externals,
       syncedAt: Date.now(),
       ...(index.check ? { check: index.check } : {}),

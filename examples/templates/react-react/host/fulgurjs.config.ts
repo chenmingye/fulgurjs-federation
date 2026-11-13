@@ -20,12 +20,15 @@ export default {
 } satisfies FederationOptions
 
 /** 页面表：URL 路由 → 远程 expose 的映射（spec = 远程名 + exposes 键） */
-export const pages: PageRouteLike[] = [
+const pages: PageRouteLike[] = [
   { route: '/remote/home', spec: 'pages/HomePage', name: 'RemoteHome', title: '远程首页' },
   { route: '/remote/detail/:id', spec: 'pages/DetailPage', name: 'RemoteDetail', title: '远程详情' },
 ]
 
 /** 路由前缀 → 远程归属（最长前缀匹配） */
-export const remotePrefixes: Record<string, string> = {
+const remotePrefixes: Record<string, string> = {
   '/remote': 'react-remote',
 }
+
+/** 运行时页面适配器与CLI核对共用唯一入口，不另维护页面副本。 */
+export const hostPages = { pages, remotePrefixes }

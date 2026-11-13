@@ -840,3 +840,11 @@ Before reading ambient declarations, dev observes their changes. Updates from au
 Temporary tsconfig, compiler inputs, and emit also stay in owned `node_modules` directories, never the project root where import/component scanners can register them and repeatedly rewrite ambient declarations. Paths are resolved from the original config. Without baseUrl, paths targets become absolute instead of adding a baseUrl that changes bare-package resolution. Each request owns its temporary config and removes it after completion; cancellation waits for process exit before restarting.
 
 Timestamp changes caused by identical declaration rewrites are accepted only when the compiler-read text digest proves equality with the final declaration. Different reads within one run, changed final content, ordinary-source changes, and tool-code changes still invalidate results. Filenames or timestamps alone do not establish this proof or bypass ABA protection.
+
+### Missing or damaged local declarations and offline checking
+
+Starting the development server synchronizes remote declarations. Deleting the entire `src/fulgurjs/types/` directory, or one generated file inside a remote directory, is repaired at startup or the next synchronization without a separate plugin command. Development polling checks only ledger-owned files and digest records for existence; it does not scan business sources or repeatedly hash every declaration.
+
+`fulgurjs types --check` performs stricter offline verification of SHA256 digests for the locally rewritten declarations, rather than merely reading the metadata revision. Missing files, missing digests, or changed content produce a nonzero TYP-003 result naming the affected files. It makes no network request, so success does not prove that the remote site has no newer revision. Run `fulgurjs types` to resynchronize, or delete that remote's generated directory and restart development.
+
+Downloaded provider resources and locally rewritten declarations have separate digests. Replacement preserves files not owned by the generator and rejects filename conflicts. Keep handwritten business types outside generated directories to make ownership clear.

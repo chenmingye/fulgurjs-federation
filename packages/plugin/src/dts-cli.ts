@@ -20,8 +20,9 @@ import type { AppConfigLoadResult } from './app-config'
 import { loadAppConfig } from './app-config'
 import { normalizeOptions } from './options'
 import { RUNTIME_VERSION } from './version'
+import { diagnosticUrl } from './runtime/errors'
 import { generateTypesBundle } from './dts-generate'
-import { syncRemoteTypes, manifestUrlFromEntry, readMetadata } from './dts-sync'
+import { syncRemoteTypes, manifestUrlFromEntry, readMetadata, validateLocalTypes } from './dts-sync'
 import { checkTypesDiscovery } from './dts-discovery'
 
 export interface TypesCommandOptions {
@@ -96,7 +97,13 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
         failed = true
         lines.push(`[check] 远程 ${remote.key}：本地无已同步类型（先运行 fulgurjs types）。`)
       } else {
-        lines.push(`[check] 远程 ${remote.key}：本地 revision ${meta.revision}（来源 ${meta.source}，${meta.files.length} 个文件，${new Date(meta.syncedAt).toLocaleString()} 同步）。`)
+        const issues = validateLocalTypes(path.join(typesRoot, remote.key), meta, true)
+        if (issues.length) {
+          failed = true
+          lines.push(`[check] [fulgurjs:TYP-003] 远程 ${remote.key} 的本地类型无法通过一致性核验（revision ${meta.revision}）：${issues.join('；')}。修法：运行 fulgurjs types 重新同步，或删除 ${path.join(typesRoot, remote.key)} 后正常重启开发环境。`)
+        } else {
+          lines.push(`[check] 远程 ${remote.key}：本地 revision ${meta.revision} 的 ${meta.files.length} 个声明摘要一致（来源 ${diagnosticUrl(meta.source)}，${new Date(meta.syncedAt).toLocaleString()} 同步；未核实远程线上最新）。`)
+        }
       }
     }
     return { exitCode: failed ? 1 : 0, lines }
@@ -120,6 +127,7 @@ export async function runTypesCommand(opts: TypesCommandOptions): Promise<TypesC
         typesRoot,
         stagingRoot: path.join(n.root, 'node_modules/.cache/fulgurjs/types/sync'),
         source: entry,
+        verifyLocal: true,
       })
       lines.push(`[consumer] ${result.status === 'synced' ? '✓' : result.status === 'unchanged' ? '=' : '×'} 远程 ${remote.key}：${result.message}`)
       for (const w of result.warnings ?? []) lines.push(`  警告：${w}`)
