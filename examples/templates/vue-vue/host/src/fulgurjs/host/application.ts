@@ -41,7 +41,7 @@ const remoteRoutes = pages.map((page) => ({
 // 应用装配只写一次；每次 start 创建自己的 router。
 export default defineApplication(() => {
   const router = createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname),
     routes: [
       { path: '/', component: HomePage },
       { path: '/utils-demo', component: UtilsDemo },

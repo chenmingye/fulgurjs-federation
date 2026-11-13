@@ -147,7 +147,7 @@ import { routes } from '../../router/routes'
 interface AppProps { label?: string }
 export default defineApplication<AppProps>((props, { mode, signal }) => {
   const router = createRouter({
-    history: mode === 'bridge' ? createMemoryHistory() : createWebHistory(import.meta.env.BASE_URL),
+    history: mode === 'bridge' ? createMemoryHistory() : createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname),
     routes,
   })
   const app = createApp(App, { ...props })

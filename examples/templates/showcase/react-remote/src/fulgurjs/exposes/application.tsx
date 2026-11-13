@@ -35,7 +35,7 @@ export default defineApplication<ChildProps>((props, ctx) => {
     ? { ...route, element: <ChildLayout bridged={hasBridgeMount(ctx)} /> }
     : route)
   if (ctx.mode === 'standalone') {
-    const router = createBrowserRouter(instanceRoutes, { basename: import.meta.env.BASE_URL })
+    const router = createBrowserRouter(instanceRoutes, { basename: new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname })
     return { element: <ChildReporterContext.Provider value={reporter}><RouterProvider router={router} /></ChildReporterContext.Provider>, dispose: () => router.dispose() }
   }
   const conn = createReactBridgeRouter(ctx.routing!, instanceRoutes, { signal: ctx.signal })

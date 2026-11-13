@@ -52,5 +52,5 @@ export default defineApplication<BridgeReactProps>((props, { mode }) => {
   const content = <><OnReady onReady={props.onReady} /><Shell {...props} /></>
   return mode === 'bridge'
     ? <MemoryRouter>{content}</MemoryRouter>
-    : <BrowserRouter basename={import.meta.env.BASE_URL}>{content}</BrowserRouter>
+    : <BrowserRouter basename={new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname}>{content}</BrowserRouter>
 })

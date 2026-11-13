@@ -8,7 +8,7 @@ import { RemoteHomePage, RemoteDetailPage } from './remotePages'
 
 export default defineApplication(() => (
   <StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <BrowserRouter basename={new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname}>
       <nav style={{ display: 'flex', gap: 16, padding: 16, fontFamily: 'sans-serif' }}>
         <Link to="/">首页</Link>
         <Link to="/remote/home">远程首页</Link>

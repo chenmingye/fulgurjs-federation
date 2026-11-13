@@ -21,6 +21,31 @@
 - 同实例内 path/search/hash 变化**不重挂 root、不重建 store、不重新加载远程**；
 - 子应用内部路由库照常自装（vue-router/react-router-dom），与联邦的 shared 协商互不干扰。
 
+## 先区分资源地址和浏览器路由 base
+
+Vite 的 `base` 管 JS/CSS 等资源地址，可以是 `https://cdn.example.com/main/`；Vue Router 的 history base、React Router 的 basename 管当前站点的浏览器路径，不能直接接收完整资源 URL。混用时，第一次 SPA 渲染可能看似成功，守卫或前进后退却写出 `/http://…`，刷新后便会 404。不能靠刷新、重复去前缀或重建组件掩盖这个地址错误。
+
+| 用途 | 示例 | 交给谁 |
+| --- | --- | --- |
+| 静态资源 base | `https://cdn.example.com/main/` | Vite 构建和资源加载 |
+| 独立入口路由 base | `/main/` | Vue Router history / React Router basename |
+| 桥接子应用逻辑前缀 | `/approval` | 宿主 `BridgeHostRouting.basePath` |
+| 子应用内的目标路由 | `/detail?id=7#record` | 受控 memory router；不拼 CDN 源或宿主部署前缀 |
+
+资源与页面部署路径一致时，可从资源 URL 取 pathname；资源在另一条 CDN 路径时，工程必须另外指定真实页面路径。五模板读取可选的工程变量 `VITE_ROUTER_BASE`，它不是 federation 配置项。例如页面在 `/console/`、资源在 CDN 的 `/assets/` 时，在该应用 `.env.production` 配置 `VITE_ROUTER_BASE=/console/`。
+
+```ts
+const browserBase = new URL(
+  import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL,
+  window.location.origin,
+).pathname
+// Vue: createWebHistory(browserBase)
+// React: createBrowserRouter(routes, { basename: browserBase })
+// React JSX: <BrowserRouter basename={browserBase}>…</BrowserRouter>
+```
+
+同一宿主的 router 和 `createReactBridgeNavigation` 必须复用同一 basename。桥接形态仍使用不接管浏览器的 memory 路由；不能把这个浏览器 base 再塞进 memory 路由，或给桥接 basePath 再加一次 `/main`。验收分别执行独立深链、守卫跳转、刷新、前进后退，并检查完整 URL、中文 query 和业务 hash；只看首屏不能证明路由正确。
+
 ## ① 宿主端（Vue Router 4，history/hash 模式皆可）
 
 **第一步：宿主路由声明后缀匹配**（缺它详情导航会卸载子应用）：
@@ -30,7 +55,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 export const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL), // hash 模式用 createWebHashHistory
+  history: createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname), // hash 模式用 createWebHashHistory
   routes: [
     { path: '/', component: Home },
     // 接住 /approval 下所有子路径，交桥接页渲染

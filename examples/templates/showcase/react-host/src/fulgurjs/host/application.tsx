@@ -5,7 +5,7 @@ import Layout from '../../Layout'
 import HomePage from '../../pages/HomePage'
 import AboutPage from '../../pages/AboutPage'
 import BridgeVuePage from './BridgeVuePage'
-import { initBridgeRouting } from './routing'
+import { initBridgeRouting, browserBasename } from './routing'
 import { installPopStateLogger } from './demo-log'
 
 export default defineApplication((_props, { signal }) => {
@@ -20,7 +20,7 @@ export default defineApplication((_props, { signal }) => {
         { path: 'br-vue/*', element: <BridgeVuePage /> },
       ],
     },
-  ], { basename: import.meta.env.BASE_URL })
+  ], { basename: browserBasename })
 
   initBridgeRouting(router)
   installPopStateLogger(signal)

@@ -21,6 +21,31 @@ Host guard rejects                 → URL/history/sub app location all unchange
 - Within the same instance, path/search/hash changes **do not remount the root, do not rebuild the store, do not reload the remote**;
 - The sub app installs its own internal router as usual (vue-router/react-router-dom), which does not interfere with the federation's shared negotiation.
 
+## Separate asset URLs from browser routing bases
+
+Vite `base` controls JS/CSS asset URLs and may be `https://cdn.example.com/main/`. Vue Router history bases and React Router basenames describe paths on the current browser origin. Passing an asset URL directly may appear to work on the first SPA render, then write `/http://…` during a guard or history transition and return 404 on refresh. Reloading, repeatedly stripping prefixes, or remounting a component does not fix that URL contract.
+
+| Purpose | Example | Owner |
+| --- | --- | --- |
+| Asset base | `https://cdn.example.com/main/` | Vite build and asset loading |
+| Standalone browser base | `/main/` | Vue Router history / React Router basename |
+| Logical child prefix | `/approval` | Host `BridgeHostRouting.basePath` |
+| Child destination | `/detail?id=7#record` | Controlled memory router; no CDN origin or host deployment prefix |
+
+When assets and pages use the same path, derive the pathname from the asset URL. If CDN assets use a different path, specify the real page path separately. The five templates read optional application variable `VITE_ROUTER_BASE`; this is not a federation option. For pages under `/console/` and CDN assets under `/assets/`, set `VITE_ROUTER_BASE=/console/` in that application's `.env.production`.
+
+```ts
+const browserBase = new URL(
+  import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL,
+  window.location.origin,
+).pathname
+// Vue: createWebHistory(browserBase)
+// React: createBrowserRouter(routes, { basename: browserBase })
+// React JSX: <BrowserRouter basename={browserBase}>…</BrowserRouter>
+```
+
+A host's router and `createReactBridgeNavigation` must use the same basename. Embedded applications still use a controlled memory router. Do not pass the browser deployment base to that memory router or add `/main` again to the logical bridge basePath. Verify standalone deep links, guards, refresh, back/forward, full URLs, Unicode query values and business hashes separately; an initial render is insufficient.
+
 ## ① Host side (Vue Router 4, history or hash mode)
 
 **Step 1: declare suffix matching in host routes** (without it, detail navigation unmounts the sub app):
@@ -30,7 +55,7 @@ Host guard rejects                 → URL/history/sub app location all unchange
 import { createRouter, createWebHistory } from 'vue-router'
 
 export const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL), // use createWebHashHistory for hash mode
+  history: createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname), // use createWebHashHistory for hash mode
   routes: [
     { path: '/', component: Home },
     // Catch every sub path under /approval and render the bridge page

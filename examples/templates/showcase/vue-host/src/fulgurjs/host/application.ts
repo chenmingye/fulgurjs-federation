@@ -12,7 +12,7 @@ import { installPopStateLogger } from './demo-log'
 
 export default defineApplication((_props, { signal }) => {
   const router = createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname),
     routes: [
       { path: '/', component: HomePage },
       { path: '/about', component: AboutPage },

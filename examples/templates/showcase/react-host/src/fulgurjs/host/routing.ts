@@ -8,10 +8,13 @@ import { createReactBridgeNavigation, type BridgeHostRouting } from '@fulgurjs/f
 
 export const BRIDGE_BASE_PATH = '/br-vue'
 
+/** 浏览器路由只使用站内路径；资源部署到不同CDN路径时由工程显式指定VITE_ROUTER_BASE。 */
+export const browserBasename = new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname
+
 let routing: BridgeHostRouting | undefined
 
 export function initBridgeRouting(router: Parameters<typeof createReactBridgeNavigation>[0]): void {
-  routing = { basePath: BRIDGE_BASE_PATH, navigation: createReactBridgeNavigation(router, { basename: import.meta.env.BASE_URL }) }
+  routing = { basePath: BRIDGE_BASE_PATH, navigation: createReactBridgeNavigation(router, { basename: browserBasename }) }
 }
 
 export function getBridgeRouting(): BridgeHostRouting {

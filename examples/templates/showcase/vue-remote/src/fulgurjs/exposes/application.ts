@@ -24,7 +24,7 @@ export default defineApplication<ChildProps>((props, ctx) => {
   // 初始位置先读快照（规范化 replace 后对比上报）
   const init = ctx?.routing?.getLocation()
   const initPath = init ? init.pathname + init.search + init.hash : ''
-  const router = createRouter({ history: ctx.mode === 'bridge' ? createMemoryHistory() : createWebHistory(import.meta.env.BASE_URL), routes })
+  const router = createRouter({ history: ctx.mode === 'bridge' ? createMemoryHistory() : createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname), routes })
   const app = createApp(ChildLayout)
   app.provide(childReporterKey, reporter)
   // afterEach 记录初始导航结果；路由安装与连接清理由插件负责。

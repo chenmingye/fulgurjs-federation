@@ -1,7 +1,5 @@
 /**
- * 运行时版本常量（与 packages/plugin/package.json 的 version 同步维护）。
- * 不直接 import package.json：运行时 bundle 有 gzip 门禁（scripts/check-gzip.mjs，以当前门禁配置为准），
- * 内联整份 JSON 会挤占预算。
- * 漂移由 tests/runtime.test.ts 的「version 同源」用例拦截。
+ * 版本只取package.json这一处；命名转出让构建器仅保留version字符串，
+ * 不把整份包元数据带入浏览器。体积门禁与运行时同源回归共同验证产物。
  */
-export const RUNTIME_VERSION = '6.16.20'
+export { version as RUNTIME_VERSION } from '../package.json'

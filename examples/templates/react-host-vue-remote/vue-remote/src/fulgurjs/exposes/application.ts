@@ -11,7 +11,7 @@ export interface BridgeVueProps { label?: string; onReady?: () => void }
 // 同一工厂服务独立调试和宿主桥接。这个基础模板没有启用宿主 URL 同步。
 export default defineApplication<BridgeVueProps>((props, { mode }) => {
   const router = createRouter({
-    history: mode === 'bridge' ? createMemoryHistory() : createWebHistory(import.meta.env.BASE_URL),
+    history: mode === 'bridge' ? createMemoryHistory() : createWebHistory(new URL(import.meta.env.VITE_ROUTER_BASE || import.meta.env.BASE_URL, window.location.origin).pathname),
     routes: [{ path: '/', component: HomePage }, { path: '/about', component: AboutPage }],
   })
   const app = createApp(App, { ...props })
