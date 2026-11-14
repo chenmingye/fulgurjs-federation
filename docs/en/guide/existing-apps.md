@@ -254,6 +254,59 @@ Source examples: [Vue host factory](../../../examples/templates/vue-vue/host/src
 
 The current CLI --application option recognizes explicit default defineApplication exports only, not arbitrary business initializers or defineBridgeApp. startup describes its proposed unified-startup rewrite, not a prerequisite. To preserve main, configure the real bridge expose manually instead of applying an unsuitable --write plan.
 
+## Third-party renderers created inside a page belong to that instance
+
+`remoteComponent` loads Vue/React components. Charts, form engines, editors, and other `embed()` instances created by the page do not automatically become framework components. Retain the returned instance and dispose it through the library's actual API. Removing DOM, closing a dialog, or observing the outer bridge unmount does not prove that its internal renderer was released.
+
+First establish whether preparation, creation, and disposal are asynchronous, the actual disposal method, and whether multiple instances can coexist. A typical failure is preparation starting before closure and completing afterward, mounting into a deleted container. Earlier preparation can also overwrite newer parameters. Fixed timeouts prove neither readiness nor ownership.
+
+This example covers **asynchronous preparation with synchronous creation and disposal** only. It assumes the existing renderer exports `prepareRenderer()` and `createRenderer(element, schema)`, returning `{ destroy() }`. Use real APIs; do not invent empty modules to satisfy these imports.
+
+```vue
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { prepareRenderer, createRenderer } from './existing-renderer-module'
+
+const props = defineProps<{ schema: object }>()
+const container = ref<HTMLElement>()
+let current: ReturnType<typeof createRenderer> | undefined
+let alive = true
+let generation = 0
+
+function releaseCurrent() {
+  const previous = current
+  current = undefined
+  previous?.destroy()
+}
+onBeforeUnmount(() => {
+  alive = false
+  generation++
+  releaseCurrent()
+})
+
+watch(() => props.schema, async schema => {
+  const epoch = ++generation
+  try {
+    await prepareRenderer()
+    if (!alive || epoch !== generation) return
+    await nextTick()
+    if (!alive || epoch !== generation || !container.value) return
+    releaseCurrent()
+    current = createRenderer(container.value, schema)
+  } catch (error) {
+    if (alive && epoch === generation) throw error
+  }
+}, { immediate: true, deep: true })
+</script>
+<template><div ref="container" /></template>
+```
+
+- Return the Promise from the watcher so current failures reach Vue's error handling and the configured content error boundary. Do not discard an async return value inside its callback. Native timers and floating Promises also require explicit error handling.
+- Generation checks do not replace disposal. Release created instances on parameter rebuilds and unmount. Notifications, save callbacks, and later requests require the same ownership checks.
+- Prefer a container ref. If a selector is required, generate a unique ID per instance instead of sharing a fixed `#form`. Do not search Vue's private component parent chain.
+- Asynchronous creation/disposal requires handling instances returned after closure and preventing container reuse until disposal finishes. Prefer bridge lifecycle for complete applications; this synchronous creation example does not establish asynchronous safety.
+- Test closing before readiness, updating parameters during preparation, normal closure, simultaneous instances, late successful/failed requests, and reopening. Check instance counts, real content, notification/save ownership, and unhandled errors separately; outer DOM counts are insufficient.
+
 <a id="url-props"></a>
 
 ## Keep standalone URLs and remote props consistent

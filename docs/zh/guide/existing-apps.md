@@ -284,6 +284,60 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 
 当前 CLI 的 --application 只识别明确默认导出的 defineApplication；不能用它扫描任意业务初始化或 defineBridgeApp。startup 中的步骤属于工具提出的统一启动改写方案，不是接入硬要求。保留 main 的项目手工配置真实桥接 expose，不执行不合适的 --write 计划。
 
+
+## 页面内创建的第三方渲染器也属于本实例
+
+`remoteComponent` 负责加载 Vue/React 组件；页面自己调用的图表、表单引擎、编辑器或其他 `embed()` 不会自动成为框架组件。提供方仍须保存本次渲染器返回的实例，并按该库的真实 API 释放。只删除 DOM、关闭外层弹窗或看到桥接卸载成功，不能证明内部渲染器已经释放。
+
+接入前先核实四件事：准备函数是否异步、创建函数是否异步、释放方法叫什么、同一页面是否可能存在多个实例。常见失败链是：页面开始等待依赖 → 用户关闭页面 → 依赖准备完成 → 旧回调继续向已删除的容器挂载；另一种是连续更新参数时，较早的异步准备覆盖最新参数。固定 `setTimeout` 不能保证注册完成，也不能解决这些归属问题。
+
+下面只演示**异步准备、同步创建与同步释放**的实际接线方式。假定原渲染器模块已经提供 `prepareRenderer()` 和 `createRenderer(element, schema)`，后者返回 `{ destroy() }`；请替换为原有库的真实 API，不要新造同名空模块满足 import。
+
+```vue
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { prepareRenderer, createRenderer } from './原有渲染器模块'
+
+const props = defineProps<{ schema: object }>()
+const container = ref<HTMLElement>()
+let current: ReturnType<typeof createRenderer> | undefined
+let alive = true
+let generation = 0
+
+function releaseCurrent() {
+  const previous = current
+  current = undefined
+  previous?.destroy()
+}
+onBeforeUnmount(() => {
+  alive = false
+  generation++
+  releaseCurrent()
+})
+
+watch(() => props.schema, async schema => {
+  const epoch = ++generation
+  try {
+    await prepareRenderer()
+    if (!alive || epoch !== generation) return
+    await nextTick()
+    if (!alive || epoch !== generation || !container.value) return
+    releaseCurrent()
+    current = createRenderer(container.value, schema)
+  } catch (error) {
+    if (alive && epoch === generation) throw error
+  }
+}, { immediate: true, deep: true })
+</script>
+<template><div ref="container" /></template>
+```
+
+- `watch` 回调返回异步 Promise，当前实例的失败才能进入 Vue 错误处理及已配置的内容区错误边界。不要在回调里调用异步函数却丢弃其返回值；原生定时器和自行启动的浮动 Promise 也必须明确处理失败。
+- 准备前后的代次校验不替代释放。已经创建的实例在参数重建、页面卸载时都需要释放；旧实例的通知、保存回调和后续数据请求也必须受同一归属约束。
+- 使用容器 ref；库只接受选择器时，为每个实例生成唯一 ID，不能多个远程页面共用固定 `#form`。不要遍历 Vue 私有组件父链寻找容器。
+- 如果创建或释放本身也是异步的，必须按实际 API 处理关闭期间返回的迟到实例，并在释放完成前阻止复用同一容器。完整子应用优先使用桥接生命周期，不照抄本同步创建示例冒充异步安全。
+- 验收至少覆盖：准备未完成即关闭、准备期间连续改参数、正常关闭、两个实例并存、旧请求迟到成功/失败、关闭后重开。分别检查实例计数、真实内容、通知/保存归属和未处理错误；不能只检查外层 DOM 数量。
+
 <a id="url-props"></a>
 
 ## 保留原 URL 与新增 props
