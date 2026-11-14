@@ -1,5 +1,7 @@
 # 已有应用接入：先看必改文件，再选需要的能力
 
+> 保留原页面 URL 时，请先核对[原 URL 与 props 参数共存](#url-props)的运行时语义，尤其是可选 Boolean 的缺省值和真实业务主键。
+
 第一次接入完整应用，请从[单一路径接入指南](first-integration.md)开始；本页提供已有启动复用、可选统一启动与工具参考。
 
 ## 先确定场景
@@ -281,3 +283,74 @@ npx @fulgurjs/federation doctor --base https://your-site --apps host,remote
 源码演示：[Vue 宿主装配](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts)、[React 远程装配](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx)、[React 宿主装配](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx)、[模板入口](../../../examples/templates/README.md)。模板使用 registry 正式包，可整目录复制后独立安装。
 
 当前 CLI 的 --application 只识别明确默认导出的 defineApplication；不能用它扫描任意业务初始化或 defineBridgeApp。startup 中的步骤属于工具提出的统一启动改写方案，不是接入硬要求。保留 main 的项目手工配置真实桥接 expose，不执行不合适的 --write 计划。
+
+<a id="url-props"></a>
+
+## 保留原 URL 与新增 props
+
+已有页面暴露给其他应用后，需要分别验证原独立 URL 和远程 props。先确认每个 ID 代表业务单据、流程实例还是任务；提供方只定义一份命名接口，消费方使用自动同步声明，不能把流程实例 ID 当业务主键。
+
+**优先在提供方自己的路由记录中把 query 转为 props。** 组件只处理 props，不读取消费方的 route.query 或 window.location.search。这样，即使两个不相关项目恰好使用同一个路由名或 id 参数，也不会串数据。下面假定已有页面确实位于 `src/views/OrderFormPage.vue`；按核实的原文件和路由修改，不新增一份业务表单。
+
+```vue
+<!-- src/views/OrderFormPage.vue -->
+<script lang="ts">
+export interface OrderFormProps {
+  /** 订单业务主键，使用字符串，不传流程实例 ID。 */
+  id: string
+  /** 未传与明确 false 分开处理。 */
+  disabled?: boolean | string
+}
+</script>
+<script setup lang="ts">
+import { computed } from 'vue'
+const props = withDefaults(defineProps<OrderFormProps>(), { disabled: undefined })
+const allowed: readonly unknown[] = [undefined, true, false, 'true', 'false', '1', '0', '']
+const parameterError = computed(() => {
+  if (typeof props.id !== 'string' || !props.id) return '缺少合法订单业务主键，请核对 id 是否为单个字符串'
+  if (!allowed.includes(props.disabled)) return '只读参数必须是 true/false 或 1/0，请核对 props 与原 URL'
+  return ''
+})
+const disabled = computed(() => props.disabled === true || props.disabled === 'true' || props.disabled === '1')
+</script>
+<template>
+  <p v-if="parameterError" role="alert">{{ parameterError }}</p>
+  <div v-else>
+    <p>订单主键：{{ id }}</p>
+    <!-- 参数示例控件；实际页面继续使用原有真实表单。 -->
+    <input aria-label="参数示例控件" :disabled="disabled" />
+  </div>
+</template>
+```
+
+```ts
+// 提供方原路由记录：同一接口，不复制DTO，不在远程组件内猜宿主URL。
+import type { RouteRecordRaw } from 'vue-router'
+import type { OrderFormProps } from '../views/OrderFormPage.vue'
+const singleText = (value: unknown) => typeof value === 'string' ? value : undefined
+export const orderFormRoute: RouteRecordRaw = {
+  path: '/order-form',
+  name: 'OrderFormPage',
+  component: () => import('../views/OrderFormPage.vue'),
+  props: route => ({
+    id: singleText(route.query.id) ?? '',
+    disabled: Array.isArray(route.query.disabled)
+      ? JSON.stringify(route.query.disabled)
+      : singleText(route.query.disabled),
+  } satisfies OrderFormProps),
+}
+```
+
+合法 URL 如 `/order-form?id=7&disabled=true` 经过本应用路由映射，组件收到业务主键 7 和字符串 true；重复 Boolean 参数保留为可见的非法值，由内容区说明原因，不静默转成“可编辑”。实际加载、保存、权限及错误处理继续复用原业务实现；示例不定义后端接口。消费方直接导入自动同步的 `OrderFormProps`，不能擅自把平铺字段再包成 `data` 或 `params`，除非提供方真实合同就是该结构。
+
+**可选 Boolean 的类型不等于运行时一定是 undefined。** Vue 会把未传、含 Boolean 的 prop 转为 false。若既有页面暂时保留组件内 query 回退，`props.disabled ?? query.disabled` 仍可能取到这个 false，遮住原 URL 的 `disabled=true`。此时要用 `withDefaults(..., { disabled: undefined })` 区分未传与明确 false；也不能换成 `props.disabled || query.disabled`，它会丢失明确传入的 false。保留 query 回退时还必须证明确实是提供方自己的独立入口，不能只凭一个可能重名的宿主路由名判断；新接入优先采用上面的路由记录适配。
+
+公开接口在普通 script 导出，setup 引用同一接口，声明由插件生成。无条件只读必须覆盖业务节点的编辑标记；明确 false 仅表示没有通过该参数强制只读，最终权限和单据状态仍沿用真实业务规则。
+
+交付前分别执行以下验证，构建成功和声明生成成功不能代替它们：
+
+1. 不传组件 props，原 URL 的 `id=7&disabled=true` 仍查订单 7 并只读；带节点名、其它编辑标记时也不能让显式只读失效。
+2. 用可编辑的合法测试记录，明确传 `disabled: false`，确认 false 没有丢失；未传、false、true 和字符串标记分别验证。
+3. 非法标记或缺少业务主键时，实际内容区保留原因和修法，不静默显示“无数据”。
+4. 嵌入页面有同名 id/路由名时，真实请求仍使用提供方业务主键；核对请求参数和返回记录，不能只数 input。
+5. 独立深链、刷新、query/hash 与远程 props 两条入口都复测；只读覆盖下拉、人员选择、附件、子表和富文本。

@@ -1,5 +1,7 @@
 # Existing applications: required files first, optional capabilities second
 
+> When retaining standalone URLs, first verify [URL and props runtime semantics](#url-props), especially absent Boolean values and real business keys.
+
 For a first complete application integration, start with the [single-path guide](first-integration.md); this page is the assembly/tool reference.
 
 ## Choose the integration scope
@@ -251,3 +253,74 @@ remoteComponent remains the component API. defineBridgeApp can coexist with orig
 Source examples: [Vue host factory](../../../examples/templates/vue-vue/host/src/fulgurjs/host/application.ts), [React remote factory](../../../examples/templates/vue-host-react-remote/react-remote/src/fulgurjs/exposes/application.tsx), [React host factory](../../../examples/templates/react-host-vue-remote/react-host/src/fulgurjs/host/application.tsx), [template guide](../../../examples/templates/README.md). Copy whole templates and install their published registry dependencies independently.
 
 The current CLI --application option recognizes explicit default defineApplication exports only, not arbitrary business initializers or defineBridgeApp. startup describes its proposed unified-startup rewrite, not a prerequisite. To preserve main, configure the real bridge expose manually instead of applying an unsuitable --write plan.
+
+<a id="url-props"></a>
+
+## Keep standalone URLs and remote props consistent
+
+Verify the original standalone URL and remote props separately. Identify business, process and task IDs correctly. Define one named provider interface and consume synchronized declarations; a process-instance ID is not a business key.
+
+**Prefer adapting query parameters in the provider's own route record.** The component handles props alone rather than reading the consumer's route.query or window.location.search. Unrelated projects can then use the same route name or id parameter without mixing data. This example assumes the existing page really is `src/views/OrderFormPage.vue`; use verified files and routes rather than creating another business form.
+
+```vue
+<!-- src/views/OrderFormPage.vue -->
+<script lang="ts">
+export interface OrderFormProps {
+  /** String business order key, not a process-instance ID. */
+  id: string
+  /** Distinguish absence from explicit false. */
+  disabled?: boolean | string
+}
+</script>
+<script setup lang="ts">
+import { computed } from 'vue'
+const props = withDefaults(defineProps<OrderFormProps>(), { disabled: undefined })
+const allowed: readonly unknown[] = [undefined, true, false, 'true', 'false', '1', '0', '']
+const parameterError = computed(() => {
+  if (typeof props.id !== 'string' || !props.id) return 'Missing valid business order key; id must be one string'
+  if (!allowed.includes(props.disabled)) return 'Read-only flag must be true/false or 1/0; check props and original URL'
+  return ''
+})
+const disabled = computed(() => props.disabled === true || props.disabled === 'true' || props.disabled === '1')
+</script>
+<template>
+  <p v-if="parameterError" role="alert">{{ parameterError }}</p>
+  <div v-else>
+    <p>Order key:{{ id }}</p>
+    <!-- Parameter demonstration; retain the real existing form. -->
+    <input aria-label="Parameter example" :disabled="disabled" />
+  </div>
+</template>
+```
+
+```ts
+// Original provider route: one interface, no duplicate DTO or guessed consumer URL.
+import type { RouteRecordRaw } from 'vue-router'
+import type { OrderFormProps } from '../views/OrderFormPage.vue'
+const singleText = (value: unknown) => typeof value === 'string' ? value : undefined
+export const orderFormRoute: RouteRecordRaw = {
+  path: '/order-form',
+  name: 'OrderFormPage',
+  component: () => import('../views/OrderFormPage.vue'),
+  props: route => ({
+    id: singleText(route.query.id) ?? '',
+    disabled: Array.isArray(route.query.disabled)
+      ? JSON.stringify(route.query.disabled)
+      : singleText(route.query.disabled),
+  } satisfies OrderFormProps),
+}
+```
+
+A valid URL such as `/order-form?id=7&disabled=true` is mapped by this application's router to business key 7 and string true. Repeated Boolean values remain visibly invalid instead of silently enabling editing. Reuse actual loading, saving, permission and error handling; this example does not define a backend API. Consumers import synchronized `OrderFormProps`. Do not add `data` or `params` wrappers unless the provider's real contract contains them.
+
+**An optional TypeScript Boolean is not necessarily undefined at runtime.** Vue casts an absent prop containing Boolean to false. If an existing component temporarily retains query fallback, `props.disabled ?? query.disabled` may still mask the original URL's `disabled=true`. Use `withDefaults(..., { disabled: undefined })` to distinguish absence from explicit false. Do not use `props.disabled || query.disabled`, which loses explicit false. Query fallback must also be proven to belong to the provider's own standalone entry; a potentially duplicated consumer route name is insufficient. Prefer the route-record adaptation above for new integrations.
+
+Export the public interface from a normal script, use that same interface in setup and let the plugin generate declarations. Explicit read-only mode must override business-node editing flags. Explicit false only removes this parameter's forced read-only condition; real permissions and business state still apply.
+
+Verify these paths separately before delivery; successful builds or declaration generation do not replace them:
+
+1. With no component props, the original `id=7&disabled=true` still loads order 7 read-only, including when node names or other editing flags are present.
+2. Use a valid editable record to verify explicit false is preserved. Test absence, false, true and string flags separately.
+3. Invalid flags and missing business keys leave actionable feedback in the content area instead of silently showing no data.
+4. A consumer's same-named id or route must not replace the provider business key. Inspect real requests and returned records rather than only counting inputs.
+5. Retest standalone deep links, refresh, query/hash and remote props. Read-only checks include selects, user pickers, attachments, subtables and rich-text editors.

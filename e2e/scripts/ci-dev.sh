@@ -36,6 +36,9 @@ for i in "${!apps[@]}"; do
   done
   "$ready" || { echo "fixture 未就绪：$url"; exit 1; }
 done
+# manifest HTTP 200 不代表首次浏览器依赖图已完成预构建。预热证据独立归档，
+# 不计入正式用例，不在测试失败后靠重试重新点击。
+node e2e/scripts/warm-dev.mjs
 # 服务已由此脚本管理，避免 Playwright 再启动并持有后台进程的管道。
 SKIP_DEV_SERVERS=1 pnpm --dir e2e exec playwright test \
   --project=dev --project=fault --project=react-dev --project=react-fault \
