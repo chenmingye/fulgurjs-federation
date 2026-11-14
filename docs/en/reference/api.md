@@ -38,7 +38,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | `initSharing` | `(scopeName?) => ShareScopeMap` | Initializes the shared scope (normally done automatically by the init module) |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | Registers runtime plugins (below); the boundary of changing policy after the app runs is described under "synchronous vs asynchronous arbitration" |
 | `getRuntime` | `() => FgRuntime` | Returns the runtime singleton itself (the same instance as `__FULGURJS_RUNTIME__`) |
-| `version` | `string` | Runtime/plugin version (for cross-origin copy consistency diagnostics, together with DEV-006) |
+| `version` | `string` | Independent runtime/plugin version export, available in dev and production (together with DEV-006) |
 | `unwrapDefault` | `(ns: any) => any` | ESM/CJS default interop utility |
 
 ### `loadRemote` options

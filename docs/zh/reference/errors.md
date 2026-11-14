@@ -32,7 +32,7 @@
 | `DEV-005` | dev 提示 remotes dev URL 端口无监听 | `remotes[*].dev` 指向的端口没有进程监听（远程未启动或改了端口未同步） | 启动远程 dev server；按[改端口四处清单](../guide/examples.md#改端口的固定清单)同步宿主 remotes dev 地址 |
 | `DEV-006` | dev 启动警告宿主/远程插件版本不一致 | 同页面多个应用的 @fulgurjs/federation 版本不同（运行时副本风险） | 统一各应用插件版本（workspace 内对齐依赖；独立仓库用相同版本号） |
 | `DEV-009` | dev 页面报门面/虚拟模块 404 | `.vite` 缓存漂移（插件升级后旧缓存与新门面签名不匹配） | `rm -rf node_modules/.vite` + 重启 dev server（必要时换浏览器 profile） |
-| `DEV-010` | dev 冷启动首轮 30~60s 出现瞬时 504/"ce" 或页面重载 | Vite 依赖预构建窗口（新依赖发现触发重新优化 + full reload），是瞬态不是故障 | 先真实打开页面预热再做断言/测试；稳定态不受影响 |
+| `DEV-010` | dev 首次依赖预构建状态提示；可能伴随 504/"ce" 或重载 | 新依赖发现可触发重新优化；本提示不证明错误只是暂态，也不保证自动恢复 | 保留失败请求/优化日志，确认页面就绪再开始稳定性验证；持续504或空白必须定位，不能无限刷新 |
 | `DEV-011` | dev 启动提醒：非 loopback host + 通配 dev CORS | `devCorsOrigins` 缺省/`'*'` 且 host 暴露到局域网，联邦端点对任意来源放开 | 显式 `devCorsOrigins: '*'`（声明知情）或改来源 allowlist 数组 |
 | `TYP-001` | 提供方声明 bundle 生成失败 | 公开合同无法安全提取或超出分析预算、暴露闭包存在编译错误、声明工具（typescript/vue-tsc）缺失或声明含本机绝对路径——失败时不产出/不发布类型资源，manifest 不携带 `types` | 按文件/入口补充精确公开签名或缩小类型依赖；确需实现推导时显式设置 dts.devCheck: "implementation"（有完整分析成本）；修复编译错误；安装缺失工具（提示含当前包管理器命令）；严格门禁用 `npx @fulgurjs/federation types`（失败非零退出） |
 | `TYP-002` | 宿主类型同步失败 | 远程 manifest/类型清单/声明文件获取失败，或本地写入失败；已有完整声明保留并明确陈旧，首次失败明确无本地声明 | 恢复远程或网络后 dev 自动重试/轮询更新；CI 重跑 `npx @fulgurjs/federation types`；本地声明在此之前按陈旧对待 |

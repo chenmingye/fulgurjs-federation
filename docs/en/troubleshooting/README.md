@@ -22,7 +22,7 @@
 |---|---|---|
 | Dev white screen, errors like `Cannot destructure property 'node'` | A UMD/CJS dependency was moved out of pre-bundling | Put it back into `optimizeDeps.include` (`DEV-004`) |
 | Pages render with old logic / facade 404 (`DEV-009`) | `.vite` cache drift (common after plugin upgrades) | `rm -rf node_modules/.vite` + restart the dev server + switch browser profile |
-| Transient 504/"ce"/page reloads in the first 30–60s (`DEV-010`) | The Vite cold-start pre-bundling window (transient, not a failure) | Warm the page up before asserting |
+| Initial pre-bundling with 504/"ce"/reloads (`DEV-010`) | New dependencies may trigger re-optimization; this notice does not exclude a defect | Preserve requests and optimizer logs, verify readiness; investigate persistent blank pages |
 | Double Vue/double React crashes (Invalid hook call / 'ce') | shared missing `singleton: true`; or multiple versions not isolated | [Shared dependencies](../guide/sharing.md); React 18/19 split into scopes (`MFU-010`) |
 | Host/remote plugin version mismatch (`DEV-006`) | The @fulgurjs/federation version of each app | Unify versions |
 | Remote page opened standalone shows a white screen (`CC-002`) | The page was accessed bypassing the host | Load it through the host federation |

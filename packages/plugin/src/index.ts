@@ -1569,14 +1569,14 @@ export function federation(options: FederationOptions): Plugin[] {
       if (!n) return
       warmResolvedSharedPaths(server)
 
-      // ---- D.5/W6 DEV-010：冷启动预构建窗口提示（一次性，防"开箱即坏"误判）----
+      // DEV-010仅说明预构建阶段，不能据此将持续失败归类为正常暂态。
       if (n.exposes.length > 0 || n.remotes.length > 0) {
         console.warn(
           formatFulgurjsDiagnostic({
             code: 'DEV-010',
-            symptom: 'dev 冷启动预构建窗口：首次启动或清 node_modules/.vite 后首轮 30~60s 内，联邦模块请求可能出现瞬时 504 / "ce" / Outdated Optimize Dep',
-            cause: 'vite 依赖预构建（含 fulgurjs 外部化桩）尚未就绪，属预构建暂态而非回归；首轮结束后自行恢复',
-            fix: '先真实打开一次页面预热（等到网络空闲），再做验收断言或人工判断；重复出现才按 DEV-009 清缓存排查',
+            symptom: 'dev 首次依赖预构建：服务监听就绪不等于页面依赖图已就绪；异常请求可能报告 504 / "ce" / Outdated Optimize Dep',
+            cause: '新依赖发现会触发Vite重新优化；本提示不能证明实际错误只是暂态，也不保证页面会自行恢复',
+            fix: '记录失败请求与优化日志，确认预构建完成后再开始稳定性验证；持续504或空白必须继续定位，检查重复dev进程及缓存，不得用无限刷新代替修复',
           }),
         )
       }
@@ -1815,14 +1815,19 @@ export function federation(options: FederationOptions): Plugin[] {
     },
   }
 
-  // 惰性解析 shared 包真实路径（dev 非预构建依赖的 .vue 映射）
+  // 仅收集参与共享改写的物理路径；不能在入口扫描前向Vite登记优化依赖。
   function warmResolvedSharedPaths(server: ViteDevServer) {
     const n = state.normalized
-    if (!n) return
+    if (!n?.devSharedSelf) return
+    // Vite 5–8 的容器运行时支持内部scan标记，公开类型省略了它；保留公开isEntry
+    // 参数并显式标注扩展，避免普通resolveId登记missing import并提前切换优化批次。
+    const resolveOptions: NonNullable<Parameters<ViteDevServer['pluginContainer']['resolveId']>[2]> & { scan: true } = {
+      isEntry: false, scan: true,
+    }
     for (const s of n.shared) {
       if (s.import === false) continue
       void server.pluginContainer
-        .resolveId(s.import, path.join(n.root, 'index.html'))
+        .resolveId(s.import, path.join(n.root, 'index.html'), resolveOptions)
         .then((r) => {
           if (r?.id) state.resolvedSharedPaths.set(r.id.split('?')[0], s.configKey)
         })

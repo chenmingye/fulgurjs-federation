@@ -19,7 +19,7 @@ export function syncViteCacheMarker(root: string, pluginVersion: string, log: (m
       fs.rmSync(viteDir, { recursive: true, force: true })
       log(
         `[fulgurjs] 插件版本变化（${prev || '无记录'} → ${pluginVersion}），已自动清除 ${path.relative(root, viteDir)} 预构建缓存` +
-          `（避免旧门面签名 404 / DEV-009）。本次启动将重新预构建，首轮 30~60s 属暂态（DEV-010）。`,
+          `（避免旧门面签名 404 / DEV-009）。本次启动将重新预构建（DEV-010）；持续失败仍须按实际请求定位。`,
       )
     }
     fs.mkdirSync(viteDir, { recursive: true })

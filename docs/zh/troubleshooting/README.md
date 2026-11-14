@@ -22,7 +22,7 @@
 |---|---|---|
 | dev 白屏、`Cannot destructure property 'node'` 类报错 | UMD/CJS 依赖被移出预构建 | 放回 `optimizeDeps.include`（`DEV-004`） |
 | 页面渲染回旧逻辑 / 门面 404（`DEV-009`） | `.vite` 缓存漂移（常发于插件升级后） | `rm -rf node_modules/.vite` + 重启 dev server + 换浏览器 profile |
-| 首轮 30~60s 瞬时 504/"ce"/页面重载（`DEV-010`） | Vite 冷启动预构建窗口（瞬态非故障） | 先预热页面再做断言 |
+| 首次预构建伴随504/"ce"/重载（`DEV-010`） | 新依赖发现可触发重新优化，不能仅凭提示排除故障 | 保留请求与优化日志，确认页面就绪再验证；持续空白必须定位 |
 | 双 Vue/双 React 崩溃（Invalid hook call / 'ce'） | shared 缺 `singleton: true`；或多版本未隔离 | [共享依赖](../guide/sharing.md)；React 18/19 分 scope（`MFU-010`） |
 | 宿主/远程插件版本不一致（`DEV-006`） | 各应用 @fulgurjs/federation 版本 | 统一版本 |
 | 远程页面独立直开白屏（`CC-002`） | 页面被绕过宿主直接访问 | 经宿主联邦加载 |

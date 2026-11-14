@@ -186,7 +186,7 @@ export function checklistFor(scenario: InitScenario): string[] {
     out.push('   （退出时 clearAppContext 清理），远程 setup/onSession 用 getAppContext / requireAppContext 消费')
   }
   out.push(APP_ENTRY_NOTE[framework])
-  out.push('6. dev 冷启动首轮 30~60s 有预构建窗口（瞬时 504/"ce"，DEV-010）：先真实打开页面预热再做断言')
+  out.push('6. dev 首次依赖预构建（DEV-010）：先确认真实页面就绪再做稳定性断言；持续504/空白是待排故障，不能仅用预热解释')
   out.push('7. 配置解释：fulgurjs explain；部署体检：fulgurjs doctor --base <URL> --apps <部署子目录...>')
   out.push('   接入前先运行 fulgurjs doctor --config ./fulgurjs.config.ts（本地预检，不代表浏览器验收通过）')
   if (consume) {

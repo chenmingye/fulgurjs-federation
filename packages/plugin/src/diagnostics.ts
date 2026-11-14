@@ -42,7 +42,7 @@ export const CODE_REGISTRY: FulgurjsCodeMeta[] = [
   { code: 'DEV-005', stage: 'DEV', title: 'remotes dev URL 端口无监听（remote 未启动或端口错位）' },
   { code: 'DEV-006', stage: 'DEV', title: '宿主/远程插件版本不一致' },
   { code: 'DEV-009', stage: 'DEV', title: '门面/虚拟模块 404（.vite 缓存漂移，需清缓存重启）' },
-  { code: 'DEV-010', stage: 'DEV', title: 'dev 冷启动预构建窗口（首轮 30~60s 瞬态 504/\'ce\' 假错误）' },
+  { code: 'DEV-010', stage: 'DEV', title: 'dev 首次依赖预构建状态（不代替实际错误归因）' },
   { code: 'DEV-011', stage: 'DEV', title: '非 loopback host + 通配 dev CORS（暴露面扩大提醒）' },
   // ── TYP 远程类型链（6.5.0 类型自动生成）──
   { code: 'TYP-001', stage: 'TYP', title: '提供方声明 bundle 生成失败（合同边界/预算/编译错误/工具缺失/路径泄漏）' },

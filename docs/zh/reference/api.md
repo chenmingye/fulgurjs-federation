@@ -38,7 +38,7 @@ import { loadRemote } from '@fulgurjs/federation/runtime'
 | `initSharing` | `(scopeName?) => ShareScopeMap` | 初始化共享作用域（一般由 init 模块自动完成） |
 | `registerPlugins` | `(plugins: RuntimePlugin[]) => void` | 注册运行时插件（见下）；应用运行后才调用更改策略的边界见「同步与异步裁决」 |
 | `getRuntime` | `() => FgRuntime` | 取运行时单例本体（与 `__FULGURJS_RUNTIME__` 同一实例） |
-| `version` | `string` | 运行时/插件版本（跨源副本一致性诊断用，配合 DEV-006） |
+| `version` | `string` | 运行时/插件版本的独立命名导出，dev/prod均可直接读取（配合 DEV-006） |
 | `unwrapDefault` | `(ns: any) => any` | ESM/CJS default interop 工具 |
 
 ### `loadRemote` 选项

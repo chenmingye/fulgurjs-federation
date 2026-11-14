@@ -7,6 +7,7 @@
  */
 import type { NormalizedOptions, NormalizedRemote, NormalizedShared } from './options'
 import { SETUP_CONTAINER_KEY } from './options'
+import { RUNTIME_VERSION } from './version'
 import { MANIFEST_SCHEMA_VERSION, type DevFederationManifest, type ProdFederationManifest } from './manifest'
 
 /** setup 生命周期入口的容器元数据声明行（配置了 setup 时 dev/prod 容器一致携带） */
@@ -497,7 +498,8 @@ export function genRuntimeProxyModule(): string {
     `export const getRuntime = () => (globalThis).__FULGURJS_RUNTIME__;`,
     `export const unwrapDefault = (ns) =>`,
     `  ns && typeof ns === 'object' && 'default' in ns ? (ns.default !== undefined ? ns.default : ns) : ns;`,
-    `export const version = (globalThis).__FULGURJS_RUNTIME__?.version;`,
+    // version是独立公开导出；冻结单例没有此字段，取版本也不应提前创建单例。
+    `export const version = ${JSON.stringify(RUNTIME_VERSION)};`,
     `export default { get runtime() { return (globalThis).__FULGURJS_RUNTIME__; } };`,
     ``,
   ]
